@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -24,6 +24,7 @@ namespace UavPms.Infrastructure.Repositories
         public async Task<List<ActiveAlertModel>> GetActiveAlertsAsync(CancellationToken cancellationToken)
         {
             return await _context.Notifications
+                .AsNoTracking()
                 .Where(n => !n.IsRead)
                 .OrderByDescending(n => n.SentAt)
                 .Select(n => new ActiveAlertModel
@@ -40,26 +41,28 @@ namespace UavPms.Infrastructure.Repositories
         public async Task<DefectStatisticsModel> GetDefectStatisticsAsync(CancellationToken cancellationToken)
         {
             var byType = await _context.DetectedAnomalies
+                .AsNoTracking()
                 .Where(a => a.ValidationStatus == "Confirmed")
                 .GroupBy(a => a.Category!.CategoryName)
-                .Select(g => new DefectTypeStatModel
-                {
-                    DefectType = g.Key,
-                    Count = g.Count()
-                }).ToListAsync(cancellationToken);
+                .Select(g => new { DefectType = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
 
             var totalDefects = byType.Sum(x => x.Count);
 
             return new DefectStatisticsModel
             {
                 TotalDefects = totalDefects,
-                ByType = byType
+                ByType = byType.Select(x => new DefectTypeStatModel
+                {
+                    DefectType = x.DefectType,
+                    Count = x.Count
+                }).ToList()
             };
         }
 
         public async Task<(List<InspectionHistoryModel> Items, int TotalCount)> GetInspectionHistoryAsync(Guid? missionId, bool? IsDefect, DateTime? fromDate, DateTime? toDate, int page, int pageSize, CancellationToken cancellationToken)
         {
-            var query = _context.InspectionMedia.AsQueryable();
+            var query = _context.InspectionMedia.AsNoTracking().AsQueryable();
 
             if (missionId.HasValue)
             {
@@ -112,9 +115,15 @@ namespace UavPms.Infrastructure.Repositories
 
         public async Task<MissionStatusOverviewModel> GetMissionStatusOverviewAsync(CancellationToken cancellationToken)
         {
-            var pending = await _context.Missions.CountAsync(m => m.Status == "Scheduled", cancellationToken);
-            var inProgress = await _context.Missions.CountAsync(m => m.Status == "InProgress", cancellationToken);
-            var completed = await _context.Missions.CountAsync(m => m.Status == "Completed", cancellationToken);
+            var missionStats = await _context.Missions
+                .AsNoTracking()
+                .GroupBy(m => m.Status)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+
+            var pending = missionStats.FirstOrDefault(m => m.Status == "Scheduled")?.Count ?? 0;
+            var inProgress = missionStats.FirstOrDefault(m => m.Status == "InProgress")?.Count ?? 0;
+            var completed = missionStats.FirstOrDefault(m => m.Status == "Completed")?.Count ?? 0;
 
             return new MissionStatusOverviewModel
             {
@@ -127,6 +136,7 @@ namespace UavPms.Infrastructure.Repositories
         public async Task<(List<RecentDefectModel> Items, int TotalCount)> GetRecentDefectsAsync(int page, int pageSize, CancellationToken cancellationToken)
         {
             var query = _context.DetectedAnomalies
+                .AsNoTracking()
                 .Where(a => a.ValidationStatus == "Confirmed");
             
             var totalCount = await query.CountAsync(cancellationToken);
@@ -151,17 +161,31 @@ namespace UavPms.Infrastructure.Repositories
 
         public async Task<MonitorSummaryModel> GetSummaryAsync(CancellationToken cancellationToken)
         {
-            var totalMissions = await _context.Missions.CountAsync(cancellationToken);
-            var pendingMissions = await _context.Missions.CountAsync(m => m.Status == "Scheduled", cancellationToken);
-            var inProgressMissions = await _context.Missions.CountAsync(m => m.Status == "InProgress", cancellationToken);
-            var completedMissions = await _context.Missions.CountAsync(m => m.Status == "Completed", cancellationToken);
-           
-            var totalInspections = await _context.InspectionMedia.CountAsync(cancellationToken);
+            // 1. Get mission counts grouped by status in one query
+            var missionStats = await _context.Missions
+                .AsNoTracking()
+                .GroupBy(m => m.Status)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+
+            var pendingMissions = missionStats.FirstOrDefault(s => s.Status == "Scheduled")?.Count ?? 0;
+            var inProgressMissions = missionStats.FirstOrDefault(s => s.Status == "InProgress")?.Count ?? 0;
+            var completedMissions = missionStats.FirstOrDefault(s => s.Status == "Completed")?.Count ?? 0;
+            var totalMissions = missionStats.Sum(s => s.Count);
+
+            // 2. Get total inspection media count
+            var totalInspections = await _context.InspectionMedia.AsNoTracking().CountAsync(cancellationToken);
             
-            var totalDefects = await _context.DetectedAnomalies.CountAsync(a => a.ValidationStatus == "Confirmed", cancellationToken);
+            // 3. Get defect counts (total and critical) in one query
+            var defectStats = await _context.DetectedAnomalies
+                .AsNoTracking()
+                .Where(a => a.ValidationStatus == "Confirmed")
+                .GroupBy(a => a.Category!.IsEmergencyClass)
+                .Select(g => new { IsCritical = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
 
-            var criricalDefects = await _context.DetectedAnomalies.CountAsync(a => a.ValidationStatus == "Confirmed" && a.Category!.IsEmergencyClass, cancellationToken);
-
+            var totalDefects = defectStats.Sum(s => s.Count);
+            var criticalDefects = defectStats.FirstOrDefault(s => s.IsCritical)?.Count ?? 0;
 
             return new MonitorSummaryModel
             {
@@ -171,7 +195,7 @@ namespace UavPms.Infrastructure.Repositories
                 CompletedMissions = completedMissions,
                 TotalInspections = totalInspections,
                 TotalDefects = totalDefects,
-                CriticalDefects = criricalDefects
+                CriticalDefects = criticalDefects
             };
         }
     }

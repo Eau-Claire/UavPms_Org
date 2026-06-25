@@ -81,7 +81,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
     private static string HashToken(string token)
     {
         var bytes = Encoding.UTF8.GetBytes(token);
-        var hashBytes = SHA256.Create().ComputeHash(bytes);
+        var hashBytes = SHA256.HashData(bytes);
         return Convert.ToBase64String(hashBytes);
     }
 }

@@ -86,7 +86,8 @@ builder.Services.AddAuthentication(options =>
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+            ClockSkew = TimeSpan.Zero
         };
     });
 
@@ -152,7 +153,7 @@ using (var scope = app.Services.CreateScope())
 UavPms.WebApi.HangfireExtensions.HangfireDashboardCustomizer.ConfigureCustomPages();
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
-    Authorization = new[] { new UavPms.WebApi.HangfireExtensions.AllowAllDashboardAuthorizationFilter() }
+    Authorization = new[] { new UavPms.WebApi.HangfireExtensions.HangfireBasicAuthorizationFilter() }
 });
 
 if (app.Environment.IsDevelopment())

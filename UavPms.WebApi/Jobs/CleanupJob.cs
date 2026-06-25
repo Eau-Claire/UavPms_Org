@@ -1,19 +1,24 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using UavPms.Infrastructure.Persistence;
 
 namespace UavPms.WebApi.Jobs;
 
-public class CleanupJob(ILogger<CleanupJob> logger, IConfiguration configuration)
+public class CleanupJob(ILogger<CleanupJob> logger, IConfiguration configuration, IServiceScopeFactory scopeFactory)
 {
     private readonly ILogger<CleanupJob> _logger = logger;
     private readonly IConfiguration _configuration = configuration;
+    private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
 
-    public Task Execute()
+    public async Task Execute()
     {
-        _logger.LogInformation("Auto-Cleanup job started: Purging stored files older than 30 days...");
+        _logger.LogInformation("Auto-Cleanup job started: Purging stored files older than 30 days and expired/revoked tokens...");
 
         var imagePath = _configuration["FileStorage:AlertImagesPath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uav_storage", "images");
         
@@ -48,7 +53,7 @@ public class CleanupJob(ILogger<CleanupJob> logger, IConfiguration configuration
                     }
                 }
 
-                _logger.LogInformation("Auto-Cleanup complete. Purged {Count} files older than 30 days.", deletedCount);
+                _logger.LogInformation("Auto-Cleanup: Purged {Count} files older than 30 days.", deletedCount);
             }
             else
             {
@@ -57,9 +62,35 @@ public class CleanupJob(ILogger<CleanupJob> logger, IConfiguration configuration
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error occurred during Auto-Cleanup job execution.");
+            _logger.LogError(ex, "Error occurred during file Auto-Cleanup.");
         }
 
-        return Task.CompletedTask;
+        // Database Cleanup
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var thresholdDate = DateTime.UtcNow.AddDays(-30);
+
+            // Xóa RefreshTokens hết hạn hoặc đã bị thu hồi quá 30 ngày
+            var oldTokens = await dbContext.RefreshTokens
+                .Where(t => t.ExpiresAt < DateTime.UtcNow || t.RevokedAt < thresholdDate)
+                .ToListAsync();
+
+            if (oldTokens.Any())
+            {
+                dbContext.RefreshTokens.RemoveRange(oldTokens);
+                await dbContext.SaveChangesAsync();
+                _logger.LogInformation("Auto-Cleanup: Purged {Count} expired or revoked refresh tokens from database.", oldTokens.Count);
+            }
+            else
+            {
+                _logger.LogInformation("Auto-Cleanup: No expired or revoked refresh tokens to purge.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during database token Auto-Cleanup.");
+        }
     }
 }
