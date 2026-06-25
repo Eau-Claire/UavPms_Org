@@ -80,6 +80,8 @@ public class LoginCommandHandlerTests
             r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
         _userRepositoryMock.Setup(r => 
             r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
+        _passwordHasherMock.Setup(p =>
+            p.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
         
         // act 
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
@@ -104,6 +106,8 @@ public class LoginCommandHandlerTests
         _userRepositoryMock.Setup(r => 
             r.GetByEmailWithRolesAsync(command.Email))
             .ReturnsAsync(user);
+        _passwordHasherMock.Setup(p =>
+            p.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
         
         //act
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);

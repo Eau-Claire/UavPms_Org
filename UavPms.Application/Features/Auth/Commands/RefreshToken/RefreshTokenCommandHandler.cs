@@ -44,7 +44,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
             throw new UnauthorizedAccessException("Invalid or expired refresh token");
         }
         
-        var user = await _userRepository.GetByIdAsync(token.UserId);
+        var user = await _userRepository.GetByIdWithRolesAsync(token.UserId);
         if (user == null || user.Status != "Active")
         {
             throw new UnauthorizedAccessException("User not found or inactive");

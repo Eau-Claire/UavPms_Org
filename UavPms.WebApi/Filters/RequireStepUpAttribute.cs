@@ -83,8 +83,15 @@ public class RequireStepUpAttribute : Attribute, IAsyncAuthorizationFilter
                 context.Result = new UnauthorizedObjectResult(new ApiResponse(false, "Invalid Step-Up token missing user identifier."));
                 return;
             }
-
+            
             // Verify with Redis key step-up:{userId}:{purpose}
+            var authenticatedUserId = context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if(string.IsNullOrEmpty(authenticatedUserId) || authenticatedUserId != userIdString)
+            {
+                context.Result = new ObjectResult(new ApiResponse(false, "Step-Up token is invalid.")) { StatusCode = 403 };
+                return;
+            }
+
             var otpService = context.HttpContext.RequestServices.GetRequiredService<IOtpService>();
             var savedToken = await otpService.GetStepUpTokenAsync(userIdString, _purpose);
             if (savedToken == null || savedToken != tokenString)

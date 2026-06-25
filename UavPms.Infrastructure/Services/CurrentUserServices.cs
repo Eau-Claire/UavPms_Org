@@ -29,4 +29,8 @@ public class CurrentUserServices : ICurrentUserServices
         .ToList() ?? new List<string>();
     
     public bool IsAuthenticated =>  _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
+
+    public string? IpAddress => _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
+
+    public string? UserAgent => _httpContextAccessor.HttpContext?.Request?.Headers["User-Agent"].ToString();
 }

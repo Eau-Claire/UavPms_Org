@@ -17,6 +17,9 @@ using UavPms.WebApi.Swagger;
 using Microsoft.Extensions.Options; 
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +64,30 @@ builder.Services.AddApiVersioning(options =>
     {
         options.GroupNameFormat = "'v'VVV";
         options.SubstituteApiVersionInUrl = true;
+    });
+
+// đăng ký cầu hình xắc thực JWT Bearer
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        var jwtSettings = builder.Configuration.GetSection("Jwt");
+        var secretKey = jwtSettings["SecretKey"] ??
+                        throw new InvalidOperationException("Jwt:SecretKey is not configured in appsettings.");
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+        };
     });
 
 // Đăng ký dịch vụ cấu hình Swagger tự động theo phiên bản
@@ -163,7 +190,12 @@ app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 
 // Cấu hình Middleware để phục vụ file tĩnh (Ảnh bằng chứng)
-var imagePath = builder.Configuration["FileStorage:AlertImagesPath"] ?? Path.Combine(builder.Environment.ContentRootPath, "uav_storage", "images");
+var rawPath = builder.Configuration["FileStorage:AlertImagesPath"] 
+    ?? "uav_storage/images";
+
+var imagePath = Path.IsPathRooted(rawPath)
+    ? rawPath
+    : Path.Combine(builder.Environment.ContentRootPath, rawPath);
 
 try
 {

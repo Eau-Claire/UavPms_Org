@@ -101,7 +101,7 @@
   - Xoá 2 cột `RefreshToken` và `RefreshTokenExpiryTime` khỏi bảng `Users`.
   - Hỗ trợ nhiều phiên đăng nhập đồng thời trên nhiều thiết bị (không ghi đè token cũ khi đăng nhập thiết bị mới).
   - Hỗ trợ chức năng thu hồi token theo session (logout từng thiết bị) và cải thiện khả năng kiểm toán bảo mật.
-- [ ] 22d. **Refactor Auth sang CQRS Pattern (Clean Architecture)**:
+- [X] 22d. **Refactor Auth sang CQRS Pattern (Clean Architecture)**:
   - Chuyển toàn bộ business logic từ `AuthController` sang Application layer.
   - Tạo và triển khai các Command/Handler sau:
     - `LoginCommand` + `LoginCommandHandler` (`POST /api/v1/auth/login`)
@@ -114,13 +114,27 @@
   - Cập nhật `GlobalExceptionHandler` để xử lý tập trung:
     - `UnauthorizedAccessException` -> Trả về HTTP 401.
     - `ValidationException`, `NotFoundException`, `BusinessRuleException` -> Trả về lỗi định dạng chuẩn của hệ thống.
-- [ ] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
-- [ ] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
+- [X] 22e. **Sửa lỗi NullReferenceException khi làm mới Token (Refresh Token)**:
+  - Định nghĩa phương thức `GetByIdWithRolesAsync(Guid id)` trong `IUserRepository` và cài đặt trong `UserRepository` để nạp kèm (Eager Loading) `UserRoles` và `Role`.
+  - Cập nhật `RefreshTokenCommandHandler` để gọi `GetByIdWithRolesAsync` thay vì `GetByIdAsync`.
+  - Chạy Unit Test đảm bảo logic hoạt động chính xác.
+- [X] 22f. **Chống Tấn công Dò quét Tài khoản (Timing Attack) trong Đăng nhập**:
+  - Thực hiện xác thực mật khẩu giả định (dummy verification) khi người dùng không tồn tại hoặc không hoạt động nhằm chuẩn hoá thời gian phản hồi giữa user tồn tại và không tồn tại.
+- [X] 22g. **Xác thực Chủ sở hữu của Step-Up Token**:
+  - So sánh định danh người dùng trong Step-Up token với định danh người dùng đang đăng nhập trong `HttpContext.User` trước khi cho phép thực hiện hành động cần Step-Up.
+- [X] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
+- [X] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
+- [X] 24b. **Bảo mật Endpoint Giám sát (`MonitorController`)**:
+  - Áp dụng thuộc tính `[Authorize]` lên `MonitorController` để chặn truy cập ẩn danh.
+  - Phân quyền chi tiết (Role-based Authorization) cho từng endpoint dựa trên vai trò của người dùng (ví dụ: `SystemAdmin`, `Manager`, `Analyst`, `Inspector`, `Technician` truy cập tương ứng với nhiệm vụ).
+  - Kiểm tra và đảm bảo các endpoint: `GET /summary`, `GET /recent-defects`, `GET /defects-statistics`, `GET /mission-status`, `GET /inspections`, và `GET /alerts` từ chối người dùng chưa xác thực (401 Unauthorized) hoặc không đủ quyền (403 Forbidden).
+- [X] 24c. **Giới hạn kích thước trang (Pagination Upper-Bound Validation)**:
+  - Ràng buộc tham số `pageSize <= 100` tại các endpoint của `MonitorController` (`recent-defects` và `inspections`) để tránh cạn kiệt tài nguyên (DoS).
 
 ### Phase 3.2: Quản trị Người dùng & Tự động ghi nhận Audit Log
-- [ ] 25. **CRUD API quản lý người dùng (Users)**: Chỉ tài khoản có vai trò `SystemAdmin` mới được phép tạo mới, cập nhật thông tin, thay đổi vai trò (Role) hoặc đình chỉ (suspend) tài khoản khác.
-- [ ] 26. **EF Core Interceptor / SaveChanges Override**: Viết bộ lắng nghe tự động ghi log thay đổi. Trước khi lưu vào DB, kiểm tra các thay đổi ở trạng thái Added/Modified/Deleted, so sánh giá trị cũ và mới để sinh bản ghi chèn tự động vào bảng `AuditLogs` (tự động ghi nhận IP người gọi và UserAgent).
-- [ ] 27. **API truy cập lịch sử Audit (`GetAuditLogsQuery`)**: Dành riêng cho `SystemAdmin` và `Manager` giám sát các tác vụ nhạy cảm trong hệ thống.
+- [X] 25. **CRUD API quản lý người dùng (Users)**: Chỉ tài khoản có vai trò `SystemAdmin` mới được phép tạo mới, cập nhật thông tin, thay đổi vai trò (Role) hoặc đình chỉ (suspend) tài khoản khác.
+- [X] 26. **EF Core Interceptor / SaveChanges Override**: Viết bộ lắng nghe tự động ghi log thay đổi. Trước khi lưu vào DB, kiểm tra các thay đổi ở trạng thái Added/Modified/Deleted, so sánh giá trị cũ và mới để sinh bản ghi chèn tự động vào bảng `AuditLogs` (tự động ghi nhận IP người gọi và UserAgent).
+- [X] 27. **API truy cập lịch sử Audit (`GetAuditLogsQuery`)**: Dành riêng cho `SystemAdmin` và `Manager` giám sát các tác vụ nhạy cảm trong hệ thống.
 
 ---
 
@@ -226,7 +240,7 @@
   - Gửi thông báo cho Analyst khi có hình ảnh kiểm tra mới cần duyệt hoặc cảnh báo khẩn cấp mới.
   - Gửi thông báo cho Technician khi có phiếu bảo trì mới được gán.
   - Gửi thông báo cho Manager khi có yêu cầu leo thang cảnh báo hoặc phiếu bảo trì chuyển sang trạng thái chờ nghiệm thu.
-- [ ] 63. **Refactor Notification sang CQRS Pattern (Clean Architecture)**:
+- [X] 63. **Refactor Notification sang CQRS Pattern (Clean Architecture)**:
   - Chuyển toàn bộ business logic liên quan đến thông báo từ Controllers sang Application layer.
   - Tạo và triển khai các Command/Handler sau:
     - `CreateNotificationCommand` + `CreateNotificationCommandHandler`
@@ -244,35 +258,3 @@
 - [ ] 66. **Tích hợp QuestPDF & EPPlus xuất báo cáo**:
   - Triển khai API xuất danh sách sự cố và vật tư tiêu hao bảo trì ra tệp Excel (`EPPlus`).
   - Triển khai API xuất Báo cáo kỹ thuật tổng hợp tình trạng sức khoẻ lưới điện kèm đồ thị trực quan ra tệp PDF (`QuestPDF`).
-
----
-
-## EPIC 11: GIÁM SÁT HỆ THỐNG & BẢNG ĐIỀU KHIỂN ADMIN (Admin Monitoring Dashboard)
-
-*Mục tiêu: Xây dựng các API tổng hợp dữ liệu, sẵn sàng cho việc trực quan hóa trên Dashboard giám sát hoạt động kiểm tra, phát hiện lỗi AI, tiến độ chuyến bay và trạng thái hệ thống theo thời gian thực.*
-
-### Phase 11.1: Phát triển APIs Giám sát và Tổng hợp Dữ liệu (CQRS & MediatR)
-- [x] 67. **API Tóm tắt Số liệu Dashboard (`GET /api/v1/monitor/summary`)**:
-  - Triển khai `GetMonitorSummaryQuery` và `GetMonitorSummaryQueryHandler`.
-  - Tổng hợp số liệu: tổng số chuyến bay (`totalMissions`), số chuyến bay theo trạng thái (`pending`, `inProgress`, `completed`), tổng số ảnh/media kiểm tra (`totalInspections`), tổng số lỗi (`totalDefects`), và số lỗi khẩn cấp (`criticalDefects`).
-- [x] 68. **API Danh sách Lỗi Mới phát hiện (`GET /api/v1/monitor/recent-defects`)**:
-  - Triển khai `GetRecentDefectsQuery` và `GetRecentDefectsQueryHandler` hỗ trợ phân trang (`page`, `pageSize`).
-  - Trả về danh sách lỗi gần đây kèm thông tin: `inspectionId`, `missionId`, `missionTitle`, `imageUrl`, `defectType`, `detectedAt`.
-- [x] 69. **API Thống kê Phân loại Lỗi (`GET /api/v1/monitor/defect-statistics`)**:
-  - Triển khai `GetDefectStatisticsQuery` và `GetDefectStatisticsQueryHandler`.
-  - Trả về tổng số lỗi và thống kê nhóm lỗi theo phân loại (`byType` bao gồm tên loại lỗi và số lượng phát hiện) để phục vụ vẽ biểu đồ.
-- [x] 70. **API Tổng quan Trạng thái Chuyến bay (`GET /api/v1/monitor/mission-status`)**:
-  - Triển khai `GetMissionStatusQuery` và `GetMissionStatusQueryHandler`.
-  - Trả về số lượng chuyến bay theo từng trạng thái: `pending`, `inProgress`, `completed`.
-- [x] 71. **API Lịch sử Kiểm định và Tìm kiếm (`GET /api/v1/monitor/inspections`)**:
-  - Triển khai `GetInspectionHistoryQuery` và `GetInspectionHistoryQueryHandler` hỗ trợ lọc và phân trang.
-  - Các tham số lọc: `missionId`, `isDefect`, `fromDate`, `toDate`.
-  - Hỗ trợ phân trang: `page`, `pageSize`.
-- [x] 72. **API Cảnh báo Đang hoạt động (`GET /api/v1/monitor/alerts`)**:
-  - Triển khai `GetActiveAlertsQuery` và `GetActiveAlertsQueryHandler`.
-  - Trả về danh sách cảnh báo chưa đọc từ hệ thống thông báo (`Notifications`) phục vụ bảng điều khiển giám sát.
-
-### Phase 11.2: Chuẩn bị Tích hợp và Tối ưu hóa Real-time
-- [x] 73. **Thiết kế sẵn sàng cho SignalR Real-time & Event Processing**:
-  - Thiết kế các DTOs tối ưu cho truyền tải thời gian thực.
-  - Tách biệt luồng nghiệp vụ trong Handler để dễ dàng phát tín hiệu (Hub context) khi có sự thay đổi trạng thái chuyến bay hoặc phát hiện lỗi mới từ pipeline AI.

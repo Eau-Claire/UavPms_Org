@@ -21,6 +21,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
     private readonly IGenericRepository<RefreshTokenEntity> _refreshTokenRepository;
     private readonly IOtpService _otpService;
     private readonly IGenericRepository<TrustedDevice>  _trustedDeviceRepository;
+    private const string DummyHash = "$2a$10$vI8aWBZdKeu5JcGlZtu4U.25m68c9c61234567890123456789012";
 
     public LoginCommandHandler(
         IUserRepository userRepository,
@@ -44,19 +45,30 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
     
     public async Task<AuthResultDto> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
-        var user = await _userRepository.GetByEmailWithRolesAsync(request.Email) ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+        var user = await _userRepository.GetByEmailWithRolesAsync(request.Email) 
+            ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+
+        bool isValidUser = true;
+        string passwordHashToVerify = DummyHash;
 
         if (user == null || user.Status != "Active")
         {
-            throw new UnauthorizedAccessException("Invalid credentials");
+            isValidUser = false;
         }
-
-        if (!_passwordHasher.Verify(user.PasswordHash, request.Password))
+        else 
         {
+            passwordHashToVerify = user.PasswordHash;
+        }
+
+        bool passwordMatch = _passwordHasher.Verify(passwordHashToVerify, request.Password);
+
+        if (!isValidUser || !passwordMatch)
+        {
+            isValidUser = false;
             throw new UnauthorizedAccessException("Invalid credentials");
         }
 
-        if (!user.IsEmailVerified)
+        if (!user!.IsEmailVerified)
         {
             throw new UnauthorizedAccessException("Email not verified");
         }

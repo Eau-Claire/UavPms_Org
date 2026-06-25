@@ -125,7 +125,7 @@ public class RefreshTokenCommandHanlderTests
             r.FindAsync(It.IsAny<Expression<Func<RefreshTokenEntity, bool>>>(), true))
             .ReturnsAsync(new List<RefreshTokenEntity>{ token });
         _userRepositoryMock.Setup(r =>
-            r.GetByIdAsync(userId, true))
+            r.GetByIdWithRolesAsync(userId))
             .ReturnsAsync((User?)null); // User does not exist
         
         // act
@@ -149,7 +149,7 @@ public class RefreshTokenCommandHanlderTests
             .ReturnsAsync(new List<RefreshTokenEntity> { existingToken });
         
         _userRepositoryMock.Setup(r => 
-            r.GetByIdAsync(user.Id, true))
+            r.GetByIdWithRolesAsync(user.Id))
             .ReturnsAsync(user);
         
         _jwtProviderMock.Setup(j =>
