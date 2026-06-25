@@ -115,11 +115,15 @@ builder.Services.AddHangfire(config =>
         options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")),
         new PostgreSqlStorageOptions
         {
-            PrepareSchemaIfNecessary = true
+            PrepareSchemaIfNecessary = true,
+            QueuePollInterval = TimeSpan.FromSeconds(2) // Kiểm tra queue mỗi 2 giây
         });
 });
 
-builder.Services.AddHangfireServer();
+builder.Services.AddHangfireServer(options =>
+{
+    options.SchedulePollingInterval = TimeSpan.FromSeconds(2); // Kiểm tra các tác vụ đã lên lịch mỗi 2 giây
+});
 
 // CẤU HÌNH CORS POLICY 
 builder.Services.AddCors(options =>
