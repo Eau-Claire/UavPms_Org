@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using Moq;
 using UavPms.Application.Features.Auth.Commands.RefreshToken;
 using UavPms.Core.Entities;
@@ -9,26 +10,30 @@ using RefreshTokenEntity = UavPms.Core.Entities.RefreshToken;
 
 namespace UavPms.UnitTests.Features.Auth;
 
-public class RefreshTokenCommandHanlderTests
+public class RefreshTokenCommandHandlerTests
 {
     private readonly Mock<IGenericRepository<RefreshTokenEntity>> _refreshTokenRepositoryMock;
     private readonly Mock<IUserRepository> _userRepositoryMock;
     private readonly Mock<IJwtProvider> _jwtProviderMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IConfiguration> _configurationMock;
     private readonly RefreshTokenCommandHandler _handler;
 
-    public RefreshTokenCommandHanlderTests()
+    public RefreshTokenCommandHandlerTests()
     {
         _refreshTokenRepositoryMock = new Mock<IGenericRepository<RefreshTokenEntity>>();
         _userRepositoryMock = new Mock<IUserRepository>();
         _jwtProviderMock = new Mock<IJwtProvider>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _configurationMock = new Mock<IConfiguration>();
+        _configurationMock.Setup(c => c["Jwt:ExpiryMinutes"]).Returns("60");
 
         _handler = new RefreshTokenCommandHandler(
             _refreshTokenRepositoryMock.Object,
             _userRepositoryMock.Object,
             _jwtProviderMock.Object,
-            _unitOfWorkMock.Object
+            _unitOfWorkMock.Object,
+            _configurationMock.Object
         );
     }
 

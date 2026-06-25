@@ -53,7 +53,7 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
             PasswordHash = _passwordHasher.Hash(request.Password),
             FullName = request.FullName,
             Phone = request.Phone,
-            CreatedAt = DateTime.Now,
+            CreatedAt = DateTime.UtcNow,
             Status = "Active"
         };
 
@@ -61,7 +61,7 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
         {
             UserId = user.Id,
             RoleId = role.Id,
-            AssignedAt = DateTime.Now
+            AssignedAt = DateTime.UtcNow
         }).ToList();
 
         await _userRepository.AddAsync(user);
