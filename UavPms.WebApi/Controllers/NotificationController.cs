@@ -10,11 +10,14 @@ using UavPms.Application.Features.Notifications.Commands.Create;
 using UavPms.Application.Features.Notifications.Commands.MarkAsRead;
 using UavPms.Application.Features.Notifications.Commands.Delete;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace UavPms.WebApi.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/notifications")]
 [ApiVersion("1.0")]
+[Authorize]
 public class NotificationController : ControllerBase
 {
     private readonly ISender _mediator;
@@ -93,7 +96,7 @@ public class NotificationController : ControllerBase
         var jobId = Hangfire.BackgroundJob.Enqueue<UavPms.Core.Interfaces.Services.IEmailService>(
             emailService => emailService.SendEmailAsync(request.Email, request.Subject, request.Body));
 
-        return Ok(new { Success = true, Message = "Email job successfully enqueued in Hangfire.", JobId = jobId });
+        return Ok(new ApiResponse(true, "Email job successfully enqueued in Hangfire.", new { JobId = jobId }));
     }
 
     [HttpPost("schedule")]
@@ -140,13 +143,11 @@ public class NotificationController : ControllerBase
             job => job.SendNotificationAsync(request.UserId.HasValue ? request.UserId.Value.ToString() : null, request.Title, request.Body, request.Type ?? "ScheduledNotification"),
             runAt);
 
-        return Ok(new 
-        { 
-            Success = true, 
-            Message = $"Notification scheduled to run at {runAt:yyyy-MM-dd HH:mm:ss zzz}.", 
+        return Ok(new ApiResponse(true, $"Notification scheduled to run at {runAt:yyyy-MM-dd HH:mm:ss zzz}.", new
+        {
             JobId = jobId,
             Target = request.UserId.HasValue ? $"User: {request.UserId}" : "ALL Users"
-        });
+        }));
     }
 
     public record CreateNotificationRequest(

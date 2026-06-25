@@ -6,6 +6,7 @@ public class AuthResultDto
     public bool OtpRequired { get; set; }
     public string? Email { get; set; }
     public string? AccessToken { get; set; }
+    public string TokenType { get; set; } = "Bearer";
     public string? RefreshToken { get; set; }
     public int? ExpiresIn { get; set; }
     public AuthUserDto? User { get; set; }
@@ -19,6 +20,7 @@ public class AuthResultDto
             Success = true,
             Message = "Success",
             AccessToken = accessToken,
+            TokenType = "Bearer",
             RefreshToken = refreshToken,
             ExpiresIn = expiresIn,
             User = user,

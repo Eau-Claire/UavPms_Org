@@ -20,17 +20,20 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
     private readonly IUserRepository _userRepository;
     private readonly IJwtProvider _jwtProvider;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IConfiguration _configuration;
 
     public RefreshTokenCommandHandler(
         IGenericRepository<RefreshTokenEntity> refreshTokenRepository,
         IUserRepository userRepository,
         IJwtProvider jwtProvider,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IConfiguration configuration)
     {
         _refreshTokenRepository = refreshTokenRepository;
         _userRepository = userRepository;
         _jwtProvider = jwtProvider;
         _unitOfWork = unitOfWork;
+        _configuration = configuration;
     }
     
     public async Task<AuthResultDto> Handle(RefreshTokenCommand request, CancellationToken cancellationToken)
@@ -54,6 +57,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
         var roles = user.UserRoles.Select(r => r.Role!.RoleName).ToList();
         var newAccess = _jwtProvider.GenerateAccessToken(user, roles);
         var newRefresh =  _jwtProvider.GenerateRefreshToken();
+        var expiryMinutes = int.TryParse(_configuration["Jwt:ExpiryMinutes"], out var m) ? m : 60;
 
         await _refreshTokenRepository.AddAsync(new RefreshTokenEntity
         {
@@ -75,7 +79,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
             Roles = roles,
         };
         
-        return AuthResultDto.SuccessResult(newAccess, newRefresh, 0, userDto);
+        return AuthResultDto.SuccessResult(newAccess, newRefresh, expiryMinutes * 60, userDto);
     }
 
     private static string HashToken(string token)
