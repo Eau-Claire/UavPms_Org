@@ -10,11 +10,14 @@ using UavPms.Application.Features.Notifications.Commands.CreateNotification;
 using UavPms.Application.Features.Notifications.Commands.DeleteNotification;
 using UavPms.Application.Features.Notifications.Commands.MarkNotificationAsRead;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace UavPms.WebApi.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/notifications")]
 [ApiVersion("1.0")]
+[Authorize]
 public class NotificationController : ControllerBase
 {
     private readonly ISender _mediator;
@@ -140,10 +143,11 @@ public class NotificationController : ControllerBase
             job => job.SendNotificationAsync(request.UserId.HasValue ? request.UserId.Value.ToString() : null, request.Title, request.Body, request.Type ?? "ScheduledNotification"),
             runAt);
 
-        return Ok(new ApiResponse(true, "Notification scheduled to run at " + runAt, new 
-        { 
-            JobId = jobId, 
-            Target = request.UserId.HasValue ? $"User: {request.UserId}" : "ALL Users" }));
+        return Ok(new ApiResponse(true, $"Notification scheduled to run at {runAt:yyyy-MM-dd HH:mm:ss zzz}.", new
+        {
+            JobId = jobId,
+            Target = request.UserId.HasValue ? $"User: {request.UserId}" : "ALL Users"
+        }));
     }
 }
 

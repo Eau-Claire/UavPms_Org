@@ -43,7 +43,7 @@ public class AuditController : ControllerBase
         }
 
         var query = new GetAuditLogsQuery(page, pageSize, search, tableName, actionType);
-        var result = await  _mediator.Send(query);
+        var result = await _mediator.Send(query);
         
         return Ok(new ApiResponse(true, "Audit logs retrieved successfully", result));
     }

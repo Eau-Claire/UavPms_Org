@@ -91,6 +91,9 @@ public static class DependencyInjection
 
         services.AddScoped<IOtpService, RedisOtpService>();
 
+        // Đăng ký File Storage Service
+        services.AddScoped<IFileStorageService, LocalFileStorageService>();
+
         // Đăng ký OTP Purpose Handlers (Strategy pattern)
         services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.LoginOtpHandler>();
         services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.ForgotPasswordOtpHandler>();

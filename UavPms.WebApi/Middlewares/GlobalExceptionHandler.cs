@@ -74,7 +74,7 @@ public class GlobalExceptionHandler : IExceptionHandler
             httpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
             apiResponse = new ApiResponse(
                 Success: false,
-                Message: exception.Message,
+                Message: "An unexpected error occurred. Please try again later.",
                 Data: null,
                 Errors: null
             );

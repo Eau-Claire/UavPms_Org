@@ -86,7 +86,8 @@ builder.Services.AddAuthentication(options =>
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+            ClockSkew = TimeSpan.Zero
         };
     });
 
@@ -114,11 +115,15 @@ builder.Services.AddHangfire(config =>
         options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")),
         new PostgreSqlStorageOptions
         {
-            PrepareSchemaIfNecessary = true
+            PrepareSchemaIfNecessary = true,
+            QueuePollInterval = TimeSpan.FromSeconds(2) // Kiểm tra queue mỗi 2 giây
         });
 });
 
-builder.Services.AddHangfireServer();
+builder.Services.AddHangfireServer(options =>
+{
+    options.SchedulePollingInterval = TimeSpan.FromSeconds(2); // Kiểm tra các tác vụ đã lên lịch mỗi 2 giây
+});
 
 // CẤU HÌNH CORS POLICY 
 builder.Services.AddCors(options =>
@@ -152,7 +157,7 @@ using (var scope = app.Services.CreateScope())
 UavPms.WebApi.HangfireExtensions.HangfireDashboardCustomizer.ConfigureCustomPages();
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
-    Authorization = new[] { new UavPms.WebApi.HangfireExtensions.AllowAllDashboardAuthorizationFilter() }
+    Authorization = new[] { new UavPms.WebApi.HangfireExtensions.HangfireBasicAuthorizationFilter() }
 });
 
 if (app.Environment.IsDevelopment())

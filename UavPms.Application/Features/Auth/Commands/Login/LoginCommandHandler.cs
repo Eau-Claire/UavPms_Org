@@ -95,7 +95,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
     private static string HashToken(string token)
     {
         var bytes = Encoding.UTF8.GetBytes(token);
-        var hashBytes = SHA256.Create().ComputeHash(bytes);
+        var hashBytes = SHA256.HashData(bytes);
         return Convert.ToBase64String(hashBytes);
     }
 

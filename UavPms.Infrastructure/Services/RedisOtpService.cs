@@ -51,7 +51,7 @@ public class RedisOtpService : IOtpService
             }
         }
 
-        var code = new Random().Next(100000, 999999).ToString();
+        var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
         var hashedCode = HashToken(code);
         var expiryTime = DateTime.UtcNow.AddMinutes(3);
 
@@ -72,7 +72,6 @@ public class RedisOtpService : IOtpService
         await _eventPublisher.PublishAsync(new OtpGenerated
         {
             Email = email,
-            OtpCode = code,
             ExpiryTime = expiryTime
         });
 

@@ -55,9 +55,10 @@ public class AuthController : ControllerBase
 
         AppendDeviceTrustCookie(result.DeviceTrustToken);
 
-        return Ok(new ApiResponse(true, "Sucess", new
+        return Ok(new ApiResponse(true, "Success", new
         {
             result.AccessToken,
+            result.TokenType,
             result.RefreshToken,
             result.ExpiresIn,
             result.DeviceTrustToken,
@@ -95,10 +96,13 @@ public class AuthController : ControllerBase
         var command = new RefreshTokenCommand(request.RefreshToken, userAgent);
         var result = await _mediator.Send(command);
 
-        return Ok(new ApiResponse(true, "Refresh token success.", new
+        return Ok(new ApiResponse(true, "Token refreshed successfully.", new
         {
             result.AccessToken,
-            result.RefreshToken
+            result.TokenType,
+            result.RefreshToken,
+            result.ExpiresIn,
+            result.User
         }));
     }
 

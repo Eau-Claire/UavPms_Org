@@ -1,10 +1,14 @@
 using System;
+using System.Text;
 using System.Threading.Tasks;
 using Hangfire;
 using Hangfire.AspNetCore;
 using Hangfire.Dashboard;
 using Hangfire.Dashboard.Pages;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using UavPms.WebApi.Jobs;
 
 namespace UavPms.WebApi.HangfireExtensions;
@@ -245,10 +249,52 @@ public static class HangfireDashboardCustomizer
     }
 }
 
-public class AllowAllDashboardAuthorizationFilter : IDashboardAuthorizationFilter
+public class HangfireBasicAuthorizationFilter : IDashboardAuthorizationFilter
 {
     public bool Authorize(DashboardContext context)
     {
-        return true;
+        var httpContext = context.GetHttpContext();
+        var authHeader = httpContext.Request.Headers["Authorization"].ToString();
+
+        if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
+        {
+            SetChallengeResponse(httpContext);
+            return false;
+        }
+
+        try
+        {
+            var parameter = authHeader.Substring("Basic ".Length).Trim();
+            var usernamePassword = Encoding.UTF8.GetString(Convert.FromBase64String(parameter));
+            var parts = usernamePassword.Split(':', 2);
+
+            if (parts.Length == 2)
+            {
+                var username = parts[0];
+                var password = parts[1];
+
+                var config = httpContext.RequestServices.GetRequiredService<IConfiguration>();
+                var hangfireUser = config["Hangfire:Username"] ?? "admin";
+                var hangfirePassword = config["Hangfire:Password"] ?? "123456";
+
+                if (username == hangfireUser && password == hangfirePassword)
+                {
+                    return true;
+                }
+            }
+        }
+        catch
+        {
+            // Ignore Base64 parsing issues
+        }
+
+        SetChallengeResponse(httpContext);
+        return false;
+    }
+
+    private void SetChallengeResponse(HttpContext httpContext)
+    {
+        httpContext.Response.StatusCode = 401;
+        httpContext.Response.Headers.Append("WWW-Authenticate", "Basic realm=\"Hangfire Dashboard\"");
     }
 }

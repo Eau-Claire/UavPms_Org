@@ -45,21 +45,21 @@ public class UserController : ControllerBase
         _mediator = mediator;
     }
 
-    [HttpGet("users")]
+    [HttpGet]
     [Authorize(Roles = "SystemAdmin")]
     public async Task<IActionResult> GetUsers(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null)
     {
-        if (pageSize <= 0 || pageSize <= 0)
+        if (page <= 0 || pageSize <= 0)
         {
-            return BadRequest(new ApiResponse(false, "Page and PageSize must be a positive integer."));
+            return BadRequest(new ApiResponse(false, "Page and PageSize must be positive integers."));
         }
 
         if (pageSize > 100)
         {
-            return BadRequest(new ApiResponse(false, "Page size must be less than 100 characters."));
+            return BadRequest(new ApiResponse(false, "PageSize must be less than or equal to 100."));
         }
 
         var result = await _mediator.Send(new GetUsersQuery(page, pageSize, search));
@@ -104,7 +104,7 @@ public class UserController : ControllerBase
         {
             var command = new UpdateUserCommand(id, request.Email, request.FullName, request.Phone, request.Status, request.Roles);
             await _mediator.Send(command);
-            return Ok(new ApiResponse(true, "User successfully updated successfully."));
+            return Ok(new ApiResponse(true, "User updated successfully."));
         }
         catch (KeyNotFoundException e)
         {
