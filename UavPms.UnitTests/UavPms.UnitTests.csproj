@@ -25,6 +25,7 @@
     <ProjectReference Include="..\UavPms.Core\UavPms.Core.csproj" />
     <ProjectReference Include="..\UavPms.Application\UavPms.Application.csproj" />
     <ProjectReference Include="..\UavPms.Infrastructure\UavPms.Infrastructure.csproj" />
+    <ProjectReference Include="..\UavPms.WebApi\UavPms.WebApi.csproj" />
   </ItemGroup>
 
 </Project>
