@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UavPms.Application.Features.Monitor.DTOs;
+using UavPms.Application.Common.DTOs;
 
 namespace UavPms.Application.Features.Monitor.Queries.GetRecentDefects;
 

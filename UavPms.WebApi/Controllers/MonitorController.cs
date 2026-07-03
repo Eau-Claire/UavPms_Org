@@ -30,7 +30,7 @@ public class MonitorController : ControllerBase
     public async Task<IActionResult> GetSummary()
     {
         var result = await _mediator.Send(new GetDashboardSummaryQuery());
-        return Ok(result);
+        return Ok(new ApiResponse(true, "Dashboard summary retrieved successfully", result));
     }
 
     [HttpGet("recent-defects")]
@@ -46,7 +46,7 @@ public class MonitorController : ControllerBase
             return BadRequest(new ApiResponse(false, "PageSize must be less than or equal to 100."));
         }
         var result = await _mediator.Send(new GetRecentDefectsQuery(page, pageSize));
-        return Ok(result);
+        return Ok(new ApiResponse(true, "Recent defects retrieved successfully", result));
     }
 
     [HttpGet("defects-statistics")]
@@ -54,7 +54,7 @@ public class MonitorController : ControllerBase
     public async Task<IActionResult> GetDefectStatistics()
     {
         var result = await _mediator.Send(new GetDefectStatisticsQuery());
-        return Ok(result);
+        return Ok(new ApiResponse(true, "Defects statistics retrieved successfully", result));
     }
 
     [HttpGet("mission-status")]
@@ -62,7 +62,7 @@ public class MonitorController : ControllerBase
     public async Task<IActionResult> GetMissionStatus()
     {
         var result = await _mediator.Send(new GetMissionStatusQuery());
-        return Ok(result);
+        return Ok(new ApiResponse(true, "Mission status retrieved successfully", result));
     }
 
     [HttpGet("inspections")]
@@ -76,7 +76,7 @@ public class MonitorController : ControllerBase
         [FromQuery] int pageSize = 10)
     {
         var result = await _mediator.Send(new GetInspectionHistoryQuery(missionId, isDefect, fromDate, toDate, page, pageSize));
-        return Ok(result);
+        return Ok(new ApiResponse(true, "Inspections retrieved successfully", result));
     }
 
     [HttpGet("alerts")]
@@ -84,6 +84,6 @@ public class MonitorController : ControllerBase
     public async Task<IActionResult> GetActiveAlerts()
     {
         var result = await _mediator.Send(new GetActiveAlertsQuery());
-        return Ok(result);
+        return Ok(new ApiResponse(true, "Active alerts retrieved successfully", result));
     }
 }

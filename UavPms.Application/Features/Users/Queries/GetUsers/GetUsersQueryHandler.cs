@@ -1,10 +1,8 @@
 using MediatR;
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using UavPms.Application.Features.Users.DTOs;
 using UavPms.Core.Interfaces.Repositories;
+using UavPms.Application.Common.DTOs;
+
 namespace UavPms.Application.Features.Users.Queries.GetUsers;
 
 public class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, PaginatedUsersResponse>

@@ -1,12 +1,9 @@
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using MediatR;
 using UavPms.Application.Features.AuditLogs.DTOs;
-using UavPms.Application.Features.Users.DTOs;
+using UavPms.Application.Common.DTOs;
 using UavPms.Core.Interfaces.Repositories;
-namespace UavPms.Application.Features.AuditLogs.Queries;
+
+namespace UavPms.Application.Features.AuditLogs.Queries.GetAuditLogs;
 
 public class GetAuditLogsQueryHandler : IRequestHandler<GetAuditLogsQuery, PaginatedAuditLogsResponse>
 {

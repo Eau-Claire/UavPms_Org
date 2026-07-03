@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using UavPms.Application.Features.Notifications.Commands.Create;
+using UavPms.Application.Features.Notifications.Commands.CreateNotification;
 using UavPms.Core.Interfaces.Repositories;
 
 namespace UavPms.WebApi.Jobs;

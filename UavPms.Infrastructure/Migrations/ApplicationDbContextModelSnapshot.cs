@@ -726,6 +726,9 @@ namespace UavPms.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("AssignedToUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -738,6 +741,11 @@ namespace UavPms.Infrastructure.Migrations
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("DroneCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTime?>("EndedAt")
                         .HasColumnType("timestamp with time zone");
@@ -755,6 +763,10 @@ namespace UavPms.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("RouteData")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("ScheduledStartAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -764,6 +776,11 @@ namespace UavPms.Infrastructure.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<Guid>("UavId")
                         .HasColumnType("uuid");
@@ -775,6 +792,8 @@ namespace UavPms.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AssignedToUserId");
 
                     b.HasIndex("InspectorId");
 
@@ -1592,6 +1611,12 @@ namespace UavPms.Infrastructure.Migrations
 
             modelBuilder.Entity("UavPms.Core.Entities.Mission", b =>
                 {
+                    b.HasOne("UavPms.Core.Entities.User", "AssignedToUser")
+                        .WithMany()
+                        .HasForeignKey("AssignedToUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("UavPms.Core.Entities.User", "Inspector")
                         .WithMany()
                         .HasForeignKey("InspectorId")
@@ -1609,6 +1634,8 @@ namespace UavPms.Infrastructure.Migrations
                         .HasForeignKey("UavId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("AssignedToUser");
 
                     b.Navigation("Inspector");
 

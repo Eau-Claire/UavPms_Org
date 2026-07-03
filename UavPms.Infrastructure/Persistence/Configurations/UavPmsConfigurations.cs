@@ -171,6 +171,10 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.ToTable("Missions");
         builder.HasKey(e => e.Id);
         builder.HasIndex(e => e.MissionCode).IsUnique();
+        
+        builder.Property(e => e.Title).HasMaxLength(256).IsRequired();
+        builder.Property(e => e.RouteData).HasColumnType("text").IsRequired();
+        builder.Property(e => e.DroneCode).HasMaxLength(100).IsRequired();
 
         builder.HasOne(e => e.Manager)
             .WithMany()
@@ -180,6 +184,11 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.HasOne(e => e.Inspector)
             .WithMany()
             .HasForeignKey(e => e.InspectorId)
+            .OnDelete(DeleteBehavior.Restrict);
+        
+        builder.HasOne(e => e.AssignedToUser)
+            .WithMany()
+            .HasForeignKey(e => e.AssignedToUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Uav)

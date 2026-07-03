@@ -1,7 +1,7 @@
 using MediatR;
 using UavPms.Application.Features.Notifications.DTOs;
 
-namespace UavPms.Application.Features.Notifications.Commands.Create;
+namespace UavPms.Application.Features.Notifications.Commands.CreateNotification;
 
 public record CreateNotificationCommand(
     Guid UserId,

@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Application.Features.Monitor.DTOs;
+using UavPms.Application.Common.DTOs;
 
 namespace UavPms.Application.Features.Monitor.Queries.GetInspectionHistory;
 

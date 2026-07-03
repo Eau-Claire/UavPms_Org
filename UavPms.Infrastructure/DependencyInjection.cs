@@ -52,6 +52,8 @@ public static class DependencyInjection
         services.AddScoped<IAssetRepository, AssetRepository>();
         services.AddScoped<IAnomalyRepository, AnomalyRepository>();
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
+        services.AddScoped<IMissionRepository, MissionRepository>();
+        services.AddScoped<IUavRepository, UavRepository>();
         
         // Đăng ký Password Hasher và JWT Provider
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();

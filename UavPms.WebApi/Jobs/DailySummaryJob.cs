@@ -1,8 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UavPms.Core.Interfaces.Repositories;
-using UavPms.Application.Features.Notifications.Commands.Create;
 using MediatR;
+using UavPms.Application.Features.Notifications.Commands.CreateNotification;
 
 namespace UavPms.WebApi.Jobs;
 

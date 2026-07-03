@@ -9,7 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using UavPms.Application.Features.Notifications.Commands.Create;
+using UavPms.Application.Features.Notifications.Commands.CreateNotification;
 using UavPms.Core.Contracts;
 using UavPms.Core.Interfaces.Repositories;
 

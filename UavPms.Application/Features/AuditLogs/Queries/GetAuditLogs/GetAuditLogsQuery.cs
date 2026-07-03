@@ -1,7 +1,7 @@
 using MediatR;
 using UavPms.Application.Features.AuditLogs.DTOs;
 
-namespace UavPms.Application.Features.AuditLogs.Queries;
+namespace UavPms.Application.Features.AuditLogs.Queries.GetAuditLogs;
 
 public record GetAuditLogsQuery(
     int Page, 

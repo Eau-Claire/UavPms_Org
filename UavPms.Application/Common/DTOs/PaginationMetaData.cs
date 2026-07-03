@@ -1,4 +1,4 @@
-namespace UavPms.Application.Features.Users.DTOs;
+namespace UavPms.Application.Common.DTOs;
 
 public record PaginationMetaData(
     int Page,
@@ -6,4 +6,3 @@ public record PaginationMetaData(
     int TotalItems,
     int TotalPages
 );
-

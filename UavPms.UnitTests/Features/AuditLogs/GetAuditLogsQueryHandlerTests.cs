@@ -6,6 +6,7 @@ using FluentAssertions;
 using Moq;
 using UavPms.Application.Features.AuditLogs.DTOs;
 using UavPms.Application.Features.AuditLogs.Queries;
+using UavPms.Application.Features.AuditLogs.Queries.GetAuditLogs;
 using UavPms.Core.Entities;
 using UavPms.Core.Interfaces.Repositories;
 using Xunit;

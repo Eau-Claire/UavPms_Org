@@ -6,9 +6,9 @@ using MediatR;
 using UavPms.Core.Contracts;
 using UavPms.Application.Features.Notifications.Queries.GetNotifications;
 using UavPms.Application.Features.Notifications.Queries.GetNotificationById;
-using UavPms.Application.Features.Notifications.Commands.Create;
-using UavPms.Application.Features.Notifications.Commands.MarkAsRead;
-using UavPms.Application.Features.Notifications.Commands.Delete;
+using UavPms.Application.Features.Notifications.Commands.CreateNotification;
+using UavPms.Application.Features.Notifications.Commands.DeleteNotification;
+using UavPms.Application.Features.Notifications.Commands.MarkNotificationAsRead;
 
 using Microsoft.AspNetCore.Authorization;
 
@@ -42,7 +42,7 @@ public class NotificationController : ControllerBase
 
         var query = new GetNotificationsQuery(userGuid);
         var result = await _mediator.Send(query);
-        return Ok(result);
+        return Ok(new ApiResponse(true, "Notifications retrieved successfully", result));
     }
 
     [HttpGet("{id:guid}")]
@@ -50,7 +50,7 @@ public class NotificationController : ControllerBase
     {
         var query = new GetNotificationByIdQuery(id);
         var result = await _mediator.Send(query);
-        return Ok(result);
+        return Ok(new ApiResponse(true, "Notification retrieved successfully", result));
     }
 
     [HttpPut("{id:guid}/read")]
@@ -149,24 +149,24 @@ public class NotificationController : ControllerBase
             Target = request.UserId.HasValue ? $"User: {request.UserId}" : "ALL Users"
         }));
     }
-
-    public record CreateNotificationRequest(
-        Guid UserId,
-        string Type,
-        string? ReferenceType,
-        Guid? ReferenceId,
-        string Title,
-        string Body
-    );
-
-    public record EnqueueEmailRequest(string Email, string Subject, string Body);
-
-    public record ScheduleNotificationRequest(
-        Guid? UserId, 
-        string Title, 
-        string Body, 
-        string? Type, 
-        int? DelaySeconds,
-        DateTime? ScheduleTime
-    );
 }
+
+public record CreateNotificationRequest(
+    Guid UserId,
+    string Type,
+    string? ReferenceType,
+    Guid? ReferenceId,
+    string Title,
+    string Body
+);
+
+public record EnqueueEmailRequest(string Email, string Subject, string Body);
+
+public record ScheduleNotificationRequest(
+    Guid? UserId, 
+    string Title, 
+    string Body, 
+    string? Type, 
+    int? DelaySeconds,
+    DateTime? ScheduleTime
+);

@@ -157,10 +157,10 @@
 
 ### Phase 5.1: Quản lý Chuyến bay kiểm tra (Missions)
 - [ ] 33. **Quản lý Hạm đội Thiết bị bay (`Uavs`)**: API CRUD và theo dõi thông tin UAV (dung lượng pin, tình trạng vận hành, vị trí thực tế thông qua GPS).
-- [ ] 34. **Lệnh tạo và Giao việc Chuyến bay (`CreateMissionCommand`)**: Manager lên kế hoạch, gán Inspector phụ trách, lựa chọn thiết bị bay `Uav` trống và danh sách tuyến đường dây truyền tải cần kiểm tra (`MissionTargetLines`).
-- [ ] 35. **Quy trình chuyển đổi trạng thái chuyến bay**:
-  - API `StartMission`: Inspector bắt đầu bay, chuyển trạng thái chuyến bay sang `InProgress` và kích hoạt thời gian bắt đầu.
-  - API `CompleteMission`: Kết thúc chuyến bay, chuyển trạng thái sang `Completed`.
+- [X] 34. **Lệnh tạo và Giao việc Chuyến bay (`CreateMissionCommand`)**: Manager lên kế hoạch, gán Inspector phụ trách, lựa chọn thiết bị bay `Uav` trống. (Đã hoàn thành với trường AssignedToUserId, DroneCode, Title, RouteData).
+- [X] 35. **Quy trình chuyển đổi trạng thái chuyến bay**: (Đã hoàn thành với CRUD CRUD & Status Management cho Pending, In Progress, Completed).
+- [X] 35b. **API Chuyến bay của tôi (`GET /missions/my`)**: Dành riêng cho kỹ sư (Inspector) truy xuất các chuyến bay được phân công.
+- [X] 35c. **Bắn sự kiện `MissionCreatedEvent` qua RabbitMQ** cho các luồng xử lý ngoài.
 - [ ] 36. **API nạp Nhật ký bay (`UploadFlightLogCommand`)**: Inspector tải lên tệp log chuyến bay từ drone (chứa chuỗi GPS track dạng JSONB, pin thấp nhất ghi nhận, độ cao tối đa, thời gian bay) để lưu vào bảng `MissionFlightLogs`.
 
 ### Phase 5.2: Tải lên hình ảnh kiểm định & Báo cáo Sự cố
