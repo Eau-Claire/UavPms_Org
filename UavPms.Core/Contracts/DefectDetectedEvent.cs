@@ -4,6 +4,7 @@ namespace UavPms.Core.Contracts;
 
 public class DefectDetectedEvent
 {
+    public Guid InspectionId { get; set; }
     public Guid RecordId { get; set; }
     public Guid MissionId { get; set; }
     public string ImageUrl { get; set; } = string.Empty;

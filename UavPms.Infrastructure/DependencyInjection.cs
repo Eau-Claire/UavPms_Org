@@ -68,6 +68,9 @@ public static class DependencyInjection
         // Đăng ký Audit Log Repository
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 
+        // Đăng ký Inspection Media Repository
+        services.AddScoped<IInspectionMediaRepository, InspectionMediaRepository>();
+
         // Đăng ký HttpContextAccessor và CurrentUserServices
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserServices, CurrentUserServices>();

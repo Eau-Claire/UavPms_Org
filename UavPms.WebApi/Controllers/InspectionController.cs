@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.Application.Features.Inspections.Commands.UploadImage;
+using UavPms.Application.Features.Inspections.Queries.GetReportById;
+using UavPms.Application.Features.Inspections.Queries.GetByMission;
 
 namespace UavPms.WebApi.Controllers;
 
@@ -64,5 +66,25 @@ public class InspectionController : ControllerBase
         var result = await _mediator.Send(command);
 
         return Ok(new ApiResponse(true, "Image uploaded successfully.", result));
+    }
+
+    /// <summary>
+    /// Lấy báo cáo kiểm tra theo ID
+    /// </summary>
+    [HttpGet("report/{id:guid}")]
+    public async Task<IActionResult> GetReportById(Guid id)
+    {
+        var result = await _mediator.Send(new GetInspectionReportByIdQuery(id));
+        return Ok(new ApiResponse(true, "Inspection report retrieved successfully.", result));
+    }
+
+    /// <summary>
+    /// Lấy lịch sử kiểm tra theo mã nhiệm vụ
+    /// </summary>
+    [HttpGet("mission/{missionId:guid}")]
+    public async Task<IActionResult> GetByMission(Guid missionId)
+    {
+        var result = await _mediator.Send(new GetInspectionsByMissionQuery(missionId));
+        return Ok(new ApiResponse(true, "Mission inspection history retrieved successfully.", result));
     }
 }

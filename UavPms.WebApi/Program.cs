@@ -106,6 +106,8 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
 {
     builder.Services.AddHostedService<MissionCreatedConsumer>();
     builder.Services.AddHostedService<DefectDetectedConsumer>();
+    builder.Services.AddHostedService<ImageUploadedConsumer>();
+    builder.Services.AddHostedService<AIAnalysisRequestedConsumer>();
 }
 
 // Hangfire - Background Job Processing
@@ -122,6 +124,7 @@ builder.Services.AddHangfire(config =>
 
 builder.Services.AddHangfireServer(options =>
 {
+    options.WorkerCount = 2; // Restrict worker count to avoid database connection pool exhaustion
     options.SchedulePollingInterval = TimeSpan.FromSeconds(2); // Kiểm tra các tác vụ đã lên lịch mỗi 2 giây
 });
 

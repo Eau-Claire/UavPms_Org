@@ -39,6 +39,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
+    public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,

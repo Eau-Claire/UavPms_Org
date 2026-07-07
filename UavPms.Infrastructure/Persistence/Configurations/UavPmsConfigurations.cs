@@ -476,4 +476,18 @@ public class TrustedDeviceConfiguration : IEntityTypeConfiguration<TrustedDevice
     }
 }
 
+public class AIAnalysisRequestConfiguration : IEntityTypeConfiguration<AIAnalysisRequest>
+{
+    public void Configure(EntityTypeBuilder<AIAnalysisRequest> builder)
+    {
+        builder.ToTable("AIAnalysisRequests");
+        builder.HasKey(e => e.Id);
+
+        builder.HasOne(e => e.Uploader)
+            .WithMany()
+            .HasForeignKey(e => e.UploadedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 

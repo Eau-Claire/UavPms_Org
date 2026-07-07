@@ -87,23 +87,15 @@ public class UploadInspectionImageCommandHandler
             media.Id, media.MissionId, media.FileUrl);
 
         // 6. Phát sự kiện ImageUploaded lên RabbitMQ
-        try
+        await _eventPublisher.PublishAsync(new ImageUploadedEvent
         {
-            await _eventPublisher.PublishAsync(new ImageUploadedEvent
-            {
-                MediaId = media.Id,
-                MissionId = media.MissionId,
-                FileUrl = media.FileUrl,
-                MediaType = media.MediaType,
-                UploadedBy = currentUserId,
-                UploadedAt = media.CapturedAt
-            });
-        }
-        catch (Exception ex)
-        {
-            // Không để lỗi publish event làm thất bại toàn bộ upload
-            _logger.LogWarning(ex, "Failed to publish ImageUploadedEvent for MediaId={MediaId}. Image was saved successfully.", media.Id);
-        }
+            MediaId = media.Id,
+            MissionId = media.MissionId,
+            FileUrl = media.FileUrl,
+            MediaType = media.MediaType,
+            UploadedBy = currentUserId,
+            UploadedAt = media.CapturedAt
+        });
 
         return new UploadInspectionImageResult
         {
