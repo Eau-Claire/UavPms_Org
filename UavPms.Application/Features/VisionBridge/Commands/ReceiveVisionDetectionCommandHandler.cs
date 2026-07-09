@@ -178,14 +178,7 @@ public class ReceiveVisionDetectionCommandHandler
 
         try
         {
-            var admins = await _userRepository.GetUsersByRoleAsync("SystemAdmin");
-            var managers = await _userRepository.GetUsersByRoleAsync("Manager");
-
-            var usersToNotify = admins.Concat(managers)
-                .DistinctBy(u => u.Id)
-                .ToList();
-
-            // Lấy thông tin người tham gia trực tiếp vào nhiệm vụ (AssignedToUser, Manager, Inspector)
+            // Lấy thông tin những người tham gia trực tiếp vào nhiệm vụ (AssignedToUser, Manager, Inspector)
             var participantIds = new List<Guid>
             {
                 activeMission.AssignedToUserId,
@@ -196,22 +189,13 @@ public class ReceiveVisionDetectionCommandHandler
             .Distinct()
             .ToList();
 
-            var participants = new List<User>();
+            var usersToNotify = new List<User>();
             foreach (var pId in participantIds)
             {
-                if (!usersToNotify.Any(u => u.Id == pId))
+                var user = await _userRepository.GetByIdAsync(pId);
+                if (user != null)
                 {
-                    var user = await _userRepository.GetByIdAsync(pId);
-                    if (user != null)
-                    {
-                        usersToNotify.Add(user);
-                        participants.Add(user);
-                    }
-                }
-                else
-                {
-                    var user = usersToNotify.First(u => u.Id == pId);
-                    participants.Add(user);
+                    usersToNotify.Add(user);
                 }
             }
 
@@ -231,8 +215,8 @@ public class ReceiveVisionDetectionCommandHandler
                     body
                 ), cancellationToken);
 
-                // Nếu là khuyết tật nguy hiểm (Critical) và user này là người tham gia Mission trực tiếp, push email lập tức!
-                if (isCritical && participants.Any(p => p.Id == user.Id) && !string.IsNullOrEmpty(user.Email))
+                // Nếu là khuyết tật nguy hiểm (Critical), push email lập tức cho người tham gia!
+                if (isCritical && !string.IsNullOrEmpty(user.Email))
                 {
                     try
                     {
