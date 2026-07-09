@@ -22,6 +22,8 @@ public class ReceiveVisionDetectionCommandHandler
     private readonly IGenericRepository<DetectedAnomaly> _anomalyRepository;
     private readonly IGenericRepository<DefectCategory> _defectCategoryRepository;
     private readonly IUserRepository _userRepository;
+    private readonly INotificationRepository _notificationRepository;
+    private readonly IEmailService _emailService;
     private readonly ISender _mediator;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
@@ -34,6 +36,8 @@ public class ReceiveVisionDetectionCommandHandler
         IGenericRepository<DetectedAnomaly> anomalyRepository,
         IGenericRepository<DefectCategory> defectCategoryRepository,
         IUserRepository userRepository,
+        INotificationRepository notificationRepository,
+        IEmailService emailService,
         ISender mediator,
         IUnitOfWork unitOfWork,
         IFileStorageService fileStorageService,
@@ -45,6 +49,8 @@ public class ReceiveVisionDetectionCommandHandler
         _anomalyRepository = anomalyRepository;
         _defectCategoryRepository = defectCategoryRepository;
         _userRepository = userRepository;
+        _notificationRepository = notificationRepository;
+        _emailService = emailService;
         _mediator = mediator;
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
@@ -157,6 +163,19 @@ public class ReceiveVisionDetectionCommandHandler
             "Detection linked: Mission={MissionCode}, AnomalyId={AnomalyId}",
             activeMission.MissionCode, anomaly.Id);
 
+        // Xác định khuyết tật nguy hiểm (Critical Anomaly)
+        bool isCritical = false;
+        if (category != null && category.IsEmergencyClass)
+        {
+            isCritical = true;
+        }
+        else if (detection.ClassName.Contains("Anomaly", StringComparison.OrdinalIgnoreCase) || 
+                 detection.ClassName.Contains("Critical", StringComparison.OrdinalIgnoreCase) || 
+                 detection.ClassName.Contains("Emergency", StringComparison.OrdinalIgnoreCase))
+        {
+            isCritical = true;
+        }
+
         try
         {
             var admins = await _userRepository.GetUsersByRoleAsync("SystemAdmin");
@@ -166,21 +185,78 @@ public class ReceiveVisionDetectionCommandHandler
                 .DistinctBy(u => u.Id)
                 .ToList();
 
+            // Lấy thông tin người tham gia trực tiếp vào nhiệm vụ (AssignedToUser, Manager, Inspector)
+            var participantIds = new List<Guid>
+            {
+                activeMission.AssignedToUserId,
+                activeMission.ManagerId,
+                activeMission.InspectorId
+            }
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+            var participants = new List<User>();
+            foreach (var pId in participantIds)
+            {
+                if (!usersToNotify.Any(u => u.Id == pId))
+                {
+                    var user = await _userRepository.GetByIdAsync(pId);
+                    if (user != null)
+                    {
+                        usersToNotify.Add(user);
+                        participants.Add(user);
+                    }
+                }
+                else
+                {
+                    var user = usersToNotify.First(u => u.Id == pId);
+                    participants.Add(user);
+                }
+            }
+
+            string title = isCritical ? "🚨 CẢNH BÁO KHẨN CẤP: Phát hiện khuyết tật nguy hiểm!" : "⚠️ Phát hiện bất thường từ Edge Camera";
+            string body = isCritical 
+                ? $"Hệ thống giám sát biên phát hiện khuyết tật/hành vi NGUY HIỂM '{detection.ClassName}' (độ tin cậy: {detection.Confidence:P1}) tại tọa độ ({detection.Latitude:F6}, {detection.Longitude:F6}) thuộc nhiệm vụ {activeMission.MissionCode}. Cần xử lý khẩn cấp!"
+                : $"Hệ thống giám sát biên (Edge Device) phát hiện hành vi bất thường '{detection.ClassName}' (độ tin cậy: {detection.Confidence:P1}) thuộc nhiệm vụ {activeMission.MissionCode}.";
+
             foreach (var user in usersToNotify)
             {
-                await _mediator.Send(new CreateNotificationCommand(
+                var notificationResult = await _mediator.Send(new CreateNotificationCommand(
                     user.Id,
-                    "CriticalAlert",
+                    isCritical ? "CriticalAlert" : "InfoAlert",
                     "DetectedAnomaly",
                     anomaly.Id,
-                    "⚠️ Phát hiện bất thường từ Edge Camera",
-                    $"Hệ thống giám sát biên (Edge Device) phát hiện hành vi bất thường '{detection.ClassName}' (độ tin cậy: {detection.Confidence:P1}) thuộc nhiệm vụ {activeMission.MissionCode}."
+                    title,
+                    body
                 ), cancellationToken);
+
+                // Nếu là khuyết tật nguy hiểm (Critical) và user này là người tham gia Mission trực tiếp, push email lập tức!
+                if (isCritical && participants.Any(p => p.Id == user.Id) && !string.IsNullOrEmpty(user.Email))
+                {
+                    try
+                    {
+                        await _emailService.SendEmailAsync(user.Email, title, body);
+                        
+                        var notification = await _notificationRepository.GetByIdAsync(notificationResult.Id);
+                        if (notification != null)
+                        {
+                            notification.IsPushed = true;
+                            notification.PushedAt = DateTime.UtcNow;
+                            await _notificationRepository.UpdateAsync(notification);
+                            await _unitOfWork.SaveChangesAsync(cancellationToken);
+                        }
+                    }
+                    catch (Exception emailEx)
+                    {
+                        _logger.LogError(emailEx, "Failed to immediately push notification email to {Email}", user.Email);
+                    }
+                }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to send notification for anomaly {AnomalyId}", anomaly.Id);
+            _logger.LogWarning(ex, "Failed to send notification/push for anomaly {AnomalyId}", anomaly.Id);
         }
 
         return new VisionDetectionResultDto
