@@ -6,6 +6,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.Application.Features.AuditLogs.Queries;
+using UavPms.Application.Features.AuditLogs.Queries.GetAuditLogs;
 
 namespace UavPms.WebApi.Controllers;
 

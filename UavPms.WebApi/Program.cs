@@ -106,6 +106,8 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
 {
     builder.Services.AddHostedService<MissionCreatedConsumer>();
     builder.Services.AddHostedService<DefectDetectedConsumer>();
+    builder.Services.AddHostedService<ImageUploadedConsumer>();
+    builder.Services.AddHostedService<AIAnalysisRequestedConsumer>();
 }
 
 // Hangfire - Background Job Processing
@@ -115,11 +117,16 @@ builder.Services.AddHangfire(config =>
         options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")),
         new PostgreSqlStorageOptions
         {
-            PrepareSchemaIfNecessary = true
+            PrepareSchemaIfNecessary = true,
+            QueuePollInterval = TimeSpan.FromSeconds(2) // Kiểm tra queue mỗi 2 giây
         });
 });
 
-builder.Services.AddHangfireServer();
+builder.Services.AddHangfireServer(options =>
+{
+    options.WorkerCount = 2; // Restrict worker count to avoid database connection pool exhaustion
+    options.SchedulePollingInterval = TimeSpan.FromSeconds(2); // Kiểm tra các tác vụ đã lên lịch mỗi 2 giây
+});
 
 // CẤU HÌNH CORS POLICY 
 builder.Services.AddCors(options =>

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Application.Features.Monitor.DTOs;
+using UavPms.Application.Common.DTOs;
 
 namespace UavPms.Application.Features.Monitor.Queries.GetRecentDefects;
 

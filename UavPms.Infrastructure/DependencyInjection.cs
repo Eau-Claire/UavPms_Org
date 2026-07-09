@@ -52,6 +52,8 @@ public static class DependencyInjection
         services.AddScoped<IAssetRepository, AssetRepository>();
         services.AddScoped<IAnomalyRepository, AnomalyRepository>();
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
+        services.AddScoped<IMissionRepository, MissionRepository>();
+        services.AddScoped<IUavRepository, UavRepository>();
         
         // Đăng ký Password Hasher và JWT Provider
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
@@ -65,6 +67,9 @@ public static class DependencyInjection
 
         // Đăng ký Audit Log Repository
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+
+        // Đăng ký Inspection Media Repository
+        services.AddScoped<IInspectionMediaRepository, InspectionMediaRepository>();
 
         // Đăng ký HttpContextAccessor và CurrentUserServices
         services.AddHttpContextAccessor();
@@ -88,6 +93,9 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IOtpService, RedisOtpService>();
+
+        // Đăng ký File Storage Service
+        services.AddScoped<IFileStorageService, LocalFileStorageService>();
 
         // Đăng ký OTP Purpose Handlers (Strategy pattern)
         services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.LoginOtpHandler>();

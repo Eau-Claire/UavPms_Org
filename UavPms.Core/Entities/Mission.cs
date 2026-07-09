@@ -7,6 +7,10 @@ namespace UavPms.Core.Entities;
 public class Mission : BaseEntity
 {
     public string MissionCode { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string RouteData { get; set; } = string.Empty;
+    public Guid AssignedToUserId { get; set; }
+    public string DroneCode { get; set; } = string.Empty;
     public Guid ManagerId { get; set; }
     public Guid InspectorId { get; set; }
     public Guid UavId { get; set; }
@@ -18,6 +22,7 @@ public class Mission : BaseEntity
 
     public virtual User? Manager { get; set; }
     public virtual User? Inspector { get; set; }
+    public virtual User? AssignedToUser { get; set; }
     public virtual Uav? Uav { get; set; }
 
     public virtual ICollection<MissionTargetLine> MissionTargetLines { get; set; } = new List<MissionTargetLine>();

@@ -113,10 +113,11 @@ public class AuthController : ControllerBase
         await _mediator.Send(command);
         return Ok(new ApiResponse(true, "Password reset successfully."));
     }
-
-    public record LoginRequest(string Email, string Password);
-    public record RefreshTokenRequest(string RefreshToken);
-    public record SendOtpRequest(string Email, OtpPurpose Purpose);
-    public record VerifyOtpRequest(string Email, string Otp, OtpPurpose Purpose);
-    public record ResetPasswordRequest(string VerificationToken, string NewPassword);
 }
+
+
+public record LoginRequest(string Email, string Password);
+public record RefreshTokenRequest(string RefreshToken);
+public record SendOtpRequest(string Email, OtpPurpose Purpose);
+public record VerifyOtpRequest(string Email, string Otp, OtpPurpose Purpose);
+public record ResetPasswordRequest(string VerificationToken, string NewPassword);
