@@ -32,12 +32,32 @@ public class VisionBridgeController : ControllerBase
         [FromForm] double lat,
         [FromForm] double lng,
         [FromForm] int? track_id,
+        [FromForm] string? bbox,
         IFormFile? image)
     {
         DateTime parsedTimestamp;
         if (!DateTime.TryParse(timestamp, out parsedTimestamp))
         {
             parsedTimestamp = DateTime.UtcNow;
+        }
+
+        int[]? parsedBbox = null;
+        if (!string.IsNullOrEmpty(bbox))
+        {
+            try
+            {
+                var parts = bbox.Split(',');
+                if (parts.Length == 4)
+                {
+                    parsedBbox = new int[] {
+                        int.Parse(parts[0]),
+                        int.Parse(parts[1]),
+                        int.Parse(parts[2]),
+                        int.Parse(parts[3])
+                    };
+                }
+            }
+            catch {}
         }
 
         var detection = new VisionDetectionDto
@@ -49,6 +69,7 @@ public class VisionBridgeController : ControllerBase
             Latitude = lat,
             Longitude = lng,
             TrackId = track_id ?? 0,
+            BoundingBox = parsedBbox,
             ImageName = image?.FileName
         };
 
