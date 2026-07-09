@@ -28,10 +28,7 @@ public class RegisterDeviceCommandHandler : IRequestHandler<RegisterDeviceComman
 
         if (uav != null)
         {
-            if (uav.Status == "Pending")
-            {
-                return new { status = "Pending" };
-            }
+            // Trả về trực tiếp droneId và token, bỏ qua kiểm tra Pending
             return new
             {
                 droneId = uav.UavCode,
@@ -44,13 +41,17 @@ public class RegisterDeviceCommandHandler : IRequestHandler<RegisterDeviceComman
             Id = Guid.NewGuid(),
             UavCode = request.SerialNumber,
             Model = $"Raspberry Pi (SW: {request.SoftwareVersion})",
-            Status = "Pending",
+            Status = "Active", // Thiết lập Active luôn
             BatteryLevel = 100
         };
 
         await _uavRepository.AddAsync(newUav);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new { status = "Pending" };
+        return new
+        {
+            droneId = newUav.UavCode,
+            deviceToken = newUav.Id.ToString()
+        };
     }
 }

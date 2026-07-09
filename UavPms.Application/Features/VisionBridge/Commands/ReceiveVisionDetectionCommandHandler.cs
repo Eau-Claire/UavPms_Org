@@ -9,6 +9,7 @@ using UavPms.Application.Features.VisionBridge.DTOs;
 using UavPms.Core.Entities;
 using UavPms.Core.Interfaces.Repositories;
 using UavPms.Core.Interfaces.Services;
+using UavPms.Application.Features.Notifications.Commands.CreateNotification;
 
 namespace UavPms.Application.Features.VisionBridge.Commands;
 
@@ -20,6 +21,8 @@ public class ReceiveVisionDetectionCommandHandler
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
     private readonly IGenericRepository<DetectedAnomaly> _anomalyRepository;
     private readonly IGenericRepository<DefectCategory> _defectCategoryRepository;
+    private readonly IUserRepository _userRepository;
+    private readonly ISender _mediator;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
     private readonly ILogger<ReceiveVisionDetectionCommandHandler> _logger;
@@ -30,6 +33,8 @@ public class ReceiveVisionDetectionCommandHandler
         IGenericRepository<InspectionMedia> mediaRepository,
         IGenericRepository<DetectedAnomaly> anomalyRepository,
         IGenericRepository<DefectCategory> defectCategoryRepository,
+        IUserRepository userRepository,
+        ISender mediator,
         IUnitOfWork unitOfWork,
         IFileStorageService fileStorageService,
         ILogger<ReceiveVisionDetectionCommandHandler> logger)
@@ -39,6 +44,8 @@ public class ReceiveVisionDetectionCommandHandler
         _mediaRepository = mediaRepository;
         _anomalyRepository = anomalyRepository;
         _defectCategoryRepository = defectCategoryRepository;
+        _userRepository = userRepository;
+        _mediator = mediator;
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
         _logger = logger;
@@ -149,6 +156,32 @@ public class ReceiveVisionDetectionCommandHandler
         _logger.LogInformation(
             "Detection linked: Mission={MissionCode}, AnomalyId={AnomalyId}",
             activeMission.MissionCode, anomaly.Id);
+
+        try
+        {
+            var admins = await _userRepository.GetUsersByRoleAsync("SystemAdmin");
+            var managers = await _userRepository.GetUsersByRoleAsync("Manager");
+
+            var usersToNotify = admins.Concat(managers)
+                .DistinctBy(u => u.Id)
+                .ToList();
+
+            foreach (var user in usersToNotify)
+            {
+                await _mediator.Send(new CreateNotificationCommand(
+                    user.Id,
+                    "CriticalAlert",
+                    "DetectedAnomaly",
+                    anomaly.Id,
+                    "⚠️ Phát hiện bất thường từ Edge Camera",
+                    $"Hệ thống giám sát biên (Edge Device) phát hiện hành vi bất thường '{detection.ClassName}' (độ tin cậy: {detection.Confidence:P1}) thuộc nhiệm vụ {activeMission.MissionCode}."
+                ), cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send notification for anomaly {AnomalyId}", anomaly.Id);
+        }
 
         return new VisionDetectionResultDto
         {
