@@ -38,6 +38,7 @@ public class AIAnalysisController : ControllerBase
     /// <param name="notes">Ghi chú (optional)</param>
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
+    [DisableRequestSizeLimit]
     public async Task<IActionResult> Upload(
         List<IFormFile> files,
         [FromForm] AnalysisType analysisType = AnalysisType.General,
