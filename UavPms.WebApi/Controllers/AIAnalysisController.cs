@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Asp.Versioning;
@@ -57,6 +58,20 @@ public class AIAnalysisController : ControllerBase
             "video/mp4", "video/x-msvideo", "video/quicktime", "video/webm"
         };
 
+        // Allowed file extensions (defense-in-depth alongside MIME type check)
+        var allowedExtensions = new[]
+        {
+            ".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif",
+            ".mp4", ".avi", ".mov", ".webm"
+        };
+
+        // Max file count to prevent abuse
+        const int maxFileCount = 20;
+        if (files.Count > maxFileCount)
+        {
+            return BadRequest(new ApiResponse(false, $"Maximum {maxFileCount} files per request."));
+        }
+
         // Max file size: 20MB cho ảnh, 100MB cho video
         const long maxImageSize = 20 * 1024 * 1024;
         const long maxVideoSize = 100 * 1024 * 1024;
@@ -66,17 +81,27 @@ public class AIAnalysisController : ControllerBase
         for (int i = 0; i < files.Count; i++)
         {
             var file = files[i];
+            // Use only the filename portion (strip directory paths from user input)
+            var safeFileName = Path.GetFileName(file.FileName);
 
             if (file.Length == 0)
             {
-                errors.Add($"File [{i}] '{file.FileName}': file is empty.");
+                errors.Add($"File [{i}] '{safeFileName}': file is empty.");
                 continue;
             }
 
             var contentType = file.ContentType.ToLower();
             if (Array.IndexOf(allowedTypes, contentType) < 0)
             {
-                errors.Add($"File [{i}] '{file.FileName}': unsupported type '{contentType}'. Allowed: JPEG, PNG, WebP, TIFF, MP4, AVI, MOV, WebM.");
+                errors.Add($"File [{i}] '{safeFileName}': unsupported type '{contentType}'. Allowed: JPEG, PNG, WebP, TIFF, MP4, AVI, MOV, WebM.");
+                continue;
+            }
+
+            // Validate file extension matches Content-Type (防 extension spoofing)
+            var extension = Path.GetExtension(safeFileName).ToLowerInvariant();
+            if (string.IsNullOrEmpty(extension) || Array.IndexOf(allowedExtensions, extension) < 0)
+            {
+                errors.Add($"File [{i}] '{safeFileName}': file extension '{extension}' is not allowed.");
                 continue;
             }
 
@@ -85,7 +110,7 @@ public class AIAnalysisController : ControllerBase
             if (file.Length > maxSize)
             {
                 var limitMb = maxSize / (1024 * 1024);
-                errors.Add($"File [{i}] '{file.FileName}': exceeds {limitMb}MB limit ({file.Length / (1024 * 1024)}MB).");
+                errors.Add($"File [{i}] '{safeFileName}': exceeds {limitMb}MB limit ({file.Length / (1024 * 1024)}MB).");
             }
         }
 
