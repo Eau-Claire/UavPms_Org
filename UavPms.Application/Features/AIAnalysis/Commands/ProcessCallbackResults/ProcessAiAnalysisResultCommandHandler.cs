@@ -155,24 +155,27 @@ public class ProcessAiAnalysisResultCommandHandler
                             await _emergencyAlertRepo.AddAsync(alert);
                             createdAlerts++;
 
-                            // 6. Notify Mission Manager
-                            var managerId = media.Mission?.ManagerId;
-                            if (managerId != null && managerId.Value != Guid.Empty)
+                            // 6. Send Notification to Mission Manager
+                            if (media.Mission != null)
                             {
-                                var notification = new Notification
+                                var managerId = media.Mission.ManagerId;
+                                if (managerId != Guid.Empty)
                                 {
-                                    Id = Guid.NewGuid(),
-                                    UserId = managerId.Value,
-                                    Type = "CriticalAlert",
-                                    ReferenceType = "EmergencyAlert",
-                                    ReferenceId = alert.Id,
-                                    Title = "⚠️ Cảnh báo khẩn cấp: Phát hiện sự cố nghiêm trọng",
-                                    Body = $"Phát hiện khuyết tật khẩn cấp '{category.CategoryName}' ({detection.CategoryCode}) với độ tin cậy {detection.Confidence:P1} tại thiết bị.",
-                                    IsRead = false,
-                                    SentAt = DateTime.UtcNow
-                                };
+                                    var notification = new Notification
+                                    {
+                                        Id = Guid.NewGuid(),
+                                        UserId = managerId,
+                                        Type = "CriticalAlert",
+                                        ReferenceType = "EmergencyAlert",
+                                        ReferenceId = alert.Id,
+                                        Title = "⚠️ Cảnh báo khẩn cấp: Phát hiện sự cố nghiêm trọng",
+                                        Body = $"Phát hiện khuyết tật khẩn cấp '{category.CategoryName}' ({detection.CategoryCode}) với độ tin cậy {detection.Confidence:P1} tại thiết bị.",
+                                        IsRead = false,
+                                        SentAt = DateTime.UtcNow
+                                    };
 
-                                await _notificationRepo.AddAsync(notification);
+                                    await _notificationRepo.AddAsync(notification);
+                                }
                             }
                         }
                     }

@@ -70,12 +70,12 @@ public class UploadInspectionImageCommandHandler
         {
             Id = Guid.NewGuid(),
             MissionId = request.MissionId,
-            AssetId = Guid.Empty, // Sẽ được gán sau khi AI phân tích hoặc user chỉ định
+            AssetId = request.AssetId,
             MediaType = mediaType,
             FileUrl = fileUrl,
             AiSource = string.Empty,
             ValidationStatus = "Pending",
-            CapturedAt = DateTime.UtcNow,
+            CapturedAt = request.CapturedAt,
             CreatedBy = currentUserId
         };
 

@@ -33,6 +33,10 @@ services:
       - Supabase__Url=${SUPABASE_URL}
       - Supabase__ApiKey=${SUPABASE_API_KEY}
       - Supabase__Bucket=${SUPABASE_BUCKET}
+      - RabbitMQ__HostName=172.20.0.1
+      - RabbitMQ__UserName=guest
+      - RabbitMQ__Password=guest
+      - RabbitMQ__Port=5672
     depends_on:
       - redis
     restart: always

@@ -32,6 +32,8 @@ public class InspectionController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadImage(
         [FromForm] Guid missionId,
+        [FromForm] Guid assetId,
+        [FromForm] DateTime capturedAt,
         IFormFile file)
     {
         if (file == null || file.Length == 0)
@@ -58,6 +60,8 @@ public class InspectionController : ControllerBase
         var command = new UploadInspectionImageCommand
         {
             MissionId = missionId,
+            AssetId = assetId,
+            CapturedAt = capturedAt,
             FileStream = stream,
             FileName = file.FileName,
             ContentType = file.ContentType

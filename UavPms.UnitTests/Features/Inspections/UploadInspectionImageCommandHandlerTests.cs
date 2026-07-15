@@ -55,6 +55,8 @@ public class UploadInspectionImageCommandHandlerTests
         var command = new UploadInspectionImageCommand
         {
             MissionId = missionId,
+            AssetId = Guid.NewGuid(),
+            CapturedAt = DateTime.UtcNow,
             FileStream = new MemoryStream(),
             FileName = "test.jpg",
             ContentType = "image/jpeg"
@@ -93,6 +95,8 @@ public class UploadInspectionImageCommandHandlerTests
         var command = new UploadInspectionImageCommand
         {
             MissionId = missionId,
+            AssetId = Guid.NewGuid(),
+            CapturedAt = DateTime.UtcNow,
             FileStream = new MemoryStream(),
             FileName = "test.jpg",
             ContentType = "image/jpeg"
@@ -132,9 +136,14 @@ public class UploadInspectionImageCommandHandlerTests
             InspectorId = inspectorId
         };
 
+        var assetId = Guid.NewGuid();
+        var capturedAt = DateTime.UtcNow;
+
         var command = new UploadInspectionImageCommand
         {
             MissionId = missionId,
+            AssetId = assetId,
+            CapturedAt = capturedAt,
             FileStream = new MemoryStream(),
             FileName = fileName,
             ContentType = contentType
@@ -160,12 +169,14 @@ public class UploadInspectionImageCommandHandlerTests
         _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), fileName), Times.Once);
         
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.Is<InspectionMedia>(m =>
-            m.MissionId == missionId &&
-            m.FileUrl == fileUrl &&
-            m.MediaType == "Image" &&
-            m.ValidationStatus == "Pending" &&
-            m.CreatedBy == inspectorId
-        )), Times.Once);
+             m.MissionId == missionId &&
+             m.AssetId == assetId &&
+             m.FileUrl == fileUrl &&
+             m.MediaType == "Image" &&
+             m.ValidationStatus == "Pending" &&
+             m.CapturedAt == capturedAt &&
+             m.CreatedBy == inspectorId
+         )), Times.Once);
 
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
 
