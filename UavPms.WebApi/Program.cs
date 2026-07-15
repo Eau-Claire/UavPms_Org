@@ -146,12 +146,18 @@ app.UseForwardedHeaders();
 // Global Exception Handler
 app.UseExceptionHandler();
 
-// Tự động chạy Migration và Seed dữ liệu khi khởi động ứng dụng
-using (var scope = app.Services.CreateScope())
+// Run database migrations/seeding only when explicitly enabled.
+// Production web containers should not migrate on every restart because this can exhaust hosted DB pooler sessions.
+if (app.Configuration.GetValue<bool>("RunMigrations"))
 {
+    using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     dbContext.Database.Migrate();
     await DatabaseSeeder.SeedAsync(dbContext);
+}
+else
+{
+    Log.Information("Database migration and seeding skipped. Set RunMigrations=true to enable it for a dedicated migration run.");
 }
 
 // Cấu hình Hangfire Dashboard và Custom Pages cho tất cả môi trường

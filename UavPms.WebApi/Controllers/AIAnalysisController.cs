@@ -11,7 +11,9 @@ using Microsoft.AspNetCore.Mvc;
 using UavPms.Application.Features.AIAnalysis.Commands.UploadForAnalysis;
 using UavPms.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
 using UavPms.Application.Features.AIAnalysis.Commands.AnalyzeExistingMedia;
+using UavPms.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
 using UavPms.Application.Features.AIAnalysis.Queries.GetAnalysisById;
+using UavPms.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using UavPms.Core.Enums;
 
 namespace UavPms.WebApi.Controllers;
@@ -221,6 +223,38 @@ public class AIAnalysisController : ControllerBase
                 await item.Stream.DisposeAsync();
             }
         }
+    }
+
+
+    /// <summary>
+    /// List mission media that have AI detections, including bounding boxes for FE overlays.
+    /// </summary>
+    [HttpGet("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/detections")]
+    public async Task<IActionResult> GetMissionAiDetections(Guid missionId)
+    {
+        var result = await _mediator.Send(new GetMissionAiDetectionsQuery(missionId));
+        return Ok(new ApiResponse(true, "Mission AI detections retrieved successfully.", result));
+    }
+
+
+    /// <summary>
+    /// Accept or reject one AI detection and optionally save analyst notes for that bounding box.
+    /// </summary>
+    [HttpPut("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/detections/{detectionId:guid}/review")]
+    public async Task<IActionResult> ReviewMissionAiDetection(
+        Guid missionId,
+        Guid detectionId,
+        [FromBody] ReviewMissionAiDetectionRequest request)
+    {
+        var result = await _mediator.Send(new ReviewMissionAiDetectionCommand
+        {
+            MissionId = missionId,
+            DetectionId = detectionId,
+            Decision = request.Decision,
+            Notes = request.Notes
+        });
+
+        return Ok(new ApiResponse(true, "AI detection review saved successfully.", result));
     }
 
     /// <summary>
