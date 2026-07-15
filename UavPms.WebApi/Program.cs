@@ -106,8 +106,6 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
 {
     builder.Services.AddHostedService<MissionCreatedConsumer>();
     builder.Services.AddHostedService<DefectDetectedConsumer>();
-    builder.Services.AddHostedService<ImageUploadedConsumer>();
-    builder.Services.AddHostedService<AIAnalysisRequestedConsumer>();
 }
 
 // Hangfire - Background Job Processing
