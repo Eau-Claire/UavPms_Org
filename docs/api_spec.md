@@ -156,6 +156,27 @@ mindmap
   ```
 - **Response `201 Created`**: Trả về thông tin User vừa tạo kèm ID.
 
+#### [GET] `/users/assignable`
+- **Mô tả**: Lấy danh sách người dùng khả dụng để phân công chuyến bay (có vai trò `Inspector` và ở trạng thái hoạt động `Active`).
+- **Yêu cầu phân quyền**: `SystemAdmin` hoặc `Manager`
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "message": "Assignable users retrieved successfully.",
+    "data": [
+      {
+        "id": "f186b4a3-7649-43a9-a9a3-5c742f8c5cf2",
+        "username": "inspector1",
+        "fullName": "Nguyen Van Inspector",
+        "email": "inspector1@uavpms.com"
+      }
+    ]
+  }
+  ```
+- **Response `401 Unauthorized`**: Token không hợp lệ hoặc hết hạn.
+- **Response `403 Forbidden`**: Người dùng không có vai trò `SystemAdmin` hoặc `Manager`.
+
 ---
 
 ### MODULE 3.2: TÀI SẢN LƯỚI ĐIỆN & HỆ THỐNG GIS (ASSET & GIS)
