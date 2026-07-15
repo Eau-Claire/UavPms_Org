@@ -111,19 +111,25 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
 // Hangfire - Background Job Processing
 builder.Services.AddHangfire(config =>
 {
+    var hangfireConnection = builder.Configuration.GetConnectionString("HangfireConnection");
+    if (string.IsNullOrWhiteSpace(hangfireConnection))
+    {
+        hangfireConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+    }
+
     config.UsePostgreSqlStorage(options =>
-        options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")),
+        options.UseNpgsqlConnection(hangfireConnection),
         new PostgreSqlStorageOptions
         {
             PrepareSchemaIfNecessary = true,
-            QueuePollInterval = TimeSpan.FromSeconds(2) // Kiểm tra queue mỗi 2 giây
+            QueuePollInterval = TimeSpan.FromSeconds(15)
         });
 });
 
 builder.Services.AddHangfireServer(options =>
 {
-    options.WorkerCount = 2; // Restrict worker count to avoid database connection pool exhaustion
-    options.SchedulePollingInterval = TimeSpan.FromSeconds(2); // Kiểm tra các tác vụ đã lên lịch mỗi 2 giây
+    options.WorkerCount = 1;
+    options.SchedulePollingInterval = TimeSpan.FromSeconds(30);
 });
 
 // CẤU HÌNH CORS POLICY 
