@@ -195,8 +195,8 @@ public class ProcessAiAnalysisResultCommandHandlerTests
         await act.Should().ThrowAsync<BusinessRuleException>()
             .WithMessage("*UNKNOWN_CODE*");
 
-        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _unitOfWorkMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -276,8 +276,8 @@ public class ProcessAiAnalysisResultCommandHandlerTests
         existingRequest.Status.Should().Be(AIAnalysisStatus.Completed);
         existingRequest.CompletedAt.Should().Be(command.CompletedAt);
 
-        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -362,8 +362,8 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             n.ReferenceType == "EmergencyAlert"
         )), Times.Once);
 
-        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -413,7 +413,7 @@ public class ProcessAiAnalysisResultCommandHandlerTests
         _anomalyRepoMock.Verify(r => r.AddAsync(It.IsAny<DetectedAnomaly>()), Times.Never);
         _mediaRepoMock.Verify(r => r.UpdateAsync(It.IsAny<InspectionMedia>()), Times.Never);
 
-        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }

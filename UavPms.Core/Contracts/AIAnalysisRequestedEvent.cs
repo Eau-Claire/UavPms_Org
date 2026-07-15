@@ -16,4 +16,8 @@ public class AIAnalysisRequestedEvent
     public string? Notes { get; set; }
     public Guid UploadedBy { get; set; }
     public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
+    public Guid? MediaId { get; set; }
+    public Guid? MissionId { get; set; }
+    public Guid? AssetId { get; set; }
+    public string? PreferredModel { get; set; }
 }

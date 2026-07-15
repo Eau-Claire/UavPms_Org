@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.Application.Features.AIAnalysis.Commands.UploadForAnalysis;
+using UavPms.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
+using UavPms.Application.Features.AIAnalysis.Commands.AnalyzeExistingMedia;
 using UavPms.Application.Features.AIAnalysis.Queries.GetAnalysisById;
 using UavPms.Core.Enums;
 
@@ -161,5 +163,79 @@ public class AIAnalysisController : ControllerBase
     {
         var result = await _mediator.Send(new GetAIAnalysisByIdQuery(id));
         return Ok(new ApiResponse(true, "AI analysis result retrieved successfully.", result));
+    }
+
+    /// <summary>
+    /// Upload file và phân tích AI liên kết với mission.
+    /// </summary>
+    [HttpPost("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> AnalyzeMissionMedia(
+        Guid missionId,
+        [FromForm] Guid assetId,
+        IFormFile file,
+        [FromForm] AnalysisType analysisType = AnalysisType.General,
+        [FromForm] string preferredModel = "SERVER",
+        [FromForm] string? notes = null)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new ApiResponse(false, "File is required."));
+        }
+
+        // Validate file type
+        var allowedTypes = new[]
+        {
+            "image/jpeg", "image/png", "image/webp", "image/tiff",
+            "video/mp4", "video/x-msvideo", "video/quicktime", "video/webm"
+        };
+        var contentType = file.ContentType.ToLower();
+        if (Array.IndexOf(allowedTypes, contentType) < 0)
+        {
+            return BadRequest(new ApiResponse(false, "Unsupported file type."));
+        }
+
+        await using var stream = file.OpenReadStream();
+
+        var command = new AnalyzeMissionMediaCommand
+        {
+            MissionId = missionId,
+            AssetId = assetId,
+            FileStream = stream,
+            FileName = file.FileName,
+            ContentType = file.ContentType,
+            AnalysisType = analysisType,
+            PreferredModel = preferredModel,
+            Notes = notes
+        };
+
+        var result = await _mediator.Send(command);
+
+        return Ok(new ApiResponse(true, "AI analysis request created and queued for processing.", result));
+    }
+
+    /// <summary>
+    /// Phân tích AI sử dụng file InspectionMedia đã tồn tại trong mission.
+    /// </summary>
+    [HttpPost("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/from-media/{mediaId:guid}")]
+    public async Task<IActionResult> AnalyzeExistingMedia(
+        Guid missionId,
+        Guid mediaId,
+        [FromQuery] AnalysisType analysisType = AnalysisType.General,
+        [FromQuery] string preferredModel = "SERVER",
+        [FromQuery] string? notes = null)
+    {
+        var command = new AnalyzeExistingMediaCommand
+        {
+            MissionId = missionId,
+            MediaId = mediaId,
+            AnalysisType = analysisType,
+            PreferredModel = preferredModel,
+            Notes = notes
+        };
+
+        var result = await _mediator.Send(command);
+
+        return Ok(new ApiResponse(true, "AI analysis request created and queued for processing.", result));
     }
 }

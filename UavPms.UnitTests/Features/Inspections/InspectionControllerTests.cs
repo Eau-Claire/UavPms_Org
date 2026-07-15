@@ -28,8 +28,10 @@ public class InspectionControllerTests
     public async Task UploadImage_ShouldReturnBadRequest_WhenFileIsNull()
     {
         var missionId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
+        var capturedAt = DateTime.UtcNow;
 
-        var result = await _controller.UploadImage(missionId, null!);
+        var result = await _controller.UploadImage(missionId, assetId, capturedAt, null!);
 
         var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
         var apiResponse = badRequestResult.Value.Should().BeOfType<ApiResponse>().Subject;
@@ -42,10 +44,12 @@ public class InspectionControllerTests
     public async Task UploadImage_ShouldReturnBadRequest_WhenFileIsEmpty()
     {
         var missionId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
+        var capturedAt = DateTime.UtcNow;
         var fileMock = new Mock<IFormFile>();
         fileMock.Setup(f => f.Length).Returns(0);
 
-        var result = await _controller.UploadImage(missionId, fileMock.Object);
+        var result = await _controller.UploadImage(missionId, assetId, capturedAt, fileMock.Object);
 
         var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
         var apiResponse = badRequestResult.Value.Should().BeOfType<ApiResponse>().Subject;
@@ -58,11 +62,13 @@ public class InspectionControllerTests
     public async Task UploadImage_ShouldReturnBadRequest_WhenContentTypeIsInvalid()
     {
         var missionId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
+        var capturedAt = DateTime.UtcNow;
         var fileMock = new Mock<IFormFile>();
         fileMock.Setup(f => f.Length).Returns(1024);
         fileMock.Setup(f => f.ContentType).Returns("application/pdf");
 
-        var result = await _controller.UploadImage(missionId, fileMock.Object);
+        var result = await _controller.UploadImage(missionId, assetId, capturedAt, fileMock.Object);
 
         var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
         var apiResponse = badRequestResult.Value.Should().BeOfType<ApiResponse>().Subject;
@@ -74,11 +80,13 @@ public class InspectionControllerTests
     public async Task UploadImage_ShouldReturnBadRequest_WhenFileSizeExceedsLimit()
     {
         var missionId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
+        var capturedAt = DateTime.UtcNow;
         var fileMock = new Mock<IFormFile>();
         fileMock.Setup(f => f.Length).Returns(55 * 1024 * 1024);
         fileMock.Setup(f => f.ContentType).Returns("image/jpeg");
 
-        var result = await _controller.UploadImage(missionId, fileMock.Object);
+        var result = await _controller.UploadImage(missionId, assetId, capturedAt, fileMock.Object);
 
         var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
         var apiResponse = badRequestResult.Value.Should().BeOfType<ApiResponse>().Subject;
@@ -103,6 +111,8 @@ public class InspectionControllerTests
         fileMock.Setup(f => f.FileName).Returns("test.jpg");
         fileMock.Setup(f => f.OpenReadStream()).Returns(ms);
 
+        var assetId = Guid.NewGuid();
+        var capturedAt = DateTime.UtcNow;
         var commandResult = new UploadInspectionImageResult
         {
             MissionId = missionId,
@@ -113,7 +123,7 @@ public class InspectionControllerTests
         _mediatorMock.Setup(m => m.Send(It.IsAny<UploadInspectionImageCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(commandResult);
 
-        var result = await _controller.UploadImage(missionId, fileMock.Object);
+        var result = await _controller.UploadImage(missionId, assetId, capturedAt, fileMock.Object);
 
         var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
         var apiResponse = okResult.Value.Should().BeOfType<ApiResponse>().Subject;
