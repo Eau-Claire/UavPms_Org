@@ -29,6 +29,7 @@ services:
       - SendGrid__ApiKey=${SENDGRID_API_KEY}
       - SendGrid__FromEmail=${SENDGRID_FROM_EMAIL}
       - SendGrid__FromName=${SENDGRID_FROM_NAME}
+      - AIService__ServiceKey=${AIService_ServiceKey}
       - Supabase__Url=${SUPABASE_URL}
       - Supabase__ApiKey=${SUPABASE_API_KEY}
       - Supabase__Bucket=${SUPABASE_BUCKET}
