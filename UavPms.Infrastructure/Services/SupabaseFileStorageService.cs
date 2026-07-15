@@ -34,6 +34,15 @@ public class SupabaseFileStorageService : IFileStorageService
         }
     }
 
+    /// <summary>
+    /// Allowed file extensions as a secondary validation layer.
+    /// </summary>
+    private static readonly string[] AllowedExtensions =
+    {
+        ".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif",
+        ".mp4", ".avi", ".mov", ".webm"
+    };
+
     public async Task<string> SaveImageAsync(Stream fileStream, string fileName)
     {
         if (string.IsNullOrEmpty(_supabaseKey))
@@ -42,8 +51,25 @@ public class SupabaseFileStorageService : IFileStorageService
             return $"/images/mock_{fileName}";
         }
 
-        var uniqueFileName = $"{Guid.NewGuid()}_{fileName}";
-        var uploadUrl = $"{_supabaseUrl}/storage/v1/object/{_bucketName}/{uniqueFileName}";
+        // 1. Sanitize: extract only the file name portion (防 path traversal like ../../etc/passwd)
+        var safeFileName = Path.GetFileName(fileName);
+
+        // 2. Validate file extension as a secondary security check
+        var extension = Path.GetExtension(safeFileName).ToLowerInvariant();
+        if (string.IsNullOrEmpty(extension) || !AllowedExtensions.Contains(extension))
+        {
+            throw new InvalidOperationException(
+                $"File extension '{extension}' is not allowed. Allowed: {string.Join(", ", AllowedExtensions)}");
+        }
+
+        // 3. Sanitize: replace spaces and non-safe characters with underscores
+        safeFileName = System.Text.RegularExpressions.Regex.Replace(safeFileName, @"[^\w\-.]", "_");
+
+        // 4. Build unique filename with GUID prefix to prevent collisions
+        var uniqueFileName = $"{Guid.NewGuid()}_{safeFileName}";
+        var encodedFileName = Uri.EscapeDataString(uniqueFileName);
+        
+        var uploadUrl = $"{_supabaseUrl}/storage/v1/object/{_bucketName}/{encodedFileName}";
 
         _logger.LogInformation("Uploading image to Supabase Storage: {UploadUrl}", uploadUrl);
 
@@ -71,7 +97,7 @@ public class SupabaseFileStorageService : IFileStorageService
             throw new HttpRequestException($"Supabase Storage upload failed with status {response.StatusCode}: {errorBody}");
         }
 
-        var publicUrl = $"{_supabaseUrl}/storage/v1/object/public/{_bucketName}/{uniqueFileName}";
+        var publicUrl = $"{_supabaseUrl}/storage/v1/object/public/{_bucketName}/{encodedFileName}";
         _logger.LogInformation("Successfully uploaded image to Supabase. Public URL: {PublicUrl}", publicUrl);
 
         return publicUrl;
