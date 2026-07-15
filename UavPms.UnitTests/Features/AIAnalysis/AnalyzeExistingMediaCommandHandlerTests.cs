@@ -173,6 +173,8 @@ public class AnalyzeExistingMediaCommandHandlerTests
 
         _aiRequestRepoMock.Verify(r => r.AddAsync(It.Is<AIAnalysisRequest>(req =>
             req.UploadedBy == userId &&
+            req.MediaId == media.Id &&
+            req.MissionId == missionId &&
             req.FileUrl == "http://storage/existing.jpg" &&
             req.AnalysisType == AnalysisType.DefectDetection &&
             req.Status == AIAnalysisStatus.Pending
@@ -182,6 +184,7 @@ public class AnalyzeExistingMediaCommandHandlerTests
 
         _eventPublisherMock.Verify(e => e.PublishAsync(It.Is<AIAnalysisRequestedEvent>(evt =>
             evt.FileUrl == "http://storage/existing.jpg" &&
+            evt.MediaId == media.Id &&
             evt.MissionId == missionId &&
             evt.AssetId == assetId &&
             evt.PreferredModel == "YOLO11" &&

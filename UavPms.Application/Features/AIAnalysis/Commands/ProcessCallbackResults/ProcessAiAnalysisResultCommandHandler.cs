@@ -78,15 +78,39 @@ public class ProcessAiAnalysisResultCommandHandler
             };
         }
 
-        // 2. Check if InspectionMedia exists if MediaId is provided
+        // 2. Resolve InspectionMedia from callback MediaId, or fallback to the persisted AIAnalysisRequest link.
+        var resolvedMediaId = request.MediaId.HasValue && request.MediaId.Value != Guid.Empty
+            ? request.MediaId
+            : aiRequest.MediaId;
+
         InspectionMedia? media = null;
-        if (request.MediaId != null && request.MediaId.Value != Guid.Empty)
+        if (resolvedMediaId != null && resolvedMediaId.Value != Guid.Empty)
         {
-            media = await _mediaRepo.GetByIdWithDetailsAsync(request.MediaId.Value);
+            media = await _mediaRepo.GetByIdWithDetailsAsync(resolvedMediaId.Value);
             if (media == null)
             {
-                _logger.LogWarning("InspectionMedia not found: MediaId={MediaId}", request.MediaId);
-                throw new NotFoundException(nameof(InspectionMedia), request.MediaId.Value);
+                _logger.LogWarning(
+                    "InspectionMedia not found while processing AI callback: RequestId={RequestId}, MediaId={MediaId}",
+                    request.RequestId, resolvedMediaId);
+                throw new NotFoundException(nameof(InspectionMedia), resolvedMediaId.Value);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(aiRequest.FileUrl))
+        {
+            var matchingMedia = await _mediaRepo.FindAsync(m => m.FileUrl == aiRequest.FileUrl, track: false);
+            var mediaByFileUrl = matchingMedia.FirstOrDefault();
+            if (mediaByFileUrl != null)
+            {
+                media = await _mediaRepo.GetByIdWithDetailsAsync(mediaByFileUrl.Id);
+                if (media != null)
+                {
+                    aiRequest.MediaId = media.Id;
+                    aiRequest.MissionId = media.MissionId;
+
+                    _logger.LogInformation(
+                        "Resolved AI callback media by file URL fallback: RequestId={RequestId}, MediaId={MediaId}",
+                        request.RequestId, media.Id);
+                }
             }
         }
 

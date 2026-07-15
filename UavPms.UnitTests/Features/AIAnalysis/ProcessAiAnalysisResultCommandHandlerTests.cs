@@ -150,6 +150,142 @@ public class ProcessAiAnalysisResultCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ShouldUsePersistedRequestMediaId_WhenCallbackOmitsMediaId()
+    {
+        // Arrange
+        var mediaId = Guid.NewGuid();
+        var command = new ProcessAiAnalysisResultCommand
+        {
+            RequestId = Guid.NewGuid(),
+            MediaId = null,
+            Status = "Completed",
+            ModelName = "RF-DETR",
+            Detections = new List<DetectionDto>
+            {
+                new()
+                {
+                    CategoryCode = "CRACK",
+                    Confidence = 0.83,
+                    BoundingBox = new BoundingBoxDto { X = 0.1, Y = 0.2, Width = 0.3, Height = 0.4 }
+                }
+            },
+            CompletedAt = DateTime.UtcNow
+        };
+
+        var existingRequest = new AIAnalysisRequest
+        {
+            Id = command.RequestId,
+            MediaId = mediaId,
+            Status = AIAnalysisStatus.Pending
+        };
+
+        var existingMedia = new InspectionMedia
+        {
+            Id = mediaId,
+            AssetId = null,
+            MissionId = Guid.NewGuid()
+        };
+
+        var defectCategory = new DefectCategory
+        {
+            Id = 7,
+            CategoryCode = "CRACK",
+            CategoryName = "Crack",
+            IsEmergencyClass = false
+        };
+
+        _aiRequestRepoMock.Setup(r => r.GetByIdAsync(command.RequestId, true))
+            .ReturnsAsync(existingRequest);
+        _mediaRepoMock.Setup(r => r.GetByIdWithDetailsAsync(mediaId))
+            .ReturnsAsync(existingMedia);
+        _defectCategoryRepoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<DefectCategory, bool>>>(), false))
+            .ReturnsAsync(new List<DefectCategory> { defectCategory });
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.SavedDetections.Should().Be(1);
+        _anomalyRepoMock.Verify(r => r.AddAsync(It.Is<DetectedAnomaly>(a =>
+            a.MediaId == mediaId &&
+            a.CategoryId == defectCategory.Id &&
+            a.ConfidenceScore == 0.83
+        )), Times.Once);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldResolveMediaByFileUrl_WhenCallbackAndRequestHaveNoMediaId()
+    {
+        // Arrange
+        var mediaId = Guid.NewGuid();
+        var fileUrl = "http://storage/legacy-upload.jpg";
+        var command = new ProcessAiAnalysisResultCommand
+        {
+            RequestId = Guid.NewGuid(),
+            MediaId = null,
+            Status = "Completed",
+            ModelName = "RF-DETR",
+            Detections = new List<DetectionDto>
+            {
+                new()
+                {
+                    CategoryCode = "CRACK",
+                    Confidence = 0.91,
+                    BoundingBox = new BoundingBoxDto { X = 0.1, Y = 0.2, Width = 0.3, Height = 0.4 }
+                }
+            },
+            CompletedAt = DateTime.UtcNow
+        };
+
+        var existingRequest = new AIAnalysisRequest
+        {
+            Id = command.RequestId,
+            FileUrl = fileUrl,
+            Status = AIAnalysisStatus.Pending
+        };
+
+        var existingMedia = new InspectionMedia
+        {
+            Id = mediaId,
+            FileUrl = fileUrl,
+            AssetId = null,
+            MissionId = Guid.NewGuid()
+        };
+
+        var defectCategory = new DefectCategory
+        {
+            Id = 8,
+            CategoryCode = "CRACK",
+            CategoryName = "Crack",
+            IsEmergencyClass = false
+        };
+
+        _aiRequestRepoMock.Setup(r => r.GetByIdAsync(command.RequestId, true))
+            .ReturnsAsync(existingRequest);
+        _mediaRepoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<InspectionMedia, bool>>>(), false))
+            .ReturnsAsync(new List<InspectionMedia> { existingMedia });
+        _mediaRepoMock.Setup(r => r.GetByIdWithDetailsAsync(mediaId))
+            .ReturnsAsync(existingMedia);
+        _defectCategoryRepoMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<DefectCategory, bool>>>(), false))
+            .ReturnsAsync(new List<DefectCategory> { defectCategory });
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.SavedDetections.Should().Be(1);
+        existingRequest.MediaId.Should().Be(mediaId);
+        existingRequest.MissionId.Should().Be(existingMedia.MissionId);
+        _anomalyRepoMock.Verify(r => r.AddAsync(It.Is<DetectedAnomaly>(a =>
+            a.MediaId == mediaId &&
+            a.CategoryId == defectCategory.Id &&
+            a.ConfidenceScore == 0.91
+        )), Times.Once);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task Handle_ShouldThrowBusinessRuleException_WhenDefectCategoryDoesNotExist()
     {
         // Arrange

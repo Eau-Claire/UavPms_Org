@@ -121,6 +121,9 @@ public class AnalyzeMissionMediaCommandHandlerTests
         addedRequests.Should().OnlyContain(r =>
             r.BatchId == result.BatchId &&
             r.UploadedBy == userId &&
+            r.MediaId.HasValue &&
+            addedMedia.Select(m => m.Id).Contains(r.MediaId.Value) &&
+            r.MissionId == missionId &&
             r.AnalysisType == AnalysisType.DefectDetection &&
             r.Status == AIAnalysisStatus.Pending &&
             r.Notes == command.Notes);
@@ -129,6 +132,8 @@ public class AnalyzeMissionMediaCommandHandlerTests
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         _eventPublisherMock.Verify(e => e.PublishAsync(It.Is<AIAnalysisRequestedEvent>(evt =>
              evt.MissionId == missionId &&
+             evt.MediaId.HasValue &&
+             addedMedia.Select(m => m.Id).Contains(evt.MediaId.Value) &&
              evt.AssetId == null &&
              evt.PreferredModel == "RF-DETR" &&
              evt.AnalysisType == "DefectDetection")), Times.Exactly(2));

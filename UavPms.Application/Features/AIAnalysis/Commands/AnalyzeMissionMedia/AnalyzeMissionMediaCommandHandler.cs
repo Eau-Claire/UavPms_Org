@@ -120,6 +120,8 @@ public class AnalyzeMissionMediaCommandHandler
                     Id = Guid.NewGuid(),
                     BatchId = batchId,
                     UploadedBy = currentUserId,
+                    MediaId = media.Id,
+                    MissionId = request.MissionId,
                     FileUrl = fileUrl,
                     MediaType = mediaType,
                     AnalysisType = request.AnalysisType,
