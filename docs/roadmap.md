@@ -135,6 +135,7 @@
 - [X] 25. **CRUD API quản lý người dùng (Users)**: Chỉ tài khoản có vai trò `SystemAdmin` mới được phép tạo mới, cập nhật thông tin, thay đổi vai trò (Role) hoặc đình chỉ (suspend) tài khoản khác.
 - [X] 26. **EF Core Interceptor / SaveChanges Override**: Viết bộ lắng nghe tự động ghi log thay đổi. Trước khi lưu vào DB, kiểm tra các thay đổi ở trạng thái Added/Modified/Deleted, so sánh giá trị cũ và mới để sinh bản ghi chèn tự động vào bảng `AuditLogs` (tự động ghi nhận IP người gọi và UserAgent).
 - [X] 27. **API truy cập lịch sử Audit (`GetAuditLogsQuery`)**: Dành riêng cho `SystemAdmin` và `Manager` giám sát các tác vụ nhạy cảm trong hệ thống.
+- [x] 27b. **API lấy danh sách người dùng cho phân công chuyến bay (`GetAssignableUsersQuery` / `GET /api/v1/users/assignable`)**: Yêu cầu quyền quản trị (`SystemAdmin`/`Manager`), chỉ trả về người dùng hoạt động (`Status == "Active"`) có vai trò `Inspector`, không bao gồm thông tin nhạy cảm.
 
 ---
 
