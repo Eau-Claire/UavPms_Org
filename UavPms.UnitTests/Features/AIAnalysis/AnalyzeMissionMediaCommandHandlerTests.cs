@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -55,98 +56,87 @@ public class AnalyzeMissionMediaCommandHandlerTests
     [Fact]
     public async Task Handle_ShouldThrowKeyNotFoundException_WhenMissionDoesNotExist()
     {
-        // Arrange
         var command = new AnalyzeMissionMediaCommand
         {
             MissionId = Guid.NewGuid(),
-            Files = new List<FileDataDto>
-            {
-                new() { Stream = new MemoryStream(), FileName = "test.jpg", ContentType = "image/jpeg" }
-            }
+            Files = new List<FileDataDto> { CreateFile("test.jpg", "image/jpeg") }
         };
 
         _missionRepoMock.Setup(r => r.GetByIdAsync(command.MissionId, false))
             .ReturnsAsync((Mission?)null);
 
-        // Act
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
 
-        // Assert
         await act.Should().ThrowAsync<KeyNotFoundException>()
             .WithMessage($"*{command.MissionId}*");
     }
 
     [Fact]
-    public async Task Handle_ShouldSaveMediaAndRequestAndPublishEvent_WhenRequestIsValid()
+    public async Task Handle_ShouldCreateMediaRequestsAndEvents_ForMixedImageVideoBatch()
     {
-        // Arrange
         var missionId = Guid.NewGuid();
         var userId = Guid.NewGuid();
+        var addedMedia = new List<InspectionMedia>();
+        var addedRequests = new List<AIAnalysisRequest>();
 
         var command = new AnalyzeMissionMediaCommand
         {
             MissionId = missionId,
             Files = new List<FileDataDto>
             {
-                new() { Stream = new MemoryStream(new byte[] { 1, 2, 3 }), FileName = "test.jpg", ContentType = "image/jpeg" },
-                new() { Stream = new MemoryStream(new byte[] { 4, 5, 6 }), FileName = "test_video.mp4", ContentType = "video/mp4" }
+                CreateFile("pole.jpg", "image/jpeg"),
+                CreateFile("flight.mp4", "video/mp4")
             },
             AnalysisType = AnalysisType.DefectDetection,
             PreferredModel = "RF-DETR",
-            Notes = "Test notes"
+            Notes = "day la 1 cay cot dien o Ha NOi"
         };
 
-        var mission = new Mission { Id = missionId };
-
         _missionRepoMock.Setup(r => r.GetByIdAsync(missionId, false))
-            .ReturnsAsync(mission);
-
+            .ReturnsAsync(new Mission { Id = missionId });
         _currentUserMock.Setup(c => c.UserId).Returns(userId);
-
         _fileStorageMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>()))
-            .ReturnsAsync("http://storage/test.jpg");
+            .ReturnsAsync((Stream _, string fileName) => $"http://storage/{fileName}");
+        _mediaRepoMock.Setup(r => r.AddAsync(It.IsAny<InspectionMedia>()))
+            .Callback<InspectionMedia>(addedMedia.Add)
+            .ReturnsAsync((InspectionMedia media) => media);
+        _aiRequestRepoMock.Setup(r => r.AddAsync(It.IsAny<AIAnalysisRequest>()))
+            .Callback<AIAnalysisRequest>(addedRequests.Add)
+            .ReturnsAsync((AIAnalysisRequest request) => request);
 
-        // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        // Assert
-        result.Should().NotBeNull();
         result.BatchId.Should().NotBeEmpty();
         result.TotalFiles.Should().Be(2);
         result.AcceptedFiles.Should().Be(2);
         result.RejectedFiles.Should().Be(0);
         result.RequestIds.Should().HaveCount(2);
 
-        _mediaRepoMock.Verify(r => r.AddAsync(It.Is<InspectionMedia>(m =>
-             m.MissionId == missionId &&
-             m.AssetId == null &&
-             m.FileUrl == "http://storage/test.jpg" &&
-             m.AiSource == "RF-DETR"
-         )), Times.Exactly(2));
+        addedMedia.Should().HaveCount(2);
+        addedMedia.Should().Contain(m => m.MissionId == missionId && m.AssetId == null && m.MediaType == "Image" && m.FileUrl == "http://storage/pole.jpg");
+        addedMedia.Should().Contain(m => m.MissionId == missionId && m.AssetId == null && m.MediaType == "Video" && m.FileUrl == "http://storage/flight.mp4");
+        addedMedia.Should().OnlyContain(m => m.AiSource == "RF-DETR");
 
-        _aiRequestRepoMock.Verify(r => r.AddAsync(It.Is<AIAnalysisRequest>(req =>
-             req.UploadedBy == userId &&
-             req.FileUrl == "http://storage/test.jpg" &&
-             req.AnalysisType == AnalysisType.DefectDetection &&
-             req.Status == AIAnalysisStatus.Pending &&
-             req.BatchId == result.BatchId
-         )), Times.Exactly(2));
+        addedRequests.Should().HaveCount(2);
+        addedRequests.Should().OnlyContain(r =>
+            r.BatchId == result.BatchId &&
+            r.UploadedBy == userId &&
+            r.AnalysisType == AnalysisType.DefectDetection &&
+            r.Status == AIAnalysisStatus.Pending &&
+            r.Notes == command.Notes);
+        result.RequestIds.Should().BeEquivalentTo(addedRequests.Select(r => r.Id));
 
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
-
         _eventPublisherMock.Verify(e => e.PublishAsync(It.Is<AIAnalysisRequestedEvent>(evt =>
-             evt.FileUrl == "http://storage/test.jpg" &&
              evt.MissionId == missionId &&
              evt.AssetId == null &&
              evt.PreferredModel == "RF-DETR" &&
-             evt.AnalysisType == "DefectDetection"
-         )), Times.Exactly(2));
+             evt.AnalysisType == "DefectDetection")), Times.Exactly(2));
     }
 
     [Fact]
-    public async Task Handle_ShouldRejectFiles_WhenContentTypeIsUnsupported()
+    public async Task Handle_ShouldRejectUnsupportedFilesAndContinueAcceptedFiles()
     {
-        // Arrange
         var missionId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
@@ -155,36 +145,85 @@ public class AnalyzeMissionMediaCommandHandlerTests
             MissionId = missionId,
             Files = new List<FileDataDto>
             {
-                new() { Stream = new MemoryStream(new byte[] { 1 }), FileName = "test.txt", ContentType = "text/plain" },
-                new() { Stream = new MemoryStream(new byte[] { 2 }), FileName = "test.jpg", ContentType = "image/jpeg" }
+                CreateFile("notes.txt", "text/plain"),
+                CreateFile("pole.png", "image/png")
             },
             AnalysisType = AnalysisType.DefectDetection,
-            PreferredModel = "RF-DETR",
-            Notes = "Test notes"
+            PreferredModel = "SERVER"
         };
 
-        var mission = new Mission { Id = missionId };
-
         _missionRepoMock.Setup(r => r.GetByIdAsync(missionId, false))
-            .ReturnsAsync(mission);
-
+            .ReturnsAsync(new Mission { Id = missionId });
         _currentUserMock.Setup(c => c.UserId).Returns(userId);
-
         _fileStorageMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>()))
-            .ReturnsAsync("http://storage/test.jpg");
+            .ReturnsAsync((Stream _, string fileName) => $"http://storage/{fileName}");
+        _mediaRepoMock.Setup(r => r.AddAsync(It.IsAny<InspectionMedia>()))
+            .ReturnsAsync((InspectionMedia media) => media);
+        _aiRequestRepoMock.Setup(r => r.AddAsync(It.IsAny<AIAnalysisRequest>()))
+            .ReturnsAsync((AIAnalysisRequest request) => request);
 
-        // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        // Assert
-        result.Should().NotBeNull();
         result.TotalFiles.Should().Be(2);
         result.AcceptedFiles.Should().Be(1);
         result.RejectedFiles.Should().Be(1);
         result.RequestIds.Should().HaveCount(1);
 
-        _mediaRepoMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Once);
+        _fileStorageMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), "pole.png"), Times.Once);
+        _mediaRepoMock.Verify(r => r.AddAsync(It.Is<InspectionMedia>(m => m.FileUrl == "http://storage/pole.png")), Times.Once);
         _aiRequestRepoMock.Verify(r => r.AddAsync(It.IsAny<AIAnalysisRequest>()), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _eventPublisherMock.Verify(e => e.PublishAsync(It.IsAny<AIAnalysisRequestedEvent>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldRejectFailedFileAndContinueRemainingFiles()
+    {
+        var missionId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var command = new AnalyzeMissionMediaCommand
+        {
+            MissionId = missionId,
+            Files = new List<FileDataDto>
+            {
+                CreateFile("broken.jpg", "image/jpeg"),
+                CreateFile("ok.webm", "video/webm")
+            }
+        };
+
+        _missionRepoMock.Setup(r => r.GetByIdAsync(missionId, false))
+            .ReturnsAsync(new Mission { Id = missionId });
+        _currentUserMock.Setup(c => c.UserId).Returns(userId);
+        _fileStorageMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), "broken.jpg"))
+            .ThrowsAsync(new IOException("storage failed"));
+        _fileStorageMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), "ok.webm"))
+            .ReturnsAsync("http://storage/ok.webm");
+        _mediaRepoMock.Setup(r => r.AddAsync(It.IsAny<InspectionMedia>()))
+            .ReturnsAsync((InspectionMedia media) => media);
+        _aiRequestRepoMock.Setup(r => r.AddAsync(It.IsAny<AIAnalysisRequest>()))
+            .ReturnsAsync((AIAnalysisRequest request) => request);
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.TotalFiles.Should().Be(2);
+        result.AcceptedFiles.Should().Be(1);
+        result.RejectedFiles.Should().Be(1);
+        result.RequestIds.Should().HaveCount(1);
+
+        _mediaRepoMock.Verify(r => r.AddAsync(It.Is<InspectionMedia>(m => m.FileUrl == "http://storage/ok.webm")), Times.Once);
+        _aiRequestRepoMock.Verify(r => r.AddAsync(It.IsAny<AIAnalysisRequest>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _eventPublisherMock.Verify(e => e.PublishAsync(It.IsAny<AIAnalysisRequestedEvent>()), Times.Once);
+    }
+
+    private static FileDataDto CreateFile(string fileName, string contentType)
+    {
+        return new FileDataDto
+        {
+            Stream = new MemoryStream(new byte[] { 1, 2, 3 }),
+            FileName = fileName,
+            ContentType = contentType
+        };
     }
 }

@@ -5,12 +5,14 @@ using UavPms.Core.Enums;
 namespace UavPms.Core.Entities;
 
 /// <summary>
-/// Yêu cầu phân tích AI ad-hoc — không liên kết với mission cụ thể.
-/// Hỗ trợ: exploratory analysis, model validation, incident investigation.
-/// Mỗi file (ảnh hoặc video) tạo 1 record riêng biệt.
+/// Yêu cầu phân tích AI ad-hoc hoặc theo mission.
+/// Mỗi file ảnh hoặc video tạo một record riêng biệt.
 /// </summary>
 public class AIAnalysisRequest : BaseEntity
 {
+    /// <summary>ID batch upload nếu request được tạo từ batch mission upload</summary>
+    public Guid? BatchId { get; set; }
+
     /// <summary>ID người upload</summary>
     public Guid UploadedBy { get; set; }
 
@@ -34,9 +36,6 @@ public class AIAnalysisRequest : BaseEntity
 
     /// <summary>Thời điểm hoàn thành phân tích</summary>
     public DateTime? CompletedAt { get; set; }
-
-    /// <summary>ID của batch upload (cho phép gom nhóm các phân tích cùng đợt)</summary>
-    public Guid? BatchId { get; set; }
 
     // Navigation
     public virtual User? Uploader { get; set; }

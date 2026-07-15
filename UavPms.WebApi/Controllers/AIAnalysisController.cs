@@ -166,13 +166,19 @@ public class AIAnalysisController : ControllerBase
     }
 
     /// <summary>
-    /// Upload file và phân tích AI liên kết với mission.
+    /// Upload one or more images/videos for AI analysis linked with a mission.
     /// </summary>
+    /// <param name="missionId">Mission ID.</param>
+    /// <param name="files">Image and/or video files to analyze.</param>
+    /// <param name="analysisType">AI analysis type.</param>
+    /// <param name="preferredModel">Preferred AI model or SERVER for server-side selection.</param>
+    /// <param name="notes">Optional notes for the batch.</param>
     [HttpPost("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis")]
     [Consumes("multipart/form-data")]
+    [DisableRequestSizeLimit]
     public async Task<IActionResult> AnalyzeMissionMedia(
         Guid missionId,
-        IFormFileCollection files,
+        [FromForm] IFormFileCollection files,
         [FromForm] AnalysisType analysisType = AnalysisType.General,
         [FromForm] string preferredModel = "SERVER",
         [FromForm] string? notes = null)
@@ -182,14 +188,13 @@ public class AIAnalysisController : ControllerBase
             return BadRequest(new ApiResponse(false, "Files are required."));
         }
 
-        var filesData = new List<FileDataDto>();
+        var fileData = new List<FileDataDto>();
         foreach (var file in files)
         {
-            var stream = file.OpenReadStream();
-            filesData.Add(new FileDataDto
+            fileData.Add(new FileDataDto
             {
-                Stream = stream,
-                FileName = file.FileName,
+                Stream = file.OpenReadStream(),
+                FileName = Path.GetFileName(file.FileName),
                 ContentType = file.ContentType
             });
         }
@@ -199,7 +204,7 @@ public class AIAnalysisController : ControllerBase
             var command = new AnalyzeMissionMediaCommand
             {
                 MissionId = missionId,
-                Files = filesData,
+                Files = fileData,
                 AnalysisType = analysisType,
                 PreferredModel = preferredModel,
                 Notes = notes
@@ -207,13 +212,13 @@ public class AIAnalysisController : ControllerBase
 
             var result = await _mediator.Send(command);
 
-            return Ok(new ApiResponse(true, "AI analysis batch request created and queued for processing.", result));
+            return Ok(new ApiResponse(true, "AI analysis batch created and queued for processing.", result));
         }
         finally
         {
-            foreach (var f in filesData)
+            foreach (var item in fileData)
             {
-                f.Stream?.Dispose();
+                await item.Stream.DisposeAsync();
             }
         }
     }

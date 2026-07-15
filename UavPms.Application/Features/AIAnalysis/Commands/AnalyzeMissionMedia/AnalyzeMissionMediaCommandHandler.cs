@@ -16,6 +16,12 @@ namespace UavPms.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
 public class AnalyzeMissionMediaCommandHandler
     : IRequestHandler<AnalyzeMissionMediaCommand, AIAnalysisBatchUploadResult>
 {
+    private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg", "image/png", "image/webp", "image/tiff",
+        "video/mp4", "video/x-msvideo", "video/quicktime", "video/webm"
+    };
+
     private readonly IGenericRepository<Mission> _missionRepository;
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
     private readonly IGenericRepository<AIAnalysisRequest> _aiRequestRepository;
@@ -50,61 +56,54 @@ public class AnalyzeMissionMediaCommandHandler
         CancellationToken cancellationToken)
     {
         var currentUserId = _currentUser.UserId;
-        var batchId = Guid.NewGuid();
-        var createdAt = DateTime.UtcNow;
-
-        // 1. Kiểm tra Mission tồn tại
         var mission = await _missionRepository.GetByIdAsync(request.MissionId, track: false);
         if (mission == null)
         {
             throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
         }
 
-        var allowedTypes = new[]
-        {
-            "image/jpeg", "image/png", "image/webp", "image/tiff",
-            "video/mp4", "video/x-msvideo", "video/quicktime", "video/webm"
-        };
-
+        var batchId = Guid.NewGuid();
+        var createdAt = DateTime.UtcNow;
+        var totalFiles = request.Files?.Count ?? 0;
+        var acceptedFiles = 0;
+        var rejectedFiles = 0;
         var requestIds = new List<Guid>();
-        int totalFiles = request.Files.Count;
-        int acceptedFiles = 0;
-        int rejectedFiles = 0;
+        var publishItems = new List<(AIAnalysisRequest Request, Guid MediaId)>();
 
-        var itemsToPublish = new List<(AIAnalysisRequest Req, Guid MediaId)>();
-
-        foreach (var fileDto in request.Files)
+        foreach (var file in request.Files ?? new List<FileDataDto>())
         {
-            if (fileDto.Stream == null || fileDto.Stream.Length == 0)
+            var safeFileName = Path.GetFileName(file.FileName);
+            var contentType = file.ContentType?.Trim().ToLowerInvariant() ?? string.Empty;
+
+            if (file.Stream == null || (file.Stream.CanSeek && file.Stream.Length == 0))
             {
                 rejectedFiles++;
+                _logger.LogWarning("Rejected empty mission AI analysis file: MissionId={MissionId}, FileName={FileName}", request.MissionId, safeFileName);
                 continue;
             }
 
-            var contentType = fileDto.ContentType.ToLower();
-            if (Array.IndexOf(allowedTypes, contentType) < 0)
+            if (!AllowedContentTypes.Contains(contentType))
             {
                 rejectedFiles++;
-                _logger.LogWarning("File '{FileName}' has unsupported content type '{ContentType}' and was rejected.", fileDto.FileName, fileDto.ContentType);
+                _logger.LogWarning(
+                    "Rejected unsupported mission AI analysis file: MissionId={MissionId}, FileName={FileName}, ContentType={ContentType}",
+                    request.MissionId, safeFileName, contentType);
                 continue;
             }
 
             try
             {
-                // 2. Lưu file ảnh/video vào hệ thống
-                var fileUrl = await _fileStorageService.SaveImageAsync(fileDto.Stream, fileDto.FileName);
+                if (file.Stream.CanSeek)
+                {
+                    file.Stream.Position = 0;
+                }
 
-                var mediaType = contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
-                    ? "Video"
-                    : "Image";
+                var fileUrl = await _fileStorageService.SaveImageAsync(file.Stream, safeFileName);
+                var mediaType = contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ? "Video" : "Image";
 
-                var mediaId = Guid.NewGuid();
-                var aiRequestId = Guid.NewGuid();
-
-                // 3. Tạo bản ghi InspectionMedia để lưu kết quả phân tích AI sau này
                 var media = new InspectionMedia
                 {
-                    Id = mediaId,
+                    Id = Guid.NewGuid(),
                     MissionId = request.MissionId,
                     AssetId = null,
                     MediaType = mediaType,
@@ -116,61 +115,60 @@ public class AnalyzeMissionMediaCommandHandler
                 };
                 await _mediaRepository.AddAsync(media);
 
-                // 4. Tạo bản ghi AIAnalysisRequest
                 var aiRequest = new AIAnalysisRequest
                 {
-                    Id = aiRequestId,
+                    Id = Guid.NewGuid(),
+                    BatchId = batchId,
                     UploadedBy = currentUserId,
                     FileUrl = fileUrl,
                     MediaType = mediaType,
                     AnalysisType = request.AnalysisType,
                     Notes = request.Notes,
                     Status = AIAnalysisStatus.Pending,
-                    BatchId = batchId,
                     CreatedBy = currentUserId
                 };
                 await _aiRequestRepository.AddAsync(aiRequest);
 
-                requestIds.Add(aiRequestId);
                 acceptedFiles++;
-
-                itemsToPublish.Add((aiRequest, mediaId));
+                requestIds.Add(aiRequest.Id);
+                publishItems.Add((aiRequest, media.Id));
             }
             catch (Exception ex)
             {
                 rejectedFiles++;
-                _logger.LogError(ex, "Error processing file '{FileName}' in batch upload.", fileDto.FileName);
+                _logger.LogError(
+                    ex,
+                    "Failed to create mission AI analysis item: MissionId={MissionId}, FileName={FileName}",
+                    request.MissionId, safeFileName);
             }
         }
 
-        // Save everything to DB
         if (acceptedFiles > 0)
         {
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Publish RabbitMQ messages for each successfully saved media item
-            foreach (var (aiRequest, mediaId) in itemsToPublish)
+            foreach (var item in publishItems)
             {
-                _logger.LogInformation(
-                    "Created mission AI analysis request in batch: BatchId={BatchId}, RequestId={RequestId}, MediaId={MediaId}, MissionId={MissionId}",
-                    batchId, aiRequest.Id, mediaId, request.MissionId);
-
                 await _eventPublisher.PublishAsync(new AIAnalysisRequestedEvent
                 {
-                    RequestId = aiRequest.Id,
-                    FileUrl = aiRequest.FileUrl,
-                    MediaType = aiRequest.MediaType,
-                    AnalysisType = aiRequest.AnalysisType.ToString(),
-                    Notes = aiRequest.Notes,
+                    RequestId = item.Request.Id,
+                    FileUrl = item.Request.FileUrl,
+                    MediaType = item.Request.MediaType,
+                    AnalysisType = item.Request.AnalysisType.ToString(),
+                    Notes = item.Request.Notes,
                     UploadedBy = currentUserId,
-                    RequestedAt = aiRequest.CreatedAt,
-                    MediaId = mediaId,
+                    RequestedAt = item.Request.CreatedAt,
+                    MediaId = item.MediaId,
                     MissionId = request.MissionId,
                     AssetId = null,
                     PreferredModel = request.PreferredModel
                 });
             }
         }
+
+        _logger.LogInformation(
+            "Created mission AI analysis batch: BatchId={BatchId}, MissionId={MissionId}, TotalFiles={TotalFiles}, AcceptedFiles={AcceptedFiles}, RejectedFiles={RejectedFiles}",
+            batchId, request.MissionId, totalFiles, acceptedFiles, rejectedFiles);
 
         return new AIAnalysisBatchUploadResult
         {
