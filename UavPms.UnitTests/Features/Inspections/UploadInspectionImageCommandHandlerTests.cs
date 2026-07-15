@@ -18,6 +18,7 @@ namespace UavPms.UnitTests.Features.Inspections;
 public class UploadInspectionImageCommandHandlerTests
 {
     private readonly Mock<IGenericRepository<Mission>> _missionRepositoryMock;
+    private readonly Mock<IGenericRepository<Asset>> _assetRepositoryMock;
     private readonly Mock<IGenericRepository<InspectionMedia>> _mediaRepositoryMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IFileStorageService> _fileStorageServiceMock;
@@ -29,6 +30,7 @@ public class UploadInspectionImageCommandHandlerTests
     public UploadInspectionImageCommandHandlerTests()
     {
         _missionRepositoryMock = new Mock<IGenericRepository<Mission>>();
+        _assetRepositoryMock = new Mock<IGenericRepository<Asset>>();
         _mediaRepositoryMock = new Mock<IGenericRepository<InspectionMedia>>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _fileStorageServiceMock = new Mock<IFileStorageService>();
@@ -38,6 +40,7 @@ public class UploadInspectionImageCommandHandlerTests
 
         _handler = new UploadInspectionImageCommandHandler(
             _missionRepositoryMock.Object,
+            _assetRepositoryMock.Object,
             _mediaRepositoryMock.Object,
             _unitOfWorkMock.Object,
             _fileStorageServiceMock.Object,
@@ -79,10 +82,48 @@ public class UploadInspectionImageCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ShouldThrowKeyNotFoundException_WhenAssetDoesNotExist()
+    {
+        // Arrange
+        var missionId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
+        var command = new UploadInspectionImageCommand
+        {
+            MissionId = missionId,
+            AssetId = assetId,
+            CapturedAt = DateTime.UtcNow,
+            FileStream = new MemoryStream(),
+            FileName = "test.jpg",
+            ContentType = "image/jpeg"
+        };
+
+        var mission = new Mission { Id = missionId };
+
+        _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false))
+            .ReturnsAsync(mission);
+
+        _assetRepositoryMock.Setup(r => r.GetByIdAsync(assetId, false))
+            .ReturnsAsync((Asset?)null);
+
+        // Act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage($"Asset with ID '{assetId}' was not found.");
+
+        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>()), Times.Never);
+        _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<ImageUploadedEvent>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Handle_ShouldThrowUnauthorizedAccessException_WhenUserIsNotAssignedInspector()
     {
         // Arrange
         var missionId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
         var inspectorId = Guid.NewGuid();
         var currentUserId = Guid.NewGuid(); // different from inspectorId
 
@@ -92,10 +133,12 @@ public class UploadInspectionImageCommandHandlerTests
             InspectorId = inspectorId
         };
 
+        var asset = new Asset { Id = assetId };
+
         var command = new UploadInspectionImageCommand
         {
             MissionId = missionId,
-            AssetId = Guid.NewGuid(),
+            AssetId = assetId,
             CapturedAt = DateTime.UtcNow,
             FileStream = new MemoryStream(),
             FileName = "test.jpg",
@@ -104,6 +147,9 @@ public class UploadInspectionImageCommandHandlerTests
 
         _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false))
             .ReturnsAsync(mission);
+
+        _assetRepositoryMock.Setup(r => r.GetByIdAsync(assetId, false))
+            .ReturnsAsync(asset);
 
         _currentUserServicesMock.Setup(s => s.UserId).Returns(currentUserId);
 
@@ -125,6 +171,7 @@ public class UploadInspectionImageCommandHandlerTests
     {
         // Arrange
         var missionId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
         var inspectorId = Guid.NewGuid();
         var fileUrl = "/images/unique_test.jpg";
         var fileName = "test.jpg";
@@ -136,7 +183,7 @@ public class UploadInspectionImageCommandHandlerTests
             InspectorId = inspectorId
         };
 
-        var assetId = Guid.NewGuid();
+        var asset = new Asset { Id = assetId };
         var capturedAt = DateTime.UtcNow;
 
         var command = new UploadInspectionImageCommand
@@ -151,6 +198,9 @@ public class UploadInspectionImageCommandHandlerTests
 
         _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false))
             .ReturnsAsync(mission);
+
+        _assetRepositoryMock.Setup(r => r.GetByIdAsync(assetId, false))
+            .ReturnsAsync(asset);
 
         _currentUserServicesMock.Setup(s => s.UserId).Returns(inspectorId);
 

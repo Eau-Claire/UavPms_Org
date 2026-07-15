@@ -18,6 +18,7 @@ public class AnalyzeMissionMediaCommandHandler
     : IRequestHandler<AnalyzeMissionMediaCommand, AIAnalysisUploadResult>
 {
     private readonly IGenericRepository<Mission> _missionRepository;
+    private readonly IGenericRepository<Asset> _assetRepository;
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
     private readonly IGenericRepository<AIAnalysisRequest> _aiRequestRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -28,6 +29,7 @@ public class AnalyzeMissionMediaCommandHandler
 
     public AnalyzeMissionMediaCommandHandler(
         IGenericRepository<Mission> missionRepository,
+        IGenericRepository<Asset> assetRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
         IGenericRepository<AIAnalysisRequest> aiRequestRepository,
         IUnitOfWork unitOfWork,
@@ -37,6 +39,7 @@ public class AnalyzeMissionMediaCommandHandler
         ILogger<AnalyzeMissionMediaCommandHandler> logger)
     {
         _missionRepository = missionRepository;
+        _assetRepository = assetRepository;
         _mediaRepository = mediaRepository;
         _aiRequestRepository = aiRequestRepository;
         _unitOfWork = unitOfWork;
@@ -57,6 +60,13 @@ public class AnalyzeMissionMediaCommandHandler
         if (mission == null)
         {
             throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
+        }
+
+        // 1b. Kiểm tra Asset tồn tại
+        var asset = await _assetRepository.GetByIdAsync(request.AssetId, track: false);
+        if (asset == null)
+        {
+            throw new KeyNotFoundException($"Asset with ID '{request.AssetId}' was not found.");
         }
 
         // 2. Lưu file ảnh/video vào hệ thống

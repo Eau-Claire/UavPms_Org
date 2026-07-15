@@ -19,6 +19,7 @@ namespace UavPms.UnitTests.Features.AIAnalysis;
 public class AnalyzeMissionMediaCommandHandlerTests
 {
     private readonly Mock<IGenericRepository<Mission>> _missionRepoMock;
+    private readonly Mock<IGenericRepository<Asset>> _assetRepoMock;
     private readonly Mock<IGenericRepository<InspectionMedia>> _mediaRepoMock;
     private readonly Mock<IGenericRepository<AIAnalysisRequest>> _aiRequestRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
@@ -32,6 +33,7 @@ public class AnalyzeMissionMediaCommandHandlerTests
     public AnalyzeMissionMediaCommandHandlerTests()
     {
         _missionRepoMock = new Mock<IGenericRepository<Mission>>();
+        _assetRepoMock = new Mock<IGenericRepository<Asset>>();
         _mediaRepoMock = new Mock<IGenericRepository<InspectionMedia>>();
         _aiRequestRepoMock = new Mock<IGenericRepository<AIAnalysisRequest>>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
@@ -42,6 +44,7 @@ public class AnalyzeMissionMediaCommandHandlerTests
 
         _handler = new AnalyzeMissionMediaCommandHandler(
             _missionRepoMock.Object,
+            _assetRepoMock.Object,
             _mediaRepoMock.Object,
             _aiRequestRepoMock.Object,
             _unitOfWorkMock.Object,
@@ -77,6 +80,35 @@ public class AnalyzeMissionMediaCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ShouldThrowKeyNotFoundException_WhenAssetDoesNotExist()
+    {
+        // Arrange
+        var command = new AnalyzeMissionMediaCommand
+        {
+            MissionId = Guid.NewGuid(),
+            AssetId = Guid.NewGuid(),
+            FileStream = new MemoryStream(),
+            FileName = "test.jpg",
+            ContentType = "image/jpeg"
+        };
+
+        var mission = new Mission { Id = command.MissionId };
+
+        _missionRepoMock.Setup(r => r.GetByIdAsync(command.MissionId, false))
+            .ReturnsAsync(mission);
+
+        _assetRepoMock.Setup(r => r.GetByIdAsync(command.AssetId, false))
+            .ReturnsAsync((Asset?)null);
+
+        // Act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage($"*{command.AssetId}*");
+    }
+
+    [Fact]
     public async Task Handle_ShouldSaveMediaAndRequestAndPublishEvent_WhenRequestIsValid()
     {
         // Arrange
@@ -97,9 +129,13 @@ public class AnalyzeMissionMediaCommandHandlerTests
         };
 
         var mission = new Mission { Id = missionId };
+        var asset = new Asset { Id = assetId };
 
         _missionRepoMock.Setup(r => r.GetByIdAsync(missionId, false))
             .ReturnsAsync(mission);
+
+        _assetRepoMock.Setup(r => r.GetByIdAsync(assetId, false))
+            .ReturnsAsync(asset);
 
         _currentUserMock.Setup(c => c.UserId).Returns(userId);
 
@@ -117,27 +153,27 @@ public class AnalyzeMissionMediaCommandHandlerTests
         result.Status.Should().Be(AIAnalysisStatus.Pending);
 
         _mediaRepoMock.Verify(r => r.AddAsync(It.Is<InspectionMedia>(m =>
-            m.MissionId == missionId &&
-            m.AssetId == assetId &&
-            m.FileUrl == "http://storage/test.jpg" &&
-            m.AiSource == "RF-DETR"
-        )), Times.Once);
+             m.MissionId == missionId &&
+             m.AssetId == assetId &&
+             m.FileUrl == "http://storage/test.jpg" &&
+             m.AiSource == "RF-DETR"
+         )), Times.Once);
 
         _aiRequestRepoMock.Verify(r => r.AddAsync(It.Is<AIAnalysisRequest>(req =>
-            req.UploadedBy == userId &&
-            req.FileUrl == "http://storage/test.jpg" &&
-            req.AnalysisType == AnalysisType.DefectDetection &&
-            req.Status == AIAnalysisStatus.Pending
-        )), Times.Once);
+             req.UploadedBy == userId &&
+             req.FileUrl == "http://storage/test.jpg" &&
+             req.AnalysisType == AnalysisType.DefectDetection &&
+             req.Status == AIAnalysisStatus.Pending
+         )), Times.Once);
 
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
 
         _eventPublisherMock.Verify(e => e.PublishAsync(It.Is<AIAnalysisRequestedEvent>(evt =>
-            evt.FileUrl == "http://storage/test.jpg" &&
-            evt.MissionId == missionId &&
-            evt.AssetId == assetId &&
-            evt.PreferredModel == "RF-DETR" &&
-            evt.AnalysisType == "DefectDetection"
-        )), Times.Once);
+             evt.FileUrl == "http://storage/test.jpg" &&
+             evt.MissionId == missionId &&
+             evt.AssetId == assetId &&
+             evt.PreferredModel == "RF-DETR" &&
+             evt.AnalysisType == "DefectDetection"
+         )), Times.Once);
     }
 }
