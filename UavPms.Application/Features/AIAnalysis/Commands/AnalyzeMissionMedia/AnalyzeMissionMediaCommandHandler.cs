@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using UavPms.Application.Features.AIAnalysis.Commands.UploadForAnalysis;
 using UavPms.Core.Contracts;
 using UavPms.Core.Entities;
 using UavPms.Core.Enums;
@@ -15,10 +14,9 @@ using UavPms.Core.Interfaces.Services;
 namespace UavPms.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
 
 public class AnalyzeMissionMediaCommandHandler
-    : IRequestHandler<AnalyzeMissionMediaCommand, AIAnalysisUploadResult>
+    : IRequestHandler<AnalyzeMissionMediaCommand, AIAnalysisBatchUploadResult>
 {
     private readonly IGenericRepository<Mission> _missionRepository;
-    private readonly IGenericRepository<Asset> _assetRepository;
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
     private readonly IGenericRepository<AIAnalysisRequest> _aiRequestRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -29,7 +27,6 @@ public class AnalyzeMissionMediaCommandHandler
 
     public AnalyzeMissionMediaCommandHandler(
         IGenericRepository<Mission> missionRepository,
-        IGenericRepository<Asset> assetRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
         IGenericRepository<AIAnalysisRequest> aiRequestRepository,
         IUnitOfWork unitOfWork,
@@ -39,7 +36,6 @@ public class AnalyzeMissionMediaCommandHandler
         ILogger<AnalyzeMissionMediaCommandHandler> logger)
     {
         _missionRepository = missionRepository;
-        _assetRepository = assetRepository;
         _mediaRepository = mediaRepository;
         _aiRequestRepository = aiRequestRepository;
         _unitOfWork = unitOfWork;
@@ -49,11 +45,13 @@ public class AnalyzeMissionMediaCommandHandler
         _logger = logger;
     }
 
-    public async Task<AIAnalysisUploadResult> Handle(
+    public async Task<AIAnalysisBatchUploadResult> Handle(
         AnalyzeMissionMediaCommand request,
         CancellationToken cancellationToken)
     {
         var currentUserId = _currentUser.UserId;
+        var batchId = Guid.NewGuid();
+        var createdAt = DateTime.UtcNow;
 
         // 1. Kiểm tra Mission tồn tại
         var mission = await _missionRepository.GetByIdAsync(request.MissionId, track: false);
@@ -62,87 +60,126 @@ public class AnalyzeMissionMediaCommandHandler
             throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
         }
 
-        Guid? targetAssetId = (request.AssetId.HasValue && request.AssetId.Value != Guid.Empty)
-            ? request.AssetId.Value
-            : null;
-
-        // 1b. Kiểm tra Asset tồn tại (nếu có truyền)
-        if (targetAssetId.HasValue)
+        var allowedTypes = new[]
         {
-            var asset = await _assetRepository.GetByIdAsync(targetAssetId.Value, track: false);
-            if (asset == null)
+            "image/jpeg", "image/png", "image/webp", "image/tiff",
+            "video/mp4", "video/x-msvideo", "video/quicktime", "video/webm"
+        };
+
+        var requestIds = new List<Guid>();
+        int totalFiles = request.Files.Count;
+        int acceptedFiles = 0;
+        int rejectedFiles = 0;
+
+        var itemsToPublish = new List<(AIAnalysisRequest Req, Guid MediaId)>();
+
+        foreach (var fileDto in request.Files)
+        {
+            if (fileDto.Stream == null || fileDto.Stream.Length == 0)
             {
-                throw new KeyNotFoundException($"Asset with ID '{targetAssetId.Value}' was not found.");
+                rejectedFiles++;
+                continue;
+            }
+
+            var contentType = fileDto.ContentType.ToLower();
+            if (Array.IndexOf(allowedTypes, contentType) < 0)
+            {
+                rejectedFiles++;
+                _logger.LogWarning("File '{FileName}' has unsupported content type '{ContentType}' and was rejected.", fileDto.FileName, fileDto.ContentType);
+                continue;
+            }
+
+            try
+            {
+                // 2. Lưu file ảnh/video vào hệ thống
+                var fileUrl = await _fileStorageService.SaveImageAsync(fileDto.Stream, fileDto.FileName);
+
+                var mediaType = contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
+                    ? "Video"
+                    : "Image";
+
+                var mediaId = Guid.NewGuid();
+                var aiRequestId = Guid.NewGuid();
+
+                // 3. Tạo bản ghi InspectionMedia để lưu kết quả phân tích AI sau này
+                var media = new InspectionMedia
+                {
+                    Id = mediaId,
+                    MissionId = request.MissionId,
+                    AssetId = null,
+                    MediaType = mediaType,
+                    FileUrl = fileUrl,
+                    AiSource = request.PreferredModel,
+                    ValidationStatus = "Pending",
+                    CapturedAt = DateTime.UtcNow,
+                    CreatedBy = currentUserId
+                };
+                await _mediaRepository.AddAsync(media);
+
+                // 4. Tạo bản ghi AIAnalysisRequest
+                var aiRequest = new AIAnalysisRequest
+                {
+                    Id = aiRequestId,
+                    UploadedBy = currentUserId,
+                    FileUrl = fileUrl,
+                    MediaType = mediaType,
+                    AnalysisType = request.AnalysisType,
+                    Notes = request.Notes,
+                    Status = AIAnalysisStatus.Pending,
+                    BatchId = batchId,
+                    CreatedBy = currentUserId
+                };
+                await _aiRequestRepository.AddAsync(aiRequest);
+
+                requestIds.Add(aiRequestId);
+                acceptedFiles++;
+
+                itemsToPublish.Add((aiRequest, mediaId));
+            }
+            catch (Exception ex)
+            {
+                rejectedFiles++;
+                _logger.LogError(ex, "Error processing file '{FileName}' in batch upload.", fileDto.FileName);
             }
         }
 
-        // 2. Lưu file ảnh/video vào hệ thống
-        var fileUrl = await _fileStorageService.SaveImageAsync(request.FileStream, request.FileName);
-
-        var mediaType = request.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
-            ? "Video"
-            : "Image";
-
-        // 3. Tạo bản ghi InspectionMedia để lưu kết quả phân tích AI sau này
-        var media = new InspectionMedia
+        // Save everything to DB
+        if (acceptedFiles > 0)
         {
-            Id = Guid.NewGuid(),
-            MissionId = request.MissionId,
-            AssetId = targetAssetId,
-            MediaType = mediaType,
-            FileUrl = fileUrl,
-            AiSource = request.PreferredModel,
-            ValidationStatus = "Pending",
-            CapturedAt = DateTime.UtcNow,
-            CreatedBy = currentUserId
-        };
-        await _mediaRepository.AddAsync(media);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // 4. Tạo bản ghi AIAnalysisRequest (ad-hoc/job request)
-        var aiRequest = new AIAnalysisRequest
+            // Publish RabbitMQ messages for each successfully saved media item
+            foreach (var (aiRequest, mediaId) in itemsToPublish)
+            {
+                _logger.LogInformation(
+                    "Created mission AI analysis request in batch: BatchId={BatchId}, RequestId={RequestId}, MediaId={MediaId}, MissionId={MissionId}",
+                    batchId, aiRequest.Id, mediaId, request.MissionId);
+
+                await _eventPublisher.PublishAsync(new AIAnalysisRequestedEvent
+                {
+                    RequestId = aiRequest.Id,
+                    FileUrl = aiRequest.FileUrl,
+                    MediaType = aiRequest.MediaType,
+                    AnalysisType = aiRequest.AnalysisType.ToString(),
+                    Notes = aiRequest.Notes,
+                    UploadedBy = currentUserId,
+                    RequestedAt = aiRequest.CreatedAt,
+                    MediaId = mediaId,
+                    MissionId = request.MissionId,
+                    AssetId = null,
+                    PreferredModel = request.PreferredModel
+                });
+            }
+        }
+
+        return new AIAnalysisBatchUploadResult
         {
-            Id = Guid.NewGuid(),
-            UploadedBy = currentUserId,
-            FileUrl = fileUrl,
-            MediaType = mediaType,
-            AnalysisType = request.AnalysisType,
-            Notes = request.Notes,
-            Status = AIAnalysisStatus.Pending,
-            CreatedBy = currentUserId
-        };
-        await _aiRequestRepository.AddAsync(aiRequest);
-
-        // 5. Lưu xuống DB
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        _logger.LogInformation(
-            "Created mission AI analysis request: RequestId={RequestId}, MediaId={MediaId}, MissionId={MissionId}",
-            aiRequest.Id, media.Id, request.MissionId);
-
-        // 6. Phát sự kiện AIAnalysisRequestedEvent lên RabbitMQ để Python consumer xử lý
-        await _eventPublisher.PublishAsync(new AIAnalysisRequestedEvent
-        {
-            RequestId = aiRequest.Id,
-            FileUrl = aiRequest.FileUrl,
-            MediaType = aiRequest.MediaType,
-            AnalysisType = aiRequest.AnalysisType.ToString(),
-            Notes = aiRequest.Notes,
-            UploadedBy = currentUserId,
-            RequestedAt = aiRequest.CreatedAt,
-            MediaId = media.Id,
-            MissionId = request.MissionId,
-            AssetId = request.AssetId,
-            PreferredModel = request.PreferredModel
-        });
-
-        return new AIAnalysisUploadResult
-        {
-            Id = aiRequest.Id,
-            FileUrl = aiRequest.FileUrl,
-            MediaType = aiRequest.MediaType,
-            AnalysisType = aiRequest.AnalysisType,
-            Status = aiRequest.Status,
-            CreatedAt = aiRequest.CreatedAt
+            BatchId = batchId,
+            TotalFiles = totalFiles,
+            AcceptedFiles = acceptedFiles,
+            RejectedFiles = rejectedFiles,
+            RequestIds = requestIds,
+            CreatedAt = createdAt
         };
     }
 }

@@ -35,6 +35,9 @@ public class AIAnalysisRequest : BaseEntity
     /// <summary>Thời điểm hoàn thành phân tích</summary>
     public DateTime? CompletedAt { get; set; }
 
+    /// <summary>ID của batch upload (cho phép gom nhóm các phân tích cùng đợt)</summary>
+    public Guid? BatchId { get; set; }
+
     // Navigation
     public virtual User? Uploader { get; set; }
 }

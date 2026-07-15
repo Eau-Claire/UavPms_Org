@@ -172,46 +172,50 @@ public class AIAnalysisController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> AnalyzeMissionMedia(
         Guid missionId,
-        [FromForm] Guid? assetId,
-        IFormFile file,
+        IFormFileCollection files,
         [FromForm] AnalysisType analysisType = AnalysisType.General,
         [FromForm] string preferredModel = "SERVER",
         [FromForm] string? notes = null)
     {
-        if (file == null || file.Length == 0)
+        if (files == null || files.Count == 0)
         {
-            return BadRequest(new ApiResponse(false, "File is required."));
+            return BadRequest(new ApiResponse(false, "Files are required."));
         }
 
-        // Validate file type
-        var allowedTypes = new[]
+        var filesData = new List<FileDataDto>();
+        foreach (var file in files)
         {
-            "image/jpeg", "image/png", "image/webp", "image/tiff",
-            "video/mp4", "video/x-msvideo", "video/quicktime", "video/webm"
-        };
-        var contentType = file.ContentType.ToLower();
-        if (Array.IndexOf(allowedTypes, contentType) < 0)
-        {
-            return BadRequest(new ApiResponse(false, "Unsupported file type."));
+            var stream = file.OpenReadStream();
+            filesData.Add(new FileDataDto
+            {
+                Stream = stream,
+                FileName = file.FileName,
+                ContentType = file.ContentType
+            });
         }
 
-        await using var stream = file.OpenReadStream();
-
-        var command = new AnalyzeMissionMediaCommand
+        try
         {
-            MissionId = missionId,
-            AssetId = assetId,
-            FileStream = stream,
-            FileName = file.FileName,
-            ContentType = file.ContentType,
-            AnalysisType = analysisType,
-            PreferredModel = preferredModel,
-            Notes = notes
-        };
+            var command = new AnalyzeMissionMediaCommand
+            {
+                MissionId = missionId,
+                Files = filesData,
+                AnalysisType = analysisType,
+                PreferredModel = preferredModel,
+                Notes = notes
+            };
 
-        var result = await _mediator.Send(command);
+            var result = await _mediator.Send(command);
 
-        return Ok(new ApiResponse(true, "AI analysis request created and queued for processing.", result));
+            return Ok(new ApiResponse(true, "AI analysis batch request created and queued for processing.", result));
+        }
+        finally
+        {
+            foreach (var f in filesData)
+            {
+                f.Stream?.Dispose();
+            }
+        }
     }
 
     /// <summary>
