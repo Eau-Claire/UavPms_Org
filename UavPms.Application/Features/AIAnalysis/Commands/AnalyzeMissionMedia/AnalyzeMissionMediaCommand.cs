@@ -9,7 +9,7 @@ namespace UavPms.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
 public class AnalyzeMissionMediaCommand : IRequest<AIAnalysisUploadResult>
 {
     public Guid MissionId { get; set; }
-    public Guid AssetId { get; set; }
+    public Guid? AssetId { get; set; }
     public Stream FileStream { get; set; } = null!;
     public string FileName { get; set; } = string.Empty;
     public string ContentType { get; set; } = string.Empty;

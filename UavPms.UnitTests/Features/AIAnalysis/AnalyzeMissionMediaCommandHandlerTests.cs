@@ -97,7 +97,7 @@ public class AnalyzeMissionMediaCommandHandlerTests
         _missionRepoMock.Setup(r => r.GetByIdAsync(command.MissionId, false))
             .ReturnsAsync(mission);
 
-        _assetRepoMock.Setup(r => r.GetByIdAsync(command.AssetId, false))
+        _assetRepoMock.Setup(r => r.GetByIdAsync(command.AssetId.Value, false))
             .ReturnsAsync((Asset?)null);
 
         // Act
@@ -175,5 +175,52 @@ public class AnalyzeMissionMediaCommandHandlerTests
              evt.PreferredModel == "RF-DETR" &&
              evt.AnalysisType == "DefectDetection"
          )), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldSaveMediaAndRequestAndPublishEvent_WhenAssetIdIsNull()
+    {
+        // Arrange
+        var missionId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var command = new AnalyzeMissionMediaCommand
+        {
+            MissionId = missionId,
+            AssetId = null,
+            FileStream = new MemoryStream(),
+            FileName = "test.jpg",
+            ContentType = "image/jpeg",
+            AnalysisType = AnalysisType.DefectDetection,
+            PreferredModel = "RF-DETR",
+            Notes = "Test note"
+        };
+
+        var mission = new Mission { Id = missionId };
+
+        _missionRepoMock.Setup(r => r.GetByIdAsync(missionId, false))
+            .ReturnsAsync(mission);
+
+        _currentUserMock.Setup(c => c.UserId).Returns(userId);
+
+        _fileStorageMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>()))
+            .ReturnsAsync("http://storage/test.jpg");
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.FileUrl.Should().Be("http://storage/test.jpg");
+        result.MediaType.Should().Be("Image");
+
+        _mediaRepoMock.Verify(r => r.AddAsync(It.Is<InspectionMedia>(m =>
+             m.MissionId == missionId &&
+             m.AssetId == null &&
+             m.FileUrl == "http://storage/test.jpg" &&
+             m.AiSource == "RF-DETR"
+         )), Times.Once);
+
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }

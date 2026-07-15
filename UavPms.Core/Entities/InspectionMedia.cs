@@ -7,7 +7,7 @@ namespace UavPms.Core.Entities;
 public class InspectionMedia : BaseEntity
 {
     public Guid MissionId { get; set; }
-    public Guid AssetId { get; set; }
+    public Guid? AssetId { get; set; }
     public string MediaType { get; set; } = string.Empty;
     public string FileUrl { get; set; } = string.Empty;
     public string AiSource { get; set; } = string.Empty;

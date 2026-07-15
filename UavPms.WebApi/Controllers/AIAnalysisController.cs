@@ -172,7 +172,7 @@ public class AIAnalysisController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> AnalyzeMissionMedia(
         Guid missionId,
-        [FromForm] Guid assetId,
+        [FromForm] Guid? assetId,
         IFormFile file,
         [FromForm] AnalysisType analysisType = AnalysisType.General,
         [FromForm] string preferredModel = "SERVER",

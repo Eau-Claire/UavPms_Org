@@ -62,11 +62,18 @@ public class AnalyzeMissionMediaCommandHandler
             throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
         }
 
-        // 1b. Kiểm tra Asset tồn tại
-        var asset = await _assetRepository.GetByIdAsync(request.AssetId, track: false);
-        if (asset == null)
+        Guid? targetAssetId = (request.AssetId.HasValue && request.AssetId.Value != Guid.Empty)
+            ? request.AssetId.Value
+            : null;
+
+        // 1b. Kiểm tra Asset tồn tại (nếu có truyền)
+        if (targetAssetId.HasValue)
         {
-            throw new KeyNotFoundException($"Asset with ID '{request.AssetId}' was not found.");
+            var asset = await _assetRepository.GetByIdAsync(targetAssetId.Value, track: false);
+            if (asset == null)
+            {
+                throw new KeyNotFoundException($"Asset with ID '{targetAssetId.Value}' was not found.");
+            }
         }
 
         // 2. Lưu file ảnh/video vào hệ thống
@@ -81,7 +88,7 @@ public class AnalyzeMissionMediaCommandHandler
         {
             Id = Guid.NewGuid(),
             MissionId = request.MissionId,
-            AssetId = request.AssetId,
+            AssetId = targetAssetId,
             MediaType = mediaType,
             FileUrl = fileUrl,
             AiSource = request.PreferredModel,
