@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -9,6 +10,7 @@ using UavPms.Application.Common.Exceptions;
 using UavPms.Core.Entities;
 using UavPms.Core.Enums;
 using UavPms.Core.Interfaces.Repositories;
+using UavPms.Core.Interfaces.Services;
 
 namespace UavPms.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
 
@@ -22,6 +24,7 @@ public class ProcessAiAnalysisResultCommandHandler
     private readonly IGenericRepository<EmergencyAlert> _emergencyAlertRepo;
     private readonly INotificationRepository _notificationRepo;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IRealtimeNotificationService _realtimeNotificationService;
     private readonly ILogger<ProcessAiAnalysisResultCommandHandler> _logger;
 
     public ProcessAiAnalysisResultCommandHandler(
@@ -32,6 +35,7 @@ public class ProcessAiAnalysisResultCommandHandler
         IGenericRepository<EmergencyAlert> emergencyAlertRepo,
         INotificationRepository notificationRepo,
         IUnitOfWork unitOfWork,
+        IRealtimeNotificationService realtimeNotificationService,
         ILogger<ProcessAiAnalysisResultCommandHandler> logger)
     {
         _aiRequestRepo = aiRequestRepo;
@@ -41,6 +45,7 @@ public class ProcessAiAnalysisResultCommandHandler
         _emergencyAlertRepo = emergencyAlertRepo;
         _notificationRepo = notificationRepo;
         _unitOfWork = unitOfWork;
+        _realtimeNotificationService = realtimeNotificationService;
         _logger = logger;
     }
 
@@ -87,6 +92,7 @@ public class ProcessAiAnalysisResultCommandHandler
 
         var savedDetections = 0;
         var createdAlerts = 0;
+        var notificationsToPush = new List<Notification>();
 
         // Save Changes
         try
@@ -175,6 +181,7 @@ public class ProcessAiAnalysisResultCommandHandler
                                     };
 
                                     await _notificationRepo.AddAsync(notification);
+                                    notificationsToPush.Add(notification);
                                 }
                             }
                         }
@@ -234,6 +241,11 @@ public class ProcessAiAnalysisResultCommandHandler
         {
             _logger.LogError(ex, "Failed while processing AI callback.");
             throw;
+        }
+
+        foreach (var notification in notificationsToPush)
+        {
+            await _realtimeNotificationService.SendToUserAsync(notification.UserId, notification, cancellationToken);
         }
 
         _logger.LogInformation("Successfully processed AI callback. RequestId={RequestId}, Status={Status}", 

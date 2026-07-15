@@ -12,6 +12,7 @@ using UavPms.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
 using UavPms.Core.Entities;
 using UavPms.Core.Enums;
 using UavPms.Core.Interfaces.Repositories;
+using UavPms.Core.Interfaces.Services;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.AIAnalysis;
@@ -25,6 +26,7 @@ public class ProcessAiAnalysisResultCommandHandlerTests
     private readonly Mock<IGenericRepository<EmergencyAlert>> _emergencyAlertRepoMock;
     private readonly Mock<INotificationRepository> _notificationRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IRealtimeNotificationService> _realtimeNotificationServiceMock;
     private readonly Mock<ILogger<ProcessAiAnalysisResultCommandHandler>> _loggerMock;
 
     private readonly ProcessAiAnalysisResultCommandHandler _handler;
@@ -38,6 +40,7 @@ public class ProcessAiAnalysisResultCommandHandlerTests
         _emergencyAlertRepoMock = new Mock<IGenericRepository<EmergencyAlert>>();
         _notificationRepoMock = new Mock<INotificationRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _realtimeNotificationServiceMock = new Mock<IRealtimeNotificationService>();
         _loggerMock = new Mock<ILogger<ProcessAiAnalysisResultCommandHandler>>();
 
         _handler = new ProcessAiAnalysisResultCommandHandler(
@@ -48,6 +51,7 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             _emergencyAlertRepoMock.Object,
             _notificationRepoMock.Object,
             _unitOfWorkMock.Object,
+            _realtimeNotificationServiceMock.Object,
             _loggerMock.Object
         );
     }
@@ -361,6 +365,14 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             n.Type == "CriticalAlert" &&
             n.ReferenceType == "EmergencyAlert"
         )), Times.Once);
+
+        _realtimeNotificationServiceMock.Verify(s => s.SendToUserAsync(
+            managerId,
+            It.Is<Notification>(n =>
+                n.UserId == managerId &&
+                n.Type == "CriticalAlert" &&
+                n.ReferenceType == "EmergencyAlert"),
+            It.IsAny<CancellationToken>()), Times.Once);
 
         _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);

@@ -11,6 +11,9 @@ using Microsoft.EntityFrameworkCore;
 using UavPms.Infrastructure.Persistence;
 using UavPms.Application;
 using UavPms.WebApi.Middlewares;
+using UavPms.WebApi.Hubs;
+using UavPms.WebApi.Services;
+using UavPms.Core.Interfaces.Services;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 using UavPms.WebApi.Swagger;
@@ -51,6 +54,9 @@ builder.Services.AddControllers(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<INotificationConnectionRegistry, NotificationConnectionRegistry>();
+builder.Services.AddScoped<IRealtimeNotificationService, RealtimeNotificationService>();
 
 // Cấu hình API Versioning 
 builder.Services.AddApiVersioning(options =>
@@ -88,6 +94,22 @@ builder.Services.AddAuthentication(options =>
             ValidAudience = jwtSettings["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
             ClockSkew = TimeSpan.Zero
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/hubs/notifications"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -242,4 +264,5 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications").RequireAuthorization();
 app.Run();  
