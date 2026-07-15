@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -34,6 +35,7 @@ public class MockAIAnalysisConsumer : BackgroundService
     private IChannel? _channel;
 
     private const string ExchangeName = "identity-exchange";
+    private const string DeadLetterExchangeName = "ai.analysis.dlx";
     private const string QueueName = "ai.analysis.server.requested";
     private const string RoutingKey = "identity.event.aianalysisrequestedevent.server";
 
@@ -65,11 +67,22 @@ public class MockAIAnalysisConsumer : BackgroundService
                 autoDelete: false,
                 cancellationToken: stoppingToken);
 
+            await _channel.ExchangeDeclareAsync(
+                exchange: DeadLetterExchangeName,
+                type: ExchangeType.Fanout,
+                durable: true,
+                autoDelete: false,
+                cancellationToken: stoppingToken);
+
             await _channel.QueueDeclareAsync(
                 queue: QueueName,
                 durable: true,
                 exclusive: false,
                 autoDelete: false,
+                arguments: new Dictionary<string, object?>
+                {
+                    ["x-dead-letter-exchange"] = DeadLetterExchangeName
+                },
                 cancellationToken: stoppingToken);
 
             await _channel.QueueBindAsync(
