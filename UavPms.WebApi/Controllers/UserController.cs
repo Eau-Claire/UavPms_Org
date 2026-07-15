@@ -9,7 +9,7 @@ using UavPms.WebApi.Filters;
 using UavPms.Core.Contracts;
 using MediatR;
 using UavPms.Application.Features.Users.Queries.GetMyProfile;
-
+using UavPms.Application.Features.Users.Queries.GetAssignableUsers;
 using Asp.Versioning;
 using UavPms.Application.Features.Users.Commands.CreateUser;
 using UavPms.Application.Features.Users.Commands.SuspendUser;
@@ -64,6 +64,14 @@ public class UserController : ControllerBase
 
         var result = await _mediator.Send(new GetUsersQuery(page, pageSize, search));
         return Ok(new ApiResponse(true, "Users retrieved successfully.", result));
+    }
+
+    [HttpGet("assignable")]
+    [Authorize(Roles = "SystemAdmin,Manager")]
+    public async Task<IActionResult> GetAssignableUsers()
+    {
+        var result = await _mediator.Send(new GetAssignableUsersQuery());
+        return Ok(new ApiResponse(true, "Assignable users retrieved successfully.", result));
     }
 
     [HttpGet("{id:guid}")]
