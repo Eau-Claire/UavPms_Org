@@ -128,6 +128,11 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
 {
     builder.Services.AddHostedService<MissionCreatedConsumer>();
     builder.Services.AddHostedService<DefectDetectedConsumer>();
+
+    if (builder.Configuration.GetValue<bool>("MockAI:Enabled"))
+    {
+        builder.Services.AddHostedService<MockAIAnalysisConsumer>();
+    }
 }
 
 // Hangfire - Background Job Processing
