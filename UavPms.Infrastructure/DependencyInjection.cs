@@ -94,8 +94,16 @@ public static class DependencyInjection
 
         services.AddScoped<IOtpService, RedisOtpService>();
 
-        // Đăng ký File Storage Service
-        services.AddScoped<IFileStorageService, LocalFileStorageService>();
+        // Đăng ký File Storage Service (Tự động chọn Supabase nếu có ApiKey, ngược lại dùng Local)
+        var supabaseKey = configuration["Supabase:ApiKey"];
+        if (!string.IsNullOrEmpty(supabaseKey))
+        {
+            services.AddScoped<IFileStorageService, SupabaseFileStorageService>();
+        }
+        else
+        {
+            services.AddScoped<IFileStorageService, LocalFileStorageService>();
+        }
 
         // Đăng ký OTP Purpose Handlers (Strategy pattern)
         services.AddScoped<IOtpPurposeHandler, UavPms.Infrastructure.Services.OtpHandlers.LoginOtpHandler>();
