@@ -68,4 +68,13 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
         
         return (items, totalCount);
     }
+
+    public async Task<Asset?> GetAssetWithDetailsAsync(Guid id)
+    {
+        return await _context.Assets
+            .Include(a => a.Tower)
+            .Include(a => a.DetectedAnomalies)
+                .ThenInclude(da => da.Category)
+            .FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
+    }
 }

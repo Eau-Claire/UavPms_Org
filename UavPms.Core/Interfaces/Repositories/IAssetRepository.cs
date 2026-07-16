@@ -14,4 +14,5 @@ public interface IAssetRepository : IGenericRepository<Asset>
         string? assetType,
         string? status
     );
+    Task<Asset?> GetAssetWithDetailsAsync(Guid id);
 }
