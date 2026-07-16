@@ -33,4 +33,27 @@ public class TowerRepository : GenericRepository<Tower>, ITowerRepository
             .FromSqlInterpolated($"SELECT * FROM \"Towers\" WHERE \"IsDeleted\" = false AND ST_DWithin(\"Geom\"::geography, ST_SetSRID(ST_Point({longitude}, {latitude}), 4326)::geography, {distanceInMeters})")
             .ToListAsync();
     }
+
+    public async Task<(IReadOnlyList<Tower> Items, int TotalCount)> GetTowersPagedAsync(
+        int page,
+        int pageSize,
+        Guid? lineAssetId)
+    {
+        var query = _context.Towers.Where(t => !t.IsDeleted);
+
+        if (lineAssetId.HasValue)
+        {
+            query = query.Where(t => t.LineAssetId == lineAssetId.Value);
+        }
+
+        int totalCount = await query.CountAsync();
+        
+        var items = await query
+            .OrderBy(t => t.TowerCode)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+        
+        return (items, totalCount);
+    }
 }
