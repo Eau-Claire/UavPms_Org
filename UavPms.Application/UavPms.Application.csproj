@@ -16,16 +16,14 @@
     <PackageReference Include="MediatR" Version="14.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.3.11" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.9" />
+    <PackageReference Include="OfficeOpenXml.Extends" Version="1.0.6" />
+    <PackageReference Include="OfficeOpenXml.Extension.AspNetCore" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="Microsoft.Extensions.Configuration.Abstractions">
       <HintPath>..\..\..\.nuget\packages\microsoft.extensions.configuration.abstractions\10.0.0\lib\net9.0\Microsoft.Extensions.Configuration.Abstractions.dll</HintPath>
     </Reference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Features\Towers\Commands\UpdateTower\" />
   </ItemGroup>
 
 </Project>
