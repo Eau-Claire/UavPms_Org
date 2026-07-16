@@ -6,7 +6,7 @@ public record AssetDetailDto(
     string TowerCode,
     string AssetType,
     string AssetCode,
-    string status,
+    string Status,
     double CurrentHealthScore,
     string RiskLevel,
     DateTime? LastInspectedAt,

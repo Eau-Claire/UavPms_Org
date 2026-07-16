@@ -1,7 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Linq;
 using NetTopologySuite;
 using NetTopologySuite.Geometries;
 using UavPms.Core.Entities;
@@ -40,5 +37,35 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
                   AND ST_DWithin(t.""Geom""::geography, ST_SetSRID(ST_Point({longitude}, {latitude}), 4326)::geography, {distanceInMeters})")
             .Include(a => a.Tower)
             .ToListAsync();
+    }
+
+    public async Task<(IReadOnlyList<Asset> Items, int TotalCount)> GetAssetsPagedAsync(int page, int pageSize, Guid? towerId, string? assetType, string? status)
+    {
+        var query = _context.Assets.Where(a => !a.IsDeleted);
+
+        if (towerId.HasValue)
+        {
+            query = query.Where(a => a.TowerId == towerId.Value);
+        }
+
+        if (!string.IsNullOrEmpty(assetType))
+        {
+            query = query.Where(a => a.AssetType == assetType);
+        }
+
+        if (!string.IsNullOrEmpty(status))
+        {
+            query = query.Where(a => a.Status == status);
+        }
+
+        int totalCount = await query.CountAsync();
+        
+        var items = await query
+            .OrderBy(a => a.AssetCode)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+        
+        return (items, totalCount);
     }
 }
