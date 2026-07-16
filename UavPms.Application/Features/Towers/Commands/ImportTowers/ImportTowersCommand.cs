@@ -1,8 +1,9 @@
 using MediatR;
+using System.IO;
 
 namespace UavPms.Application.Features.Towers.Commands.ImportTowers;
 
-public record ImporTowersCommand(Stream FileStream) : IRequest<ImportTowersResponse>;
+public record ImportTowersCommand(Stream FileStream) : IRequest<ImportTowersResponse>;
 
 public record ImportTowersResponse(
     bool Success,

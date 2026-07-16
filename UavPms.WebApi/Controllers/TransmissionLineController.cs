@@ -9,7 +9,7 @@ using UavPms.Application.Features.TransmissionLines.Commands.CreateTransmissionL
 using UavPms.Application.Features.TransmissionLines.Commands.UpdateTransmissionLine;
 using UavPms.Application.Features.TransmissionLines.Commands.DeleteTransmissionLine;
 using UavPms.Application.Features.TransmissionLines.Queries.GetTransmissionLines;
-using UavPms.Application.Features.TransmissionLines.Queries.GetTransmissionLineById;
+using UavPms.Application.Features.TransmissionLines.Queries.GetTransmissionLinesById;
 
 namespace UavPms.WebApi.Controllers;
 

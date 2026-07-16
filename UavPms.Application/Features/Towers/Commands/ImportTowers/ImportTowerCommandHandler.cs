@@ -7,7 +7,7 @@ using UavPms.Core.Interfaces.Repositories;
 
 namespace UavPms.Application.Features.Towers.Commands.ImportTowers;
 
-public class ImportTowerCommandHandler : IRequestHandler<ImporTowersCommand, ImportTowersResponse>
+public class ImportTowerCommandHandler : IRequestHandler<ImportTowersCommand, ImportTowersResponse>
 {
     private readonly ITowerRepository _towerRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -26,7 +26,7 @@ public class ImportTowerCommandHandler : IRequestHandler<ImporTowersCommand, Imp
         _transmissionLineRepository = transmissionLineRepository;
     }
     
-    public async  Task<ImportTowersResponse> Handle(ImporTowersCommand request, CancellationToken cancellationToken)
+    public async  Task<ImportTowersResponse> Handle(ImportTowersCommand request, CancellationToken cancellationToken)
     {
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
         var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
