@@ -47,6 +47,11 @@ public static class DependencyInjection
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUserRepository, UserRepository>();
         
+        // Đăng ký các Repositories quản lý phân cấp lưới điện & tài sản
+        services.AddScoped<IRegionRepository, RegionRepository>();
+        services.AddScoped<ISubstationRepository, SubstationRepository>();
+        services.AddScoped<ITransmissionLineRepository, TransmissionLineRepository>();
+        
         // Đăng ký các Repositories đặc thù 
         services.AddScoped<ITowerRepository, TowerRepository>();
         services.AddScoped<IAssetRepository, AssetRepository>();
