@@ -14,6 +14,7 @@ public class UploadInspectionImageCommandHandler
     : IRequestHandler<UploadInspectionImageCommand, UploadInspectionImageResult>
 {
     private readonly IGenericRepository<Mission> _missionRepository;
+    private readonly IGenericRepository<Asset> _assetRepository;
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
@@ -23,6 +24,7 @@ public class UploadInspectionImageCommandHandler
 
     public UploadInspectionImageCommandHandler(
         IGenericRepository<Mission> missionRepository,
+        IGenericRepository<Asset> assetRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
         IUnitOfWork unitOfWork,
         IFileStorageService fileStorageService,
@@ -31,6 +33,7 @@ public class UploadInspectionImageCommandHandler
         ILogger<UploadInspectionImageCommandHandler> logger)
     {
         _missionRepository = missionRepository;
+        _assetRepository = assetRepository;
         _mediaRepository = mediaRepository;
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
@@ -48,6 +51,13 @@ public class UploadInspectionImageCommandHandler
         if (mission == null)
         {
             throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
+        }
+
+        // 1b. Kiểm tra Asset tồn tại
+        var asset = await _assetRepository.GetByIdAsync(request.AssetId, track: false);
+        if (asset == null)
+        {
+            throw new KeyNotFoundException($"Asset with ID '{request.AssetId}' was not found.");
         }
 
         // 2. Kiểm tra quyền: chỉ Inspector được giao mới có quyền upload

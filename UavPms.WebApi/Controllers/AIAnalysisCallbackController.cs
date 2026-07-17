@@ -1,13 +1,10 @@
 using System;
-using System.IdentityModel.Tokens.Jwt;
-using System.Text;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Tokens;
 using UavPms.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
 
 namespace UavPms.WebApi.Controllers;
@@ -55,8 +52,14 @@ public class AIAnalysisCallbackController : ControllerBase
 
     private bool AuthenticateCaller()
     {
-        // Read expected service key from configuration
-        var expectedKey = _configuration["AIService:ServiceKey"] ?? "AI-Service-Secret-Token-Key-12345";
+        // Read expected service key from configuration. Do not fall back to a built-in default;
+        // callbacks must fail closed when service-to-service auth is not configured.
+        var expectedKey = _configuration["AIService:ServiceKey"];
+        if (string.IsNullOrWhiteSpace(expectedKey))
+        {
+            _logger.LogError("AI callback authentication is not configured. Set AIService:ServiceKey.");
+            return false;
+        }
 
         // Check header: X-AI-Service-Key
         if (Request.Headers.TryGetValue("X-AI-Service-Key", out var headerKey))
@@ -67,22 +70,15 @@ public class AIAnalysisCallbackController : ControllerBase
             }
         }
 
-        // Check header: Authorization (Bearer token)
+        // Check header: Authorization. Only an exact service key is accepted here;
+        // user JWTs must not authorize this internal callback endpoint.
         if (Request.Headers.TryGetValue("Authorization", out var authHeader))
         {
             var authStr = authHeader.ToString();
             if (authStr.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
                 var token = authStr.Substring(7).Trim();
-                
-                // Check if token matches expected service key
                 if (string.Equals(token, expectedKey, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-
-                // Validate token as JWT (service-to-service option)
-                if (ValidateJwtToken(token))
                 {
                     return true;
                 }
@@ -90,39 +86,5 @@ public class AIAnalysisCallbackController : ControllerBase
         }
 
         return false;
-    }
-
-    private bool ValidateJwtToken(string token)
-    {
-        try
-        {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var jwtSettings = _configuration.GetSection("Jwt");
-            var secretKey = jwtSettings["SecretKey"];
-            if (string.IsNullOrEmpty(secretKey))
-            {
-                return false;
-            }
-
-            var validationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = jwtSettings["Issuer"],
-                ValidAudience = jwtSettings["Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
-                ClockSkew = TimeSpan.Zero
-            };
-
-            tokenHandler.ValidateToken(token, validationParameters, out _);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to validate JWT token for service-to-service callback authentication.");
-            return false;
-        }
     }
 }

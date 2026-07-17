@@ -11,6 +11,9 @@ using Microsoft.EntityFrameworkCore;
 using UavPms.Infrastructure.Persistence;
 using UavPms.Application;
 using UavPms.WebApi.Middlewares;
+using UavPms.WebApi.Hubs;
+using UavPms.WebApi.Services;
+using UavPms.Core.Interfaces.Services;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 using UavPms.WebApi.Swagger;
@@ -51,6 +54,9 @@ builder.Services.AddControllers(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<INotificationConnectionRegistry, NotificationConnectionRegistry>();
+builder.Services.AddScoped<IRealtimeNotificationService, RealtimeNotificationService>();
 
 // Cấu hình API Versioning 
 builder.Services.AddApiVersioning(options =>
@@ -89,6 +95,22 @@ builder.Services.AddAuthentication(options =>
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
             ClockSkew = TimeSpan.Zero
         };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/hubs/notifications"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 // Đăng ký dịch vụ cấu hình Swagger tự động theo phiên bản
@@ -106,24 +128,35 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
 {
     builder.Services.AddHostedService<MissionCreatedConsumer>();
     builder.Services.AddHostedService<DefectDetectedConsumer>();
+
+    if (builder.Configuration.GetValue<bool>("MockAI:Enabled"))
+    {
+        builder.Services.AddHostedService<MockAIAnalysisConsumer>();
+    }
 }
 
 // Hangfire - Background Job Processing
 builder.Services.AddHangfire(config =>
 {
+    var hangfireConnection = builder.Configuration.GetConnectionString("HangfireConnection");
+    if (string.IsNullOrWhiteSpace(hangfireConnection))
+    {
+        hangfireConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+    }
+
     config.UsePostgreSqlStorage(options =>
-        options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection")),
+        options.UseNpgsqlConnection(hangfireConnection),
         new PostgreSqlStorageOptions
         {
             PrepareSchemaIfNecessary = true,
-            QueuePollInterval = TimeSpan.FromSeconds(2) // Kiểm tra queue mỗi 2 giây
+            QueuePollInterval = TimeSpan.FromSeconds(15)
         });
 });
 
 builder.Services.AddHangfireServer(options =>
 {
-    options.WorkerCount = 2; // Restrict worker count to avoid database connection pool exhaustion
-    options.SchedulePollingInterval = TimeSpan.FromSeconds(2); // Kiểm tra các tác vụ đã lên lịch mỗi 2 giây
+    options.WorkerCount = 1;
+    options.SchedulePollingInterval = TimeSpan.FromSeconds(30);
 });
 
 // CẤU HÌNH CORS POLICY 
@@ -146,12 +179,18 @@ app.UseForwardedHeaders();
 // Global Exception Handler
 app.UseExceptionHandler();
 
-// Tự động chạy Migration và Seed dữ liệu khi khởi động ứng dụng
-using (var scope = app.Services.CreateScope())
+// Run database migrations/seeding only when explicitly enabled.
+// Production web containers should not migrate on every restart because this can exhaust hosted DB pooler sessions.
+if (app.Configuration.GetValue<bool>("RunMigrations"))
 {
+    using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     dbContext.Database.Migrate();
     await DatabaseSeeder.SeedAsync(dbContext);
+}
+else
+{
+    Log.Information("Database migration and seeding skipped. Set RunMigrations=true to enable it for a dedicated migration run.");
 }
 
 // Cấu hình Hangfire Dashboard và Custom Pages cho tất cả môi trường
@@ -230,4 +269,5 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications").RequireAuthorization();
 app.Run();  

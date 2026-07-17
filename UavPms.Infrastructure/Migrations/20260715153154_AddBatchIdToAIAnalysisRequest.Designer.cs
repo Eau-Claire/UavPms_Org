@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using UavPms.Infrastructure.Persistence;
 namespace UavPms.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260715153154_AddBatchIdToAIAnalysisRequest")]
+    partial class AddBatchIdToAIAnalysisRequest
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -55,15 +58,9 @@ namespace UavPms.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<Guid?>("MediaId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("MediaType")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<Guid?>("MissionId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("Notes")
                         .HasColumnType("text");
@@ -84,10 +81,6 @@ namespace UavPms.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("MediaId");
-
-                    b.HasIndex("MissionId");
 
                     b.HasIndex("UploadedBy");
 
@@ -1442,25 +1435,11 @@ namespace UavPms.Infrastructure.Migrations
 
             modelBuilder.Entity("UavPms.Core.Entities.AIAnalysisRequest", b =>
                 {
-                    b.HasOne("UavPms.Core.Entities.InspectionMedia", "Media")
-                        .WithMany()
-                        .HasForeignKey("MediaId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("UavPms.Core.Entities.Mission", "Mission")
-                        .WithMany()
-                        .HasForeignKey("MissionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("UavPms.Core.Entities.User", "Uploader")
                         .WithMany()
                         .HasForeignKey("UploadedBy")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("Media");
-
-                    b.Navigation("Mission");
 
                     b.Navigation("Uploader");
                 });

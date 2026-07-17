@@ -11,7 +11,9 @@ using Microsoft.AspNetCore.Mvc;
 using UavPms.Application.Features.AIAnalysis.Commands.UploadForAnalysis;
 using UavPms.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
 using UavPms.Application.Features.AIAnalysis.Commands.AnalyzeExistingMedia;
+using UavPms.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
 using UavPms.Application.Features.AIAnalysis.Queries.GetAnalysisById;
+using UavPms.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using UavPms.Core.Enums;
 
 namespace UavPms.WebApi.Controllers;
@@ -166,52 +168,93 @@ public class AIAnalysisController : ControllerBase
     }
 
     /// <summary>
-    /// Upload file và phân tích AI liên kết với mission.
+    /// Upload one or more images/videos for AI analysis linked with a mission.
     /// </summary>
+    /// <param name="missionId">Mission ID.</param>
+    /// <param name="files">Image and/or video files to analyze.</param>
+    /// <param name="analysisType">AI analysis type.</param>
+    /// <param name="preferredModel">Preferred AI model or SERVER for server-side selection.</param>
+    /// <param name="notes">Optional notes for the batch.</param>
     [HttpPost("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis")]
     [Consumes("multipart/form-data")]
+    [DisableRequestSizeLimit]
     public async Task<IActionResult> AnalyzeMissionMedia(
         Guid missionId,
-        [FromForm] Guid assetId,
-        IFormFile file,
+        [FromForm] IFormFileCollection files,
         [FromForm] AnalysisType analysisType = AnalysisType.General,
         [FromForm] string preferredModel = "SERVER",
         [FromForm] string? notes = null)
     {
-        if (file == null || file.Length == 0)
+        if (files == null || files.Count == 0)
         {
-            return BadRequest(new ApiResponse(false, "File is required."));
+            return BadRequest(new ApiResponse(false, "Files are required."));
         }
 
-        // Validate file type
-        var allowedTypes = new[]
+        var fileData = new List<FileDataDto>();
+        foreach (var file in files)
         {
-            "image/jpeg", "image/png", "image/webp", "image/tiff",
-            "video/mp4", "video/x-msvideo", "video/quicktime", "video/webm"
-        };
-        var contentType = file.ContentType.ToLower();
-        if (Array.IndexOf(allowedTypes, contentType) < 0)
-        {
-            return BadRequest(new ApiResponse(false, "Unsupported file type."));
+            fileData.Add(new FileDataDto
+            {
+                Stream = file.OpenReadStream(),
+                FileName = Path.GetFileName(file.FileName),
+                ContentType = file.ContentType
+            });
         }
 
-        await using var stream = file.OpenReadStream();
+        try
+        {
+            var command = new AnalyzeMissionMediaCommand
+            {
+                MissionId = missionId,
+                Files = fileData,
+                AnalysisType = analysisType,
+                PreferredModel = preferredModel,
+                Notes = notes
+            };
 
-        var command = new AnalyzeMissionMediaCommand
+            var result = await _mediator.Send(command);
+
+            return Ok(new ApiResponse(true, "AI analysis batch created and queued for processing.", result));
+        }
+        finally
+        {
+            foreach (var item in fileData)
+            {
+                await item.Stream.DisposeAsync();
+            }
+        }
+    }
+
+
+    /// <summary>
+    /// List mission media that have AI detections, including bounding boxes for FE overlays.
+    /// </summary>
+    [HttpGet("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/detections")]
+    public async Task<IActionResult> GetMissionAiDetections(Guid missionId)
+    {
+        var result = await _mediator.Send(new GetMissionAiDetectionsQuery(missionId));
+        return Ok(new ApiResponse(true, "Mission AI detections retrieved successfully.", result));
+    }
+
+
+    /// <summary>
+    /// Accept or reject one AI detection and optionally save analyst notes for that bounding box.
+    /// </summary>
+    [HttpPut("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/detections/{detectionId:guid}/review")]
+    public async Task<IActionResult> ReviewMissionAiDetection(
+        Guid missionId,
+        Guid detectionId,
+        [FromBody] ReviewMissionAiDetectionRequest request)
+    {
+        var result = await _mediator.Send(new ReviewMissionAiDetectionCommand
         {
             MissionId = missionId,
-            AssetId = assetId,
-            FileStream = stream,
-            FileName = file.FileName,
-            ContentType = file.ContentType,
-            AnalysisType = analysisType,
-            PreferredModel = preferredModel,
-            Notes = notes
-        };
+            DetectionId = detectionId,
+            Decision = request.Decision,
+            Notes = request.Notes
+        });
 
-        var result = await _mediator.Send(command);
-
-        return Ok(new ApiResponse(true, "AI analysis request created and queued for processing.", result));
+        return Ok(new ApiResponse(true, "AI detection review saved successfully.", result));
     }
 
     /// <summary>

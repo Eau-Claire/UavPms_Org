@@ -74,6 +74,8 @@ public class AnalyzeExistingMediaCommandHandler
         {
             Id = Guid.NewGuid(),
             UploadedBy = currentUserId,
+            MediaId = media.Id,
+            MissionId = request.MissionId,
             FileUrl = media.FileUrl,
             MediaType = media.MediaType,
             AnalysisType = request.AnalysisType,

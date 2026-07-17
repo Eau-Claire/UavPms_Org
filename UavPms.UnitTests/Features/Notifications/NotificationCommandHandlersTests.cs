@@ -6,6 +6,7 @@ using UavPms.Application.Features.Notifications.Commands.DeleteNotification;
 using UavPms.Application.Features.Notifications.Commands.MarkNotificationAsRead;
 using UavPms.Core.Entities;
 using UavPms.Core.Interfaces.Repositories;
+using UavPms.Core.Interfaces.Services;
 
 namespace UavPms.UnitTests.Features.Notifications;
 
@@ -13,11 +14,13 @@ public class NotificationCommandHandlersTests
 {
     private readonly Mock<INotificationRepository> _notificationRepositoryMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IRealtimeNotificationService> _realtimeNotificationServiceMock;
 
     public NotificationCommandHandlersTests()
     {
         _notificationRepositoryMock = new Mock<INotificationRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _realtimeNotificationServiceMock = new Mock<IRealtimeNotificationService>();
     }
 
     #region CreateNotificationCommand tests
@@ -37,7 +40,8 @@ public class NotificationCommandHandlersTests
 
         var handler = new CreateNotificationCommandHandler(
             _notificationRepositoryMock.Object,
-            _unitOfWorkMock.Object
+            _unitOfWorkMock.Object,
+            _realtimeNotificationServiceMock.Object
         );
 
         // act
@@ -61,6 +65,10 @@ public class NotificationCommandHandlersTests
         )), Times.Once);
 
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _realtimeNotificationServiceMock.Verify(s => s.SendToUserAsync(
+            command.UserId,
+            It.Is<Notification>(n => n.Id == result.Id),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion

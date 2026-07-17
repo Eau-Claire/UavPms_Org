@@ -59,6 +59,16 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Errors: null
             );
         }
+        else if (exception is KeyNotFoundException keyNotFoundException)
+        {
+            httpContext.Response.StatusCode = (int)HttpStatusCode.NotFound;
+            apiResponse = new ApiResponse(
+                Success: false,
+                Message: keyNotFoundException.Message,
+                Data: null,
+                Errors: null
+            );
+        }
         else if (exception is BusinessRuleException businessRuleException)
         {
             httpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;

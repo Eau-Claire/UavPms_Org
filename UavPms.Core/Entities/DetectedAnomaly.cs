@@ -7,7 +7,7 @@ namespace UavPms.Core.Entities;
 public class DetectedAnomaly : BaseEntity
 {
     public Guid MediaId { get; set; }
-    public Guid AssetId { get; set; }
+    public Guid? AssetId { get; set; }
     public int CategoryId { get; set; }
     public Guid? AnalystId { get; set; }
     public string BoundingBox { get; set; } = string.Empty; // Will be mapped to jsonb
