@@ -23,6 +23,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Data.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -143,6 +144,10 @@ builder.Services.AddHangfire(config =>
     {
         hangfireConnection = builder.Configuration.GetConnectionString("DefaultConnection");
     }
+
+    hangfireConnection = NormalizeHangfireConnectionString(
+        hangfireConnection,
+        builder.Configuration.GetValue<int?>("Hangfire:MinimumPoolSize") ?? 5);
 
     config.UsePostgreSqlStorage(options =>
         options.UseNpgsqlConnection(hangfireConnection),
@@ -271,3 +276,47 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications").RequireAuthorization();
 app.Run();  
+
+static string? NormalizeHangfireConnectionString(string? connectionString, int minimumPoolSize)
+{
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return connectionString;
+    }
+
+    var builder = new DbConnectionStringBuilder
+    {
+        ConnectionString = connectionString
+    };
+
+    var configuredPoolSize = TryGetIntConnectionValue(builder, "Maximum Pool Size");
+    if (configuredPoolSize == null || configuredPoolSize < minimumPoolSize)
+    {
+        builder["Maximum Pool Size"] = minimumPoolSize;
+    }
+
+    return builder.ConnectionString;
+}
+
+static int? TryGetIntConnectionValue(DbConnectionStringBuilder builder, string key)
+{
+    foreach (string existingKey in builder.Keys)
+    {
+        if (!string.Equals(existingKey, key, StringComparison.OrdinalIgnoreCase))
+        {
+            continue;
+        }
+
+        if (builder[existingKey] is int intValue)
+        {
+            return intValue;
+        }
+
+        if (int.TryParse(builder[existingKey]?.ToString(), out var parsedValue))
+        {
+            return parsedValue;
+        }
+    }
+
+    return null;
+}
