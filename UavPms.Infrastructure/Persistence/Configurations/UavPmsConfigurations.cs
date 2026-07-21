@@ -269,6 +269,11 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
         builder.ToTable("DetectedAnomalies");
         builder.HasKey(e => e.Id);
         builder.Property(e => e.BoundingBox).HasColumnType("jsonb");
+        builder.Property(e => e.Gps).HasColumnType("jsonb");
+        builder.Property(e => e.AiDetectionId).HasMaxLength(128);
+        builder.Property(e => e.ImageUrl).HasMaxLength(2048);
+        builder.Property(e => e.CropUrl).HasMaxLength(2048);
+        builder.Property(e => e.TowerId).HasMaxLength(128);
 
         builder.HasOne(e => e.Media)
             .WithMany(m => m.DetectedAnomalies)

@@ -25,22 +25,33 @@ public class GetMissionAiDetectionsQueryHandler
 
         return mediaList
             .Where(media => media.DetectedAnomalies.Count > 0)
-            .Select(media => new MissionAiDetectionMediaDto
+            .Select(media =>
             {
-                MediaId = media.Id,
-                MissionId = media.MissionId,
-                AssetId = media.AssetId,
-                MediaType = media.MediaType,
-                FileUrl = media.FileUrl,
-                AiSource = media.AiSource,
-                ValidationStatus = media.ValidationStatus,
-                CapturedAt = media.CapturedAt,
-                CreatedAt = media.CreatedAt,
-                DetectionCount = media.DetectedAnomalies.Count,
-                Detections = media.DetectedAnomalies
-                    .OrderByDescending(anomaly => anomaly.ConfidenceScore)
-                    .Select(MissionAiDetectionMapper.MapDetection)
-                    .ToList()
+                var orderedDetections = media.DetectedAnomalies
+                    .OrderBy(anomaly => anomaly.Timestamp ?? double.MaxValue)
+                    .ThenBy(anomaly => anomaly.FrameIndex ?? int.MaxValue)
+                    .ThenByDescending(anomaly => anomaly.ConfidenceScore)
+                    .ToList();
+
+                return new MissionAiDetectionMediaDto
+                {
+                    MediaId = media.Id,
+                    MissionId = media.MissionId,
+                    AssetId = media.AssetId,
+                    MediaType = media.MediaType,
+                    FileUrl = media.FileUrl,
+                    AiSource = media.AiSource,
+                    ValidationStatus = media.ValidationStatus,
+                    CapturedAt = media.CapturedAt,
+                    CreatedAt = media.CreatedAt,
+                    DetectionCount = media.DetectedAnomalies.Count,
+                    VideoMetadata = orderedDetections
+                        .Select(MissionAiDetectionMapper.MapVideoMetadata)
+                        .FirstOrDefault(metadata => metadata != null),
+                    Detections = orderedDetections
+                        .Select(MissionAiDetectionMapper.MapDetection)
+                        .ToList()
+                };
             })
             .ToList();
     }

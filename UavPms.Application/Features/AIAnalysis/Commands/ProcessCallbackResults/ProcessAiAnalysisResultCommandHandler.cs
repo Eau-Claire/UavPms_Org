@@ -147,13 +147,41 @@ public class ProcessAiAnalysisResultCommandHandler
                         }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
                         // 4. Create DetectedAnomaly
+                        var timestamp = detection.Timestamp
+                            ?? (detection.TimestampMs.HasValue
+                                ? Math.Round(detection.TimestampMs.Value / 1000d, 3)
+                                : null);
+                        var gpsJson = detection.Gps == null
+                            ? null
+                            : JsonSerializer.Serialize(detection.Gps, new JsonSerializerOptions
+                            {
+                                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                            });
+
                         var anomaly = new DetectedAnomaly
                         {
                             Id = Guid.NewGuid(),
                             MediaId = media.Id,
-                            AssetId = media.AssetId,
+                            AssetId = detection.AssetId ?? media.AssetId,
                             CategoryId = category.Id,
                             BoundingBox = bboxJson,
+                            AiDetectionId = string.IsNullOrWhiteSpace(detection.Id) ? null : detection.Id.Trim(),
+                            FrameIndex = detection.FrameIndex,
+                            Timestamp = timestamp,
+                            ImageUrl = string.IsNullOrWhiteSpace(detection.ImageUrl)
+                                ? media.FileUrl
+                                : detection.ImageUrl.Trim(),
+                            CropUrl = string.IsNullOrWhiteSpace(detection.CropUrl)
+                                ? null
+                                : detection.CropUrl.Trim(),
+                            Gps = gpsJson,
+                            TowerId = string.IsNullOrWhiteSpace(detection.TowerId)
+                                ? null
+                                : detection.TowerId.Trim(),
+                            VideoDuration = request.VideoMetadata?.Duration,
+                            VideoFps = request.VideoMetadata?.Fps,
+                            VideoWidth = request.VideoMetadata?.Width,
+                            VideoHeight = request.VideoMetadata?.Height,
                             ConfidenceScore = Math.Round(detection.Confidence, 3),
                             ValidationStatus = "Pending",
                             AiSource = request.ModelName ?? "UnknownModel",
@@ -232,6 +260,7 @@ public class ProcessAiAnalysisResultCommandHandler
                         processingTimeMs = request.ProcessingTimeMs,
                         savedDetectionsCount = savedDetections,
                         completedAt = request.CompletedAt,
+                        videoMetadata = request.VideoMetadata,
                         rawResult = request.RawResult
                     }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                 }

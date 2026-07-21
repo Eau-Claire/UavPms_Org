@@ -351,12 +351,27 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             ModelName = "RF-DETR",
             ModelVersion = "v1.0",
             ProcessingTimeMs = 1500,
+            VideoMetadata = new VideoMetadataDto
+            {
+                Duration = 132.5,
+                Fps = 30,
+                Width = 1920,
+                Height = 1080
+            },
             Detections = new List<DetectionDto>
             {
                 new()
                 {
+                    Id = "ai-det-001",
                     CategoryCode = "BROKEN_INSULATOR",
+                    ClassName = "Broken Insulator",
                     Confidence = 0.75, // Lower than 0.80, so no emergency alert
+                    FrameIndex = 360,
+                    Timestamp = 12.03,
+                    ImageUrl = "https://storage/frame-360.jpg",
+                    CropUrl = "https://storage/crops/ai-det-001.jpg",
+                    Gps = new GpsDto { Lat = 10.762622, Lng = 106.660172 },
+                    TowerId = "tower-42",
                     BoundingBox = new BoundingBoxDto { X = 0.1, Y = 0.2, Width = 0.3, Height = 0.4 }
                 }
             },
@@ -405,7 +420,19 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             a.MediaId == command.MediaId &&
             a.CategoryId == defectCategory.Id &&
             a.ConfidenceScore == 0.75 &&
-            a.AiSource == "RF-DETR"
+            a.AiSource == "RF-DETR" &&
+            a.AiDetectionId == "ai-det-001" &&
+            a.FrameIndex == 360 &&
+            a.Timestamp == 12.03 &&
+            a.ImageUrl == "https://storage/frame-360.jpg" &&
+            a.CropUrl == "https://storage/crops/ai-det-001.jpg" &&
+            a.Gps != null &&
+            a.Gps.Contains("10.762622") &&
+            a.TowerId == "tower-42" &&
+            a.VideoDuration == 132.5 &&
+            a.VideoFps == 30 &&
+            a.VideoWidth == 1920 &&
+            a.VideoHeight == 1080
         )), Times.Once);
 
         _mediaRepoMock.Verify(r => r.UpdateAsync(It.Is<InspectionMedia>(m =>

@@ -13,12 +13,23 @@ public static class MissionAiDetectionMapper
             Id = anomaly.Id,
             MediaId = anomaly.MediaId,
             AssetId = anomaly.AssetId,
+            AiDetectionId = anomaly.AiDetectionId,
             CategoryCode = anomaly.Category?.CategoryCode ?? string.Empty,
+            Class = anomaly.Category?.CategoryName ?? anomaly.Category?.CategoryCode ?? string.Empty,
             CategoryName = anomaly.Category?.CategoryName ?? string.Empty,
             CategoryDescription = anomaly.Category?.Description ?? string.Empty,
             SeverityWeight = anomaly.Category?.SeverityWeight ?? 0,
             IsEmergencyClass = anomaly.Category?.IsEmergencyClass ?? false,
             ConfidenceScore = anomaly.ConfidenceScore,
+            Confidence = anomaly.ConfidenceScore,
+            FrameIndex = anomaly.FrameIndex,
+            Timestamp = anomaly.Timestamp,
+            ImageUrl = string.IsNullOrWhiteSpace(anomaly.ImageUrl)
+                ? anomaly.Media?.FileUrl
+                : anomaly.ImageUrl,
+            CropUrl = anomaly.CropUrl,
+            Gps = TryParseGps(anomaly.Gps),
+            TowerId = anomaly.TowerId,
             ValidationStatus = anomaly.ValidationStatus,
             AiSource = anomaly.AiSource,
             AnalystId = anomaly.AnalystId,
@@ -28,6 +39,50 @@ public static class MissionAiDetectionMapper
             ValidatedAt = anomaly.ValidatedAt,
             CreatedAt = anomaly.CreatedAt
         };
+    }
+
+
+    public static MissionAiVideoMetadataDto? MapVideoMetadata(DetectedAnomaly anomaly)
+    {
+        if (anomaly.VideoDuration == null &&
+            anomaly.VideoFps == null &&
+            anomaly.VideoWidth == null &&
+            anomaly.VideoHeight == null)
+        {
+            return null;
+        }
+
+        return new MissionAiVideoMetadataDto
+        {
+            Duration = anomaly.VideoDuration,
+            Fps = anomaly.VideoFps,
+            Width = anomaly.VideoWidth,
+            Height = anomaly.VideoHeight
+        };
+    }
+
+    private static MissionAiGpsDto? TryParseGps(string? rawGps)
+    {
+        if (string.IsNullOrWhiteSpace(rawGps))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(rawGps);
+            var root = document.RootElement;
+
+            return new MissionAiGpsDto
+            {
+                Lat = TryGetDouble(root, "lat", out var lat) ? lat : null,
+                Lng = TryGetDouble(root, "lng", out var lng) ? lng : null
+            };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static MissionAiBoundingBoxDto? TryParseBoundingBox(string rawBoundingBox)
