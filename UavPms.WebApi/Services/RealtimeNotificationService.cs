@@ -78,6 +78,36 @@ public class RealtimeNotificationService : IRealtimeNotificationService
         }
     }
 
+    public async Task SendAiAnalysisStatusToUserAsync(
+        Guid userId,
+        AIAnalysisStatusChangedEvent statusChanged,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var groupName = NotificationHub.UserGroupName(userId);
+            var connectionIds = _connectionRegistry.GetConnections(groupName);
+
+            await _hubContext.Clients
+                .Group(groupName)
+                .SendAsync(RealtimeNotificationEvents.AiAnalysisStatusChanged, statusChanged, cancellationToken);
+
+            _logger.LogInformation(
+                "AI analysis status pushed to user. UserId={UserId}, RequestId={RequestId}, Status={Status}, ConnectionIds={ConnectionIds}",
+                userId, statusChanged.RequestId, statusChanged.Status, connectionIds);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "AI analysis status push failed for user. UserId={UserId}, RequestId={RequestId}, Status={Status}, ConnectionIds={ConnectionIds}",
+                userId,
+                statusChanged.RequestId,
+                statusChanged.Status,
+                _connectionRegistry.GetConnections(NotificationHub.UserGroupName(userId)));
+        }
+    }
+
     private static RealtimeNotificationPayload ToPayload(Notification notification)
     {
         return new RealtimeNotificationPayload

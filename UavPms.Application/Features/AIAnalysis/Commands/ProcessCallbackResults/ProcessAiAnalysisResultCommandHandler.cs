@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using UavPms.Application.Common.Exceptions;
+using UavPms.Core.Contracts;
 using UavPms.Core.Entities;
 using UavPms.Core.Enums;
 using UavPms.Core.Interfaces.Repositories;
@@ -299,6 +300,28 @@ public class ProcessAiAnalysisResultCommandHandler
         foreach (var notification in notificationsToPush)
         {
             await _realtimeNotificationService.SendToUserAsync(notification.UserId, notification, cancellationToken);
+        }
+
+        if (aiRequest != null && aiRequest.UploadedBy != Guid.Empty)
+        {
+            await _realtimeNotificationService.SendAiAnalysisStatusToUserAsync(
+                aiRequest.UploadedBy,
+                new AIAnalysisStatusChangedEvent
+                {
+                    RequestId = aiRequest.Id,
+                    BatchId = aiRequest.BatchId,
+                    MissionId = aiRequest.MissionId,
+                    MediaId = aiRequest.MediaId,
+                    MediaType = aiRequest.MediaType,
+                    Status = aiRequest.Status.ToString(),
+                    SavedDetections = savedDetections,
+                    CreatedAlerts = createdAlerts,
+                    ErrorCode = request.ErrorCode,
+                    ErrorMessage = request.ErrorMessage,
+                    CreatedAt = aiRequest.CreatedAt,
+                    CompletedAt = aiRequest.CompletedAt
+                },
+                cancellationToken);
         }
 
         _logger.LogInformation("Successfully processed AI callback. RequestId={RequestId}, Status={Status}", 
