@@ -19,6 +19,7 @@ public class LoginCommandHandlerTests
     private readonly Mock<IGenericRepository<TrustedDevice>> _trustedDeviceRepositoryMock;
     private readonly Mock<IConfiguration> _configurationMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>> _loggerMock;
     private readonly LoginCommandHandler _handler;
 
     public LoginCommandHandlerTests()
@@ -31,6 +32,7 @@ public class LoginCommandHandlerTests
         _trustedDeviceRepositoryMock = new Mock<IGenericRepository<TrustedDevice>>();
         _configurationMock = new Mock<IConfiguration>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>();
 
         _configurationMock.Setup(c => c["Jwt:ExpiryMinutes"]).Returns("60");
         
@@ -42,7 +44,8 @@ public class LoginCommandHandlerTests
             _otpServiceMock.Object,
             _trustedDeviceRepositoryMock.Object,
             _configurationMock.Object,
-            _unitOfWorkMock.Object
+            _unitOfWorkMock.Object,
+            _loggerMock.Object
         );
     }
 
@@ -200,9 +203,9 @@ public class LoginCommandHandlerTests
         var user = CreateActivateUser();
         var command = new LoginCommand(user.Email, "password123", null, "UserAgent");
         
-        // email lookup trả null, username trả usre
+        // email lookup trả null, username trả user
         _userRepositoryMock.Setup(r =>
-            r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
+            r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
         _userRepositoryMock.Setup(r =>
             r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync(user);
         _passwordHasherMock.Setup(p =>
@@ -219,6 +222,38 @@ public class LoginCommandHandlerTests
         result.OtpRequired.Should().BeTrue();
         _userRepositoryMock.Verify(r => 
             r.GetByUsernameWithRolesAsync(command.Email), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldFallbackToUsername_WhenEmailUserPasswordFails()
+    {
+        // Account A: Email = uselessliem@gmail.com
+        var accountA = CreateActivateUser("uselessliem@gmail.com", "an3439201@gmail.com");
+        accountA.PasswordHash = "hash_A";
+        // Account B: Username = uselessliem@gmail.com, Email = testing@123gmail.com
+        var accountB = CreateActivateUser("testing@123gmail.com", "uselessliem@gmail.com");
+        accountB.PasswordHash = "hash_B";
+
+        var command = new LoginCommand("uselessliem@gmail.com", "passwordB", null, "UserAgent");
+
+        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(accountA);
+        _userRepositoryMock.Setup(r => r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync(accountB);
+
+        _passwordHasherMock.Setup(p => p.Verify("hash_A", command.Password)).Returns(false);
+        _passwordHasherMock.Setup(p => p.Verify("hash_B", command.Password)).Returns(true);
+
+        _otpServiceMock.Setup(o => o.GenerateAndSendOtpAsync(accountB.Email, OtpPurpose.Login, It.IsAny<bool>()))
+            .ReturnsAsync((true, "OTP sent"));
+
+        // act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // assert
+        result.Should().NotBeNull();
+        result.OtpRequired.Should().BeTrue();
+        result.Email.Should().Be("testing@123gmail.com");
+
+        _otpServiceMock.Verify(o => o.GenerateAndSendOtpAsync("testing@123gmail.com", OtpPurpose.Login, false), Times.Once);
     }
     
     // Test 8: OTP gửi thất bại -> Throw Exception
@@ -242,5 +277,26 @@ public class LoginCommandHandlerTests
         // assert
         await act.Should().ThrowAsync<Exception>()
             .WithMessage("Rate limit exceeded");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Handle_ShouldThrowUnauthorizedAccessException_WhenUserPasswordHashIsNullOrEmpty(string? emptyPasswordHash)
+    {
+        // arrange
+        var user = CreateActivateUser();
+        user.PasswordHash = emptyPasswordHash!;
+        var command = new LoginCommand(user.Email, "password123", null, "UserAgent");
+
+        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(user);
+
+        // act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+
+        // assert
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Invalid credentials");
     }
 }
