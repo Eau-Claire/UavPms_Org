@@ -19,6 +19,7 @@ services:
       - "5194:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - RunMigrations=${RUN_MIGRATIONS:-false}
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION}
       - ConnectionStrings__HangfireConnection=${HANGFIRE_DB_CONNECTION}
       - Redis__ConnectionString=redis:6379,abortConnect=false
