@@ -20,7 +20,7 @@ public class LoginOtpHandlerTests
     }
 
     [Fact]
-    public async Task ValidatePreconditionAsync_ShouldReturnResolvedEmail_WhenUserFoundByUsername()
+    public async Task ValidatePreconditionAsync_ShouldFail_WhenOnlyUsernameMatches()
     {
         // Account B: Username = uselessliem@gmail.com, Email = testing@123gmail.com
         var userB = new User
@@ -38,8 +38,8 @@ public class LoginOtpHandlerTests
 
         var result = await _handler.ValidatePreconditionAsync("uselessliem@gmail.com", null);
 
-        result.IsValid.Should().BeTrue();
-        result.ResolvedEmail.Should().Be("testing@123gmail.com");
+        result.IsValid.Should().BeFalse();
+        result.Message.Should().Be("User not found or inactive.");
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class LoginOtpHandlerTests
     }
 
     [Fact]
-    public async Task ValidatePreconditionAsync_ShouldFail_WhenIdentifierMatchesEmailAndUsernameOfDifferentUsers()
+    public async Task ValidatePreconditionAsync_ShouldUseEmail_WhenIdentifierMatchesEmailAndUsernameOfDifferentUsers()
     {
         var accountA = new User
         {
@@ -87,7 +87,7 @@ public class LoginOtpHandlerTests
 
         var result = await _handler.ValidatePreconditionAsync("uselessliem@gmail.com", null);
 
-        result.IsValid.Should().BeFalse();
-        result.Message.Should().Be("Ambiguous login identifier.");
+        result.IsValid.Should().BeTrue();
+        result.ResolvedEmail.Should().Be("uselessliem@gmail.com");
     }
 }

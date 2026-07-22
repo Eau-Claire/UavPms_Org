@@ -49,50 +49,30 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
     
     public async Task<AuthResultDto> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
-        var emailUser = await _userRepository.GetByEmailWithRolesAsync(request.Email);
-        var usernameUser = await _userRepository.GetByUsernameWithRolesAsync(request.Email);
-        var matchingUsers = new List<User>();
+        var user = await _userRepository.GetByEmailWithRolesAsync(request.Email);
 
-        if (emailUser != null && emailUser.Status == "Active")
+        if (user != null && user.Status == "Active")
         {
-            if (string.IsNullOrWhiteSpace(emailUser.PasswordHash))
+            if (string.IsNullOrWhiteSpace(user.PasswordHash))
             {
-                _logger.LogWarning("Account {UserId} ({Email}) has no password hash configured.", emailUser.Id, emailUser.Email);
+                _logger.LogWarning("Account {UserId} ({Email}) has no password hash configured.", user.Id, user.Email);
+                user = null;
             }
-            else if (_passwordHasher.Verify(emailUser.PasswordHash, request.Password))
+            else if (!_passwordHasher.Verify(user.PasswordHash, request.Password))
             {
-                matchingUsers.Add(emailUser);
+                user = null;
             }
         }
-
-        if (usernameUser != null && usernameUser.Status == "Active")
+        else
         {
-            if (string.IsNullOrWhiteSpace(usernameUser.PasswordHash))
-            {
-                _logger.LogWarning("Account {UserId} ({Username}) has no password hash configured.", usernameUser.Id, usernameUser.Username);
-            }
-            else if (_passwordHasher.Verify(usernameUser.PasswordHash, request.Password) &&
-                     matchingUsers.All(u => u.Id != usernameUser.Id))
-            {
-                matchingUsers.Add(usernameUser);
-            }
+            user = null;
         }
 
-        if (matchingUsers.Count == 0)
+        if (user == null)
         {
             _passwordHasher.Verify(DummyHash, request.Password);
             throw new UnauthorizedAccessException("Invalid credentials");
         }
-
-        if (matchingUsers.Count > 1)
-        {
-            _logger.LogWarning(
-                "Ambiguous login identifier {Identifier} matched multiple active users with valid credentials.",
-                request.Email);
-            throw new UnauthorizedAccessException("Invalid credentials");
-        }
-
-        var user = matchingUsers.Single();
 
         if (!user.IsEmailVerified)
         {

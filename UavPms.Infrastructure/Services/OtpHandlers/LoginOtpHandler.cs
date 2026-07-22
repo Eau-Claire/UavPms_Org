@@ -26,14 +26,7 @@ public class LoginOtpHandler : IOtpPurposeHandler
         }
 
         var emailUser = await _userRepository.GetByEmailWithRolesAsync(email);
-        var usernameUser = await _userRepository.GetByUsernameWithRolesAsync(email);
-
-        if (emailUser != null && usernameUser != null && emailUser.Id != usernameUser.Id)
-        {
-            return PreconditionResult.Failure("Ambiguous login identifier.");
-        }
-
-        var user = emailUser ?? usernameUser;
+        var user = emailUser;
         if (user == null || user.Status != "Active")
         {
             return PreconditionResult.Failure("User not found or inactive.");
