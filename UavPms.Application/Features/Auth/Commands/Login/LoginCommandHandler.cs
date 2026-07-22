@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using MediatR;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using UavPms.Application.Features.Auth.DTOs;
 using UavPms.Core.Entities;
 using UavPms.Core.Enums;
@@ -21,6 +22,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
     private readonly IGenericRepository<RefreshTokenEntity> _refreshTokenRepository;
     private readonly IOtpService _otpService;
     private readonly IGenericRepository<TrustedDevice>  _trustedDeviceRepository;
+    private readonly ILogger<LoginCommandHandler> _logger;
     private const string DummyHash = "$2a$10$vI8aWBZdKeu5JcGlZtu4U.25m68c9c61234567890123456789012";
 
     public LoginCommandHandler(
@@ -31,7 +33,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
         IOtpService otpService,
         IGenericRepository<TrustedDevice> trustedDeviceRepository,
         IConfiguration configuration,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ILogger<LoginCommandHandler> logger)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
@@ -41,6 +44,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
         _trustedDeviceRepository = trustedDeviceRepository;
         _configuration = configuration;
         _unitOfWork = unitOfWork;
+        _logger = logger;
     }
     
     public async Task<AuthResultDto> Handle(LoginCommand request, CancellationToken cancellationToken)
@@ -48,17 +52,31 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
         var emailUser = await _userRepository.GetByEmailWithRolesAsync(request.Email);
         User? user = null;
 
-        if (emailUser != null && emailUser.Status == "Active" && _passwordHasher.Verify(emailUser.PasswordHash, request.Password))
+        if (emailUser != null && emailUser.Status == "Active")
         {
-            user = emailUser;
+            if (string.IsNullOrWhiteSpace(emailUser.PasswordHash))
+            {
+                _logger.LogWarning("Account {UserId} ({Email}) has no password hash configured.", emailUser.Id, emailUser.Email);
+            }
+            else if (_passwordHasher.Verify(emailUser.PasswordHash, request.Password))
+            {
+                user = emailUser;
+            }
         }
 
         if (user == null)
         {
             var usernameUser = await _userRepository.GetByUsernameWithRolesAsync(request.Email);
-            if (usernameUser != null && usernameUser.Status == "Active" && _passwordHasher.Verify(usernameUser.PasswordHash, request.Password))
+            if (usernameUser != null && usernameUser.Status == "Active")
             {
-                user = usernameUser;
+                if (string.IsNullOrWhiteSpace(usernameUser.PasswordHash))
+                {
+                    _logger.LogWarning("Account {UserId} ({Username}) has no password hash configured.", usernameUser.Id, usernameUser.Username);
+                }
+                else if (_passwordHasher.Verify(usernameUser.PasswordHash, request.Password))
+                {
+                    user = usernameUser;
+                }
             }
         }
 

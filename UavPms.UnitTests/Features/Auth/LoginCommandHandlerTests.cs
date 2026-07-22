@@ -19,6 +19,7 @@ public class LoginCommandHandlerTests
     private readonly Mock<IGenericRepository<TrustedDevice>> _trustedDeviceRepositoryMock;
     private readonly Mock<IConfiguration> _configurationMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>> _loggerMock;
     private readonly LoginCommandHandler _handler;
 
     public LoginCommandHandlerTests()
@@ -31,6 +32,7 @@ public class LoginCommandHandlerTests
         _trustedDeviceRepositoryMock = new Mock<IGenericRepository<TrustedDevice>>();
         _configurationMock = new Mock<IConfiguration>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>();
 
         _configurationMock.Setup(c => c["Jwt:ExpiryMinutes"]).Returns("60");
         
@@ -42,7 +44,8 @@ public class LoginCommandHandlerTests
             _otpServiceMock.Object,
             _trustedDeviceRepositoryMock.Object,
             _configurationMock.Object,
-            _unitOfWorkMock.Object
+            _unitOfWorkMock.Object,
+            _loggerMock.Object
         );
     }
 
@@ -274,5 +277,26 @@ public class LoginCommandHandlerTests
         // assert
         await act.Should().ThrowAsync<Exception>()
             .WithMessage("Rate limit exceeded");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Handle_ShouldThrowUnauthorizedAccessException_WhenUserPasswordHashIsNullOrEmpty(string? emptyPasswordHash)
+    {
+        // arrange
+        var user = CreateActivateUser();
+        user.PasswordHash = emptyPasswordHash!;
+        var command = new LoginCommand(user.Email, "password123", null, "UserAgent");
+
+        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(user);
+
+        // act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+
+        // assert
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Invalid credentials");
     }
 }
