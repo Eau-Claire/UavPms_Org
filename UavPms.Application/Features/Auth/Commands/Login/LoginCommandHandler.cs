@@ -49,18 +49,35 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
     
     public async Task<AuthResultDto> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
-        var user = await _userRepository.GetByEmailWithRolesAsync(request.Email);
+        var usernameUser = await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+        var emailUser = await _userRepository.GetByEmailWithRolesAsync(request.Email);
+        var user = usernameUser ?? emailUser;
 
         if (user != null && user.Status == "Active")
         {
             if (string.IsNullOrWhiteSpace(user.PasswordHash))
             {
-                _logger.LogWarning("Account {UserId} ({Email}) has no password hash configured.", user.Id, user.Email);
+                _logger.LogWarning("Account {UserId} ({Identifier}) has no password hash configured.", user.Id, request.Email);
                 user = null;
             }
             else if (!_passwordHasher.Verify(user.PasswordHash, request.Password))
             {
-                user = null;
+                user = usernameUser != null && emailUser != null && usernameUser.Id != emailUser.Id
+                    ? emailUser
+                    : null;
+
+                if (user != null)
+                {
+                    if (string.IsNullOrWhiteSpace(user.PasswordHash))
+                    {
+                        _logger.LogWarning("Account {UserId} ({Email}) has no password hash configured.", user.Id, user.Email);
+                        user = null;
+                    }
+                    else if (!_passwordHasher.Verify(user.PasswordHash, request.Password))
+                    {
+                        user = null;
+                    }
+                }
             }
         }
         else

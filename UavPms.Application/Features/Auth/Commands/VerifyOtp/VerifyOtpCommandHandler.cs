@@ -41,10 +41,11 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
 
     public async Task<OtpVerifyResultDto> Handle(VerifyOtpCommand request, CancellationToken cancellationToken)
     {
-        var emailUser = await _userRepository.GetByEmailWithRolesAsync(request.Email);
         var targetUser = request.OtpPurpose == OtpPurpose.Login
-            ? emailUser
-            : emailUser ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+            ? await _userRepository.GetByUsernameWithRolesAsync(request.Email)
+              ?? await _userRepository.GetByEmailWithRolesAsync(request.Email)
+            : await _userRepository.GetByEmailWithRolesAsync(request.Email)
+              ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
         var targetEmail = targetUser?.Email ?? request.Email;
 
         var verification = await _otpService.VerifyOtpAsync(targetEmail, request.Code, request.OtpPurpose);

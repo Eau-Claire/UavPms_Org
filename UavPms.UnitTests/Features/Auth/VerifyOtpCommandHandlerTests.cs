@@ -76,7 +76,7 @@ public class VerifyOtpCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ShouldUseEmail_WhenLoginIdentifierMatchesEmailAndUsernameOfDifferentUsers()
+    public async Task Handle_ShouldPreferUsername_WhenLoginIdentifierMatchesEmailAndUsernameOfDifferentUsers()
     {
         var accountA = CreateActiveUser("uselessliem@gmail.com");
         accountA.Username = "an3439201@gmail.com";
@@ -89,10 +89,10 @@ public class VerifyOtpCommandHandlerTests
         _userRepositoryMock.Setup(u => u.GetByUsernameWithRolesAsync(command.Email))
             .ReturnsAsync(accountB);
         _otpServiceMock.Setup(o =>
-                o.VerifyOtpAsync(accountA.Email, command.Code, command.OtpPurpose))
+                o.VerifyOtpAsync(accountB.Email, command.Code, command.OtpPurpose))
             .ReturnsAsync((true, "OK"));
         _jwtProviderMock.Setup(j =>
-            j.GenerateAccessToken(accountA, It.IsAny<IList<string>>())).Returns("access-token");
+            j.GenerateAccessToken(accountB, It.IsAny<IList<string>>())).Returns("access-token");
         _jwtProviderMock.Setup(j =>
             j.GenerateRefreshToken()).Returns("refresh-token");
         _unitOfWorkMock.Setup(u =>
@@ -104,9 +104,9 @@ public class VerifyOtpCommandHandlerTests
         result.Success.Should().BeTrue();
         result.AuthResult.Should().NotBeNull();
         result.AuthResult!.User.Should().NotBeNull();
-        result.AuthResult.User!.Email.Should().Be("uselessliem@gmail.com");
+        result.AuthResult.User!.Email.Should().Be("testing@123gmail.com");
         _otpServiceMock.Verify(o =>
-            o.VerifyOtpAsync("uselessliem@gmail.com", command.Code, OtpPurpose.Login), Times.Once);
+            o.VerifyOtpAsync("testing@123gmail.com", command.Code, OtpPurpose.Login), Times.Once);
     }
 
     [Fact]
