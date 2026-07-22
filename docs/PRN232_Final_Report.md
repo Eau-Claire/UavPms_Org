@@ -207,11 +207,13 @@ Tính đến thời điểm hiện tại, các tính năng sau đây đã đư�
 
 ### Sơ đồ thực thể liên kết hiện tại (Implemented Entity Relationship Diagram)
 
-Sơ đồ ERD thể hiện các thực thể cốt lõi đã được xây dựng và ánh xạ thành công vào cơ sở dữ liệu PostgreSQL (Supabase) thông qua Entity Framework Core Migrations:
+Sơ đồ ERD thể hiện các thực thể cốt lõi đã được xây dựng và ánh xạ thành công vào cơ sở dữ liệu PostgreSQL (Supabase) thông qua Entity Framework Core Migrations. Do cơ sở dữ liệu có quy mô lớn và nhiều mối liên kết phức tạp, cấu trúc ERD dưới đây được phân tách thành 4 phân hệ nhỏ để đảm bảo tính trực quan và dễ dàng theo dõi trên các công cụ hiển thị:
+
+#### 1. Phân hệ Xác thực & Phân quyền (Identity & Access Control Subsystem)
 
 ```mermaid
+%%{init: { "er": { "layoutDirection": "LR" } }}%%
 erDiagram
-    %% ===================== IDENTITY SYSTEM =====================
     Users {
         uuid Id PK
         varchar Username
@@ -248,7 +250,16 @@ erDiagram
         varchar DeviceInfo
     }
 
-    %% ===================== ASSET REGISTRY =====================
+    Users ||--o{ UserRoles : "has"
+    Roles ||--o{ UserRoles : "assigned_to"
+    Users ||--o{ RefreshTokens : "owns"
+```
+
+#### 2. Phân hệ Phân cấp Tài sản Lưới điện (Asset Hierarchy Subsystem)
+
+```mermaid
+%%{init: { "er": { "layoutDirection": "LR" } }}%%
+erDiagram
     Regions {
         uuid Id PK
         varchar RegionName
@@ -304,7 +315,23 @@ erDiagram
         timestamp CalculatedAt
     }
 
-    %% ===================== UAV & MISSION =====================
+    Regions ||--o{ Substations : "contains"
+    Substations ||--o{ TransmissionLines : "comprises"
+    TransmissionLines ||--o{ Towers : "has"
+    Towers ||--o{ Assets : "hosts"
+    Assets ||--o{ AssetHealthHistories : "logs"
+```
+
+#### 3. Phân hệ Chuyến bay & Dữ liệu khuyết tật (UAV, Mission & Defect Detection Subsystem)
+
+```mermaid
+%%{init: { "er": { "layoutDirection": "LR" } }}%%
+erDiagram
+    Users {
+        uuid Id PK
+        varchar FullName
+    }
+
     UAVs {
         uuid Id PK
         varchar UavCode
@@ -333,7 +360,6 @@ erDiagram
         timestamp UpdatedAt
     }
 
-    %% ===================== MEDIA & ANOMALY =====================
     InspectionMedia {
         uuid Id PK
         uuid MissionId FK
@@ -344,6 +370,11 @@ erDiagram
         varchar ValidationStatus
         timestamp CapturedAt
         timestamp CreatedAt
+    }
+
+    Assets {
+        uuid Id PK
+        varchar AssetCode
     }
 
     DefectCategories {
@@ -370,7 +401,27 @@ erDiagram
         timestamp CreatedAt
     }
 
-    %% ===================== SYSTEM AUDITING & NOTIFICATION =====================
+    Users ||--o{ Missions : "assigned_to"
+    Missions ||--o{ InspectionMedia : "captures"
+    Assets ||--o{ InspectionMedia : "linked_to"
+
+    InspectionMedia ||--o{ DetectedAnomalies : "shows"
+    Assets ||--o{ DetectedAnomalies : "affects"
+    DefectCategories ||--o{ DetectedAnomalies : "categorizes"
+    Users ||--o{ DetectedAnomalies : "validated_by"
+```
+
+#### 4. Phân hệ Thông báo & Nhật ký kiểm toán (Notifications & Auditing Subsystem)
+
+```mermaid
+%%{init: { "er": { "layoutDirection": "LR" } }}%%
+erDiagram
+    Users {
+        uuid Id PK
+        varchar Username
+        varchar FullName
+    }
+
     Notifications {
         uuid Id PK
         uuid UserId FK
@@ -396,26 +447,6 @@ erDiagram
         varchar UserAgent
         timestamp CreatedAt
     }
-
-    %% ===================== RELATIONSHIPS =====================
-    Users ||--o{ UserRoles : "has"
-    Roles ||--o{ UserRoles : "assigned_to"
-    Users ||--o{ RefreshTokens : "owns"
-
-    Regions ||--o{ Substations : "contains"
-    Substations ||--o{ TransmissionLines : "comprises"
-    TransmissionLines ||--o{ Towers : "has"
-    Towers ||--o{ Assets : "hosts"
-    Assets ||--o{ AssetHealthHistories : "logs"
-
-    Users ||--o{ Missions : "assigned_to"
-    Missions ||--o{ InspectionMedia : "captures"
-    Assets ||--o{ InspectionMedia : "linked_to"
-
-    InspectionMedia ||--o{ DetectedAnomalies : "shows"
-    Assets ||--o{ DetectedAnomalies : "affects"
-    DefectCategories ||--o{ DetectedAnomalies : "categorizes"
-    Users ||--o{ DetectedAnomalies : "validated_by"
 
     Users ||--o{ Notifications : "receives"
     Users ||--o{ AuditLogs : "logs_action"
