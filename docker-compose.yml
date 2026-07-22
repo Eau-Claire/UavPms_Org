@@ -31,6 +31,10 @@ services:
       - SendGrid__ApiKey=${SENDGRID_API_KEY}
       - SendGrid__FromEmail=${SENDGRID_FROM_EMAIL}
       - SendGrid__FromName=${SENDGRID_FROM_NAME}
+      - Cors__AllowedOrigins__0=${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
+      - Cors__AllowedOrigins__1=${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}
+      - Cors__AllowedOrigins__2=${CORS_ALLOWED_ORIGIN_2:-https://seppms.vercel.app}
+      - Cors__AllowedOrigins__3=${CORS_ALLOWED_ORIGIN_3:-https://uavpms.ddns.net}
       - AIService__ServiceKey=${AIService_ServiceKey}
       - MockAI__Enabled=${MOCK_AI_ENABLED:-false}
       - MockAI__CategoryCode=${MOCK_AI_CATEGORY_CODE:-}
