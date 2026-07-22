@@ -45,26 +45,26 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
     
     public async Task<AuthResultDto> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
-        var user = await _userRepository.GetByEmailWithRolesAsync(request.Email) 
-            ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+        var emailUser = await _userRepository.GetByEmailWithRolesAsync(request.Email);
+        User? user = null;
 
-        bool isValidUser = true;
-        string passwordHashToVerify = DummyHash;
-
-        if (user == null || user.Status != "Active")
+        if (emailUser != null && emailUser.Status == "Active" && _passwordHasher.Verify(emailUser.PasswordHash, request.Password))
         {
-            isValidUser = false;
-        }
-        else 
-        {
-            passwordHashToVerify = user.PasswordHash;
+            user = emailUser;
         }
 
-        bool passwordMatch = _passwordHasher.Verify(passwordHashToVerify, request.Password);
-
-        if (!isValidUser || !passwordMatch)
+        if (user == null)
         {
-            isValidUser = false;
+            var usernameUser = await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+            if (usernameUser != null && usernameUser.Status == "Active" && _passwordHasher.Verify(usernameUser.PasswordHash, request.Password))
+            {
+                user = usernameUser;
+            }
+        }
+
+        if (user == null)
+        {
+            _passwordHasher.Verify(DummyHash, request.Password);
             throw new UnauthorizedAccessException("Invalid credentials");
         }
 

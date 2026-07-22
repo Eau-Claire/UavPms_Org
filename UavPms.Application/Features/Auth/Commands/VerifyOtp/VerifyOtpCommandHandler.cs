@@ -41,7 +41,11 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
 
     public async Task<OtpVerifyResultDto> Handle(VerifyOtpCommand request, CancellationToken cancellationToken)
     {
-        var verification = await _otpService.VerifyOtpAsync(request.Email, request.Code, request.OtpPurpose);
+        var targetUser = await _userRepository.GetByEmailWithRolesAsync(request.Email)
+                         ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+        var targetEmail = targetUser?.Email ?? request.Email;
+
+        var verification = await _otpService.VerifyOtpAsync(targetEmail, request.Code, request.OtpPurpose);
         if (!verification.IsValid)
         {
             throw new BusinessRuleException(verification.Message);
@@ -55,8 +59,7 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
 
         if (request.OtpPurpose == OtpPurpose.Login || request.OtpPurpose == OtpPurpose.EmailVerification)
         {
-            var user = await _userRepository.GetByEmailWithRolesAsync(request.Email)
-                       ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+            var user = targetUser;
             if (user == null)
             {
                 throw new NotFoundException("User not found", request.Email);
@@ -119,15 +122,14 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
         {
             var token = Guid.NewGuid().ToString();
             var hash = HashToken(token);
-            await _otpService.SaveVerificationTokenAsync(hash, request.Email, TimeSpan.FromMinutes(10));
+            await _otpService.SaveVerificationTokenAsync(hash, targetEmail, TimeSpan.FromMinutes(10));
             resultDto.Token = token;
         }
         else if (request.OtpPurpose == OtpPurpose.ChangePassword ||
                  request.OtpPurpose == OtpPurpose.ChangeEmail ||
                  request.OtpPurpose == OtpPurpose.DeleteAccount)
         {
-            var user = await _userRepository.GetByEmailWithRolesAsync(request.Email)
-                ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+            var user = targetUser;
 
             if (user == null || user.Status != "Active")
             {
