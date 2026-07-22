@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
+using UavPms.Core.Contracts;
 using UavPms.Core.Interfaces.Services;
 
 namespace UavPms.Infrastructure.Messaging;
@@ -17,6 +18,28 @@ public class RabbitMqEventPublisher : IEventPublisher
     {
         _rabbitMqConnection = rabbitMqConnection;
         _logger = logger;
+    }
+
+    private static string GetRoutingKey<T>(string eventName, T @event) where T : class
+    {
+        var baseRoutingKey = $"identity.event.{eventName.ToLowerInvariant()}";
+        if (@event is AIAnalysisRequestedEvent aiAnalysisRequestedEvent)
+        {
+            return $"{baseRoutingKey}.{ResolveAiRuntime(aiAnalysisRequestedEvent.PreferredModel)}";
+        }
+
+        return baseRoutingKey;
+    }
+
+    private static string ResolveAiRuntime(string? preferredModel)
+    {
+        if (string.Equals(preferredModel, "YOLO11", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(preferredModel, "EDGE", StringComparison.OrdinalIgnoreCase))
+        {
+            return "edge";
+        }
+
+        return "server";
     }
 
     public async Task PublishAsync<T>(T @event) where T : class
@@ -35,7 +58,7 @@ public class RabbitMqEventPublisher : IEventPublisher
                 arguments: null);
 
             var eventName = @event.GetType().Name;
-            var routingKey = $"identity.event.{eventName.ToLower()}";
+            var routingKey = GetRoutingKey(eventName, @event);
 
             var json = JsonSerializer.Serialize(@event);
             var body = Encoding.UTF8.GetBytes(json);

@@ -101,7 +101,7 @@ public static class DependencyInjection
 
         // Đăng ký File Storage Service (Tự động chọn Supabase nếu có ApiKey, ngược lại dùng Local)
         var supabaseKey = configuration["Supabase:ApiKey"];
-        if (!string.IsNullOrEmpty(supabaseKey))
+        if (!string.IsNullOrEmpty(supabaseKey) && !supabaseKey.Contains("YOUR_SUPABASE_SERVICE_ROLE_KEY"))
         {
             services.AddScoped<IFileStorageService, SupabaseFileStorageService>();
         }

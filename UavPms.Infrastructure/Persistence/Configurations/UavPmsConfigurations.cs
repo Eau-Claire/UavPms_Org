@@ -410,6 +410,7 @@ public class MaintenanceProofConfiguration : IEntityTypeConfiguration<Maintenanc
             .WithMany()
             .HasForeignKey(e => e.UploadedBy)
             .OnDelete(DeleteBehavior.Restrict);
+
     }
 }
 
@@ -486,6 +487,16 @@ public class AIAnalysisRequestConfiguration : IEntityTypeConfiguration<AIAnalysi
         builder.HasOne(e => e.Uploader)
             .WithMany()
             .HasForeignKey(e => e.UploadedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Media)
+            .WithMany()
+            .HasForeignKey(e => e.MediaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Mission)
+            .WithMany()
+            .HasForeignKey(e => e.MissionId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

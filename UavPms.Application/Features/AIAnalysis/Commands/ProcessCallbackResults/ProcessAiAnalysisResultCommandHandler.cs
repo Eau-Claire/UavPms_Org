@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -9,6 +10,7 @@ using UavPms.Application.Common.Exceptions;
 using UavPms.Core.Entities;
 using UavPms.Core.Enums;
 using UavPms.Core.Interfaces.Repositories;
+using UavPms.Core.Interfaces.Services;
 
 namespace UavPms.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
 
@@ -22,6 +24,7 @@ public class ProcessAiAnalysisResultCommandHandler
     private readonly IGenericRepository<EmergencyAlert> _emergencyAlertRepo;
     private readonly INotificationRepository _notificationRepo;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IRealtimeNotificationService _realtimeNotificationService;
     private readonly ILogger<ProcessAiAnalysisResultCommandHandler> _logger;
 
     public ProcessAiAnalysisResultCommandHandler(
@@ -32,6 +35,7 @@ public class ProcessAiAnalysisResultCommandHandler
         IGenericRepository<EmergencyAlert> emergencyAlertRepo,
         INotificationRepository notificationRepo,
         IUnitOfWork unitOfWork,
+        IRealtimeNotificationService realtimeNotificationService,
         ILogger<ProcessAiAnalysisResultCommandHandler> logger)
     {
         _aiRequestRepo = aiRequestRepo;
@@ -41,6 +45,7 @@ public class ProcessAiAnalysisResultCommandHandler
         _emergencyAlertRepo = emergencyAlertRepo;
         _notificationRepo = notificationRepo;
         _unitOfWork = unitOfWork;
+        _realtimeNotificationService = realtimeNotificationService;
         _logger = logger;
     }
 
@@ -73,20 +78,45 @@ public class ProcessAiAnalysisResultCommandHandler
             };
         }
 
-        // 2. Check if InspectionMedia exists if MediaId is provided
+        // 2. Resolve InspectionMedia from callback MediaId, or fallback to the persisted AIAnalysisRequest link.
+        var resolvedMediaId = request.MediaId.HasValue && request.MediaId.Value != Guid.Empty
+            ? request.MediaId
+            : aiRequest.MediaId;
+
         InspectionMedia? media = null;
-        if (request.MediaId != null && request.MediaId.Value != Guid.Empty)
+        if (resolvedMediaId != null && resolvedMediaId.Value != Guid.Empty)
         {
-            media = await _mediaRepo.GetByIdWithDetailsAsync(request.MediaId.Value);
+            media = await _mediaRepo.GetByIdWithDetailsAsync(resolvedMediaId.Value);
             if (media == null)
             {
-                _logger.LogWarning("InspectionMedia not found: MediaId={MediaId}", request.MediaId);
-                throw new NotFoundException(nameof(InspectionMedia), request.MediaId.Value);
+                _logger.LogWarning(
+                    "InspectionMedia not found while processing AI callback: RequestId={RequestId}, MediaId={MediaId}",
+                    request.RequestId, resolvedMediaId);
+                throw new NotFoundException(nameof(InspectionMedia), resolvedMediaId.Value);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(aiRequest.FileUrl))
+        {
+            var matchingMedia = await _mediaRepo.FindAsync(m => m.FileUrl == aiRequest.FileUrl, track: false);
+            var mediaByFileUrl = matchingMedia.FirstOrDefault();
+            if (mediaByFileUrl != null)
+            {
+                media = await _mediaRepo.GetByIdWithDetailsAsync(mediaByFileUrl.Id);
+                if (media != null)
+                {
+                    aiRequest.MediaId = media.Id;
+                    aiRequest.MissionId = media.MissionId;
+
+                    _logger.LogInformation(
+                        "Resolved AI callback media by file URL fallback: RequestId={RequestId}, MediaId={MediaId}",
+                        request.RequestId, media.Id);
+                }
             }
         }
 
         var savedDetections = 0;
         var createdAlerts = 0;
+        var notificationsToPush = new List<Notification>();
 
         // Save Changes
         try
@@ -155,24 +185,28 @@ public class ProcessAiAnalysisResultCommandHandler
                             await _emergencyAlertRepo.AddAsync(alert);
                             createdAlerts++;
 
-                            // 6. Notify Mission Manager
-                            var managerId = media.Mission?.ManagerId;
-                            if (managerId != null && managerId.Value != Guid.Empty)
+                            // 6. Send Notification to Mission Manager
+                            if (media.Mission != null)
                             {
-                                var notification = new Notification
+                                var managerId = media.Mission.ManagerId;
+                                if (managerId != Guid.Empty)
                                 {
-                                    Id = Guid.NewGuid(),
-                                    UserId = managerId.Value,
-                                    Type = "CriticalAlert",
-                                    ReferenceType = "EmergencyAlert",
-                                    ReferenceId = alert.Id,
-                                    Title = "⚠️ Cảnh báo khẩn cấp: Phát hiện sự cố nghiêm trọng",
-                                    Body = $"Phát hiện khuyết tật khẩn cấp '{category.CategoryName}' ({detection.CategoryCode}) với độ tin cậy {detection.Confidence:P1} tại thiết bị.",
-                                    IsRead = false,
-                                    SentAt = DateTime.UtcNow
-                                };
+                                    var notification = new Notification
+                                    {
+                                        Id = Guid.NewGuid(),
+                                        UserId = managerId,
+                                        Type = "CriticalAlert",
+                                        ReferenceType = "EmergencyAlert",
+                                        ReferenceId = alert.Id,
+                                        Title = "⚠️ Cảnh báo khẩn cấp: Phát hiện sự cố nghiêm trọng",
+                                        Body = $"Phát hiện khuyết tật khẩn cấp '{category.CategoryName}' ({detection.CategoryCode}) với độ tin cậy {detection.Confidence:P1} tại thiết bị.",
+                                        IsRead = false,
+                                        SentAt = DateTime.UtcNow
+                                    };
 
-                                await _notificationRepo.AddAsync(notification);
+                                    await _notificationRepo.AddAsync(notification);
+                                    notificationsToPush.Add(notification);
+                                }
                             }
                         }
                     }
@@ -231,6 +265,11 @@ public class ProcessAiAnalysisResultCommandHandler
         {
             _logger.LogError(ex, "Failed while processing AI callback.");
             throw;
+        }
+
+        foreach (var notification in notificationsToPush)
+        {
+            await _realtimeNotificationService.SendToUserAsync(notification.UserId, notification, cancellationToken);
         }
 
         _logger.LogInformation("Successfully processed AI callback. RequestId={RequestId}, Status={Status}", 

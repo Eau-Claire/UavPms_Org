@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using UavPms.Infrastructure.Persistence;
 namespace UavPms.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260715133321_AddMediaIdToAIAnalysisRequest")]
+    partial class AddMediaIdToAIAnalysisRequest
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -32,9 +35,6 @@ namespace UavPms.Infrastructure.Migrations
 
                     b.Property<int>("AnalysisType")
                         .HasColumnType("integer");
-
-                    b.Property<Guid?>("BatchId")
-                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
@@ -352,7 +352,7 @@ namespace UavPms.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("AssetId")
+                    b.Property<Guid>("AssetId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("BoundingBox")
@@ -415,7 +415,7 @@ namespace UavPms.Infrastructure.Migrations
                     b.Property<Guid>("AnomalyId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("AssetId")
+                    b.Property<Guid>("AssetId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
@@ -547,7 +547,7 @@ namespace UavPms.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("AssetId")
+                    b.Property<Guid>("AssetId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CapturedAt")
@@ -1442,7 +1442,7 @@ namespace UavPms.Infrastructure.Migrations
 
             modelBuilder.Entity("UavPms.Core.Entities.AIAnalysisRequest", b =>
                 {
-                    b.HasOne("UavPms.Core.Entities.InspectionMedia", "Media")
+                    b.HasOne("UavPms.Core.Entities.InspectionMedia", "InspectionMedia")
                         .WithMany()
                         .HasForeignKey("MediaId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1458,7 +1458,7 @@ namespace UavPms.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Media");
+                    b.Navigation("InspectionMedia");
 
                     b.Navigation("Mission");
 
@@ -1534,7 +1534,8 @@ namespace UavPms.Infrastructure.Migrations
                     b.HasOne("UavPms.Core.Entities.Asset", "Asset")
                         .WithMany("DetectedAnomalies")
                         .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("UavPms.Core.Entities.DefectCategory", "Category")
                         .WithMany("DetectedAnomalies")
@@ -1568,7 +1569,8 @@ namespace UavPms.Infrastructure.Migrations
                     b.HasOne("UavPms.Core.Entities.Asset", "Asset")
                         .WithMany("EmergencyAlerts")
                         .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("UavPms.Core.Entities.Mission", "Mission")
                         .WithMany("EmergencyAlerts")
@@ -1615,7 +1617,8 @@ namespace UavPms.Infrastructure.Migrations
                     b.HasOne("UavPms.Core.Entities.Asset", "Asset")
                         .WithMany("InspectionMedias")
                         .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("UavPms.Core.Entities.Mission", "Mission")
                         .WithMany("InspectionMedias")

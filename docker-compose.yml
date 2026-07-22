@@ -18,8 +18,9 @@ services:
     ports:
       - "5194:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION}
+      - ConnectionStrings__HangfireConnection=${HANGFIRE_DB_CONNECTION}
       - Redis__ConnectionString=redis:6379,abortConnect=false
       - Redis__Password=${REDIS_PASSWORD}
       - Jwt__SecretKey=${JWT_SECRET}
@@ -30,9 +31,18 @@ services:
       - SendGrid__FromEmail=${SENDGRID_FROM_EMAIL}
       - SendGrid__FromName=${SENDGRID_FROM_NAME}
       - AIService__ServiceKey=${AIService_ServiceKey}
+      - MockAI__Enabled=${MOCK_AI_ENABLED:-false}
+      - MockAI__CategoryCode=${MOCK_AI_CATEGORY_CODE:-}
+      - MockAI__Confidence=${MOCK_AI_CONFIDENCE:-0.92}
       - Supabase__Url=${SUPABASE_URL}
       - Supabase__ApiKey=${SUPABASE_API_KEY}
       - Supabase__Bucket=${SUPABASE_BUCKET}
+      - RabbitMQ__HostName=host.docker.internal
+      - RabbitMQ__UserName=guest
+      - RabbitMQ__Password=guest
+      - RabbitMQ__Port=5672
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - redis
     restart: always
