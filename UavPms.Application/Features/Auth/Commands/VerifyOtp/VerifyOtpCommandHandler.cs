@@ -41,8 +41,15 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
 
     public async Task<OtpVerifyResultDto> Handle(VerifyOtpCommand request, CancellationToken cancellationToken)
     {
-        var targetUser = await _userRepository.GetByEmailWithRolesAsync(request.Email)
-                         ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+        var emailUser = await _userRepository.GetByEmailWithRolesAsync(request.Email);
+        var usernameUser = await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+
+        if (emailUser != null && usernameUser != null && emailUser.Id != usernameUser.Id)
+        {
+            throw new BusinessRuleException("Ambiguous login identifier.");
+        }
+
+        var targetUser = emailUser ?? usernameUser;
         var targetEmail = targetUser?.Email ?? request.Email;
 
         var verification = await _otpService.VerifyOtpAsync(targetEmail, request.Code, request.OtpPurpose);

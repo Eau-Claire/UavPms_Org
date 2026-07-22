@@ -255,6 +255,31 @@ public class LoginCommandHandlerTests
 
         _otpServiceMock.Verify(o => o.GenerateAndSendOtpAsync("testing@123gmail.com", OtpPurpose.Login, false), Times.Once);
     }
+
+    [Fact]
+    public async Task Handle_ShouldThrowUnauthorizedException_WhenIdentifierMatchesMultipleUsersWithValidPassword()
+    {
+        // Account A: Email = uselessliem@gmail.com
+        var accountA = CreateActivateUser("uselessliem@gmail.com", "an3439201@gmail.com");
+        accountA.PasswordHash = "shared_hash_A";
+        // Account B: Username = uselessliem@gmail.com, Email = testing@123gmail.com
+        var accountB = CreateActivateUser("testing@123gmail.com", "uselessliem@gmail.com");
+        accountB.PasswordHash = "shared_hash_B";
+
+        var command = new LoginCommand("uselessliem@gmail.com", "samePassword", null, "UserAgent");
+
+        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(accountA);
+        _userRepositoryMock.Setup(r => r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync(accountB);
+        _passwordHasherMock.Setup(p => p.Verify("shared_hash_A", command.Password)).Returns(true);
+        _passwordHasherMock.Setup(p => p.Verify("shared_hash_B", command.Password)).Returns(true);
+
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Invalid credentials");
+        _otpServiceMock.Verify(o =>
+            o.GenerateAndSendOtpAsync(It.IsAny<string>(), OtpPurpose.Login, It.IsAny<bool>()), Times.Never);
+    }
     
     // Test 8: OTP gửi thất bại -> Throw Exception
     [Fact]

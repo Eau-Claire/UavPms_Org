@@ -25,8 +25,15 @@ public class LoginOtpHandler : IOtpPurposeHandler
             return PreconditionResult.Failure("Email is required.");
         }
 
-        var user = await _userRepository.GetByEmailWithRolesAsync(email)
-                   ?? await _userRepository.GetByUsernameWithRolesAsync(email);
+        var emailUser = await _userRepository.GetByEmailWithRolesAsync(email);
+        var usernameUser = await _userRepository.GetByUsernameWithRolesAsync(email);
+
+        if (emailUser != null && usernameUser != null && emailUser.Id != usernameUser.Id)
+        {
+            return PreconditionResult.Failure("Ambiguous login identifier.");
+        }
+
+        var user = emailUser ?? usernameUser;
         if (user == null || user.Status != "Active")
         {
             return PreconditionResult.Failure("User not found or inactive.");

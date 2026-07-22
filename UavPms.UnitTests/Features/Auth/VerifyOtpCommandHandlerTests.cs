@@ -76,6 +76,28 @@ public class VerifyOtpCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ShouldThrowBusinessRuleException_WhenIdentifierMatchesEmailAndUsernameOfDifferentUsers()
+    {
+        var accountA = CreateActiveUser("uselessliem@gmail.com");
+        accountA.Username = "an3439201@gmail.com";
+        var accountB = CreateActiveUser("testing@123gmail.com");
+        accountB.Username = "uselessliem@gmail.com";
+        var command = new VerifyOtpCommand("uselessliem@gmail.com", "123456", OtpPurpose.Login, "UserAgent");
+
+        _userRepositoryMock.Setup(u => u.GetByEmailWithRolesAsync(command.Email))
+            .ReturnsAsync(accountA);
+        _userRepositoryMock.Setup(u => u.GetByUsernameWithRolesAsync(command.Email))
+            .ReturnsAsync(accountB);
+
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+
+        await act.Should().ThrowAsync<BusinessRuleException>()
+            .WithMessage("Ambiguous login identifier.");
+        _otpServiceMock.Verify(o =>
+            o.VerifyOtpAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<OtpPurpose>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Handle_ShouldReturnAuthResult_WhenOtpValidForLogin()
     {
         var user = CreateActiveUser();

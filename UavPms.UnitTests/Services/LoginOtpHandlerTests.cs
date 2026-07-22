@@ -61,4 +61,33 @@ public class LoginOtpHandlerTests
         result.IsValid.Should().BeTrue();
         result.ResolvedEmail.Should().Be("uselessliem@gmail.com");
     }
+
+    [Fact]
+    public async Task ValidatePreconditionAsync_ShouldFail_WhenIdentifierMatchesEmailAndUsernameOfDifferentUsers()
+    {
+        var accountA = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "an3439201@gmail.com",
+            Email = "uselessliem@gmail.com",
+            Status = "Active"
+        };
+        var accountB = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "uselessliem@gmail.com",
+            Email = "testing@123gmail.com",
+            Status = "Active"
+        };
+
+        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync("uselessliem@gmail.com"))
+            .ReturnsAsync(accountA);
+        _userRepositoryMock.Setup(r => r.GetByUsernameWithRolesAsync("uselessliem@gmail.com"))
+            .ReturnsAsync(accountB);
+
+        var result = await _handler.ValidatePreconditionAsync("uselessliem@gmail.com", null);
+
+        result.IsValid.Should().BeFalse();
+        result.Message.Should().Be("Ambiguous login identifier.");
+    }
 }
