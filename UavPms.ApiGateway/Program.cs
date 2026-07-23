@@ -79,18 +79,6 @@ if (app.Environment.IsDevelopment())
         await next();
     });
 
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.RoutePrefix = "swagger";
-        options.DocumentTitle = "UAV PMS APIs";
-        options.SwaggerEndpoint("/swagger/gateway/swagger.json", "API Gateway");
-        options.SwaggerEndpoint("/swagger/services/identity/v1/swagger.json", "Identity Service");
-        options.SwaggerEndpoint("/swagger/services/operations/v1/swagger.json", "Operations Service");
-        options.SwaggerEndpoint("/swagger/services/ai-inspection/v1/swagger.json", "AI Inspection Service");
-        options.SwaggerEndpoint("/swagger/services/notifications/v1/swagger.json", "Notification Service");
-    });
-
     var swaggerTargets = isRunningInContainer && !useLocalDownstreams
         ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -140,6 +128,18 @@ if (app.Environment.IsDevelopment())
         context.Response.StatusCode = (int)response.StatusCode;
         context.Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
         await context.Response.WriteAsync(content, context.RequestAborted);
+    });
+
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.RoutePrefix = "swagger";
+        options.DocumentTitle = "UAV PMS APIs";
+        options.SwaggerEndpoint("/swagger/gateway/swagger.json", "API Gateway");
+        options.SwaggerEndpoint("/swagger/services/identity/v1/swagger.json", "Identity Service");
+        options.SwaggerEndpoint("/swagger/services/operations/v1/swagger.json", "Operations Service");
+        options.SwaggerEndpoint("/swagger/services/ai-inspection/v1/swagger.json", "AI Inspection Service");
+        options.SwaggerEndpoint("/swagger/services/notifications/v1/swagger.json", "Notification Service");
     });
 }
 
