@@ -12,6 +12,12 @@
     <PackageReference Include="AutoMapper" Version="16.1.1" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+    <PackageReference Include="Google.Protobuf" Version="3.31.1" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.72.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="MediatR" Version="14.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.16" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.16" />
@@ -32,6 +38,14 @@
     <PackageReference Include="StackExchange.Redis" Version="3.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.2" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.19.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="../../Protos/inspection_evaluation.proto" GrpcServices="Client" Link="Protos/inspection_evaluation.proto" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Shared/UavPms.Shared.Contracts/UavPms.Shared.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

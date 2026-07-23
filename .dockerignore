@@ -12,6 +12,7 @@
 **/[Rr]elease/
 **/[Ll]og/
 **/[Ll]ogs/
+**/uav_storage/
 
 .vs/
 .vscode/

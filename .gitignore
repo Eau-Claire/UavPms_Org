@@ -6,6 +6,10 @@
 # dotenv files
 .env
 
+# Runtime storage/uploads
+uav_storage/
+**/uav_storage/
+
 # User-specific files
 *.rsuser
 *.suo

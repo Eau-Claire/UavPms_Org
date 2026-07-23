@@ -1,7 +1,7 @@
 using MediatR;
+using UavPms.Shared.Contracts.Events;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Missions.DTOs;
-using UavPms.OperationsService.Domain.Contracts;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Domain.Interfaces.Services;

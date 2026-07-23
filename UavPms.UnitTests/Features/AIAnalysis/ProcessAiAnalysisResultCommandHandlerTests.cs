@@ -7,8 +7,11 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
+using UavPms.Shared.Contracts.Events;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
+using UavPms.AIInspectionService.Application.Interfaces;
+using UavPms.AIInspectionService.Domain.Contracts;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
@@ -27,6 +30,8 @@ public class ProcessAiAnalysisResultCommandHandlerTests
     private readonly Mock<INotificationRepository> _notificationRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IRealtimeNotificationService> _realtimeNotificationServiceMock;
+    private readonly Mock<IInspectionEvaluationClient> _inspectionEvaluationClientMock;
+    private readonly Mock<IEventPublisher> _eventPublisherMock;
     private readonly Mock<ILogger<ProcessAiAnalysisResultCommandHandler>> _loggerMock;
 
     private readonly ProcessAiAnalysisResultCommandHandler _handler;
@@ -41,7 +46,25 @@ public class ProcessAiAnalysisResultCommandHandlerTests
         _notificationRepoMock = new Mock<INotificationRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _realtimeNotificationServiceMock = new Mock<IRealtimeNotificationService>();
+        _inspectionEvaluationClientMock = new Mock<IInspectionEvaluationClient>();
+        _eventPublisherMock = new Mock<IEventPublisher>();
         _loggerMock = new Mock<ILogger<ProcessAiAnalysisResultCommandHandler>>();
+
+        _inspectionEvaluationClientMock
+            .Setup(c => c.EvaluateAsync(It.IsAny<DetectionEvaluationRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DetectionEvaluationRequest request, CancellationToken _) =>
+            {
+                var requiresAlert = request.IsEmergencyClass && request.Confidence >= 0.80;
+                return new DetectionEvaluationResult(
+                    requiresAlert ? "Critical" : "Medium",
+                    requiresAlert ? "ImmediateAction" : "PlannedReview",
+                    (int)Math.Round(request.Confidence * 100),
+                    requiresAlert,
+                    "Unit test evaluation");
+            });
+        _eventPublisherMock
+            .Setup(p => p.PublishAsync(It.IsAny<DefectDetectedEvent>()))
+            .Returns(Task.CompletedTask);
 
         _handler = new ProcessAiAnalysisResultCommandHandler(
             _aiRequestRepoMock.Object,
@@ -52,6 +75,8 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             _notificationRepoMock.Object,
             _unitOfWorkMock.Object,
             _realtimeNotificationServiceMock.Object,
+            _inspectionEvaluationClientMock.Object,
+            _eventPublisherMock.Object,
             _loggerMock.Object
         );
     }

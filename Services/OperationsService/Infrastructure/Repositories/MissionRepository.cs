@@ -11,7 +11,13 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     {
     }
 
-    public async Task<(IReadOnlyList<Mission> Items, int TotalCount)> GetMissionsPagedAsync(int page, int pageSize, string? search, string? status)
+    public async Task<(IReadOnlyList<Mission> Items, int TotalCount)> GetMissionsPagedAsync(
+        int page,
+        int pageSize,
+        string? search,
+        string? status,
+        string? sortBy = "createdAt",
+        bool sortDescending = true)
     {
         var query = _context.Missions
             .Include(m => m.AssignedToUser)
@@ -31,14 +37,39 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
             query = query.Where(m => m.Status == status);
         }
         
+        query = ApplySorting(query, sortBy, sortDescending);
+
         var totalCount = await query.CountAsync();
         var items = await query
-            .OrderByDescending(m  =>m.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
         
         return (items, totalCount);
+    }
+
+    private static IQueryable<Mission> ApplySorting(
+        IQueryable<Mission> query,
+        string? sortBy,
+        bool sortDescending)
+    {
+        var normalizedSortBy = (sortBy ?? "createdAt").Trim().ToLowerInvariant();
+
+        return normalizedSortBy switch
+        {
+            "title" => sortDescending
+                ? query.OrderByDescending(m => m.Title)
+                : query.OrderBy(m => m.Title),
+            "status" => sortDescending
+                ? query.OrderByDescending(m => m.Status)
+                : query.OrderBy(m => m.Status),
+            "missioncode" or "mission_code" => sortDescending
+                ? query.OrderByDescending(m => m.MissionCode)
+                : query.OrderBy(m => m.MissionCode),
+            _ => sortDescending
+                ? query.OrderByDescending(m => m.CreatedAt)
+                : query.OrderBy(m => m.CreatedAt)
+        };
     }
 
     public async Task<IReadOnlyList<Mission>> GetMissionsByAssignedUserAsync(Guid userId)

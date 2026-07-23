@@ -6,7 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using UavPms.Shared.Contracts.Events;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Interfaces;
 using UavPms.AIInspectionService.Domain.Contracts;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
@@ -26,6 +28,8 @@ public class ProcessAiAnalysisResultCommandHandler
     private readonly INotificationRepository _notificationRepo;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IRealtimeNotificationService _realtimeNotificationService;
+    private readonly IInspectionEvaluationClient _inspectionEvaluationClient;
+    private readonly IEventPublisher _eventPublisher;
     private readonly ILogger<ProcessAiAnalysisResultCommandHandler> _logger;
 
     public ProcessAiAnalysisResultCommandHandler(
@@ -37,6 +41,8 @@ public class ProcessAiAnalysisResultCommandHandler
         INotificationRepository notificationRepo,
         IUnitOfWork unitOfWork,
         IRealtimeNotificationService realtimeNotificationService,
+        IInspectionEvaluationClient inspectionEvaluationClient,
+        IEventPublisher eventPublisher,
         ILogger<ProcessAiAnalysisResultCommandHandler> logger)
     {
         _aiRequestRepo = aiRequestRepo;
@@ -47,6 +53,8 @@ public class ProcessAiAnalysisResultCommandHandler
         _notificationRepo = notificationRepo;
         _unitOfWork = unitOfWork;
         _realtimeNotificationService = realtimeNotificationService;
+        _inspectionEvaluationClient = inspectionEvaluationClient;
+        _eventPublisher = eventPublisher;
         _logger = logger;
     }
 
@@ -194,8 +202,23 @@ public class ProcessAiAnalysisResultCommandHandler
                         await _anomalyRepo.AddAsync(anomaly);
                         savedDetections++;
 
+                        var evaluation = await _inspectionEvaluationClient.EvaluateAsync(
+                            new DetectionEvaluationRequest(
+                                detection.CategoryCode,
+                                category.CategoryName,
+                                detection.Confidence,
+                                category.IsEmergencyClass,
+                                media.MissionId,
+                                media.Id,
+                                detection.Id),
+                            cancellationToken);
+
+                        anomaly.AnalystNotes = string.IsNullOrWhiteSpace(evaluation.Reason)
+                            ? anomaly.AnalystNotes
+                            : $"AI evaluation: severity={evaluation.Severity}, risk={evaluation.RiskLevel}, score={evaluation.PriorityScore}. {evaluation.Reason}";
+
                         // 5. Check if it's an emergency alert
-                        if (category.IsEmergencyClass && detection.Confidence >= 0.80)
+                        if (evaluation.RequiresImmediateAlert)
                         {
                             var latencySeconds = (int)Math.Max(0, (DateTime.UtcNow - request.CompletedAt).TotalSeconds);
 
@@ -213,6 +236,17 @@ public class ProcessAiAnalysisResultCommandHandler
 
                             await _emergencyAlertRepo.AddAsync(alert);
                             createdAlerts++;
+
+                            await _eventPublisher.PublishAsync(new DefectDetectedEvent
+                            {
+                                InspectionId = media.MissionId,
+                                RecordId = anomaly.Id,
+                                MissionId = media.MissionId,
+                                ImageUrl = anomaly.ImageUrl ?? media.FileUrl,
+                                IsDefect = true,
+                                DefectType = $"{category.CategoryName} ({evaluation.Severity})",
+                                DetectedAt = DateTime.UtcNow
+                            });
 
                             // 6. Send Notification to Mission Manager
                             if (media.Mission != null)

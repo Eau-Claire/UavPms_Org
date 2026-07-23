@@ -1,80 +1,208 @@
-# UAV-GridGuard: Hệ thống Quản lý & Phân tích Giám sát Đường dây 110kV
+# UAV-GridGuard PMS
 
-Dự án này là hệ thống backend quản lý và phân tích dữ liệu kiểm tra đường dây truyền tải điện bằng thiết bị bay không người lái (UAV). Phần này tập trung vào cấu hình **Notification Service**, kết nối cơ sở dữ liệu **Supabase**, và hệ thống tác vụ chạy ngầm **Hangfire**.
+Backend for UAV-based power-line inspection management. The system is organized as a moderate distributed architecture: Ocelot API Gateway, four ASP.NET Core business services, one internal gRPC service, RabbitMQ background consumers, Redis, Supabase/PostgreSQL, and the existing independent FastAPI AI service integration.
 
----
+## Architecture
 
-## Hướng dẫn Khởi chạy nhanh (Quick Start)
+```text
+Client / Swagger
+  -> UavPms.ApiGateway (Ocelot)
+      -> IdentityService REST
+      -> OperationsService REST
+      -> AIInspectionService REST
+            -> InspectionEvaluationService gRPC
+            -> RabbitMQ publish DefectDetectedEvent
+      -> NotificationService REST + SignalR + Hangfire
+            -> RabbitMQ consumers
+      -> FastAPI AI service over HTTP when attached to the network
+```
 
-Dự án đã được thiết lập để kết nối trực tiếp đến Cloud Database (**Supabase**) và tự động cấu hình di chuyển cơ sở dữ liệu (Database Migrations). Người mới pull dự án về **không cần cài đặt PostgreSQL** hoặc **bật Docker** cục bộ vẫn có thể khởi chạy ứng dụng ngay lập tức.
+## Services
 
-### Bước 1: Khởi chạy theo microservice qua Docker Compose
-Mở Terminal tại thư mục gốc của dự án và chạy lệnh:
+| Service | Responsibility | Project |
+|---|---|---|
+| API Gateway | Public routing, CORS, gateway health | `UavPms.ApiGateway` |
+| IdentityService | Login, OTP, refresh token, users, roles | `Services/IdentityService` |
+| OperationsService | Regions, substations, lines, towers, assets, missions, inspections, devices, monitor, audit logs | `Services/OperationsService` |
+| AIInspectionService | AI upload/orchestration, callback processing, Vision Bridge, FastAPI/RabbitMQ integration | `Services/AIInspectionService` |
+| NotificationService | Notifications, SignalR hub, Hangfire jobs, RabbitMQ consumers | `Services/NotificationService` |
+| InspectionEvaluationService | Internal gRPC severity/risk evaluation for AI detections | `Services/InspectionEvaluationService` |
+
+## Technology Stack
+
+ASP.NET Core 9, Ocelot, MediatR, EF Core, PostgreSQL/Supabase, Redis, RabbitMQ, Hangfire, SignalR, JWT Bearer auth, Swagger/OpenAPI, gRPC, Docker Compose.
+
+## Run
+
 ```bash
+dotnet restore UavPms.sln
+dotnet build UavPms.sln
+dotnet test UavPms.UnitTests/UavPms.UnitTests.csproj
 docker compose up -d --build
 ```
 
-Khi chạy bằng Docker Compose, frontend gọi API Gateway tại `http://localhost:5194`.
-Gateway Ocelot sẽ chuyển route cũ sang các service domain:
+Gateway: `http://localhost:5194`
 
-* `IdentityService`: `/api/v{version}/auth`, `/api/v{version}/users`
-* `OperationsService`: asset/grid/mission/inspection/device/monitor/audit APIs
-* `AIInspectionService`: AI analysis, callback, Vision Bridge
-* `NotificationService`: notification APIs, SignalR hub, Hangfire
-* FastAPI AI service vẫn độc lập và có route gateway `/ai-service/...` khi được attach cùng network.
+RabbitMQ management: `http://localhost:15672` (`guest` / `guest` by default)
 
-### Bước 1b: Khởi chạy từng service khi development
+Internal gRPC: `inspectionevaluationservice:8080`; health endpoint: `inspectionevaluationservice:8081/health`.
+
+The FastAPI AI service source is not part of this repository. If you have its image, run it on the same Compose network with:
+
 ```bash
-dotnet run --project UavPms.ApiGateway/UavPms.ApiGateway.csproj
-dotnet run --project Services/IdentityService/UavPms.IdentityService.csproj
-dotnet run --project Services/OperationsService/UavPms.OperationsService.csproj
-dotnet run --project Services/AIInspectionService/UavPms.AIInspectionService.csproj
-dotnet run --project Services/NotificationService/UavPms.NotificationService.csproj
+FASTAPI_AI_IMAGE=<your-fastapi-image> docker compose --profile fastapi-ai up -d --build
 ```
 
-Chi tiết kiến trúc service nằm trong [docs/service-architecture.md](docs/service-architecture.md).
+## Environment
 
----
+Required production variables:
 
-## Kiểm thử Các Tính năng (Testing Guide)
-
-### 1. Hệ thống Thông báo (Notification APIs)
-Truy cập giao diện Swagger tại: `http://localhost:5194/swagger`
-Bạn có thể gọi trực tiếp các HTTP Endpoint để kiểm thử luồng thông báo mà không cần có RabbitMQ:
-* **Tạo thông báo mới**: `POST /api/notifications` với body chứa thông tin người nhận (`userId`), tiêu đề (`title`), và nội dung (`content`).
-* **Xem lịch sử thông báo**: `GET /api/notifications/history?userId={userId}` để lấy toàn bộ danh sách thông báo của người dùng đó.
-* **Đánh dấu đã đọc**: `PUT /api/notifications/{id}/read` để đánh dấu thông báo cụ thể là đã đọc.
-
-### 2. Tác vụ Chạy ngầm (Hangfire Background Jobs)
-Truy cập Hangfire Dashboard tại: `http://localhost:5194/hangfire`
-Tại đây, bạn có thể theo dõi và kích hoạt thủ công các tác vụ chạy ngầm:
-* **auto-cleanup-job**: Tác vụ tự động dọn dẹp các tệp tin lưu trữ tạm thời và file logs cũ hơn 30 ngày.
-* **daily-summary-job**: Tác vụ tổng hợp và giả lập gửi email báo cáo sự cố hàng ngày.
-* *Mẹo*: Chọn mục **Recurring Jobs** -> Chọn Job -> Nhấp **Trigger Now** để chạy thử ngay lập tức mà không cần đợi lịch hẹn.
-
-### 3. Tạo Job Lịch thông báo qua Hangfire Dashboard (Custom Create Job UI)
-Hệ thống tích hợp sẵn một giao diện tạo Job tùy chỉnh ngay trong Hangfire UI để người quản trị hoặc tester có thể tạo lịch gửi thông báo tự động mà không cần dùng API Swagger hay viết code:
-* **Địa chỉ truy cập**: Click vào mục **Create Job** trên thanh menu của Hangfire Dashboard (ví dụ: `https://uavpms.ddns.net/hangfire/create-job` hoặc `http://localhost:5196/create-job`).
-* **Các trường thông tin**:
-  * **User IDs**: Nhập danh sách ID người dùng (Guid), phân tách bởi dấu phẩy `,`, dấu chấm phẩy `;` hoặc dấu cách (ví dụ: `guid1, guid2`). Nếu muốn gửi thông báo cho **TẤT CẢ** người dùng đang hoạt động trong hệ thống, hãy **để trống** trường này.
-  * **Title & Body**: Điền tiêu đề và nội dung chi tiết của thông báo.
-  * **Type**: Loại tác vụ (mặc định là `ScheduledNotification`).
-  * **Execute At**: Chọn ngày giờ cụ thể muốn gửi thông báo (mặc định tự động điền thời gian hiện tại + 5 phút). Hệ thống đã được tích hợp bộ đo lệch múi giờ (timezone offset) tự động nên job sẽ chạy chuẩn xác theo múi giờ trên máy tính của bạn.
-* **Theo dõi**: Sau khi nhấn nút **Schedule Job**, hệ thống sẽ tạo một Job và tự động chuyển hướng bạn tới trang **Scheduled Jobs** của Hangfire để theo dõi thời gian đếm ngược đến lúc thực thi.
-
----
-
-## Cấu hình RabbitMQ (Tùy chọn)
-
-Ứng dụng hỗ trợ cấu hình RabbitMQ để truyền nhận tin nhắn bất đồng bộ khi có sự kiện `MissionCreated` (Phân công nhiệm vụ) hoặc `DefectDetected` (Phát hiện lỗi bằng AI).
-
-### Khởi chạy RabbitMQ bằng Docker Compose:
-Để khởi chạy RabbitMQ cục bộ, chạy lệnh sau tại thư mục gốc của dự án:
-```bash
-docker compose up -d
+```env
+DB_CONNECTION=
+HANGFIRE_DB_CONNECTION=
+JWT_SECRET=
+JWT_ISSUER=UavPms
+JWT_AUDIENCE=UavPmsClient
+JWT_EXPIRY_MINUTES=60
+SUPABASE_URL=
+SUPABASE_API_KEY=
+SUPABASE_BUCKET=
+SENDGRID_API_KEY=
+SENDGRID_FROM_EMAIL=
+SENDGRID_FROM_NAME=
+RABBITMQ_USER=guest
+RABBITMQ_PASSWORD=guest
 ```
-Lệnh này sẽ tự động khởi chạy một container RabbitMQ lắng nghe tại cổng `5672` và giao diện quản lý (management console) tại địa chỉ `http://localhost:15672`.
 
-### Cách quản lý Hosted Services:
-* `NotificationService` chạy `MissionCreatedConsumer` và `DefectDetectedConsumer` khi có `RabbitMQ__HostName`.
-* `AIInspectionService` chạy `MockAIAnalysisConsumer` khi có `RabbitMQ__HostName` và `MockAI__Enabled=true`.
+Optional:
+
+```env
+RUN_MIGRATIONS=false
+MOCK_AI_ENABLED=false
+MOCK_AI_CATEGORY_CODE=
+MOCK_AI_CONFIDENCE=0.92
+GATEWAY_HTTP_PORT=5194
+RABBITMQ_MANAGEMENT_PORT=15672
+```
+
+## REST API Demo
+
+All public routes go through Ocelot. Representative PRN232 CRUD/search/filter/sort/pagination resource:
+
+```http
+POST   /api/v1/missions
+GET    /api/v1/missions?page=1&pageSize=10&search=line&status=Pending&sortBy=createdAt&sortDescending=true
+GET    /api/v1/missions/{id}
+PUT    /api/v1/missions/{id}
+DELETE /api/v1/missions/{id}
+```
+
+Other route groups:
+
+| Route | Service |
+|---|---|
+| `/api/v1/auth`, `/api/v1/users` | IdentityService |
+| `/api/v1/regions`, `/substations`, `/lines`, `/towers`, `/assets`, `/missions`, `/inspections`, `/devices`, `/monitor`, `/audit-logs` | OperationsService |
+| `/api/v1/ai-analysis`, `/api/internal/ai-analysis`, `/api/v1/vision`, `/api/v1/missions/{id}/ai-analysis` | AIInspectionService |
+| `/api/v1/notifications`, `/hubs/notifications`, `/hangfire` | NotificationService |
+| `/health`, `/health/identity`, `/health/operations`, `/health/ai-inspection`, `/health/notifications` | Gateway/downstream health |
+
+Swagger is exposed by each REST service when running in Development. For direct local development, run a service and open `/swagger`.
+
+## gRPC Workflow
+
+Contract: `Protos/inspection_evaluation.proto`
+
+Shared RabbitMQ event contracts: `Shared/UavPms.Shared.Contracts/Events`
+
+Server: `Services/InspectionEvaluationService/Services/InspectionEvaluationGrpcService.cs`
+
+Client: `Services/AIInspectionService/Infrastructure/Grpc/GrpcInspectionEvaluationClient.cs`
+
+Workflow:
+
+1. FastAPI/worker posts AI callback to `AIInspectionService`.
+2. `ProcessAiAnalysisResultCommandHandler` resolves media/category and calls `InspectionEvaluationService.EvaluateDetection`.
+3. gRPC returns severity, risk level, priority score, and immediate-alert decision.
+4. AIInspectionService saves anomaly/alert metadata and preserves fallback behavior if gRPC is temporarily unavailable.
+
+## RabbitMQ Workflow
+
+RabbitMQ is preserved as the asynchronous broker.
+
+Producer examples:
+
+- `OperationsService` publishes `MissionCreatedEvent` after creating a mission.
+- `AIInspectionService` publishes `DefectDetectedEvent` after a critical evaluated AI defect.
+
+Consumers:
+
+- `NotificationService.Infrastructure.Messaging.MissionCreatedConsumer`
+- `NotificationService.Infrastructure.Messaging.DefectDetectedConsumer`
+
+The consumers run as `BackgroundService`, use manual ack/nack, log processing failures, and create in-app notifications.
+
+Demo:
+
+1. Start `docker compose up -d --build`.
+2. Open RabbitMQ management at `http://localhost:15672`.
+3. Create a mission through `POST /api/v1/missions`; observe `MissionCreatedEvent`.
+4. Submit an AI callback with a high-confidence emergency category; observe `DefectDetectedEvent` and NotificationService logs.
+
+## Background Jobs
+
+NotificationService owns Hangfire jobs:
+
+- `CleanupJob`
+- `DailySummaryJob`
+- `PushNotificationsJob`
+- `ScheduledNotificationJob`
+
+Dashboard: `/hangfire` when Hangfire connection is configured.
+
+RabbitMQ consumers are also meaningful background workers and are suitable for live demonstration through service logs.
+
+## PRN232 Compliance Checklist
+
+| Requirement | Implementation |
+|---|---|
+| ASP.NET Core REST API | Four REST services under `Services/*Service/Controllers` |
+| RESTful CRUD | `OperationsService/Controllers/MissionController.cs` |
+| Layered architecture | Each service has `Application`, `Domain`, `Infrastructure`, `Controllers` |
+| JWT authentication | `Program.cs` in each REST service, `[Authorize]` controllers |
+| Searching | `GET /api/v1/missions?search=...` and other list endpoints |
+| Filtering | `GET /api/v1/missions?status=...`, audit/table/action filters |
+| Sorting | `GET /api/v1/missions?sortBy=createdAt&sortDescending=true` |
+| Pagination | `page`, `pageSize`, `PaginationMetaData` responses |
+| EF Core | Service-local `Infrastructure/Persistence/ApplicationDbContext.cs` |
+| Relational database | PostgreSQL/Supabase connection via `DB_CONNECTION` |
+| Dependency Injection | `Application/DependencyInjection.cs`, `Infrastructure/DependencyInjection.cs` |
+| Configuration management | `appsettings.json`, Docker env vars |
+| Logging | Serilog console logging |
+| Global exception handling | `Middlewares/GlobalExceptionHandler.cs` |
+| Background processing | RabbitMQ `BackgroundService` consumers, Hangfire jobs |
+| Message broker | RabbitMQ producer/consumer workflows |
+| Independent gRPC service | `Services/InspectionEvaluationService` |
+| REST to gRPC interaction | AI callback handler calls `IInspectionEvaluationClient` |
+| Docker containerization | Dockerfile per service |
+| Docker Compose deployment | `docker-compose.yml` |
+| Swagger/OpenAPI | `ConfigureSwaggerOptions.cs` in REST services |
+| End-to-end workflow | AI callback -> gRPC evaluation -> DB save -> RabbitMQ event -> notification consumer |
+| README | This document |
+
+## Team Responsibilities
+
+| Member | Responsibility |
+|---|---|
+| Member 1 | Identity, JWT, users, roles |
+| Member 2 | Operations CRUD, EF Core, PostgreSQL schema |
+| Member 3 | AIInspectionService, FastAPI integration, gRPC integration |
+| Member 4 | NotificationService, RabbitMQ consumers, Hangfire, deployment |
+
+## Troubleshooting
+
+- If `docker compose config` fails, check `.env` quoting first, especially secret values.
+- If Hangfire does not start, configure `HANGFIRE_DB_CONNECTION` or `DB_CONNECTION`.
+- If RabbitMQ consumers do not start, verify `rabbitmq` is healthy and `RabbitMQ__HostName=rabbitmq`.
+- If gRPC evaluation is unavailable, AIInspectionService logs a warning and uses its fallback critical-alert rule to preserve existing AI callback behavior.
+- If Docker restore fails without `network: host`, run the compose build path, which is configured with host networking for restore.

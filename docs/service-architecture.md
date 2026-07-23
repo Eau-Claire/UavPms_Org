@@ -13,6 +13,7 @@ UavPms.ApiGateway (Ocelot)
   +--> IdentityService
   +--> OperationsService
   +--> AIInspectionService
+        +--> InspectionEvaluationService (gRPC)
   +--> NotificationService
   |
   +--> FastAPI AI service (independent)
@@ -65,6 +66,15 @@ Owns user notifications and background notification workloads:
 
 This isolates realtime and background processing from synchronous operations APIs.
 
+### InspectionEvaluationService
+
+Owns a small synchronous gRPC business capability:
+
+- `uavpms.inspectionevaluation.InspectionEvaluation/EvaluateDetection`
+- Calculates severity, risk level, priority score, and immediate-alert decision for AI detections.
+
+This service is internal-only. AIInspectionService calls it directly over the Docker network; Ocelot does not route gRPC traffic.
+
 ### FastAPI AI Service
 
 The existing FastAPI AI service remains independent. Gateway keeps `/ai-service/{everything}` available for deployments that attach the Python service to the same network.
@@ -84,6 +94,8 @@ Each .NET service runs independently and owns its API/runtime/config/Dockerfile/
 - `operationsservice`
 - `aiinspectionservice`
 - `notificationservice`
+- `inspectionevaluationservice`
+- `rabbitmq`
 - `redis`
 
 The previous `webapi` monolith container is no longer part of compose. The old global layered projects have been removed from the active solution and source tree. Unit tests now reference the owning service projects directly.
@@ -112,13 +124,19 @@ Domain models now live under service-local namespaces, for example `UavPms.Ident
 - `OperationsService/Application/Features`: `Assets`, `AuditLogs`, `Devices`, `Inspections`, `Missions`, `Monitor`, `Regions`, `Substations`, `Towers`, `TransmissionLines`
 - `AIInspectionService/Application/Features`: `AIAnalysis`, `VisionBridge`
 - `NotificationService/Application/Features`: `Notifications`
+- `InspectionEvaluationService`: gRPC endpoint and evaluation rules under `Services/InspectionEvaluationService`
 
 Cross-domain background consumers are compiled only in their owning services:
 
 - `MissionCreatedConsumer` and `DefectDetectedConsumer` are owned by `NotificationService`.
 - `MockAIAnalysisConsumer` is owned by `AIInspectionService`.
 
-All services expose `/health`.
+RabbitMQ producer-consumer paths:
+
+- `OperationsService` publishes `MissionCreatedEvent`; `NotificationService` consumes it.
+- `AIInspectionService` publishes `DefectDetectedEvent` after gRPC-evaluated critical detections; `NotificationService` consumes it.
+
+REST services expose `/health` on their HTTP port. `InspectionEvaluationService` uses port `8080` for internal gRPC over HTTP/2 and port `8081` for HTTP/1 health checks.
 
 EF Core migration history for the current shared PostgreSQL database is retained under `Services/OperationsService/Infrastructure/Migrations`. This keeps deployment migration support while removing the old global Infrastructure project.
 
@@ -144,6 +162,7 @@ dotnet run --project Services/IdentityService/UavPms.IdentityService.csproj
 dotnet run --project Services/OperationsService/UavPms.OperationsService.csproj
 dotnet run --project Services/AIInspectionService/UavPms.AIInspectionService.csproj
 dotnet run --project Services/NotificationService/UavPms.NotificationService.csproj
+dotnet run --project Services/InspectionEvaluationService/UavPms.InspectionEvaluationService.csproj
 dotnet run --project UavPms.ApiGateway/UavPms.ApiGateway.csproj
 ```
 
@@ -158,5 +177,5 @@ docker compose up -d --build
 - Authentication/authorization behavior remains inside the services and uses the same JWT settings.
 - FastAPI AI capability is not rewritten or merged into .NET.
 - RabbitMQ is still used where the repository already used it.
-- The architecture intentionally uses 4 .NET business services plus the existing FastAPI service, avoiding tiny services around every entity.
+- The architecture intentionally uses 4 .NET REST business services, one focused internal gRPC service, plus the existing FastAPI service, avoiding tiny services around every entity.
 - Remaining migration risk: services still share one PostgreSQL database instance and should only access tables owned by their domain until a future schema split is justified.

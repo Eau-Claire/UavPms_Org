@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
+using UavPms.AIInspectionService.Application.Interfaces;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
@@ -90,6 +91,15 @@ public class AiInspectionPipelineTests
             notificationRepo.Object,
             new UnitOfWork(context),
             Mock.Of<IRealtimeNotificationService>(),
+            Mock.Of<IInspectionEvaluationClient>(c => c.EvaluateAsync(
+                It.IsAny<DetectionEvaluationRequest>(),
+                It.IsAny<CancellationToken>()) == Task.FromResult(new DetectionEvaluationResult(
+                    "Medium",
+                    "PlannedReview",
+                    70,
+                    false,
+                    "Unit test evaluation"))),
+            Mock.Of<IEventPublisher>(),
             Mock.Of<ILogger<ProcessAiAnalysisResultCommandHandler>>());
 
         var callbackResult = await callbackHandler.Handle(new ProcessAiAnalysisResultCommand

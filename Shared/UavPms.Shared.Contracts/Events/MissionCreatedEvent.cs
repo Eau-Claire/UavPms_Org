@@ -1,6 +1,4 @@
-using System;
-
-namespace UavPms.AIInspectionService.Domain.Contracts;
+namespace UavPms.Shared.Contracts.Events;
 
 public class MissionCreatedEvent
 {

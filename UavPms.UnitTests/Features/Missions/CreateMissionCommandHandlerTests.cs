@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Moq;
+using UavPms.Shared.Contracts.Events;
 using UavPms.OperationsService.Application.Features.Missions.Commands.CreateMission;
 using UavPms.OperationsService.Domain.Contracts;
 using UavPms.OperationsService.Domain.Entities;

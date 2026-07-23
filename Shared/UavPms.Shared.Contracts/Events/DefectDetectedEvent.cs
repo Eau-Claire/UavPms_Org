@@ -1,6 +1,4 @@
-using System;
-
-namespace UavPms.NotificationService.Domain.Contracts;
+namespace UavPms.Shared.Contracts.Events;
 
 public class DefectDetectedEvent
 {

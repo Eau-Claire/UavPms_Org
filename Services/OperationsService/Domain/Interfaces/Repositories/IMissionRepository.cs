@@ -8,7 +8,9 @@ public interface IMissionRepository : IGenericRepository<Mission>
         int page,
         int pageSize,
         string? search,
-        string? status);
+        string? status,
+        string? sortBy = "createdAt",
+        bool sortDescending = true);
     
     Task<IReadOnlyList<Mission>> GetMissionsByAssignedUserAsync(Guid userId);
     

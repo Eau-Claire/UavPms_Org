@@ -62,7 +62,9 @@ public class MissionController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null,
-        [FromQuery] string? status = null)
+        [FromQuery] string? status = null,
+        [FromQuery] string? sortBy = "createdAt",
+        [FromQuery] bool sortDescending = true)
     {
         if (page <= 0 || pageSize <= 0)
         {
@@ -74,7 +76,7 @@ public class MissionController : ControllerBase
             return BadRequest(new ApiResponse(false, "Invalid page or page size"));
         }
         
-        var query = new ListMissionsQuery(page,  pageSize, search, status);
+        var query = new ListMissionsQuery(page, pageSize, search, status, sortBy, sortDescending);
         var result = await _mediator.Send(query);
         return Ok(new ApiResponse(true, "Mission list retrieved successfully", result));
     }

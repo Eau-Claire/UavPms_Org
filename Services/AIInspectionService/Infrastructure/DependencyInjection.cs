@@ -1,12 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Grpc.Net.Client;
+using UavPms.AIInspectionService.Application.Interfaces;
+using UavPms.AIInspectionService.Infrastructure.Grpc;
 using UavPms.AIInspectionService.Infrastructure.Persistence;
 using UavPms.AIInspectionService.Infrastructure.Messaging;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Infrastructure.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.AIInspectionService.Infrastructure.Services;
+using UavPms.Grpc.InspectionEvaluation;
 
 namespace UavPms.AIInspectionService.Infrastructure;
 
@@ -41,6 +45,13 @@ public static class DependencyInjection
         {
             services.AddScoped<IEventPublisher, NoOpEventPublisher>();
         }
+
+        var inspectionEvaluationUrl = configuration["GrpcServices:InspectionEvaluationUrl"]
+            ?? "http://inspectionevaluationservice:8080";
+        services.AddSingleton(_ => GrpcChannel.ForAddress(inspectionEvaluationUrl));
+        services.AddSingleton(sp =>
+            new InspectionEvaluation.InspectionEvaluationClient(sp.GetRequiredService<GrpcChannel>()));
+        services.AddScoped<IInspectionEvaluationClient, GrpcInspectionEvaluationClient>();
 
         // Đăng ký Unit of Work và Generic Repository
         services.AddScoped<IUnitOfWork, UnitOfWork>();

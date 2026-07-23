@@ -20,7 +20,9 @@ public class ListMissionsQueryHandler : IRequestHandler<ListMissionsQuery, Pagin
             request.Page,
             request.PageSize,
             request.Search,
-            request.Status);
+            request.Status,
+            request.SortBy,
+            request.SortDescending);
 
         var dtos = items.Select(mission => new MissionDto
         {
