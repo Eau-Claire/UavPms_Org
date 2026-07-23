@@ -8,7 +8,7 @@ var isRunningInContainer = string.Equals(
     Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
     "true",
     StringComparison.OrdinalIgnoreCase);
-var useLocalDownstreams = builder.Configuration.GetValue<bool>("Gateway:UseLocalDownstreams");
+var configuredLocalDownstreams = builder.Configuration.GetValue<bool?>("Gateway:UseLocalDownstreams");
 
 builder.Host.UseSerilog((context, loggerConfig) =>
 {
@@ -18,6 +18,11 @@ builder.Host.UseSerilog((context, loggerConfig) =>
 builder.Configuration
     .AddJsonFile("ocelot.json", optional: false, reloadOnChange: true)
     .AddEnvironmentVariables();
+
+// Docker service DNS is the safe default for deployed gateway instances.
+// Local downstreams must be explicitly enabled for local development.
+var useLocalDownstreams = configuredLocalDownstreams
+    ?? (!isRunningInContainer && builder.Environment.IsDevelopment());
 
 if (builder.Environment.IsDevelopment() && (!isRunningInContainer || useLocalDownstreams))
 {
@@ -80,7 +85,7 @@ app.UseCors("GatewayCors");
         await next();
     });
 
-    var swaggerTargets = isRunningInContainer && !useLocalDownstreams
+    var swaggerTargets = !useLocalDownstreams
         ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["identity"] = builder.Configuration["SwaggerServices:IdentityUrl"] ?? "http://identityservice:8080/swagger/v1/swagger.json",
