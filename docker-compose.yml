@@ -44,6 +44,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
     ports:
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     expose:
       - "5672"

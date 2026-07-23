@@ -11,6 +11,7 @@ builder.Host.UseSerilog((context, loggerConfig) =>
 
 builder.Configuration
     .AddJsonFile("ocelot.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"ocelot.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
 builder.Services.AddCors(options =>
@@ -40,7 +41,7 @@ builder.Services.AddOcelot(builder.Configuration);
 
 var app = builder.Build();
 
-app.MapHealthChecks("/health");
+app.UseHealthChecks("/health");
 app.UseWebSockets();
 app.UseCors("GatewayCors");
 
