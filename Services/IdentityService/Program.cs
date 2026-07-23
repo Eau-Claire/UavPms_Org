@@ -109,7 +109,7 @@ else
     Log.Information("Database migration and seeding skipped. Set RunMigrations=true to enable it for a dedicated migration run.");
 }
 
-if (app.Environment.IsDevelopment())
+// Keep service-level OpenAPI available behind the gateway in Docker as well.
 {
     app.UseSwagger();
     app.UseSwaggerUI(options =>

@@ -66,7 +66,8 @@ app.UseHealthChecks("/health");
 app.UseWebSockets();
 app.UseCors("GatewayCors");
 
-if (app.Environment.IsDevelopment())
+// Swagger is part of the deployed API contract and must also be available
+// when the gateway runs in the production Docker profile.
 {
     app.Use(async (context, next) =>
     {

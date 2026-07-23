@@ -187,7 +187,7 @@ if (!string.IsNullOrWhiteSpace(normalizedHangfireConnection))
     });
 }
 
-if (app.Environment.IsDevelopment())
+// Keep service-level OpenAPI available behind the gateway in Docker as well.
 {
     app.UseSwagger();
     app.UseSwaggerUI(options =>
