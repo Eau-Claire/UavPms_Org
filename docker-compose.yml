@@ -67,6 +67,7 @@ services:
       - "${GATEWAY_HTTP_PORT:-5194}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      Gateway__UseLocalDownstreams: ${GATEWAY_USE_LOCAL_DOWNSTREAMS:-false}
       Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
       Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}
       Cors__AllowedOrigins__2: ${CORS_ALLOWED_ORIGIN_2:-http://localhost:5194}
