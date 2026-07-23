@@ -7,8 +7,8 @@ using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
-using UavPms.Application.Features.Inspections.Commands.UploadImage;
-using UavPms.WebApi.Controllers;
+using UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage;
+using UavPms.OperationsService.Api.Controllers;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.Inspections;

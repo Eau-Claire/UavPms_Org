@@ -1,10 +1,10 @@
 using FluentAssertions;
 using Moq;
 using System.Linq.Expressions;
-using UavPms.Application.Features.Users.Commands.CreateUser;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
+using UavPms.IdentityService.Application.Features.Users.Commands.CreateUser;
+using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
+using UavPms.IdentityService.Domain.Interfaces.Services;
 namespace UavPms.UnitTests.Features.Users.Commands.CreateUser;
 
 public class CreateUserCommandHandlerTests

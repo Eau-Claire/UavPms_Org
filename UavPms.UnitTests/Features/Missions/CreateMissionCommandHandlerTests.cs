@@ -1,10 +1,10 @@
 using FluentAssertions;
 using Moq;
-using UavPms.Application.Features.Missions.Commands.CreateMission;
-using UavPms.Core.Contracts;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
+using UavPms.OperationsService.Application.Features.Missions.Commands.CreateMission;
+using UavPms.OperationsService.Domain.Contracts;
+using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Interfaces.Repositories;
+using UavPms.OperationsService.Domain.Interfaces.Services;
 
 namespace UavPms.UnitTests.Features.Missions;
 

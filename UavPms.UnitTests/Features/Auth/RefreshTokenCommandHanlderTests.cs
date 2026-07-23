@@ -2,11 +2,11 @@ using System.Linq.Expressions;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Moq;
-using UavPms.Application.Features.Auth.Commands.RefreshToken;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
-using RefreshTokenEntity = UavPms.Core.Entities.RefreshToken;
+using UavPms.IdentityService.Application.Features.Auth.Commands.RefreshToken;
+using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
+using UavPms.IdentityService.Domain.Interfaces.Services;
+using RefreshTokenEntity = UavPms.IdentityService.Domain.Entities.RefreshToken;
 
 namespace UavPms.UnitTests.Features.Auth;
 

@@ -1,4 +1,4 @@
-using UavPms.Infrastructure.Services;
+using UavPms.IdentityService.Infrastructure.Services;
 using Xunit;
 using FluentAssertions;
 

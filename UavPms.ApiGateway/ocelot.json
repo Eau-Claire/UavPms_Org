@@ -1,0 +1,318 @@
+{
+  "Routes": [
+    {
+      "DownstreamPathTemplate": "/health",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "identityservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/health/identity",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/health",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/health/operations",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/health",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/health/ai-inspection",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/health",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/health/notifications",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/missions/{missionId}/ai-analysis/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/missions/{missionId}/ai-analysis/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      "Priority": 100
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/missions/{missionId}/ai-analysis",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/missions/{missionId}/ai-analysis",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      "Priority": 100
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/auth/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "identityservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/auth/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/auth",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "identityservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/auth",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/users/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "identityservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/users/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/users",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "identityservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/users",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/ai-analysis/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/ai-analysis/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/ai-analysis",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/ai-analysis",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/internal/ai-analysis/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/internal/ai-analysis/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/internal/ai-analysis",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/internal/ai-analysis",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/vision/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/vision/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/vision",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/vision",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/notifications/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/notifications/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/notifications",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/notifications",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/hubs/notifications/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/hubs/notifications/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/hubs/notifications",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/hubs/notifications",
+      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/hangfire/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/hangfire/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/hangfire",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/hangfire",
+      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/regions/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/regions/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/regions",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/regions",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/substations/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/substations/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/substations",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/substations",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/lines/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/lines/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/lines",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/lines",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/towers/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/towers/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/towers",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/towers",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/assets/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/assets/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/assets",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/assets",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/missions/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/missions/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      "Priority": 1
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/missions",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/missions",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/inspections/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/inspections/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/inspections",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/inspections",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/devices/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/devices/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/devices",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/devices",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/monitor/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/monitor/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/monitor",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/monitor",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/audit-logs/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/audit-logs/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/audit-logs",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/audit-logs",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/images/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/images/{everything}",
+      "UpstreamHttpMethod": ["GET", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "fastapi-ai", "Port": 8000 }],
+      "UpstreamPathTemplate": "/ai-service/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    }
+  ],
+  "GlobalConfiguration": {
+    "BaseUrl": "http://localhost:5194"
+  }
+}

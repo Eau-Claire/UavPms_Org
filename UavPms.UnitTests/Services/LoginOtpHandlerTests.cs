@@ -1,9 +1,9 @@
 using FluentAssertions;
 using Moq;
-using UavPms.Core.Entities;
-using UavPms.Core.Enums;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Infrastructure.Services.OtpHandlers;
+using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Enums;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
+using UavPms.IdentityService.Infrastructure.Services.OtpHandlers;
 using Xunit;
 
 namespace UavPms.UnitTests.Services;

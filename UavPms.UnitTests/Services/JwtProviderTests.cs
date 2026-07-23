@@ -3,8 +3,8 @@ using System.Security.Claims;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Moq;
-using UavPms.Core.Entities;
-using UavPms.Infrastructure.Services;
+using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Infrastructure.Services;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 

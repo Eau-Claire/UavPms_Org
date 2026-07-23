@@ -7,12 +7,12 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
-using UavPms.Application.Common.Exceptions;
-using UavPms.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
-using UavPms.Core.Entities;
-using UavPms.Core.Enums;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
+using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
+using UavPms.AIInspectionService.Domain.Entities;
+using UavPms.AIInspectionService.Domain.Enums;
+using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
+using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.AIAnalysis;

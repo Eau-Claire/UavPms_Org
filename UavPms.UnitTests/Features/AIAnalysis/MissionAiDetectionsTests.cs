@@ -4,11 +4,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
-using UavPms.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
-using UavPms.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
+using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
+using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
+using UavPms.AIInspectionService.Domain.Entities;
+using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
+using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.AIAnalysis;

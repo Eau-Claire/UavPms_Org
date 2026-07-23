@@ -1,4 +1,32 @@
-version: '3.8'
+x-service-environment: &service-environment
+  ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+  RunMigrations: ${RUN_MIGRATIONS:-false}
+  ConnectionStrings__DefaultConnection: ${DB_CONNECTION}
+  ConnectionStrings__HangfireConnection: ${HANGFIRE_DB_CONNECTION}
+  Redis__ConnectionString: redis:6379,abortConnect=false
+  Redis__Password: ${REDIS_PASSWORD}
+  Jwt__SecretKey: ${JWT_SECRET}
+  Jwt__Issuer: ${JWT_ISSUER}
+  Jwt__Audience: ${JWT_AUDIENCE}
+  Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES}
+  SendGrid__ApiKey: ${SENDGRID_API_KEY}
+  SendGrid__FromEmail: ${SENDGRID_FROM_EMAIL}
+  SendGrid__FromName: ${SENDGRID_FROM_NAME}
+  Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
+  Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}
+  Cors__AllowedOrigins__2: ${CORS_ALLOWED_ORIGIN_2:-https://seppms.vercel.app}
+  Cors__AllowedOrigins__3: ${CORS_ALLOWED_ORIGIN_3:-https://uavpms.ddns.net}
+  AIService__ServiceKey: ${AIService_ServiceKey}
+  MockAI__Enabled: ${MOCK_AI_ENABLED:-false}
+  MockAI__CategoryCode: ${MOCK_AI_CATEGORY_CODE:-}
+  MockAI__Confidence: ${MOCK_AI_CONFIDENCE:-0.92}
+  Supabase__Url: ${SUPABASE_URL}
+  Supabase__ApiKey: ${SUPABASE_API_KEY}
+  Supabase__Bucket: ${SUPABASE_BUCKET}
+  RabbitMQ__HostName: host.docker.internal
+  RabbitMQ__UserName: guest
+  RabbitMQ__Password: guest
+  RabbitMQ__Port: 5672
 
 services:
   redis:
@@ -8,44 +36,90 @@ services:
       - "6379:6379"
     restart: always
 
-  webapi:
-    image: uavpms-webapi:latest
-    container_name: uav-webapi
+  gateway:
+    image: uavpms-gateway:latest
+    container_name: uav-gateway
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.gateway
       network: host
     ports:
-      - "5194:8080"
+      - "${GATEWAY_HTTP_PORT:-5194}:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
-      - RunMigrations=${RUN_MIGRATIONS:-false}
-      - ConnectionStrings__DefaultConnection=${DB_CONNECTION}
-      - ConnectionStrings__HangfireConnection=${HANGFIRE_DB_CONNECTION}
-      - Redis__ConnectionString=redis:6379,abortConnect=false
-      - Redis__Password=${REDIS_PASSWORD}
-      - Jwt__SecretKey=${JWT_SECRET}
-      - Jwt__Issuer=${JWT_ISSUER}
-      - Jwt__Audience=${JWT_AUDIENCE}
-      - Jwt__ExpiryMinutes=${JWT_EXPIRY_MINUTES}
-      - SendGrid__ApiKey=${SENDGRID_API_KEY}
-      - SendGrid__FromEmail=${SENDGRID_FROM_EMAIL}
-      - SendGrid__FromName=${SENDGRID_FROM_NAME}
-      - Cors__AllowedOrigins__0=${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
-      - Cors__AllowedOrigins__1=${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}
-      - Cors__AllowedOrigins__2=${CORS_ALLOWED_ORIGIN_2:-https://seppms.vercel.app}
-      - Cors__AllowedOrigins__3=${CORS_ALLOWED_ORIGIN_3:-https://uavpms.ddns.net}
-      - AIService__ServiceKey=${AIService_ServiceKey}
-      - MockAI__Enabled=${MOCK_AI_ENABLED:-false}
-      - MockAI__CategoryCode=${MOCK_AI_CATEGORY_CODE:-}
-      - MockAI__Confidence=${MOCK_AI_CONFIDENCE:-0.92}
-      - Supabase__Url=${SUPABASE_URL}
-      - Supabase__ApiKey=${SUPABASE_API_KEY}
-      - Supabase__Bucket=${SUPABASE_BUCKET}
-      - RabbitMQ__HostName=host.docker.internal
-      - RabbitMQ__UserName=guest
-      - RabbitMQ__Password=guest
-      - RabbitMQ__Port=5672
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
+      Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}
+      Cors__AllowedOrigins__2: ${CORS_ALLOWED_ORIGIN_2:-https://seppms.vercel.app}
+      Cors__AllowedOrigins__3: ${CORS_ALLOWED_ORIGIN_3:-https://uavpms.ddns.net}
+    depends_on:
+      - identityservice
+      - operationsservice
+      - aiinspectionservice
+      - notificationservice
+    restart: always
+
+  identityservice:
+    image: uavpms-identity-service:latest
+    container_name: uav-identity-service
+    build:
+      context: .
+      dockerfile: Services/IdentityService/Dockerfile
+      network: host
+    expose:
+      - "8080"
+    environment:
+      <<: *service-environment
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+    restart: always
+
+  operationsservice:
+    image: uavpms-operations-service:latest
+    container_name: uav-operations-service
+    build:
+      context: .
+      dockerfile: Services/OperationsService/Dockerfile
+      network: host
+    expose:
+      - "8080"
+    environment:
+      <<: *service-environment
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+    restart: always
+
+  aiinspectionservice:
+    image: uavpms-ai-inspection-service:latest
+    container_name: uav-ai-inspection-service
+    build:
+      context: .
+      dockerfile: Services/AIInspectionService/Dockerfile
+      network: host
+    expose:
+      - "8080"
+    environment:
+      <<: *service-environment
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+    restart: always
+
+  notificationservice:
+    image: uavpms-notification-service:latest
+    container_name: uav-notification-service
+    build:
+      context: .
+      dockerfile: Services/NotificationService/Dockerfile
+      network: host
+    expose:
+      - "8080"
+    environment:
+      <<: *service-environment
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

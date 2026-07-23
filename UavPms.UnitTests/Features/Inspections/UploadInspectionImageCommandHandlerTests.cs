@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
-using UavPms.Application.Features.Inspections.Commands.UploadImage;
-using UavPms.Core.Contracts;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
+using UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage;
+using UavPms.OperationsService.Domain.Contracts;
+using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Interfaces.Repositories;
+using UavPms.OperationsService.Domain.Interfaces.Services;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.Inspections;

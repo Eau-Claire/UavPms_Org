@@ -4,9 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
-using UavPms.Application.Features.Users.Queries.GetAssignableUsers;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
+using UavPms.IdentityService.Application.Features.Users.Queries.GetAssignableUsers;
+using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.Users.Queries.GetAssignableUsers;

@@ -8,16 +8,31 @@ Dự án này là hệ thống backend quản lý và phân tích dữ liệu ki
 
 Dự án đã được thiết lập để kết nối trực tiếp đến Cloud Database (**Supabase**) và tự động cấu hình di chuyển cơ sở dữ liệu (Database Migrations). Người mới pull dự án về **không cần cài đặt PostgreSQL** hoặc **bật Docker** cục bộ vẫn có thể khởi chạy ứng dụng ngay lập tức.
 
-### Bước 1: Khởi chạy Web API
+### Bước 1: Khởi chạy theo microservice qua Docker Compose
 Mở Terminal tại thư mục gốc của dự án và chạy lệnh:
 ```bash
-dotnet run --project UavPms.WebApi/UavPms.WebApi.csproj
+docker compose up -d --build
 ```
 
-Khi chạy ứng dụng:
-* Hệ thống sẽ tự động chạy EF Migrations để đồng bộ các bảng cơ sở dữ liệu mới (bao gồm cả bảng `Notifications` và các bảng cấu trúc hệ thống).
-* Khởi tạo các bảng quản lý tác vụ của Hangfire trên database Supabase.
-* Máy chủ Web API sẽ lắng nghe tại cổng mặc định (ví dụ: `http://localhost:5194` - hãy kiểm tra cổng hiển thị trên Terminal của bạn).
+Khi chạy bằng Docker Compose, frontend gọi API Gateway tại `http://localhost:5194`.
+Gateway Ocelot sẽ chuyển route cũ sang các service domain:
+
+* `IdentityService`: `/api/v{version}/auth`, `/api/v{version}/users`
+* `OperationsService`: asset/grid/mission/inspection/device/monitor/audit APIs
+* `AIInspectionService`: AI analysis, callback, Vision Bridge
+* `NotificationService`: notification APIs, SignalR hub, Hangfire
+* FastAPI AI service vẫn độc lập và có route gateway `/ai-service/...` khi được attach cùng network.
+
+### Bước 1b: Khởi chạy từng service khi development
+```bash
+dotnet run --project UavPms.ApiGateway/UavPms.ApiGateway.csproj
+dotnet run --project Services/IdentityService/UavPms.IdentityService.csproj
+dotnet run --project Services/OperationsService/UavPms.OperationsService.csproj
+dotnet run --project Services/AIInspectionService/UavPms.AIInspectionService.csproj
+dotnet run --project Services/NotificationService/UavPms.NotificationService.csproj
+```
+
+Chi tiết kiến trúc service nằm trong [docs/service-architecture.md](docs/service-architecture.md).
 
 ---
 
@@ -61,8 +76,5 @@ docker compose up -d
 Lệnh này sẽ tự động khởi chạy một container RabbitMQ lắng nghe tại cổng `5672` và giao diện quản lý (management console) tại địa chỉ `http://localhost:15672`.
 
 ### Cách quản lý Hosted Services:
-* Nếu muốn tắt/bật các Consumer chạy ngầm, bạn mở [Program.cs](UavPms.WebApi/Program.cs) và comment/uncomment hai dòng đăng ký Hosted Services:
-  ```csharp
-  // builder.Services.AddHostedService<MissionCreatedConsumer>();
-  // builder.Services.AddHostedService<DefectDetectedConsumer>();
-  ```
+* `NotificationService` chạy `MissionCreatedConsumer` và `DefectDetectedConsumer` khi có `RabbitMQ__HostName`.
+* `AIInspectionService` chạy `MockAIAnalysisConsumer` khi có `RabbitMQ__HostName` và `MockAI__Enabled=true`.

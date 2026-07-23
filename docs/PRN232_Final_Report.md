@@ -65,7 +65,7 @@ Hệ thống triển khai cơ chế giao tiếp Service-to-Service trực tiếp
 sequenceDiagram
     autonumber
     actor Edge as Python Vision Edge (UAV Device)
-    participant API as UavPms WebApi (.NET)
+    participant API as UavPms Gateway + Business Services (.NET)
     participant App as MediatR / Application Layer
     participant DB as Cloud DB (PostgreSQL / Supabase)
     participant FS as Local File Storage (uav_storage)
@@ -108,27 +108,27 @@ graph TD
     Client[Web Dashboard Client / Swagger UI]
     VisionEdge[Python Vision Edge Device / FastAPI]
 
-    subgraph UavPms.WebApi [Tầng WebApi - Entry Point]
+    subgraph service-local API projects [Tầng WebApi - Entry Point]
         Controllers[API Controllers v1]
         Middlewares[Global Exception Middleware / Step-Up Authorization Filter]
         HangfireDash[Hangfire Dashboard & Create Job Custom UI]
     end
 
-    subgraph UavPms.Application [Tầng Application - Business Logic]
+    subgraph service-local Application folders [Tầng Application - Business Logic]
         Commands[MediatR Commands & Handlers]
         Queries[MediatR Queries & Handlers]
         Behaviors[MediatR Behaviors: Validation, Logging]
         DTOs[Data Transfer Objects]
     end
 
-    subgraph UavPms.Infrastructure [Tầng Infrastructure - Adapters]
+    subgraph service-local Infrastructure folders [Tầng Infrastructure - Adapters]
         DbContext[ApplicationDbContext - EF Core & Fluent API]
         Repos[Repositories & Unit of Work]
         Services[Services: BCrypt Hasher, JWT Provider, Hangfire Jobs]
         MQProducer[RabbitMQ Message Producer]
     end
 
-    subgraph UavPms.Core [Tầng Core - Enterprise Domain]
+    subgraph service-local Domain folders [Tầng Core - Enterprise Domain]
         Entities[Domain Entities]
         Enums[Domain Enums]
         Contracts[Core Interfaces & Contracts]

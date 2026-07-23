@@ -6,19 +6,22 @@ Tài liệu này định nghĩa các quy chuẩn thiết kế, cấu trúc thư 
 
 ## 1. Cấu trúc Kiến trúc (Architecture Structure)
 
-Dự án áp dụng mô hình **Clean Architecture** (Onion Architecture) chia thành các tầng rõ rệt:
+Dự án hiện áp dụng kiến trúc microservice vừa phải theo business domain. Mỗi service là một process deploy độc lập và tự sở hữu API, application logic, domain model, infrastructure, dependency injection, config và Dockerfile.
 
-*   **UavPms.Core**: Chứa các định nghĩa Domain như Entities, Enums, Interfaces (IRepository, IServices), ValueObjects, Models và các contract cốt lõi. Tầng này độc lập và không phụ thuộc vào bất kỳ tầng nào khác.
-*   **UavPms.Application**: Triển khai các Use Case theo mô hình CQRS (sử dụng MediatR). Chứa các Features (Commands, Queries, DTOs) và Common (Behaviors, Exceptions, Common DTOs).
-*   **UavPms.Infrastructure**: Triển khai các chi tiết kỹ thuật: Cơ sở dữ liệu (Persistence/EF Core/DbContext/Configurations), Repositories implementation, Services implementation (Email, OTP, Token, ...), Migrations, và Messaging.
-*   **UavPms.WebApi**: Tầng giao tiếp client. Chứa Controllers, Filters, Middlewares, Background Jobs (Hangfire), và cấu hình startup.
+*   **UavPms.ApiGateway**: Ocelot gateway, chỉ chịu trách nhiệm routing/cross-cutting gateway concerns.
+*   **Services/IdentityService**: Authentication, users, roles, OTP, refresh tokens, trusted devices và identity persistence.
+*   **Services/OperationsService**: Regions, substations, transmission lines, towers, assets, missions, inspections, devices, monitor dashboards và audit logs.
+*   **Services/AIInspectionService**: AI analysis orchestration, AI callbacks, Vision Bridge và giao tiếp với FastAPI AI service.
+*   **Services/NotificationService**: Notification APIs, SignalR hub, Hangfire jobs, email/realtime notification dispatch và notification consumers.
+
+Các project layered monolith cũ đã bị loại khỏi solution/source tree. Không thêm business logic mới vào các project global shared kiểu cũ.
 
 ---
 
 ## 2. Quy ước cấu trúc thư mục & File (Folder & File Conventions)
 
-### 2.1. Cấu trúc CQRS trong `UavPms.Application`
-Mỗi tính năng chính được đặt trong thư mục `Features/<FeatureName>` và chia thành:
+### 2.1. Cấu trúc CQRS trong từng service
+Mỗi tính năng chính được đặt trong thư mục `Services/<ServiceName>/Application/Features/<FeatureName>` và chia thành:
 *   `Commands/`: Chứa các hành động thay đổi trạng thái (Write).
 *   `Queries/`: Chứa các hành động truy vấn dữ liệu (Read).
 *   `DTOs/`: Chứa các Data Transfer Object phục vụ riêng cho Feature đó.
@@ -80,9 +83,9 @@ public record ApiResponse(bool Success, string Message, object? Data = null, obj
 
 ## 5. Quy tắc phân trang (Pagination)
 
-*   Sử dụng chung record `PaginationMetaData` tại namespace `UavPms.Application.Common.DTOs` để biểu diễn thông tin phân trang:
+*   Sử dụng record `PaginationMetaData` trong namespace Application của service sở hữu endpoint để biểu diễn thông tin phân trang, ví dụ:
     ```csharp
-    namespace UavPms.Application.Common.DTOs;
+    namespace UavPms.OperationsService.Application.Common.DTOs;
 
     public record PaginationMetaData(
         int Page,

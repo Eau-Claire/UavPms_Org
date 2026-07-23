@@ -1,9 +1,9 @@
 using FluentAssertions;
 using Moq;
 using System.Linq.Expressions;
-using UavPms.Application.Features.Users.Commands.UpdateUser;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
+using UavPms.IdentityService.Application.Features.Users.Commands.UpdateUser;
+using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
 namespace UavPms.UnitTests.Features.Users.Commands.UpdateUser;
 
 public class UpdateUserCommandHandlerTests

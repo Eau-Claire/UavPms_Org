@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Moq;
-using UavPms.Application.Features.Auth.Commands.Login;
-using UavPms.Core.Entities;
-using UavPms.Core.Enums;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
+using UavPms.IdentityService.Application.Features.Auth.Commands.Login;
+using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Enums;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
+using UavPms.IdentityService.Domain.Interfaces.Services;
 
 namespace UavPms.UnitTests.Features.Auth;
 
