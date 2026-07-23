@@ -4,6 +4,11 @@ using Serilog;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+var isRunningInContainer = string.Equals(
+    Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
+    "true",
+    StringComparison.OrdinalIgnoreCase);
+var useLocalDownstreams = builder.Configuration.GetValue<bool>("Gateway:UseLocalDownstreams");
 
 builder.Host.UseSerilog((context, loggerConfig) =>
 {
@@ -12,8 +17,12 @@ builder.Host.UseSerilog((context, loggerConfig) =>
 
 builder.Configuration
     .AddJsonFile("ocelot.json", optional: false, reloadOnChange: true)
-    .AddJsonFile($"ocelot.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
+
+if (builder.Environment.IsDevelopment() && (!isRunningInContainer || useLocalDownstreams))
+{
+    builder.Configuration.AddJsonFile($"ocelot.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
+}
 
 builder.Services.AddCors(options =>
 {
@@ -82,13 +91,21 @@ if (app.Environment.IsDevelopment())
         options.SwaggerEndpoint("/swagger/services/notifications/v1/swagger.json", "Notification Service");
     });
 
-    var swaggerTargets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    var swaggerTargets = isRunningInContainer && !useLocalDownstreams
+        ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["identity"] = builder.Configuration["SwaggerServices:IdentityUrl"] ?? "http://identityservice:8080/swagger/v1/swagger.json",
+            ["operations"] = builder.Configuration["SwaggerServices:OperationsUrl"] ?? "http://operationsservice:8080/swagger/v1/swagger.json",
+            ["ai-inspection"] = builder.Configuration["SwaggerServices:AIInspectionUrl"] ?? "http://aiinspectionservice:8080/swagger/v1/swagger.json",
+            ["notifications"] = builder.Configuration["SwaggerServices:NotificationsUrl"] ?? "http://notificationservice:8080/swagger/v1/swagger.json"
+        }
+        : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        ["identity"] = "http://localhost:5101/swagger/v1/swagger.json",
-        ["operations"] = "http://localhost:5102/swagger/v1/swagger.json",
-        ["ai-inspection"] = "http://localhost:5103/swagger/v1/swagger.json",
-        ["notifications"] = "http://localhost:5104/swagger/v1/swagger.json"
-    };
+            ["identity"] = builder.Configuration["SwaggerServices:IdentityUrl"] ?? "http://localhost:5101/swagger/v1/swagger.json",
+            ["operations"] = builder.Configuration["SwaggerServices:OperationsUrl"] ?? "http://localhost:5102/swagger/v1/swagger.json",
+            ["ai-inspection"] = builder.Configuration["SwaggerServices:AIInspectionUrl"] ?? "http://localhost:5103/swagger/v1/swagger.json",
+            ["notifications"] = builder.Configuration["SwaggerServices:NotificationsUrl"] ?? "http://localhost:5104/swagger/v1/swagger.json"
+        };
 
     app.Use(async (context, next) =>
     {
