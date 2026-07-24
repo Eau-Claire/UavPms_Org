@@ -27,7 +27,9 @@
     <ProjectReference Include="..\Services\IdentityService\UavPms.IdentityService.Domain\UavPms.IdentityService.Domain.csproj" />
     <ProjectReference Include="..\Services\IdentityService\UavPms.IdentityService.Infrastructure\UavPms.IdentityService.Infrastructure.csproj" />
     <ProjectReference Include="..\Services\NotificationService\UavPms.NotificationService.csproj" />
-    <ProjectReference Include="..\Services\OperationsService\UavPms.OperationsService.csproj" />
+    <ProjectReference Include="..\Services\OperationsService\UavPms.OperationsService.Application\UavPms.OperationsService.Application.csproj" />
+    <ProjectReference Include="..\Services\OperationsService\UavPms.OperationsService.Domain\UavPms.OperationsService.Domain.csproj" />
+    <ProjectReference Include="..\Services\OperationsService\UavPms.OperationsService.Infrastructure\UavPms.OperationsService.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
