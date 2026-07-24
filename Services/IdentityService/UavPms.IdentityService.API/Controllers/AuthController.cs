@@ -8,7 +8,7 @@ using UavPms.IdentityService.Application.Features.Auth.Commands.ResetPassword;
 using UavPms.IdentityService.Application.Features.Auth.Commands.SendOtp;
 using UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp;
 
-namespace UavPms.IdentityService.Api.Controllers;
+namespace UavPms.IdentityService.API.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/auth")]

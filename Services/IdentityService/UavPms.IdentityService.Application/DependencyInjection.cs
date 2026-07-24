@@ -7,6 +7,11 @@ namespace UavPms.IdentityService.Application;
 
 public static class DependencyInjection
 {
+    public static IServiceCollection AddApplication(this IServiceCollection services)
+    {
+        return services.AddApplicationServices();
+    }
+
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         // Đăng ký toàn bộ các FluentValidation Validators trong Assembly
