@@ -142,7 +142,7 @@ services:
     container_name: uav-ai-inspection-service
     build:
       context: .
-      dockerfile: Services/AIInspectionService/Dockerfile
+      dockerfile: Services/AIInspectionService/UavPms.AIInspectionService.API/Dockerfile
       network: host
     expose:
       - "8080"
