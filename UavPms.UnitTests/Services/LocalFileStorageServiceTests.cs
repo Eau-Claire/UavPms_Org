@@ -5,7 +5,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
-using UavPms.Infrastructure.Services;
+using UavPms.OperationsService.Infrastructure.Services;
 using Xunit;
 
 namespace UavPms.UnitTests.Services;

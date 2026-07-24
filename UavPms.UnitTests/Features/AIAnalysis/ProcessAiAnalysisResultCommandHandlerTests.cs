@@ -7,12 +7,15 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
-using UavPms.Application.Common.Exceptions;
-using UavPms.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
-using UavPms.Core.Entities;
-using UavPms.Core.Enums;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
+using UavPms.Shared.Contracts.Events;
+using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
+using UavPms.AIInspectionService.Application.Interfaces;
+using UavPms.AIInspectionService.Domain.Contracts;
+using UavPms.AIInspectionService.Domain.Entities;
+using UavPms.AIInspectionService.Domain.Enums;
+using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
+using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.AIAnalysis;
@@ -27,6 +30,8 @@ public class ProcessAiAnalysisResultCommandHandlerTests
     private readonly Mock<INotificationRepository> _notificationRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IRealtimeNotificationService> _realtimeNotificationServiceMock;
+    private readonly Mock<IInspectionEvaluationClient> _inspectionEvaluationClientMock;
+    private readonly Mock<IEventPublisher> _eventPublisherMock;
     private readonly Mock<ILogger<ProcessAiAnalysisResultCommandHandler>> _loggerMock;
 
     private readonly ProcessAiAnalysisResultCommandHandler _handler;
@@ -41,7 +46,25 @@ public class ProcessAiAnalysisResultCommandHandlerTests
         _notificationRepoMock = new Mock<INotificationRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _realtimeNotificationServiceMock = new Mock<IRealtimeNotificationService>();
+        _inspectionEvaluationClientMock = new Mock<IInspectionEvaluationClient>();
+        _eventPublisherMock = new Mock<IEventPublisher>();
         _loggerMock = new Mock<ILogger<ProcessAiAnalysisResultCommandHandler>>();
+
+        _inspectionEvaluationClientMock
+            .Setup(c => c.EvaluateAsync(It.IsAny<DetectionEvaluationRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DetectionEvaluationRequest request, CancellationToken _) =>
+            {
+                var requiresAlert = request.IsEmergencyClass && request.Confidence >= 0.80;
+                return new DetectionEvaluationResult(
+                    requiresAlert ? "Critical" : "Medium",
+                    requiresAlert ? "ImmediateAction" : "PlannedReview",
+                    (int)Math.Round(request.Confidence * 100),
+                    requiresAlert,
+                    "Unit test evaluation");
+            });
+        _eventPublisherMock
+            .Setup(p => p.PublishAsync(It.IsAny<DefectDetectedEvent>()))
+            .Returns(Task.CompletedTask);
 
         _handler = new ProcessAiAnalysisResultCommandHandler(
             _aiRequestRepoMock.Object,
@@ -52,6 +75,8 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             _notificationRepoMock.Object,
             _unitOfWorkMock.Object,
             _realtimeNotificationServiceMock.Object,
+            _inspectionEvaluationClientMock.Object,
+            _eventPublisherMock.Object,
             _loggerMock.Object
         );
     }
@@ -351,12 +376,27 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             ModelName = "RF-DETR",
             ModelVersion = "v1.0",
             ProcessingTimeMs = 1500,
+            VideoMetadata = new VideoMetadataDto
+            {
+                Duration = 132.5,
+                Fps = 30,
+                Width = 1920,
+                Height = 1080
+            },
             Detections = new List<DetectionDto>
             {
                 new()
                 {
+                    Id = "ai-det-001",
                     CategoryCode = "BROKEN_INSULATOR",
+                    ClassName = "Broken Insulator",
                     Confidence = 0.75, // Lower than 0.80, so no emergency alert
+                    FrameIndex = 360,
+                    Timestamp = 12.03,
+                    ImageUrl = "https://storage/frame-360.jpg",
+                    CropUrl = "https://storage/crops/ai-det-001.jpg",
+                    Gps = new GpsDto { Lat = 10.762622, Lng = 106.660172 },
+                    TowerId = "tower-42",
                     BoundingBox = new BoundingBoxDto { X = 0.1, Y = 0.2, Width = 0.3, Height = 0.4 }
                 }
             },
@@ -405,7 +445,19 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             a.MediaId == command.MediaId &&
             a.CategoryId == defectCategory.Id &&
             a.ConfidenceScore == 0.75 &&
-            a.AiSource == "RF-DETR"
+            a.AiSource == "RF-DETR" &&
+            a.AiDetectionId == "ai-det-001" &&
+            a.FrameIndex == 360 &&
+            a.Timestamp == 12.03 &&
+            a.ImageUrl == "https://storage/frame-360.jpg" &&
+            a.CropUrl == "https://storage/crops/ai-det-001.jpg" &&
+            a.Gps != null &&
+            a.Gps.Contains("10.762622") &&
+            a.TowerId == "tower-42" &&
+            a.VideoDuration == 132.5 &&
+            a.VideoFps == 30 &&
+            a.VideoWidth == 1920 &&
+            a.VideoHeight == 1080
         )), Times.Once);
 
         _mediaRepoMock.Verify(r => r.UpdateAsync(It.Is<InspectionMedia>(m =>

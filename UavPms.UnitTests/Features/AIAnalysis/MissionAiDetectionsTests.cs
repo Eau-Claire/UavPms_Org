@@ -4,11 +4,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
-using UavPms.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
-using UavPms.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
+using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
+using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
+using UavPms.AIInspectionService.Domain.Entities;
+using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
+using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.AIAnalysis;
@@ -39,6 +39,17 @@ public class MissionAiDetectionsTests
                             Id = Guid.NewGuid(),
                             MediaId = mediaId,
                             BoundingBox = """{ "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4 }""",
+                            AiDetectionId = "ai-det-001",
+                            FrameIndex = 360,
+                            Timestamp = 12.03,
+                            ImageUrl = "https://storage/frame-360.jpg",
+                            CropUrl = "https://storage/crop-360.jpg",
+                            Gps = """{ "lat": 10.762622, "lng": 106.660172 }""",
+                            TowerId = "tower-42",
+                            VideoDuration = 132.5,
+                            VideoFps = 30,
+                            VideoWidth = 1920,
+                            VideoHeight = 1080,
                             ConfidenceScore = 0.91,
                             ValidationStatus = "Pending",
                             AiSource = "RF-DETR",
@@ -70,8 +81,24 @@ public class MissionAiDetectionsTests
         var media = result[0];
         media.MediaId.Should().Be(mediaId);
         media.DetectionCount.Should().Be(1);
+        media.VideoMetadata.Should().NotBeNull();
+        media.VideoMetadata!.Duration.Should().Be(132.5);
+        media.VideoMetadata.Fps.Should().Be(30);
+        media.VideoMetadata.Width.Should().Be(1920);
+        media.VideoMetadata.Height.Should().Be(1080);
         media.Detections[0].CategoryCode.Should().Be("CORROSION");
         var detection = media.Detections[0];
+        detection.AiDetectionId.Should().Be("ai-det-001");
+        detection.Class.Should().Be("Corrosion");
+        detection.Confidence.Should().Be(0.91);
+        detection.FrameIndex.Should().Be(360);
+        detection.Timestamp.Should().Be(12.03);
+        detection.ImageUrl.Should().Be("https://storage/frame-360.jpg");
+        detection.CropUrl.Should().Be("https://storage/crop-360.jpg");
+        detection.Gps.Should().NotBeNull();
+        detection.Gps!.Lat.Should().Be(10.762622);
+        detection.Gps.Lng.Should().Be(106.660172);
+        detection.TowerId.Should().Be("tower-42");
         detection.BoundingBox.Should().NotBeNull();
         var boundingBox = detection.BoundingBox!;
         boundingBox.X.Should().Be(0.1);

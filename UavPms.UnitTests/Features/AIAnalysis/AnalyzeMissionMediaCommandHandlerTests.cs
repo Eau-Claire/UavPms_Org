@@ -7,12 +7,12 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
-using UavPms.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
-using UavPms.Core.Contracts;
-using UavPms.Core.Entities;
-using UavPms.Core.Enums;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
+using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
+using UavPms.AIInspectionService.Domain.Contracts;
+using UavPms.AIInspectionService.Domain.Entities;
+using UavPms.AIInspectionService.Domain.Enums;
+using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
+using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.AIAnalysis;
@@ -25,6 +25,7 @@ public class AnalyzeMissionMediaCommandHandlerTests
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IFileStorageService> _fileStorageMock;
     private readonly Mock<IEventPublisher> _eventPublisherMock;
+    private readonly Mock<IRealtimeNotificationService> _realtimeNotificationServiceMock;
     private readonly Mock<ICurrentUserServices> _currentUserMock;
     private readonly Mock<ILogger<AnalyzeMissionMediaCommandHandler>> _loggerMock;
 
@@ -38,6 +39,7 @@ public class AnalyzeMissionMediaCommandHandlerTests
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _fileStorageMock = new Mock<IFileStorageService>();
         _eventPublisherMock = new Mock<IEventPublisher>();
+        _realtimeNotificationServiceMock = new Mock<IRealtimeNotificationService>();
         _currentUserMock = new Mock<ICurrentUserServices>();
         _loggerMock = new Mock<ILogger<AnalyzeMissionMediaCommandHandler>>();
 
@@ -48,6 +50,7 @@ public class AnalyzeMissionMediaCommandHandlerTests
             _unitOfWorkMock.Object,
             _fileStorageMock.Object,
             _eventPublisherMock.Object,
+            _realtimeNotificationServiceMock.Object,
             _currentUserMock.Object,
             _loggerMock.Object
         );
@@ -137,6 +140,14 @@ public class AnalyzeMissionMediaCommandHandlerTests
              evt.AssetId == null &&
              evt.PreferredModel == "RF-DETR" &&
              evt.AnalysisType == "DefectDetection")), Times.Exactly(2));
+        _realtimeNotificationServiceMock.Verify(s => s.SendAiAnalysisStatusToUserAsync(
+            userId,
+            It.Is<AIAnalysisStatusChangedEvent>(evt =>
+                evt.BatchId == result.BatchId &&
+                evt.MissionId == missionId &&
+                evt.Status == "Pending" &&
+                result.RequestIds.Contains(evt.RequestId)),
+            It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]

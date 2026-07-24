@@ -10,7 +10,7 @@
 
 ```
 ┌──────────────────────────┐     HTTP POST (multipart)     ┌──────────────────────────┐
-│  Vision Edge Device      │ ─────────────────────────────→│  UavPms .NET Backend     │
+│  Vision Edge Device      │ ─────────────────────────────→│  AIInspectionService     │
 │  (Python FastAPI)        │  /api/v1/vision/detections    │  (ASP.NET Core 9)        │
 │  Port: 8001              │                               │  Port: 5196              │
 ├──────────────────────────┤                               ├──────────────────────────┤
@@ -36,11 +36,11 @@
 ### Phía PMS (.NET Backend)
 | File | Mô tả |
 |------|--------|
-| `UavPms.Application/Features/VisionBridge/DTOs/VisionDetectionDto.cs` | DTO nhận detection (class_name, confidence, GPS, bbox, track_id) |
-| `UavPms.Application/Features/VisionBridge/DTOs/VisionDetectionResultDto.cs` | DTO phản hồi (success, recordId, receivedAt) |
-| `UavPms.Application/Features/VisionBridge/Commands/ReceiveVisionDetectionCommand.cs` | MediatR Command (CQRS pattern) |
-| `UavPms.Application/Features/VisionBridge/Commands/ReceiveVisionDetectionCommandHandler.cs` | Handler: log, lưu ảnh, tạo record ID |
-| `UavPms.WebApi/Controllers/VisionBridgeController.cs` | 3 endpoints: multipart receiver, JSON receiver, health check |
+| `Services/AIInspectionService/Application/Features/VisionBridge/DTOs/VisionDetectionDto.cs` | DTO nhận detection (class_name, confidence, GPS, bbox, track_id) |
+| `Services/AIInspectionService/Application/Features/VisionBridge/DTOs/VisionDetectionResultDto.cs` | DTO phản hồi (success, recordId, receivedAt) |
+| `Services/AIInspectionService/Application/Features/VisionBridge/Commands/ReceiveVisionDetectionCommand.cs` | MediatR Command (CQRS pattern) |
+| `Services/AIInspectionService/Application/Features/VisionBridge/Commands/ReceiveVisionDetectionCommandHandler.cs` | Handler: log, lưu ảnh, tạo record ID |
+| `Services/AIInspectionService/Controllers/VisionBridgeController.cs` | 3 endpoints: multipart receiver, JSON receiver, health check |
 
 ### Phía Vision (Python Edge Device)
 | File | Mô tả |
@@ -117,7 +117,7 @@ PMS_BRIDGE_TIMEOUT=5                 # Timeout (seconds)
 ### Bước 1: Chạy PMS Backend
 ```bash
 cd /home/minhchau/Documents/PMS
-dotnet run --project UavPms.WebApi
+dotnet run --project Services/AIInspectionService/UavPms.AIInspectionService.csproj --urls http://localhost:5196
 ```
 
 ### Bước 2: Test Health Check
@@ -230,4 +230,3 @@ Tích hợp này liên quan đến các Epic trong `roadmap.md`:
 1. **User Test**: Tạo user ID `469bfac4-8b96-4f27-a772-945cff2fbaa8` làm người giám sát và bay UAV.
 2. **Cấu trúc Asset Mặc định (Guid.Empty)**: Sử dụng raw SQL chèn các bản ghi Region, Substation, TransmissionLine, Tower, và Asset với ID `00000000-0000-0000-0000-000000000000` để làm nơi chứa mặc định cho các media/anomalies mới được upload trước khi được kiểm định viên duyệt gắn vào tài sản thật.
 3. **UAV và Mission mẫu**: UAV code `UAV001` và 01 Mission ở trạng thái `Executing` được gán cho user trên để sẵn sàng bắt cặp với dữ liệu gửi về từ Edge.
-

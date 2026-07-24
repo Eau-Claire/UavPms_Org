@@ -4,11 +4,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
-using UavPms.Application.Features.AuditLogs.DTOs;
-using UavPms.Application.Features.AuditLogs.Queries;
-using UavPms.Application.Features.AuditLogs.Queries.GetAuditLogs;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
+using UavPms.OperationsService.Application.Features.AuditLogs.DTOs;
+using UavPms.OperationsService.Application.Features.AuditLogs.Queries;
+using UavPms.OperationsService.Application.Features.AuditLogs.Queries.GetAuditLogs;
+using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.AuditLogs;

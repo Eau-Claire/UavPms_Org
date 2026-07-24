@@ -5,9 +5,9 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using NetTopologySuite.Geometries;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Services;
-using UavPms.Infrastructure.Persistence;
+using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Interfaces.Services;
+using UavPms.OperationsService.Infrastructure.Persistence;
 using Xunit;
 
 namespace UavPms.UnitTests.Features.AuditLogs;

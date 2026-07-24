@@ -1,12 +1,12 @@
 using FluentAssertions;
 using Moq;
-using UavPms.Application.Common.Exceptions;
-using UavPms.Application.Features.Notifications.Commands.CreateNotification;
-using UavPms.Application.Features.Notifications.Commands.DeleteNotification;
-using UavPms.Application.Features.Notifications.Commands.MarkNotificationAsRead;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
+using UavPms.NotificationService.Application.Common.Exceptions;
+using UavPms.NotificationService.Application.Features.Notifications.Commands.CreateNotification;
+using UavPms.NotificationService.Application.Features.Notifications.Commands.DeleteNotification;
+using UavPms.NotificationService.Application.Features.Notifications.Commands.MarkNotificationAsRead;
+using UavPms.NotificationService.Domain.Entities;
+using UavPms.NotificationService.Domain.Interfaces.Repositories;
+using UavPms.NotificationService.Domain.Interfaces.Services;
 
 namespace UavPms.UnitTests.Features.Notifications;
 

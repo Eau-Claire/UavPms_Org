@@ -1,13 +1,13 @@
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Moq;
-using UavPms.Application.Common.Exceptions;
-using UavPms.Application.Features.Auth.Commands.VerifyOtp;
-using UavPms.Core.Entities;
-using UavPms.Core.Enums;
-using UavPms.Core.Interfaces.Repositories;
-using UavPms.Core.Interfaces.Services;
-using RefreshTokenEntity = UavPms.Core.Entities.RefreshToken;
+using UavPms.IdentityService.Application.Common.Exceptions;
+using UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp;
+using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Enums;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
+using UavPms.IdentityService.Domain.Interfaces.Services;
+using RefreshTokenEntity = UavPms.IdentityService.Domain.Entities.RefreshToken;
 
 namespace UavPms.UnitTests.Features.Auth;
 
@@ -73,6 +73,40 @@ public class VerifyOtpCommandHandlerTests
         
         await act.Should().ThrowAsync<BusinessRuleException>()
             .WithMessage($"Invalid OTP code");
+    }
+
+    [Fact]
+    public async Task Handle_ShouldPreferUsername_WhenLoginIdentifierMatchesEmailAndUsernameOfDifferentUsers()
+    {
+        var accountA = CreateActiveUser("uselessliem@gmail.com");
+        accountA.Username = "an3439201@gmail.com";
+        var accountB = CreateActiveUser("testing@123gmail.com");
+        accountB.Username = "uselessliem@gmail.com";
+        var command = new VerifyOtpCommand("uselessliem@gmail.com", "123456", OtpPurpose.Login, "UserAgent");
+
+        _userRepositoryMock.Setup(u => u.GetByEmailWithRolesAsync(command.Email))
+            .ReturnsAsync(accountA);
+        _userRepositoryMock.Setup(u => u.GetByUsernameWithRolesAsync(command.Email))
+            .ReturnsAsync(accountB);
+        _otpServiceMock.Setup(o =>
+                o.VerifyOtpAsync(accountB.Email, command.Code, command.OtpPurpose))
+            .ReturnsAsync((true, "OK"));
+        _jwtProviderMock.Setup(j =>
+            j.GenerateAccessToken(accountB, It.IsAny<IList<string>>())).Returns("access-token");
+        _jwtProviderMock.Setup(j =>
+            j.GenerateRefreshToken()).Returns("refresh-token");
+        _unitOfWorkMock.Setup(u =>
+                u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        result.AuthResult.Should().NotBeNull();
+        result.AuthResult!.User.Should().NotBeNull();
+        result.AuthResult.User!.Email.Should().Be("testing@123gmail.com");
+        _otpServiceMock.Verify(o =>
+            o.VerifyOtpAsync("testing@123gmail.com", command.Code, OtpPurpose.Login), Times.Once);
     }
 
     [Fact]

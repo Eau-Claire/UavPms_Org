@@ -1,4 +1,34 @@
-version: '3.8'
+x-service-environment: &service-environment
+  ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+  RunMigrations: ${RUN_MIGRATIONS:-false}
+  ConnectionStrings__DefaultConnection: ${DB_CONNECTION}
+  ConnectionStrings__HangfireConnection: ${HANGFIRE_DB_CONNECTION}
+  Redis__ConnectionString: redis:6379,abortConnect=false
+  Redis__Password: ${REDIS_PASSWORD}
+  Jwt__SecretKey: ${JWT_SECRET}
+  Jwt__Issuer: ${JWT_ISSUER}
+  Jwt__Audience: ${JWT_AUDIENCE}
+  Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES}
+  SendGrid__ApiKey: ${SENDGRID_API_KEY}
+  SendGrid__FromEmail: ${SENDGRID_FROM_EMAIL}
+  SendGrid__FromName: ${SENDGRID_FROM_NAME}
+  Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
+  Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}
+  Cors__AllowedOrigins__2: ${CORS_ALLOWED_ORIGIN_2:-http://localhost:5194}
+  Cors__AllowedOrigins__3: ${CORS_ALLOWED_ORIGIN_3:-https://seppms.vercel.app}
+  Cors__AllowedOrigins__4: ${CORS_ALLOWED_ORIGIN_4:-https://uavpms.ddns.net}
+  AIService__ServiceKey: ${AIService_ServiceKey}
+  MockAI__Enabled: ${MOCK_AI_ENABLED:-false}
+  MockAI__CategoryCode: ${MOCK_AI_CATEGORY_CODE:-}
+  MockAI__Confidence: ${MOCK_AI_CONFIDENCE:-0.92}
+  Supabase__Url: ${SUPABASE_URL}
+  Supabase__ApiKey: ${SUPABASE_API_KEY}
+  Supabase__Bucket: ${SUPABASE_BUCKET}
+  RabbitMQ__HostName: rabbitmq
+  RabbitMQ__UserName: ${RABBITMQ_USER:-guest}
+  RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
+  RabbitMQ__Port: 5672
+  GrpcServices__InspectionEvaluationUrl: http://inspectionevaluationservice:8080
 
 services:
   redis:
@@ -8,41 +38,154 @@ services:
       - "6379:6379"
     restart: always
 
-  webapi:
-    image: uavpms-webapi:latest
-    container_name: uav-webapi
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: uav-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    expose:
+      - "5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  gateway:
+    image: uavpms-gateway:latest
+    container_name: uav-gateway
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.gateway
       network: host
     ports:
-      - "5194:8080"
+      - "${GATEWAY_HTTP_PORT:-5194}:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
-      - ConnectionStrings__DefaultConnection=${DB_CONNECTION}
-      - ConnectionStrings__HangfireConnection=${HANGFIRE_DB_CONNECTION}
-      - Redis__ConnectionString=redis:6379,abortConnect=false
-      - Redis__Password=${REDIS_PASSWORD}
-      - Jwt__SecretKey=${JWT_SECRET}
-      - Jwt__Issuer=${JWT_ISSUER}
-      - Jwt__Audience=${JWT_AUDIENCE}
-      - Jwt__ExpiryMinutes=${JWT_EXPIRY_MINUTES}
-      - SendGrid__ApiKey=${SENDGRID_API_KEY}
-      - SendGrid__FromEmail=${SENDGRID_FROM_EMAIL}
-      - SendGrid__FromName=${SENDGRID_FROM_NAME}
-      - AIService__ServiceKey=${AIService_ServiceKey}
-      - MockAI__Enabled=${MOCK_AI_ENABLED:-false}
-      - MockAI__CategoryCode=${MOCK_AI_CATEGORY_CODE:-}
-      - MockAI__Confidence=${MOCK_AI_CONFIDENCE:-0.92}
-      - Supabase__Url=${SUPABASE_URL}
-      - Supabase__ApiKey=${SUPABASE_API_KEY}
-      - Supabase__Bucket=${SUPABASE_BUCKET}
-      - RabbitMQ__HostName=host.docker.internal
-      - RabbitMQ__UserName=guest
-      - RabbitMQ__Password=guest
-      - RabbitMQ__Port=5672
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      Gateway__UseLocalDownstreams: ${GATEWAY_USE_LOCAL_DOWNSTREAMS:-false}
+      Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
+      Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}
+      Cors__AllowedOrigins__2: ${CORS_ALLOWED_ORIGIN_2:-http://localhost:5194}
+      Cors__AllowedOrigins__3: ${CORS_ALLOWED_ORIGIN_3:-https://seppms.vercel.app}
+      Cors__AllowedOrigins__4: ${CORS_ALLOWED_ORIGIN_4:-https://uavpms.ddns.net}
+    depends_on:
+      - identityservice
+      - operationsservice
+      - aiinspectionservice
+      - notificationservice
+      - inspectionevaluationservice
+    restart: always
+
+  inspectionevaluationservice:
+    image: uavpms-inspection-evaluation-service:latest
+    container_name: uav-inspection-evaluation-service
+    build:
+      context: .
+      dockerfile: Services/InspectionEvaluationService/Dockerfile
+      network: host
+    expose:
+      - "8080"
+      - "8081"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      Grpc__Port: 8080
+      Health__Port: 8081
+    restart: always
+
+  identityservice:
+    image: uavpms-identity-service:latest
+    container_name: uav-identity-service
+    build:
+      context: .
+      dockerfile: Services/IdentityService/Dockerfile
+      network: host
+    expose:
+      - "8080"
+    environment:
+      <<: *service-environment
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    restart: always
+
+  operationsservice:
+    image: uavpms-operations-service:latest
+    container_name: uav-operations-service
+    build:
+      context: .
+      dockerfile: Services/OperationsService/Dockerfile
+      network: host
+    expose:
+      - "8080"
+    environment:
+      <<: *service-environment
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    restart: always
+
+  aiinspectionservice:
+    image: uavpms-ai-inspection-service:latest
+    container_name: uav-ai-inspection-service
+    build:
+      context: .
+      dockerfile: Services/AIInspectionService/Dockerfile
+      network: host
+    expose:
+      - "8080"
+    environment:
+      <<: *service-environment
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      inspectionevaluationservice:
+        condition: service_started
+    restart: always
+
+  fastapi-ai:
+    image: ${FASTAPI_AI_IMAGE:-uavpms-fastapi-ai:latest}
+    container_name: uav-fastapi-ai
+    profiles:
+      - fastapi-ai
+    expose:
+      - "8000"
+    environment:
+      AI_SERVICE_KEY: ${AIService_ServiceKey}
+    restart: unless-stopped
+
+  notificationservice:
+    image: uavpms-notification-service:latest
+    container_name: uav-notification-service
+    build:
+      context: .
+      dockerfile: Services/NotificationService/Dockerfile
+      network: host
+    expose:
+      - "8080"
+    environment:
+      <<: *service-environment
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     restart: always

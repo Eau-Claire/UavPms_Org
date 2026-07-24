@@ -6,6 +6,14 @@
 # dotenv files
 .env
 
+# Local agent metadata
+.agents/
+.codex/
+
+# Runtime storage/uploads
+uav_storage/
+**/uav_storage/
+
 # User-specific files
 *.rsuser
 *.suo

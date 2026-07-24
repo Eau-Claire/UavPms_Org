@@ -1,8 +1,8 @@
 using FluentAssertions;
 using Moq;
-using UavPms.Application.Features.Users.Queries.GetUsers;
-using UavPms.Core.Entities;
-using UavPms.Core.Interfaces.Repositories;
+using UavPms.IdentityService.Application.Features.Users.Queries.GetUsers;
+using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
 namespace UavPms.UnitTests.Features.Users.Queries.GetUsers;
 
 public class GetUsersQueryHandlerTests

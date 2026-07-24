@@ -1,4 +1,4 @@
-using UavPms.Infrastructure.Services;
+using UavPms.IdentityService.Infrastructure.Services;
 using Xunit;
 using FluentAssertions;
 
@@ -82,6 +82,18 @@ public class BCryptPasswordHasherTests
         
         var result = _hasher.Verify(hash, wrongPassword);
         
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("invalid_hash_string")]
+    public void Verify_ShouldReturnFalse_WhenPasswordHashIsNullOrEmptyOrInvalid(string? invalidHash)
+    {
+        var result = _hasher.Verify(invalidHash!, "SomePassword123!");
+
         result.Should().BeFalse();
     }
 }

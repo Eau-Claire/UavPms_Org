@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+option csharp_namespace = "UavPms.Grpc.InspectionEvaluation";
+
+package uavpms.inspectionevaluation;
+
+service InspectionEvaluation {
+  rpc EvaluateDetection (EvaluateDetectionRequest) returns (EvaluateDetectionResponse);
+}
+
+message EvaluateDetectionRequest {
+  string category_code = 1;
+  string category_name = 2;
+  double confidence = 3;
+  bool is_emergency_class = 4;
+  string mission_id = 5;
+  string media_id = 6;
+  string detection_id = 7;
+}
+
+message EvaluateDetectionResponse {
+  string severity = 1;
+  string risk_level = 2;
+  int32 priority_score = 3;
+  bool requires_immediate_alert = 4;
+  string reason = 5;
+}

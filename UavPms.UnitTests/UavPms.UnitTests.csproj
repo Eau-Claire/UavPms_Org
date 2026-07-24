@@ -22,10 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\UavPms.Core\UavPms.Core.csproj" />
-    <ProjectReference Include="..\UavPms.Application\UavPms.Application.csproj" />
-    <ProjectReference Include="..\UavPms.Infrastructure\UavPms.Infrastructure.csproj" />
-    <ProjectReference Include="..\UavPms.WebApi\UavPms.WebApi.csproj" />
+    <ProjectReference Include="..\Services\AIInspectionService\UavPms.AIInspectionService.csproj" />
+    <ProjectReference Include="..\Services\IdentityService\UavPms.IdentityService.csproj" />
+    <ProjectReference Include="..\Services\NotificationService\UavPms.NotificationService.csproj" />
+    <ProjectReference Include="..\Services\OperationsService\UavPms.OperationsService.csproj" />
   </ItemGroup>
 
 </Project>
