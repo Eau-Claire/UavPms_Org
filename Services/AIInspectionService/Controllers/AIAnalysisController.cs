@@ -28,6 +28,11 @@ namespace UavPms.AIInspectionService.Api.Controllers;
 [Authorize(Roles = "Analyst,Supervisor,SystemAdmin")]
 public class AIAnalysisController : ControllerBase
 {
+    private const long MaxMultipartRequestBytes = 50L * 1024 * 1024;
+    private const int MaxFileCount = 20;
+    private const long MaxImageSizeBytes = 20L * 1024 * 1024;
+    private const long MaxVideoSizeBytes = 50L * 1024 * 1024;
+
     private readonly ISender _mediator;
 
     public AIAnalysisController(ISender mediator)
@@ -43,7 +48,8 @@ public class AIAnalysisController : ControllerBase
     /// <param name="notes">Ghi chú (optional)</param>
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
-    [DisableRequestSizeLimit]
+    [RequestSizeLimit(MaxMultipartRequestBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxMultipartRequestBytes)]
     public async Task<IActionResult> Upload(
         List<IFormFile> files,
         [FromForm] AnalysisType analysisType = AnalysisType.General,
@@ -70,15 +76,16 @@ public class AIAnalysisController : ControllerBase
         };
 
         // Max file count to prevent abuse
-        const int maxFileCount = 20;
-        if (files.Count > maxFileCount)
+        if (files.Count > MaxFileCount)
         {
-            return BadRequest(new ApiResponse(false, $"Maximum {maxFileCount} files per request."));
+            return BadRequest(new ApiResponse(false, $"Maximum {MaxFileCount} files per request."));
         }
 
-        // Max file size: 20MB cho ảnh, 100MB cho video
-        const long maxImageSize = 20 * 1024 * 1024;
-        const long maxVideoSize = 100 * 1024 * 1024;
+        var totalBytes = files.Sum(file => file.Length);
+        if (totalBytes > MaxMultipartRequestBytes)
+        {
+            return BadRequest(new ApiResponse(false, "The combined upload size must not exceed 50MB."));
+        }
 
         // Validate từng file trước khi xử lý
         var errors = new List<string>();
@@ -110,7 +117,7 @@ public class AIAnalysisController : ControllerBase
             }
 
             var isVideo = contentType.StartsWith("video/");
-            var maxSize = isVideo ? maxVideoSize : maxImageSize;
+            var maxSize = isVideo ? MaxVideoSizeBytes : MaxImageSizeBytes;
             if (file.Length > maxSize)
             {
                 var limitMb = maxSize / (1024 * 1024);
@@ -177,7 +184,8 @@ public class AIAnalysisController : ControllerBase
     /// <param name="notes">Optional notes for the batch.</param>
     [HttpPost("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis")]
     [Consumes("multipart/form-data")]
-    [DisableRequestSizeLimit]
+    [RequestSizeLimit(MaxMultipartRequestBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxMultipartRequestBytes)]
     public async Task<IActionResult> AnalyzeMissionMedia(
         Guid missionId,
         [FromForm] IFormFileCollection files,
@@ -188,6 +196,30 @@ public class AIAnalysisController : ControllerBase
         if (files == null || files.Count == 0)
         {
             return BadRequest(new ApiResponse(false, "Files are required."));
+        }
+
+        if (files.Count > MaxFileCount)
+        {
+            return BadRequest(new ApiResponse(false, $"Maximum {MaxFileCount} files per request."));
+        }
+
+        var totalBytes = files.Sum(file => file.Length);
+        if (totalBytes > MaxMultipartRequestBytes)
+        {
+            return BadRequest(new ApiResponse(false, "The combined upload size must not exceed 50MB."));
+        }
+
+        foreach (var file in files)
+        {
+            var contentType = file.ContentType?.Trim().ToLowerInvariant() ?? string.Empty;
+            var maxSize = contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
+                ? MaxVideoSizeBytes
+                : MaxImageSizeBytes;
+
+            if (file.Length > maxSize)
+            {
+                return BadRequest(new ApiResponse(false, $"File '{Path.GetFileName(file.FileName)}' exceeds its {maxSize / (1024 * 1024)}MB limit."));
+            }
         }
 
         var fileData = new List<FileDataDto>();
