@@ -22,7 +22,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Services\AIInspectionService\UavPms.AIInspectionService.csproj" />
+    <ProjectReference Include="..\Services\AIInspectionService\UavPms.AIInspectionService.Application\UavPms.AIInspectionService.Application.csproj" />
+    <ProjectReference Include="..\Services\AIInspectionService\UavPms.AIInspectionService.Domain\UavPms.AIInspectionService.Domain.csproj" />
+    <ProjectReference Include="..\Services\AIInspectionService\UavPms.AIInspectionService.Infrastructure\UavPms.AIInspectionService.Infrastructure.csproj" />
     <ProjectReference Include="..\Services\IdentityService\UavPms.IdentityService.Application\UavPms.IdentityService.Application.csproj" />
     <ProjectReference Include="..\Services\IdentityService\UavPms.IdentityService.Domain\UavPms.IdentityService.Domain.csproj" />
     <ProjectReference Include="..\Services\IdentityService\UavPms.IdentityService.Infrastructure\UavPms.IdentityService.Infrastructure.csproj" />
