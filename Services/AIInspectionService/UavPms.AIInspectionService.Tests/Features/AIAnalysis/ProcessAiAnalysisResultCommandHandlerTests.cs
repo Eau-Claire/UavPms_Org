@@ -29,7 +29,6 @@ public class ProcessAiAnalysisResultCommandHandlerTests
     private readonly Mock<IGenericRepository<EmergencyAlert>> _emergencyAlertRepoMock;
     private readonly Mock<INotificationRepository> _notificationRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
-    private readonly Mock<IRealtimeNotificationService> _realtimeNotificationServiceMock;
     private readonly Mock<IInspectionEvaluationClient> _inspectionEvaluationClientMock;
     private readonly Mock<IEventPublisher> _eventPublisherMock;
     private readonly Mock<ILogger<ProcessAiAnalysisResultCommandHandler>> _loggerMock;
@@ -45,7 +44,6 @@ public class ProcessAiAnalysisResultCommandHandlerTests
         _emergencyAlertRepoMock = new Mock<IGenericRepository<EmergencyAlert>>();
         _notificationRepoMock = new Mock<INotificationRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
-        _realtimeNotificationServiceMock = new Mock<IRealtimeNotificationService>();
         _inspectionEvaluationClientMock = new Mock<IInspectionEvaluationClient>();
         _eventPublisherMock = new Mock<IEventPublisher>();
         _loggerMock = new Mock<ILogger<ProcessAiAnalysisResultCommandHandler>>();
@@ -74,7 +72,6 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             _emergencyAlertRepoMock.Object,
             _notificationRepoMock.Object,
             _unitOfWorkMock.Object,
-            _realtimeNotificationServiceMock.Object,
             _inspectionEvaluationClientMock.Object,
             _eventPublisherMock.Object,
             _loggerMock.Object
@@ -554,13 +551,11 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             n.ReferenceType == "EmergencyAlert"
         )), Times.Once);
 
-        _realtimeNotificationServiceMock.Verify(s => s.SendToUserAsync(
-            managerId,
-            It.Is<Notification>(n =>
+        _eventPublisherMock.Verify(e => e.PublishAsync(
+            It.Is<NotificationPushEvent>(n =>
                 n.UserId == managerId &&
                 n.Type == "CriticalAlert" &&
-                n.ReferenceType == "EmergencyAlert"),
-            It.IsAny<CancellationToken>()), Times.Once);
+                n.ReferenceType == "EmergencyAlert")), Times.Once);
 
         _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);

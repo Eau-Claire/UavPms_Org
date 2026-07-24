@@ -90,7 +90,6 @@ public class AiInspectionPipelineTests
             emergencyAlertRepo,
             notificationRepo.Object,
             new UnitOfWork(context),
-            Mock.Of<IRealtimeNotificationService>(),
             Mock.Of<IInspectionEvaluationClient>(c => c.EvaluateAsync(
                 It.IsAny<DetectionEvaluationRequest>(),
                 It.IsAny<CancellationToken>()) == Task.FromResult(new DetectionEvaluationResult(
