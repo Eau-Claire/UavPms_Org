@@ -114,7 +114,15 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
 {
     builder.Services.AddHostedService<MissionCreatedConsumer>();
     builder.Services.AddHostedService<DefectDetectedConsumer>();
+    builder.Services.AddHostedService<NotificationPushConsumer>();
+    builder.Services.AddHostedService<AIAnalysisStatusChangedConsumer>();
 }
+
+// Register Hangfire background jobs in DI so Hangfire JobActivator can resolve them
+builder.Services.AddTransient<CleanupJob>();
+builder.Services.AddTransient<DailySummaryJob>();
+builder.Services.AddTransient<PushNotificationsJob>();
+builder.Services.AddTransient<ScheduledNotificationJob>();
 
 var normalizedHangfireConnection = builder.Configuration.GetConnectionString("HangfireConnection");
 if (string.IsNullOrWhiteSpace(normalizedHangfireConnection))

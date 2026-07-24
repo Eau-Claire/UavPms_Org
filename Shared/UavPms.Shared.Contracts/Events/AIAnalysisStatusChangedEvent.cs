@@ -1,9 +1,8 @@
-using System;
-
-namespace UavPms.AIInspectionService.Domain.Contracts;
+namespace UavPms.Shared.Contracts.Events;
 
 public class AIAnalysisStatusChangedEvent
 {
+    public Guid UserId { get; set; }
     public Guid RequestId { get; set; }
     public Guid? BatchId { get; set; }
     public Guid? MissionId { get; set; }

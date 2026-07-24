@@ -10,12 +10,12 @@ using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using UavPms.AIInspectionService.Application;
-using UavPms.AIInspectionService.Domain.Interfaces.Services;
+
 using UavPms.AIInspectionService.Infrastructure;
 using UavPms.AIInspectionService.Infrastructure.Messaging;
 using UavPms.AIInspectionService.Infrastructure.Persistence;
 using UavPms.AIInspectionService.API.Middlewares;
-using UavPms.AIInspectionService.API.Services;
+
 using UavPms.AIInspectionService.API.Swagger;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,9 +42,6 @@ builder.Services.AddControllers(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSignalR();
-builder.Services.AddSingleton<INotificationConnectionRegistry, NotificationConnectionRegistry>();
-builder.Services.AddScoped<IRealtimeNotificationService, RealtimeNotificationService>();
 builder.Services.AddApiVersioning(options =>
     {
         options.DefaultApiVersion = new ApiVersion(1, 0);

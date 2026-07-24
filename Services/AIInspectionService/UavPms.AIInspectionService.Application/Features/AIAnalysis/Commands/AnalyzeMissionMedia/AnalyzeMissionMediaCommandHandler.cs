@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using UavPms.Shared.Contracts.Events;
 using UavPms.AIInspectionService.Domain.Contracts;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
@@ -28,7 +29,7 @@ public class AnalyzeMissionMediaCommandHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
     private readonly IEventPublisher _eventPublisher;
-    private readonly IRealtimeNotificationService _realtimeNotificationService;
+
     private readonly ICurrentUserServices _currentUser;
     private readonly ILogger<AnalyzeMissionMediaCommandHandler> _logger;
 
@@ -39,7 +40,6 @@ public class AnalyzeMissionMediaCommandHandler
         IUnitOfWork unitOfWork,
         IFileStorageService fileStorageService,
         IEventPublisher eventPublisher,
-        IRealtimeNotificationService realtimeNotificationService,
         ICurrentUserServices currentUser,
         ILogger<AnalyzeMissionMediaCommandHandler> logger)
     {
@@ -49,7 +49,6 @@ public class AnalyzeMissionMediaCommandHandler
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
         _eventPublisher = eventPublisher;
-        _realtimeNotificationService = realtimeNotificationService;
         _currentUser = currentUser;
         _logger = logger;
     }
@@ -169,19 +168,17 @@ public class AnalyzeMissionMediaCommandHandler
                     PreferredModel = request.PreferredModel
                 });
 
-                await _realtimeNotificationService.SendAiAnalysisStatusToUserAsync(
-                    currentUserId,
-                    new AIAnalysisStatusChangedEvent
-                    {
-                        RequestId = item.Request.Id,
-                        BatchId = batchId,
-                        MissionId = request.MissionId,
-                        MediaId = item.MediaId,
-                        MediaType = item.Request.MediaType,
-                        Status = item.Request.Status.ToString(),
-                        CreatedAt = item.Request.CreatedAt
-                    },
-                    cancellationToken);
+                await _eventPublisher.PublishAsync(new AIAnalysisStatusChangedEvent
+                {
+                    UserId = currentUserId,
+                    RequestId = item.Request.Id,
+                    BatchId = batchId,
+                    MissionId = request.MissionId,
+                    MediaId = item.MediaId,
+                    MediaType = item.Request.MediaType,
+                    Status = item.Request.Status.ToString(),
+                    CreatedAt = item.Request.CreatedAt
+                });
             }
         }
 

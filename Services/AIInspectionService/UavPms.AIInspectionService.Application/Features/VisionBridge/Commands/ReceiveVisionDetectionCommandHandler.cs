@@ -9,6 +9,7 @@ using UavPms.AIInspectionService.Application.Features.VisionBridge.DTOs;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.AIInspectionService.Application.Features.VisionBridge.Commands;
 
@@ -23,7 +24,7 @@ public class ReceiveVisionDetectionCommandHandler
     private readonly IUserRepository _userRepository;
     private readonly INotificationRepository _notificationRepository;
     private readonly IEmailService _emailService;
-    private readonly IRealtimeNotificationService _realtimeNotificationService;
+    private readonly IEventPublisher _eventPublisher;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
     private readonly ILogger<ReceiveVisionDetectionCommandHandler> _logger;
@@ -37,7 +38,7 @@ public class ReceiveVisionDetectionCommandHandler
         IUserRepository userRepository,
         INotificationRepository notificationRepository,
         IEmailService emailService,
-        IRealtimeNotificationService realtimeNotificationService,
+        IEventPublisher eventPublisher,
         IUnitOfWork unitOfWork,
         IFileStorageService fileStorageService,
         ILogger<ReceiveVisionDetectionCommandHandler> logger)
@@ -50,7 +51,7 @@ public class ReceiveVisionDetectionCommandHandler
         _userRepository = userRepository;
         _notificationRepository = notificationRepository;
         _emailService = emailService;
-        _realtimeNotificationService = realtimeNotificationService;
+        _eventPublisher = eventPublisher;
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
         _logger = logger;
@@ -220,7 +221,18 @@ public class ReceiveVisionDetectionCommandHandler
 
                 await _notificationRepository.AddAsync(notification);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _realtimeNotificationService.SendToUserAsync(notification.UserId, notification, cancellationToken);
+                await _eventPublisher.PublishAsync(new NotificationPushEvent
+                {
+                    UserId = notification.UserId,
+                    NotificationId = notification.Id,
+                    Type = notification.Type,
+                    Title = notification.Title,
+                    Body = notification.Body,
+                    ReferenceType = notification.ReferenceType,
+                    ReferenceId = notification.ReferenceId,
+                    IsRead = notification.IsRead,
+                    SentAt = notification.SentAt
+                });
 
                 // Nếu là khuyết tật nguy hiểm (Critical), push email lập tức cho người tham gia!
                 if (isCritical && !string.IsNullOrEmpty(user.Email))
