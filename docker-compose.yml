@@ -122,7 +122,7 @@ services:
     container_name: uav-operations-service
     build:
       context: .
-      dockerfile: Services/OperationsService/Dockerfile
+      dockerfile: Services/OperationsService/UavPms.OperationsService.API/Dockerfile
       network: host
     expose:
       - "8080"
