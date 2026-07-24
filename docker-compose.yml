@@ -175,7 +175,7 @@ services:
     container_name: uav-notification-service
     build:
       context: .
-      dockerfile: Services/NotificationService/Dockerfile
+      dockerfile: Services/NotificationService/UavPms.NotificationService.API/Dockerfile
       network: host
     expose:
       - "8080"
