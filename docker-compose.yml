@@ -86,7 +86,7 @@ services:
     container_name: uav-inspection-evaluation-service
     build:
       context: .
-      dockerfile: Services/InspectionEvaluationService/Dockerfile
+      dockerfile: Services/InspectionEvaluationService/UavPms.InspectionEvaluationService.API/Dockerfile
       network: host
     expose:
       - "8080"
@@ -102,7 +102,7 @@ services:
     container_name: uav-identity-service
     build:
       context: .
-      dockerfile: Services/IdentityService/Dockerfile
+      dockerfile: Services/IdentityService/UavPms.IdentityService.API/Dockerfile
       network: host
     expose:
       - "8080"
@@ -122,7 +122,7 @@ services:
     container_name: uav-operations-service
     build:
       context: .
-      dockerfile: Services/OperationsService/Dockerfile
+      dockerfile: Services/OperationsService/UavPms.OperationsService.API/Dockerfile
       network: host
     expose:
       - "8080"
@@ -142,7 +142,7 @@ services:
     container_name: uav-ai-inspection-service
     build:
       context: .
-      dockerfile: Services/AIInspectionService/Dockerfile
+      dockerfile: Services/AIInspectionService/UavPms.AIInspectionService.API/Dockerfile
       network: host
     expose:
       - "8080"
@@ -175,7 +175,7 @@ services:
     container_name: uav-notification-service
     build:
       context: .
-      dockerfile: Services/NotificationService/Dockerfile
+      dockerfile: Services/NotificationService/UavPms.NotificationService.API/Dockerfile
       network: host
     expose:
       - "8080"
