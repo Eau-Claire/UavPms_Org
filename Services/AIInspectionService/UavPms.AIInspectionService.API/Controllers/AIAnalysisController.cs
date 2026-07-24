@@ -108,7 +108,7 @@ public class AIAnalysisController : ControllerBase
                 continue;
             }
 
-            // Validate file extension matches Content-Type (防 extension spoofing)
+            // Validate file extension matches Content-Type ( extension spoofing)
             var extension = Path.GetExtension(safeFileName).ToLowerInvariant();
             if (string.IsNullOrEmpty(extension) || Array.IndexOf(allowedExtensions, extension) < 0)
             {

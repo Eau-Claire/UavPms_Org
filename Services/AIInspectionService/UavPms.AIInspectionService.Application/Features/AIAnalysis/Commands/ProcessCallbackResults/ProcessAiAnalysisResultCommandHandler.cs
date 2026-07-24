@@ -27,7 +27,6 @@ public class ProcessAiAnalysisResultCommandHandler
     private readonly IGenericRepository<EmergencyAlert> _emergencyAlertRepo;
     private readonly INotificationRepository _notificationRepo;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IRealtimeNotificationService _realtimeNotificationService;
     private readonly IInspectionEvaluationClient _inspectionEvaluationClient;
     private readonly IEventPublisher _eventPublisher;
     private readonly ILogger<ProcessAiAnalysisResultCommandHandler> _logger;
@@ -40,7 +39,6 @@ public class ProcessAiAnalysisResultCommandHandler
         IGenericRepository<EmergencyAlert> emergencyAlertRepo,
         INotificationRepository notificationRepo,
         IUnitOfWork unitOfWork,
-        IRealtimeNotificationService realtimeNotificationService,
         IInspectionEvaluationClient inspectionEvaluationClient,
         IEventPublisher eventPublisher,
         ILogger<ProcessAiAnalysisResultCommandHandler> logger)
@@ -52,7 +50,6 @@ public class ProcessAiAnalysisResultCommandHandler
         _emergencyAlertRepo = emergencyAlertRepo;
         _notificationRepo = notificationRepo;
         _unitOfWork = unitOfWork;
-        _realtimeNotificationService = realtimeNotificationService;
         _inspectionEvaluationClient = inspectionEvaluationClient;
         _eventPublisher = eventPublisher;
         _logger = logger;
@@ -331,17 +328,30 @@ public class ProcessAiAnalysisResultCommandHandler
             throw;
         }
 
+
+
         foreach (var notification in notificationsToPush)
         {
-            await _realtimeNotificationService.SendToUserAsync(notification.UserId, notification, cancellationToken);
+            await _eventPublisher.PublishAsync(new NotificationPushEvent
+            {
+                UserId = notification.UserId,
+                NotificationId = notification.Id,
+                Type = notification.Type,
+                Title = notification.Title,
+                Body = notification.Body,
+                ReferenceType = notification.ReferenceType,
+                ReferenceId = notification.ReferenceId,
+                IsRead = notification.IsRead,
+                SentAt = notification.SentAt
+            });
         }
 
         if (aiRequest != null && aiRequest.UploadedBy != Guid.Empty)
         {
-            await _realtimeNotificationService.SendAiAnalysisStatusToUserAsync(
-                aiRequest.UploadedBy,
-                new AIAnalysisStatusChangedEvent
+            await _eventPublisher.PublishAsync(
+                new UavPms.Shared.Contracts.Events.AIAnalysisStatusChangedEvent
                 {
+                    UserId = aiRequest.UploadedBy,
                     RequestId = aiRequest.Id,
                     BatchId = aiRequest.BatchId,
                     MissionId = aiRequest.MissionId,
@@ -354,8 +364,7 @@ public class ProcessAiAnalysisResultCommandHandler
                     ErrorMessage = request.ErrorMessage,
                     CreatedAt = aiRequest.CreatedAt,
                     CompletedAt = aiRequest.CompletedAt
-                },
-                cancellationToken);
+                });
         }
 
         _logger.LogInformation("Successfully processed AI callback. RequestId={RequestId}, Status={Status}", 
