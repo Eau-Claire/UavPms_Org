@@ -1,7 +1,8 @@
 using Grpc.Core;
+using Microsoft.Extensions.Logging;
 using UavPms.Grpc.InspectionEvaluation;
 
-namespace UavPms.InspectionEvaluationService.Services;
+namespace UavPms.InspectionEvaluationService.Infrastructure.Services;
 
 public class InspectionEvaluationGrpcService(
     ILogger<InspectionEvaluationGrpcService> logger)

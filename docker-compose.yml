@@ -86,7 +86,7 @@ services:
     container_name: uav-inspection-evaluation-service
     build:
       context: .
-      dockerfile: Services/InspectionEvaluationService/Dockerfile
+      dockerfile: Services/InspectionEvaluationService/UavPms.InspectionEvaluationService.API/Dockerfile
       network: host
     expose:
       - "8080"
@@ -102,7 +102,7 @@ services:
     container_name: uav-identity-service
     build:
       context: .
-      dockerfile: Services/IdentityService/Dockerfile
+      dockerfile: Services/IdentityService/UavPms.IdentityService.API/Dockerfile
       network: host
     expose:
       - "8080"

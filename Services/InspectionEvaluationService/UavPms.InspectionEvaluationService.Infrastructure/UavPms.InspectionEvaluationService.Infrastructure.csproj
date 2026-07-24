@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>UavPms.InspectionEvaluationService.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="../../../Protos/inspection_evaluation.proto" GrpcServices="Server" Link="Protos/inspection_evaluation.proto" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UavPms.InspectionEvaluationService.Application\UavPms.InspectionEvaluationService.Application.csproj" />
+    <ProjectReference Include="..\UavPms.InspectionEvaluationService.Domain\UavPms.InspectionEvaluationService.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
