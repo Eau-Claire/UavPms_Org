@@ -2,8 +2,16 @@ using Ocelot.DependencyInjection;
 using Ocelot.Middleware;
 using Serilog;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    // Allow multipart uploads up to the API's 50 MiB business limit plus
+    // multipart headers while the gateway proxies the request downstream.
+    options.Limits.MaxRequestBodySize = 52L * 1024 * 1024;
+});
+
 var isRunningInContainer = string.Equals(
     Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
     "true",
