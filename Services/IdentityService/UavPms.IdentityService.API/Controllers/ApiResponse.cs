@@ -1,3 +1,3 @@
-namespace UavPms.IdentityService.Api.Controllers;
+namespace UavPms.IdentityService.API.Controllers;
 
 public record ApiResponse(bool Success, string Message, object? Data = null, object? Errors = null);

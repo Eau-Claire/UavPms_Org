@@ -5,7 +5,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
-using UavPms.IdentityService.Api.Filters;
+using UavPms.IdentityService.API.Filters;
 using UavPms.IdentityService.Domain.Contracts;
 using MediatR;
 using UavPms.IdentityService.Application.Features.Users.Queries.GetMyProfile;
@@ -17,7 +17,7 @@ using UavPms.IdentityService.Application.Features.Users.Commands.UpdateUser;
 using UavPms.IdentityService.Application.Features.Users.Queries.GetUserById;
 using UavPms.IdentityService.Application.Features.Users.Queries.GetUsers;
 
-namespace UavPms.IdentityService.Api.Controllers;
+namespace UavPms.IdentityService.API.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/users")]

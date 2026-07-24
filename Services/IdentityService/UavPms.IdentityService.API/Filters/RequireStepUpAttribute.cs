@@ -10,9 +10,9 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using UavPms.IdentityService.Domain.Interfaces.Services;
-using UavPms.IdentityService.Api.Controllers;
+using UavPms.IdentityService.API.Controllers;
 
-namespace UavPms.IdentityService.Api.Filters;
+namespace UavPms.IdentityService.API.Filters;
 
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 public class RequireStepUpAttribute : Attribute, IAsyncAuthorizationFilter

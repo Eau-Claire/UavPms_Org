@@ -1,10 +1,10 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using System.Net;
-using UavPms.IdentityService.Api.Controllers;
+using UavPms.IdentityService.API.Controllers;
 using UavPms.IdentityService.Application.Common.Exceptions;
 
-namespace UavPms.IdentityService.Api.Middlewares;
+namespace UavPms.IdentityService.API.Middlewares;
 
 public class GlobalExceptionHandler : IExceptionHandler
 {

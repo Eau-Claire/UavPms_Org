@@ -11,8 +11,8 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using UavPms.IdentityService.Application;
 using UavPms.IdentityService.Infrastructure;
 using UavPms.IdentityService.Infrastructure.Persistence;
-using UavPms.IdentityService.Api.Middlewares;
-using UavPms.IdentityService.Api.Swagger;
+using UavPms.IdentityService.API.Middlewares;
+using UavPms.IdentityService.API.Swagger;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -77,8 +77,8 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
 builder.Services.AddSwaggerGen();
-builder.Services.AddInfrastructureServices(builder.Configuration);
-builder.Services.AddApplicationServices();
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddCors(options =>

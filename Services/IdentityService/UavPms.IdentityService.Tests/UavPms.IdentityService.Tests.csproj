@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <RootNamespace>UavPms.IdentityService.Tests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,12 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Services\AIInspectionService\UavPms.AIInspectionService.csproj" />
-    <ProjectReference Include="..\Services\IdentityService\UavPms.IdentityService.Application\UavPms.IdentityService.Application.csproj" />
-    <ProjectReference Include="..\Services\IdentityService\UavPms.IdentityService.Domain\UavPms.IdentityService.Domain.csproj" />
-    <ProjectReference Include="..\Services\IdentityService\UavPms.IdentityService.Infrastructure\UavPms.IdentityService.Infrastructure.csproj" />
-    <ProjectReference Include="..\Services\NotificationService\UavPms.NotificationService.csproj" />
-    <ProjectReference Include="..\Services\OperationsService\UavPms.OperationsService.csproj" />
+    <ProjectReference Include="..\UavPms.IdentityService.API\UavPms.IdentityService.API.csproj" />
+    <ProjectReference Include="..\UavPms.IdentityService.Application\UavPms.IdentityService.Application.csproj" />
+    <ProjectReference Include="..\UavPms.IdentityService.Domain\UavPms.IdentityService.Domain.csproj" />
+    <ProjectReference Include="..\UavPms.IdentityService.Infrastructure\UavPms.IdentityService.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
