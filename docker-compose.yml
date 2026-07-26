@@ -29,6 +29,14 @@ x-service-environment: &service-environment
   RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
   RabbitMQ__Port: 5672
   GrpcServices__InspectionEvaluationUrl: http://inspectionevaluationservice:8080
+  AIAnalysisResultMessaging__ExchangeName: ${AI_RESULT_EXCHANGE:-identity-exchange}
+  AIAnalysisResultMessaging__RoutingKey: ${AI_RESULT_ROUTING_KEY:-identity.event.aianalysisresultevent}
+  AIAnalysisResultMessaging__QueueName: ${AI_RESULT_QUEUE_NAME:-ai.analysis.result}
+  AIAnalysisResultMessaging__RetryQueueName: ${AI_RESULT_RETRY_QUEUE_NAME:-ai.analysis.result.retry}
+  AIAnalysisResultMessaging__DeadLetterExchangeName: ${AI_RESULT_DLX:-ai.analysis.result.dlx}
+  AIAnalysisResultMessaging__DeadLetterQueueName: ${AI_RESULT_DLQ:-ai.analysis.result.dead-letter}
+  AIAnalysisResultMessaging__RetryLimit: ${AI_RESULT_RETRY_LIMIT:-3}
+  AIAnalysisResultMessaging__RetryDelayMs: ${AI_RESULT_RETRY_DELAY_MS:-15000}
 
 services:
   redis:

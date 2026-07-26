@@ -23,6 +23,8 @@ public static class DependencyInjection
 
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
     {
+        services.Configure<AIAnalysisResultMessagingOptions>(configuration.GetSection(AIAnalysisResultMessagingOptions.SectionName));
+
         // Truyền Connection String vào cấu hình UseNpgsql
         services.AddDbContext<ApplicationDbContext>(options =>
         {

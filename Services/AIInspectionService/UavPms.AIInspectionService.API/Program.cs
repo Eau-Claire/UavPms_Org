@@ -92,6 +92,11 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]) &&
     builder.Services.AddHostedService<MockAIAnalysisConsumer>();
 }
 
+if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
+{
+    builder.Services.AddHostedService<AIAnalysisResultConsumer>();
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>

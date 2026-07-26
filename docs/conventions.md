@@ -11,7 +11,7 @@ Dự án hiện áp dụng kiến trúc microservice vừa phải theo business 
 *   **UavPms.ApiGateway**: Ocelot gateway, chỉ chịu trách nhiệm routing/cross-cutting gateway concerns.
 *   **Services/IdentityService**: Authentication, users, roles, OTP, refresh tokens, trusted devices và identity persistence.
 *   **Services/OperationsService**: Regions, substations, transmission lines, towers, assets, missions, inspections, devices, monitor dashboards và audit logs.
-*   **Services/AIInspectionService**: AI analysis orchestration, AI callbacks, Vision Bridge và giao tiếp với FastAPI AI service.
+*   **Services/AIInspectionService**: AI analysis orchestration, AI result consumption, Vision Bridge và giao tiếp với FastAPI AI service.
 *   **Services/NotificationService**: Notification APIs, SignalR hub, Hangfire jobs, email/realtime notification dispatch và notification consumers.
 
 Các project layered monolith cũ đã bị loại khỏi solution/source tree. Không thêm business logic mới vào các project global shared kiểu cũ.

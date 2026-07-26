@@ -201,7 +201,7 @@ public class MockAIAnalysisConsumer : BackgroundService
             var result = await mediator.Send(command, cancellationToken);
 
             _logger.LogWarning(
-                "Mock AI callback processed. RequestId={RequestId}, SavedDetections={SavedDetections}, CreatedAlerts={CreatedAlerts}",
+                "Mock AI result processed. RequestId={RequestId}, SavedDetections={SavedDetections}, CreatedAlerts={CreatedAlerts}",
                 result.RequestId,
                 result.SavedDetections,
                 result.CreatedAlerts);

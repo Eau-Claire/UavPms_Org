@@ -87,20 +87,6 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
-      "DownstreamPathTemplate": "/api/internal/ai-analysis/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/internal/ai-analysis/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/api/internal/ai-analysis",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/internal/ai-analysis",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
       "DownstreamPathTemplate": "/api/v{version}/vision/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],

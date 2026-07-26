@@ -104,7 +104,7 @@ UnreadCountChanged
 
 The payload intentionally omits unnecessary database fields. Clients should call the REST detail/history APIs when they need full persisted data.
 
-`AiAnalysisStatusChanged` is sent to the uploading user's group when a mission AI request is queued and when the AI callback marks it completed or failed:
+`AiAnalysisStatusChanged` is sent to the uploading user's group when a mission AI request is queued and when the AI result consumer marks it completed or failed:
 
 ```json
 {
