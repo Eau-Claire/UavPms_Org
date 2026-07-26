@@ -59,7 +59,7 @@ public class ProcessAiAnalysisResultCommandHandler
         ProcessAiAnalysisResultCommand request,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Processing AI analysis callback results for RequestId={RequestId}, Status={Status}", 
+        _logger.LogInformation("Processing AI analysis result for RequestId={RequestId}, Status={Status}", 
             request.RequestId, request.Status);
 
         // 1. Check if AIAnalysisRequest exists
@@ -71,13 +71,14 @@ public class ProcessAiAnalysisResultCommandHandler
         }
 
         // Idempotent check
-        if (aiRequest.Status == AIAnalysisStatus.Completed)
+        if (aiRequest.Status is AIAnalysisStatus.Completed or AIAnalysisStatus.Failed)
         {
-            _logger.LogInformation("AIAnalysisRequest {RequestId} is already Completed. Skipping duplicate inserts.", request.RequestId);
+            _logger.LogInformation("AIAnalysisRequest {RequestId} is already in terminal state {Status}. Skipping duplicate processing.",
+                request.RequestId, aiRequest.Status);
             return new AiAnalysisCallbackResponseDto
             {
                 RequestId = aiRequest.Id,
-                Status = "Completed",
+                Status = aiRequest.Status.ToString(),
                 SavedDetections = 0,
                 CreatedAlerts = 0,
                 ProcessedAt = DateTime.UtcNow
@@ -96,7 +97,7 @@ public class ProcessAiAnalysisResultCommandHandler
             if (media == null)
             {
                 _logger.LogWarning(
-                    "InspectionMedia not found while processing AI callback: RequestId={RequestId}, MediaId={MediaId}",
+                    "InspectionMedia not found while processing AI result: RequestId={RequestId}, MediaId={MediaId}",
                     request.RequestId, resolvedMediaId);
                 throw new NotFoundException(nameof(InspectionMedia), resolvedMediaId.Value);
             }
@@ -114,7 +115,7 @@ public class ProcessAiAnalysisResultCommandHandler
                     aiRequest.MissionId = media.MissionId;
 
                     _logger.LogInformation(
-                        "Resolved AI callback media by file URL fallback: RequestId={RequestId}, MediaId={MediaId}",
+                        "Resolved AI result media by file URL fallback: RequestId={RequestId}, MediaId={MediaId}",
                         request.RequestId, media.Id);
                 }
             }
@@ -324,7 +325,7 @@ public class ProcessAiAnalysisResultCommandHandler
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed while processing AI callback.");
+            _logger.LogError(ex, "Failed while processing AI analysis result.");
             throw;
         }
 
@@ -367,7 +368,7 @@ public class ProcessAiAnalysisResultCommandHandler
                 });
         }
 
-        _logger.LogInformation("Successfully processed AI callback. RequestId={RequestId}, Status={Status}", 
+        _logger.LogInformation("Successfully processed AI analysis result. RequestId={RequestId}, Status={Status}", 
             request.RequestId, aiRequest?.Status.ToString() ?? "Completed");
 
         return new AiAnalysisCallbackResponseDto
