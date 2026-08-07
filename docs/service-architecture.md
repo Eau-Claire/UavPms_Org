@@ -48,11 +48,10 @@ These modules stay together because mission/inspection workflows share transacti
 Owns .NET-side AI orchestration and integration APIs:
 
 - `/api/v{version}/ai-analysis`
-- `/api/internal/ai-analysis`
 - `/api/v{version}/vision`
 - `/api/v{version}/missions/{missionId}/ai-analysis`
 
-It preserves RabbitMQ AI request publication, callback processing, Vision Bridge ingestion, and optional `MockAIAnalysisConsumer`.
+It preserves RabbitMQ AI request publication, RabbitMQ AI result consumption, Vision Bridge ingestion, and optional `MockAIAnalysisConsumer`.
 
 ### NotificationService
 
@@ -147,7 +146,7 @@ Ocelot routes public paths to the owning service:
 - Health: `/health` for the gateway, plus `/health/identity`, `/health/operations`, `/health/ai-inspection`, `/health/notifications`
 - Identity: `/api/v{version}/auth...`, `/api/v{version}/users...`
 - Operations: `/regions`, `/substations`, `/lines`, `/towers`, `/assets`, `/missions`, `/inspections`, `/devices`, `/monitor`, `/audit-logs`, `/images`
-- AI Inspection: `/ai-analysis`, `/api/internal/ai-analysis`, `/vision`, mission AI analysis routes
+- AI Inspection: `/ai-analysis`, `/vision`, mission AI analysis routes
 - Notifications: `/notifications`, `/hubs/notifications`, `/hangfire`
 - FastAPI: `/ai-service/{everything}`
 

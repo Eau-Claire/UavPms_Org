@@ -24,7 +24,7 @@ Client / Swagger
 | API Gateway | Public routing, CORS, gateway health | `UavPms.ApiGateway` |
 | IdentityService | Login, OTP, refresh token, users, roles | `Services/IdentityService` |
 | OperationsService | Regions, substations, lines, towers, assets, missions, inspections, devices, monitor, audit logs | `Services/OperationsService` |
-| AIInspectionService | AI upload/orchestration, callback processing, Vision Bridge, FastAPI/RabbitMQ integration | `Services/AIInspectionService` |
+| AIInspectionService | AI upload/orchestration, result-event processing, Vision Bridge, FastAPI/RabbitMQ integration | `Services/AIInspectionService` |
 | NotificationService | Notifications, SignalR hub, Hangfire jobs, RabbitMQ consumers | `Services/NotificationService` |
 | InspectionEvaluationService | Internal gRPC severity/risk evaluation for AI detections | `Services/InspectionEvaluationService` |
 
@@ -103,7 +103,7 @@ Other route groups:
 |---|---|
 | `/api/v1/auth`, `/api/v1/users` | IdentityService |
 | `/api/v1/regions`, `/substations`, `/lines`, `/towers`, `/assets`, `/missions`, `/inspections`, `/devices`, `/monitor`, `/audit-logs` | OperationsService |
-| `/api/v1/ai-analysis`, `/api/internal/ai-analysis`, `/api/v1/vision`, `/api/v1/missions/{id}/ai-analysis` | AIInspectionService |
+| `/api/v1/ai-analysis`, `/api/v1/vision`, `/api/v1/missions/{id}/ai-analysis` | AIInspectionService |
 | `/api/v1/notifications`, `/hubs/notifications`, `/hangfire` | NotificationService |
 | `/health`, `/health/identity`, `/health/operations`, `/health/ai-inspection`, `/health/notifications` | Gateway/downstream health |
 
@@ -121,7 +121,7 @@ Client: `Services/AIInspectionService/Infrastructure/Grpc/GrpcInspectionEvaluati
 
 Workflow:
 
-1. FastAPI/worker posts AI callback to `AIInspectionService`.
+1. Python AI worker publishes AI result events to RabbitMQ.
 2. `ProcessAiAnalysisResultCommandHandler` resolves media/category and calls `InspectionEvaluationService.EvaluateDetection`.
 3. gRPC returns severity, risk level, priority score, and immediate-alert decision.
 4. AIInspectionService saves anomaly/alert metadata and preserves fallback behavior if gRPC is temporarily unavailable.
@@ -147,7 +147,7 @@ Demo:
 1. Start `docker compose up -d --build`.
 2. Open RabbitMQ management at `http://localhost:15672`.
 3. Create a mission through `POST /api/v1/missions`; observe `MissionCreatedEvent`.
-4. Submit an AI callback with a high-confidence emergency category; observe `DefectDetectedEvent` and NotificationService logs.
+4. Publish an AI result event with a high-confidence emergency category; observe `DefectDetectedEvent` and NotificationService logs.
 
 ## Background Jobs
 
@@ -183,11 +183,11 @@ RabbitMQ consumers are also meaningful background workers and are suitable for l
 | Background processing | RabbitMQ `BackgroundService` consumers, Hangfire jobs |
 | Message broker | RabbitMQ producer/consumer workflows |
 | Independent gRPC service | `Services/InspectionEvaluationService` |
-| REST to gRPC interaction | AI callback handler calls `IInspectionEvaluationClient` |
+| RabbitMQ to gRPC interaction | AI result consumer calls `IInspectionEvaluationClient` |
 | Docker containerization | Dockerfile per service |
 | Docker Compose deployment | `docker-compose.yml` |
 | Swagger/OpenAPI | `ConfigureSwaggerOptions.cs` in REST services |
-| End-to-end workflow | AI callback -> gRPC evaluation -> DB save -> RabbitMQ event -> notification consumer |
+| End-to-end workflow | AI result event -> gRPC evaluation -> DB save -> RabbitMQ event -> notification consumer |
 | README | This document |
 
 ## Team Responsibilities
@@ -204,5 +204,5 @@ RabbitMQ consumers are also meaningful background workers and are suitable for l
 - If `docker compose config` fails, check `.env` quoting first, especially secret values.
 - If Hangfire does not start, configure `HANGFIRE_DB_CONNECTION` or `DB_CONNECTION`.
 - If RabbitMQ consumers do not start, verify `rabbitmq` is healthy and `RabbitMQ__HostName=rabbitmq`.
-- If gRPC evaluation is unavailable, AIInspectionService logs a warning and uses its fallback critical-alert rule to preserve existing AI callback behavior.
+- If gRPC evaluation is unavailable, AIInspectionService logs a warning and uses its fallback critical-alert rule to preserve existing AI result processing behavior.
 - If Docker restore fails without `network: host`, run the compose build path, which is configured with host networking for restore.
