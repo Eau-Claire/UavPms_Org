@@ -47,7 +47,6 @@ public class RefreshTokenCommandHandlerTests
             Email = "user@test.com",
             FullName = "User",
             Status = "Active",
-            Username = "Test user",
             UserRoles = new List<UserRole>
             {
                 new UserRole

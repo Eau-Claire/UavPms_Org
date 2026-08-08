@@ -20,41 +20,17 @@ public class LoginOtpHandlerTests
     }
 
     [Fact]
-    public async Task ValidatePreconditionAsync_ShouldReturnResolvedEmail_WhenUserFoundByUsername()
-    {
-        // Account B: Username = uselessliem@gmail.com, Email = testing@123gmail.com
-        var userB = new User
-        {
-            Id = Guid.NewGuid(),
-            Username = "uselessliem@gmail.com",
-            Email = "testing@123gmail.com",
-            Status = "Active"
-        };
-
-        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync("uselessliem@gmail.com"))
-            .ReturnsAsync((User?)null);
-        _userRepositoryMock.Setup(r => r.GetByUsernameWithRolesAsync("uselessliem@gmail.com"))
-            .ReturnsAsync(userB);
-
-        var result = await _handler.ValidatePreconditionAsync("uselessliem@gmail.com", null);
-
-        result.IsValid.Should().BeTrue();
-        result.ResolvedEmail.Should().Be("testing@123gmail.com");
-    }
-
-    [Fact]
     public async Task ValidatePreconditionAsync_ShouldReturnResolvedEmail_WhenUserFoundByEmail()
     {
-        var userA = new User
+        var user = new User
         {
             Id = Guid.NewGuid(),
-            Username = "an3439201@gmail.com",
             Email = "uselessliem@gmail.com",
             Status = "Active"
         };
 
         _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync("uselessliem@gmail.com"))
-            .ReturnsAsync(userA);
+            .ReturnsAsync(user);
 
         var result = await _handler.ValidatePreconditionAsync("uselessliem@gmail.com", null);
 
@@ -63,31 +39,15 @@ public class LoginOtpHandlerTests
     }
 
     [Fact]
-    public async Task ValidatePreconditionAsync_ShouldPreferUsername_WhenIdentifierMatchesEmailAndUsernameOfDifferentUsers()
+    public async Task ValidatePreconditionAsync_ShouldReturnFailure_WhenUserNotFound()
     {
-        var accountA = new User
-        {
-            Id = Guid.NewGuid(),
-            Username = "an3439201@gmail.com",
-            Email = "uselessliem@gmail.com",
-            Status = "Active"
-        };
-        var accountB = new User
-        {
-            Id = Guid.NewGuid(),
-            Username = "uselessliem@gmail.com",
-            Email = "testing@123gmail.com",
-            Status = "Active"
-        };
+        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync("notfound@gmail.com"))
+            .ReturnsAsync((User?)null);
 
-        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync("uselessliem@gmail.com"))
-            .ReturnsAsync(accountA);
-        _userRepositoryMock.Setup(r => r.GetByUsernameWithRolesAsync("uselessliem@gmail.com"))
-            .ReturnsAsync(accountB);
+        var result = await _handler.ValidatePreconditionAsync("notfound@gmail.com", null);
 
-        var result = await _handler.ValidatePreconditionAsync("uselessliem@gmail.com", null);
-
-        result.IsValid.Should().BeTrue();
-        result.ResolvedEmail.Should().Be("testing@123gmail.com");
+        result.IsValid.Should().BeFalse();
+        result.Message.Should().Be("User not found or inactive.");
     }
 }
+

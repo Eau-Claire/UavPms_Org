@@ -122,7 +122,7 @@
   - Thực hiện xác thực mật khẩu giả định (dummy verification) khi người dùng không tồn tại hoặc không hoạt động nhằm chuẩn hoá thời gian phản hồi giữa user tồn tại và không tồn tại.
 - [X] 22g. **Xác thực Chủ sở hữu của Step-Up Token**:
   - So sánh định danh người dùng trong Step-Up token với định danh người dùng đang đăng nhập trong `HttpContext.User` trước khi cho phép thực hiện hành động cần Step-Up.
-- [ ] 22h. **Refactor Authentication dùng Email làm Định danh Đăng nhập Duy nhất (Single Login Identifier - Issue #84)**:
+- [X] 22h. **Refactor Authentication dùng Email làm Định danh Đăng nhập Duy nhất (Single Login Identifier - Issue #84)**:
   - Loại bỏ thuộc tính `Username` khỏi domain entity `User`, DTOs (`AuthUserDto`, `UserDetailDto`, `AssignableUserDto`), DbContext Configuration, và Database Schema.
   - Cập nhật toàn bộ các luồng xác thực (`LoginCommand`, `VerifyOtpCommand`, `SendOtpCommand`, `ResetPasswordCommand`, OTP Handlers) truy vấn người dùng duy nhất bằng `Email` (`x.Email == input`).
   - Loại bỏ các phương thức và kiểm tra trùng lặp `Username` (`GetByUsernameWithRolesAsync`) trong Repositories và Command Handlers.

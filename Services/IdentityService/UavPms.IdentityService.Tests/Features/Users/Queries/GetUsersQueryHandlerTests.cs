@@ -22,8 +22,8 @@ public class GetUsersQueryHandlerTests
         var query = new GetUsersQuery(1, 10, null);
         var mockUserList = new List<User>()
         {
-            new User() { Username = "user1", Email = "1@gmail.com", UserRoles = new List<UserRole>() },
-            new User() { Username = "user2", Email = "2@gmail.com", UserRoles = new List<UserRole>() },
+            new User() { Email = "1@gmail.com", UserRoles = new List<UserRole>() },
+            new User() { Email = "2@gmail.com", UserRoles = new List<UserRole>() },
         };
         
         _userRepositoryMock.Setup(r => r.GetUsersPagedAsync(1, 10, null))

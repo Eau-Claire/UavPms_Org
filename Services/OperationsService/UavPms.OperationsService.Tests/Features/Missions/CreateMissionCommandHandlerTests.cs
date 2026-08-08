@@ -41,7 +41,7 @@ public class CreateMissionCommandHandlerTests
     public async Task Handle_ShouldCreateMissionAndPublishEvent_WhenRequestIsValid()
     {
         var assignedUserId = Guid.NewGuid();
-        var mockUser = new User{ Id = assignedUserId, Username = "inspector" };
+        var mockUser = new User{ Id = assignedUserId, Email = "inspector@test.com" };
         var droneCode = "XXXX";
         var mockUav = new Uav { Id = Guid.NewGuid(), UavCode = droneCode };
         
@@ -52,7 +52,7 @@ public class CreateMissionCommandHandlerTests
             .ReturnsAsync(mockUav);
         
         _currentUserServicesMock.Setup(x => x.UserId).Returns(Guid.NewGuid());
-        _currentUserServicesMock.Setup(x => x.UserName).Returns("admin");
+        _currentUserServicesMock.Setup(x => x.Email).Returns("admin@uavpms.com");
         
         var command = new CreateMissionCommand("Inspection A", "Route abc", assignedUserId, droneCode, "Pending", "Description");
         
@@ -61,7 +61,7 @@ public class CreateMissionCommandHandlerTests
         result.Should().NotBeNull();
         result.Title.Should().Be("Inspection A");
         result.Status.Should().Be("Pending");
-        result.AssignedToUsername.Should().Be("inspector");
+        result.AssignedToEmail.Should().Be("inspector@test.com");
         
         _missionRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Mission>()), Times.Once);
         _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
