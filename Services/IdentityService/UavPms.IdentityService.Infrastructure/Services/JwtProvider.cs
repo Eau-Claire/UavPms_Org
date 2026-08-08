@@ -38,7 +38,7 @@ public class JwtProvider : IJwtProvider
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Name, user.Email),
             new Claim(ClaimTypes.Email, user.Email),
             new Claim("fullname", user.FullName)
         };
@@ -50,7 +50,7 @@ public class JwtProvider : IJwtProvider
 
         var token = new JwtSecurityToken(
             issuer: issuer,
-            audience: audience,
+            audience: audience, 
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
             signingCredentials: credentials);

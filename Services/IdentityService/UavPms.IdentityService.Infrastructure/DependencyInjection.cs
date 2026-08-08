@@ -64,13 +64,13 @@ public static class DependencyInjection
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
         services.AddScoped<IMissionRepository, MissionRepository>();
         services.AddScoped<IUavRepository, UavRepository>();
-        
-        // Đăng ký Password Hasher và JWT Provider
-        services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
-        services.AddScoped<IJwtProvider, JwtProvider>();
 
         // Đăng ký Notification Repository
         services.AddScoped<INotificationRepository, NotificationRepository>();
+
+        // Đăng ký Password Hasher và JWT Provider
+        services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+        services.AddScoped<IJwtProvider, JwtProvider>();
 
         // Đăng ký Monitor Repository
         services.AddScoped<IMonitorRepository, MonitorRepository>();

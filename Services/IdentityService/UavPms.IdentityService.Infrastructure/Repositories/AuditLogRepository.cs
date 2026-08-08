@@ -36,7 +36,7 @@ public class AuditLogRepository : GenericRepository<AuditLog>, IAuditLogReposito
                 x.IpAddress.ToLower().Contains(lowerSearch) || x.UserAgent.ToLower().Contains(lowerSearch)
                                                             || x.OldValues.ToLower().Contains(lowerSearch) || x
                                                                 .NewValues.ToLower().Contains(lowerSearch)
-                                                                    || (x.User != null && x.User.Username.ToLower()
+                                                                    || (x.User != null && x.User.Email.ToLower()
                                                                         .Contains(lowerSearch)));
         }
         

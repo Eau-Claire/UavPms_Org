@@ -28,7 +28,6 @@ public class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, PaginatedUser
             Phone = u.Phone,
             Roles = u.UserRoles.Select(ur => ur.Role!.RoleName).ToList(),
             Status = u.Status,
-            Username = u.Username,
         });
 
         var totalPages = (int)Math.Ceiling((double)totalItems / request.PageSize);

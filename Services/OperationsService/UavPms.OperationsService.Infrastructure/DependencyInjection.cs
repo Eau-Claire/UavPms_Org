@@ -64,10 +64,6 @@ public static class DependencyInjection
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
         services.AddScoped<IMissionRepository, MissionRepository>();
         services.AddScoped<IUavRepository, UavRepository>();
-        
-        // Đăng ký Password Hasher và JWT Provider
-        services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
-        services.AddScoped<IJwtProvider, JwtProvider>();
 
         // Đăng ký Notification Repository
         services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -85,10 +81,6 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserServices, CurrentUserServices>();
 
-        // Đăng ký các Dịch vụ OTP, Email (SendGrid) và Event Publisher
-        services.AddMemoryCache();
-        services.AddScoped<IEmailService, EmailService>();
-
         // Register Redis ConnectionMultiplexer as Singleton
         var redisConnectionString = configuration["Redis:ConnectionString"];
         var redisPassword = configuration["Redis:Password"];
@@ -102,8 +94,6 @@ public static class DependencyInjection
             services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(StackExchange.Redis.ConnectionMultiplexer.Connect(configOptions));
         }
 
-        services.AddScoped<IOtpService, RedisOtpService>();
-
         // Đăng ký File Storage Service (Tự động chọn Supabase nếu có ApiKey, ngược lại dùng Local)
         var supabaseKey = configuration["Supabase:ApiKey"];
         if (!string.IsNullOrEmpty(supabaseKey) && !supabaseKey.Contains("YOUR_SUPABASE_SERVICE_ROLE_KEY"))
@@ -115,14 +105,6 @@ public static class DependencyInjection
             services.AddScoped<IFileStorageService, LocalFileStorageService>();
         }
 
-        // Đăng ký OTP Purpose Handlers (Strategy pattern)
-        services.AddScoped<IOtpPurposeHandler, UavPms.OperationsService.Infrastructure.Services.OtpHandlers.LoginOtpHandler>();
-        services.AddScoped<IOtpPurposeHandler, UavPms.OperationsService.Infrastructure.Services.OtpHandlers.ForgotPasswordOtpHandler>();
-        services.AddScoped<IOtpPurposeHandler, UavPms.OperationsService.Infrastructure.Services.OtpHandlers.EmailVerificationOtpHandler>();
-        services.AddScoped<IOtpPurposeHandler, UavPms.OperationsService.Infrastructure.Services.OtpHandlers.ChangeEmailOtpHandler>();
-        services.AddScoped<IOtpPurposeHandler, UavPms.OperationsService.Infrastructure.Services.OtpHandlers.ChangePasswordOtpHandler>();
-        services.AddScoped<IOtpPurposeHandler, UavPms.OperationsService.Infrastructure.Services.OtpHandlers.DeleteAccountOtpHandler>();
-        
         return services;
     }
 }

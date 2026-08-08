@@ -41,12 +41,9 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
 
     public async Task<OtpVerifyResultDto> Handle(VerifyOtpCommand request, CancellationToken cancellationToken)
     {
-        var targetUser = request.OtpPurpose == OtpPurpose.Login
-            ? await _userRepository.GetByUsernameWithRolesAsync(request.Email)
-              ?? await _userRepository.GetByEmailWithRolesAsync(request.Email)
-            : await _userRepository.GetByEmailWithRolesAsync(request.Email)
-              ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
-        var targetEmail = targetUser?.Email ?? request.Email;
+        var targetUser = await _userRepository.GetByEmailWithRolesAsync(request.Email);
+        if (targetUser == null) throw new BusinessRuleException("User not found");
+        var targetEmail = targetUser.Email;
 
         var verification = await _otpService.VerifyOtpAsync(targetEmail, request.Code, request.OtpPurpose);
         if (!verification.IsValid)
@@ -115,7 +112,6 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
                 {
                     Id = user.Id,
                     Email = user.Email,
-                    Username = user.Username,
                     FullName = user.FullName,
                     Roles = roles,
                 },

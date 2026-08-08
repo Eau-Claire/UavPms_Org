@@ -27,7 +27,7 @@ public class GetAuditLogsQueryHandler : IRequestHandler<GetAuditLogsQuery, Pagin
         {
             Id = x.Id,
             UserId = x.UserId,
-            OperatorUsername = x.User?.Username,
+            OperatorEmail = x.User?.Email,
             TableName =  x.TableName,
             RecordId =  x.RecordId,
             ActionType =  x.ActionType,

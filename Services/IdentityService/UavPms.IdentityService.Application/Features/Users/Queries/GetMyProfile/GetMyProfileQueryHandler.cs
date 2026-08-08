@@ -26,7 +26,6 @@ public class GetMyProfileQueryHandler : IRequestHandler<GetMyProfileQuery, AuthU
         {
             Id = user.Id,
             Email = user.Email,
-            Username = user.Username,
             FullName = user.FullName,
             Roles = user.UserRoles.Select(ur => ur.Role!.RoleName).ToList(),
         };

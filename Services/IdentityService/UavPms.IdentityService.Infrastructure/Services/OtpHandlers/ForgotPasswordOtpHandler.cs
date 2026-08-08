@@ -25,8 +25,7 @@ public class ForgotPasswordOtpHandler : IOtpPurposeHandler
             return PreconditionResult.Failure("Email is required.");
         }
 
-        var user = await _userRepository.GetByEmailWithRolesAsync(email)
-                   ?? await _userRepository.GetByUsernameWithRolesAsync(email);
+        var user = await _userRepository.GetByEmailWithRolesAsync(email);
         if (user == null || user.Status != "Active")
         {
             // Silent success to prevent user enumeration

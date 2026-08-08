@@ -6,7 +6,6 @@ namespace UavPms.IdentityService.Application.Features.Users.DTOs;
 public class UserDetailDto
 {
     public Guid Id { get; set; }
-    public string Username { get; set; } = null!;
     public string Email { get; set; } = null!;
     public string FullName { get; set; } = null!;
     public string Phone { get; set; } = null!;
