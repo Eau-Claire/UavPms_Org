@@ -31,7 +31,7 @@ public class CreateUserCommandHandlerTests
     [Fact]
     public async Task Handle_ShouldThrowException_WhenEmailAlreadyInUse()
     {
-        var command = new CreateUserCommand("newuser", "existingemail@gmail.com", "pass", "Name", "123",
+        var command = new CreateUserCommand("existingemail@gmail.com", "pass", "Name", "123",
             new List<string>());
         _userRepositoryMock.Setup(u =>
             u.GetByEmailWithRolesAsync(command.Email))
@@ -46,7 +46,7 @@ public class CreateUserCommandHandlerTests
     [Fact]
     public async Task Handle_ShouldCreateUser_WhenDataIsValid()
     {
-        var command = new CreateUserCommand("newuser", "existingemail@gmail.com", "pass", "Name", "123",
+        var command = new CreateUserCommand("existingemail@gmail.com", "pass", "Name", "123",
             new List<string>());
         _userRepositoryMock.Setup(u =>
             u.GetByEmailWithRolesAsync(command.Email))
