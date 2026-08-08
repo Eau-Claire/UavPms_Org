@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
+using NetTopologySuite;
 using NetTopologySuite.Geometries;
 using OfficeOpenXml;
 using UavPms.OperationsService.Application.Common.Exceptions;
@@ -197,7 +198,7 @@ public class TowerCommandHandlerTests
         result.Should().NotBeNull();
         result.Success.Should().BeTrue();
         result.ImportedCount.Should().Be(2); // 2 towers imported
-        result.CreatedAssetsCount.Should().Be(8); // 4 assets per tower * 2 towers = 8 assets
+        result.CreateAssetsCount.Should().Be(8); // 4 assets per tower * 2 towers = 8 assets
 
         _towerRepositoryMock.Verify(t => t.AddAsync(It.IsAny<Tower>()), Times.Exactly(2));
         _assetRepositoryMock.Verify(a => a.AddAsync(It.IsAny<Asset>()), Times.Exactly(8));

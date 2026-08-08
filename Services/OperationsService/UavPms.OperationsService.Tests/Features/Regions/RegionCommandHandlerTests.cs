@@ -35,7 +35,7 @@ public class RegionCommandHandlerTests
     {
         // Arrange
         var handler = new CreateRegionCommandHandler(_regionRepositoryMock.Object, _unitOfWorkMock.Object);
-        var command = new CreateRegionCommand("Northern Substation Region", "Description note", null);
+        var command = new CreateRegionCommand("Northern Substation Region");
 
         // Act
         var result = await handler.Handle(command, CancellationToken.None);
@@ -60,7 +60,7 @@ public class RegionCommandHandlerTests
         _regionRepositoryMock.Setup(r => r.GetByIdAsync(regionId, true)).ReturnsAsync(existingRegion);
 
         var handler = new UpdateRegionCommandHandler(_regionRepositoryMock.Object, _unitOfWorkMock.Object);
-        var command = new UpdateRegionCommand(regionId, "Updated Region Name", "New Description", null);
+        var command = new UpdateRegionCommand(regionId, "Updated Region Name");
 
         // Act
         var result = await handler.Handle(command, CancellationToken.None);
@@ -80,7 +80,7 @@ public class RegionCommandHandlerTests
         _regionRepositoryMock.Setup(r => r.GetByIdAsync(regionId, true)).ReturnsAsync((Region?)null);
 
         var handler = new UpdateRegionCommandHandler(_regionRepositoryMock.Object, _unitOfWorkMock.Object);
-        var command = new UpdateRegionCommand(regionId, "New Name", null, null);
+        var command = new UpdateRegionCommand(regionId, "New Name");
 
         // Act
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
