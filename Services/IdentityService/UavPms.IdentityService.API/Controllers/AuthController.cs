@@ -45,7 +45,7 @@ public class AuthController : ControllerBase
         var deviceTrustToken = Request.Cookies["device_trust_token"] 
             ?? Request.Headers["X-Device-Trust-Token"].ToString();
         var userAgent = Request.Headers["User-Agent"].ToString();
-        var command = new LoginCommand(request.Username, request.Password, deviceTrustToken, userAgent);
+        var command = new LoginCommand(request.Email, request.Password, deviceTrustToken, userAgent);
         var result  = await _mediator.Send(command);
 
         if (result.OtpRequired)
@@ -118,7 +118,7 @@ public class AuthController : ControllerBase
 
 public class LoginRequest
 {
-    public string Username { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
 }
 

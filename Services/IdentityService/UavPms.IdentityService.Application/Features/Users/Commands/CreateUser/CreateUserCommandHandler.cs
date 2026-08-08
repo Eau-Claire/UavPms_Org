@@ -37,12 +37,6 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
             throw new ArgumentException("Email already exists.");
         }
 
-        var existingUsername = await _userRepository.GetByEmailWithRolesAsync(request.Username);
-        if (existingUsername != null)
-        {
-            throw new ArgumentException("Username already exists");
-        }
-
         var rolesInDb = await _roleRepository.FindAsync(r => request.Roles.Contains(r.RoleName));
         
         var user = new User
