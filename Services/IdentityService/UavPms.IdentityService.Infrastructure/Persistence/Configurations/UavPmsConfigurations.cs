@@ -10,7 +10,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
     {
         builder.ToTable("Users");
         builder.HasKey(e => e.Id);
-        builder.HasIndex(e => e.Username).IsUnique();
+        builder.HasIndex(e => e.Phone).IsUnique();
+        builder.HasIndex(e => e.Email).IsUnique();
     }
 }
 

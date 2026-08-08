@@ -31,12 +31,12 @@ public class ListMissionsQueryHandler : IRequestHandler<ListMissionsQuery, Pagin
             Title = mission.Title,
             RouteData = mission.RouteData,
             AssignedToUserId = mission.AssignedToUserId,
-            AssignedToUsername = mission.AssignedToUser?.Username ?? string.Empty,
+            AssignedToEmail = mission.AssignedToUser?.Email ?? string.Empty,
             DroneCode = mission.DroneCode,
             Status = mission.Status,
             Description = mission.Description,
             ManagerId = mission.ManagerId,
-            ManagerUsername = mission.Manager?.Username ?? string.Empty,
+            ManagerEmail = mission.Manager?.Email ?? string.Empty,
             CreatedAt = mission.CreatedAt,
             UpdatedAt = mission.UpdatedAt
         }).ToList();

@@ -74,7 +74,6 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
         {
             Id = user.Id,
             Email = user.Email,
-            Username = user.Username,
             FullName = user.FullName,
             Roles = roles,
         };

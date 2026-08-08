@@ -27,7 +27,6 @@ public class GetAssignableUsersQueryHandler : IRequestHandler<GetAssignableUsers
             .Select(u => new AssignableUserDto
             {
                 Id = u.Id,
-                Username = u.Username,
                 FullName = u.FullName,
                 Email = u.Email
             })

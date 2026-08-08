@@ -33,8 +33,7 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, bool>
             throw new KeyNotFoundException("User not found");
         }
         
-        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email)
-            ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email);
         if (existingEmail != null && existingEmail.Id != user.Id)
         {
             throw new ArgumentException("Email is already in use");

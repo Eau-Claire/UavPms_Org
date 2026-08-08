@@ -37,10 +37,9 @@ public static class DatabaseSeeder
             targetUser = new User
             {
                 Id = targetUserId,
-                Username = "uav_operator",
+                Email = "operator@uavpms.com",
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword("Operator123!", 10),
                 FullName = "UAV Operator",
-                Email = "operator@uavpms.com",
                 Phone = "0987654321",
                 Status = "Active"
             };
@@ -140,7 +139,7 @@ public static class DatabaseSeeder
         var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.RoleName == "SystemAdmin");
         if (adminRole != null)
         {
-            var adminUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
+            var adminUser = await context.Users.FirstOrDefaultAsync(u => u.Email == "[EMAIL_ADDRESS]");
             if (adminUser == null)
             {
                 var adminPassword = Environment.GetEnvironmentVariable("UAVPMS_ADMIN_PASSWORD");
@@ -152,10 +151,9 @@ public static class DatabaseSeeder
 
                 var newAdmin = new User
                 {
-                    Username = "admin",
+                    Email = "[EMAIL_ADDRESS]",
                     PasswordHash = passwordHash,
                     FullName = "System Administrator",
-                    Email = "admin@uavpms.com",
                     Phone = "0123456789",
                     Status = "Active",
                     CreatedAt = DateTime.UtcNow

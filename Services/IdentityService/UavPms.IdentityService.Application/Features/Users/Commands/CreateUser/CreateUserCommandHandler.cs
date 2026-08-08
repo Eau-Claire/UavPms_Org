@@ -31,15 +31,13 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
 
     public async Task<Guid> Handle(CreateUserCommand request, CancellationToken cancellationToken)
     {
-        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email)
-            ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email);
         if (existingEmail != null)
         {
             throw new ArgumentException("Email already exists.");
         }
 
-        var existingUsername = await _userRepository.GetByUsernameWithRolesAsync(request.Username)
-            ?? await _userRepository.GetByEmailWithRolesAsync(request.Username);
+        var existingUsername = await _userRepository.GetByEmailWithRolesAsync(request.Username);
         if (existingUsername != null)
         {
             throw new ArgumentException("Username already exists");
@@ -50,7 +48,6 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Username = request.Username,
             Email = request.Email,
             PasswordHash = _passwordHasher.Hash(request.Password),
             FullName = request.FullName,

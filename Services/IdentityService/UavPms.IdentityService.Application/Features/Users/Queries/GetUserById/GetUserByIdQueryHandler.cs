@@ -24,7 +24,6 @@ public class GetUserByIdQueryHandler : IRequestHandler<GetUserByIdQuery, UserDet
         return new UserDetailDto
         {
             Id = user.Id,
-            Username = user.Username,
             Email = user.Email,
             FullName = user.FullName,
             Phone = user.Phone,
