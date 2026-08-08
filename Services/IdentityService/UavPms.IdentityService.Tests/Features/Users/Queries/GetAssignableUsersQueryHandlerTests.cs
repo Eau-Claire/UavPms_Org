@@ -27,8 +27,8 @@ public class GetUsersQueryHandlerTests
     {
         var inspectors = new List<User>
         {
-            new User { Id = Guid.NewGuid(), Username = "active_inspector", FullName = "Active Inspector", Email = "active@uavpms.com", Status = "Active" },
-            new User { Id = Guid.NewGuid(), Username = "inactive_inspector", FullName = "Inactive Inspector", Email = "inactive@uavpms.com", Status = "Suspended" }
+            new User { Id = Guid.NewGuid(), FullName = "Active Inspector", Email = "active@uavpms.com", Status = "Active" },
+            new User { Id = Guid.NewGuid(), FullName = "Inactive Inspector", Email = "inactive@uavpms.com", Status = "Suspended" }
         };
 
         _userRepositoryMock.Setup(repo => repo.GetUsersByRoleAsync("Inspector"))
@@ -40,7 +40,6 @@ public class GetUsersQueryHandlerTests
 
         result.Should().NotBeNull();
         result.Should().HaveCount(1);
-        result[0].Username.Should().Be("active_inspector");
         result[0].FullName.Should().Be("Active Inspector");
         result[0].Email.Should().Be("active@uavpms.com");
     }

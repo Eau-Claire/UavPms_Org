@@ -41,7 +41,6 @@ public class GetMyProfileQueryHandlerTests
         var inactiveUser = new User
         {
             Id = userId,
-            Username = "test",
             Email = "test@user.com",
             FullName = "test",
             Status = "Inactive"
@@ -64,7 +63,6 @@ public class GetMyProfileQueryHandlerTests
         var validUser = new User
         {
             Id = userId,
-            Username = "test",
             FullName = "test",
             Email = "test@user.com",
             Status = "Active",
@@ -83,7 +81,6 @@ public class GetMyProfileQueryHandlerTests
         
         result.Should().NotBeNull();
         result.Id.Should().Be(validUser.Id);
-        result.Username.Should().Be(validUser.Username);
         result.Email.Should().Be(validUser.Email);
         result.FullName.Should().Be(validUser.FullName);
         result.Roles.Should().NotBeNull();

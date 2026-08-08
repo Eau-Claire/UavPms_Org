@@ -35,7 +35,6 @@ public class JwtProviderTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Username = "testusername",
             Email = "testuseremail@gmail.com",
             FullName = "testuserfullname",
         };
@@ -54,7 +53,7 @@ public class JwtProviderTests
         jwtToken.Audiences.Should().Contain(Audience);
 
         jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.NameIdentifier && c.Value == user.Id.ToString());
-        jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == user.Username);
+        jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == user.Email);
         jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.Email && c.Value == user.Email);
         jwtToken.Claims.Should().Contain(c => c.Type == "fullname" && c.Value == user.FullName);
 
@@ -101,7 +100,6 @@ public class JwtProviderTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Username = "testusername",
             Email = "test@user.com",
             FullName = "testuserfullname",
         };
@@ -131,7 +129,6 @@ public class JwtProviderTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Username = "testusername",
             Email = "test@user.com",
             FullName = "testuserfullname",
         };
@@ -169,7 +166,6 @@ public class JwtProviderTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Username = "testusername",
             Email = "user@test.com",
             FullName = "testuserfullname",
         };
@@ -200,7 +196,6 @@ public class JwtProviderTests
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Username = "testusername",
             Email = "user@test.com",
             FullName = "testuserfullname",
         };

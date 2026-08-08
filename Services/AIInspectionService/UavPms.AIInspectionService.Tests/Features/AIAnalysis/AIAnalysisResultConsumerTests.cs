@@ -3,6 +3,7 @@ using System.Text.Json;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -45,12 +46,7 @@ public class AIAnalysisResultConsumerTests
     {
         var evt = CreateEvent();
         var body = JsonSerializer.SerializeToUtf8Bytes(evt);
-        var args = new BasicDeliverEventArgs
-        {
-            DeliveryTag = 7,
-            Body = body,
-            BasicProperties = new BasicProperties()
-        };
+        var args = new BasicDeliverEventArgs("consumer", 7, false, "", "", new BasicProperties(), body);
 
         _senderMock
             .Setup(x => x.Send(It.IsAny<ProcessAiAnalysisResultCommand>(), It.IsAny<CancellationToken>()))
@@ -74,12 +70,7 @@ public class AIAnalysisResultConsumerTests
     [Fact]
     public async Task HandleMessageAsync_ShouldNack_WhenPayloadIsInvalid()
     {
-        var args = new BasicDeliverEventArgs
-        {
-            DeliveryTag = 11,
-            Body = Encoding.UTF8.GetBytes("{bad json"),
-            BasicProperties = new BasicProperties()
-        };
+        var args = new BasicDeliverEventArgs("consumer", 11, false, "", "", new BasicProperties(), Encoding.UTF8.GetBytes("{bad json"));
 
         _channelMock
             .Setup(x => x.BasicNackAsync(11, false, false, It.IsAny<CancellationToken>()))
@@ -99,12 +90,7 @@ public class AIAnalysisResultConsumerTests
         {
             Headers = new Dictionary<string, object?>()
         };
-        var args = new BasicDeliverEventArgs
-        {
-            DeliveryTag = 13,
-            Body = JsonSerializer.SerializeToUtf8Bytes(evt),
-            BasicProperties = props
-        };
+        var args = new BasicDeliverEventArgs("consumer", 13, false, "", "", props, JsonSerializer.SerializeToUtf8Bytes(evt));
 
         _senderMock
             .Setup(x => x.Send(It.IsAny<ProcessAiAnalysisResultCommand>(), It.IsAny<CancellationToken>()))
@@ -127,12 +113,7 @@ public class AIAnalysisResultConsumerTests
     public async Task HandleMessageAsync_ShouldNack_WhenBusinessRuleViolationOccurs()
     {
         var evt = CreateEvent();
-        var args = new BasicDeliverEventArgs
-        {
-            DeliveryTag = 17,
-            Body = JsonSerializer.SerializeToUtf8Bytes(evt),
-            BasicProperties = new BasicProperties()
-        };
+        var args = new BasicDeliverEventArgs("consumer", 17, false, "", "", new BasicProperties(), JsonSerializer.SerializeToUtf8Bytes(evt));
 
         _senderMock
             .Setup(x => x.Send(It.IsAny<ProcessAiAnalysisResultCommand>(), It.IsAny<CancellationToken>()))

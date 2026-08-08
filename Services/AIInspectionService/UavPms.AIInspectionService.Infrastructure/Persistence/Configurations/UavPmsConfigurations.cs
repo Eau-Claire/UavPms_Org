@@ -10,7 +10,6 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
     {
         builder.ToTable("Users");
         builder.HasKey(e => e.Id);
-        builder.HasIndex(e => e.Username).IsUnique();
     }
 }
 
@@ -53,11 +52,6 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 
         builder.Property(e => e.TokenHash)
             .IsRequired();
-
-        builder.HasOne(e => e.User)
-            .WithMany(u => u.RefreshTokens)
-            .HasForeignKey(e => e.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 

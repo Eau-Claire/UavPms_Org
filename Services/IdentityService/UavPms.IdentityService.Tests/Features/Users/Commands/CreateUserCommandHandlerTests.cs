@@ -51,9 +51,6 @@ public class CreateUserCommandHandlerTests
         _userRepositoryMock.Setup(u =>
             u.GetByEmailWithRolesAsync(command.Email))
             .ReturnsAsync((User?)null);
-        _userRepositoryMock.Setup(r =>
-            r.GetByUsernameWithRolesAsync(command.Username))
-            .ReturnsAsync((User?)null);
         
         var mockRole = new Role {Id = 1, RoleName = "Manager"};
         _roleRepositoryMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<Role, bool>>>(), false))

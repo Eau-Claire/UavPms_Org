@@ -38,9 +38,7 @@ public class ApplicationDbContextAuditTests : IDisposable
     {
         var testUser = new User
         {
-            Username = "testuser",
             Email = "test@example.com",
-            PasswordHash = "supersecretpassword",
             FullName = "Test User",
             Status = "Active"
         };
@@ -59,8 +57,7 @@ public class ApplicationDbContextAuditTests : IDisposable
         log.IpAddress.Should().Be("127.0.0.1");
         log.UserAgent.Should().Be("Mozilla/5.0");
         
-        log.NewValues.Should().Contain("\"Username\":\"testuser\"");
-        log.NewValues.Should().Contain("\"PasswordHash\":\"[MASKED]\"");
+        log.NewValues.Should().Contain("\"Email\":\"test@example.com\"");
     }
 
     [Fact]
@@ -68,9 +65,7 @@ public class ApplicationDbContextAuditTests : IDisposable
     {
         var testUser = new User
         {
-            Username = "testuser",
             Email = "test@example.com",
-            PasswordHash = "supersecretpassword",
             FullName = "Test User",
             Status = "Active"
         };
@@ -80,7 +75,6 @@ public class ApplicationDbContextAuditTests : IDisposable
         await _context.SaveChangesAsync();
 
         testUser.FullName = "Updated Name";
-        testUser.PasswordHash = "newpassword";
         await _context.SaveChangesAsync();
 
         var auditLogs = await _context.AuditLogs.ToListAsync();
@@ -91,10 +85,7 @@ public class ApplicationDbContextAuditTests : IDisposable
         log.ActionType.Should().Be("Modified");
         
         log.OldValues.Should().Contain("\"FullName\":\"Test User\"");
-        log.OldValues.Should().Contain("\"PasswordHash\":\"[MASKED]\"");
-        
         log.NewValues.Should().Contain("\"FullName\":\"Updated Name\"");
-        log.NewValues.Should().Contain("\"PasswordHash\":\"[MASKED]\"");
     }
 
     [Fact]

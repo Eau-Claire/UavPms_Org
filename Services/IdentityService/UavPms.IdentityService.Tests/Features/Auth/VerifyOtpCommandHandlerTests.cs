@@ -49,7 +49,6 @@ public class VerifyOtpCommandHandlerTests
         {
             Id = Guid.NewGuid(),
             Email = email,
-            Username = "testuser",
             FullName = "Test User",
             Status = "Active",
             IsEmailVerified = true,
@@ -64,7 +63,10 @@ public class VerifyOtpCommandHandlerTests
     [Fact]
     public async Task Handle_ShouldThrowBusinessRuleException_WhenOtpIsInvalid()
     {
+        var user = CreateActiveUser("user@test.com");
         var command = new VerifyOtpCommand("user@test.com", "000000", OtpPurpose.Login, "UserAgent");
+        _userRepositoryMock.Setup(u => u.GetByEmailWithRolesAsync(command.Email))
+            .ReturnsAsync(user);
         _otpServiceMock.Setup(o =>
                 o.VerifyOtpAsync(command.Email, command.Code, command.OtpPurpose))
             .ReturnsAsync((false, "Invalid OTP code"));
@@ -73,40 +75,6 @@ public class VerifyOtpCommandHandlerTests
         
         await act.Should().ThrowAsync<BusinessRuleException>()
             .WithMessage($"Invalid OTP code");
-    }
-
-    [Fact]
-    public async Task Handle_ShouldPreferUsername_WhenLoginIdentifierMatchesEmailAndUsernameOfDifferentUsers()
-    {
-        var accountA = CreateActiveUser("uselessliem@gmail.com");
-        accountA.Username = "an3439201@gmail.com";
-        var accountB = CreateActiveUser("testing@123gmail.com");
-        accountB.Username = "uselessliem@gmail.com";
-        var command = new VerifyOtpCommand("uselessliem@gmail.com", "123456", OtpPurpose.Login, "UserAgent");
-
-        _userRepositoryMock.Setup(u => u.GetByEmailWithRolesAsync(command.Email))
-            .ReturnsAsync(accountA);
-        _userRepositoryMock.Setup(u => u.GetByUsernameWithRolesAsync(command.Email))
-            .ReturnsAsync(accountB);
-        _otpServiceMock.Setup(o =>
-                o.VerifyOtpAsync(accountB.Email, command.Code, command.OtpPurpose))
-            .ReturnsAsync((true, "OK"));
-        _jwtProviderMock.Setup(j =>
-            j.GenerateAccessToken(accountB, It.IsAny<IList<string>>())).Returns("access-token");
-        _jwtProviderMock.Setup(j =>
-            j.GenerateRefreshToken()).Returns("refresh-token");
-        _unitOfWorkMock.Setup(u =>
-                u.SaveChangesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
-
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        result.Success.Should().BeTrue();
-        result.AuthResult.Should().NotBeNull();
-        result.AuthResult!.User.Should().NotBeNull();
-        result.AuthResult.User!.Email.Should().Be("testing@123gmail.com");
-        _otpServiceMock.Verify(o =>
-            o.VerifyOtpAsync("testing@123gmail.com", command.Code, OtpPurpose.Login), Times.Once);
     }
 
     [Fact]
@@ -153,12 +121,10 @@ public class VerifyOtpCommandHandlerTests
             .ReturnsAsync((true, "OK"));
         _userRepositoryMock.Setup(u => u.GetByEmailWithRolesAsync(command.Email))
             .ReturnsAsync((User?)null);
-        _userRepositoryMock.Setup(u => u.GetByUsernameWithRolesAsync(command.Email))
-            .ReturnsAsync((User?)null);
         
         Func<Task> act =  async () => await _handler.Handle(command, CancellationToken.None);
 
-        await act.Should().ThrowAsync<NotFoundException>();
+        await act.Should().ThrowAsync<BusinessRuleException>();
     }
 
     [Fact]
@@ -213,7 +179,10 @@ public class VerifyOtpCommandHandlerTests
     [Fact]
     public async Task Handle_ShouldReturnVerificationToken_WhenForgotPurposePurpose()
     {
+        var user = CreateActiveUser("user@test.com");
         var command = new VerifyOtpCommand("user@test.com", "123456", OtpPurpose.ForgotPassword, "UserAgent");
+        _userRepositoryMock.Setup(u => u.GetByEmailWithRolesAsync(command.Email))
+            .ReturnsAsync(user);
         
         _otpServiceMock.Setup(o => 
             o.VerifyOtpAsync(command.Email, command.Code, command.OtpPurpose))
@@ -262,3 +231,4 @@ public class VerifyOtpCommandHandlerTests
            o.SaveStepUpTokenAsync(user.Id.ToString(), "ChangePassword", "step-up-token", TimeSpan.FromMinutes(5)), Times.Once);
     }
 }
+
