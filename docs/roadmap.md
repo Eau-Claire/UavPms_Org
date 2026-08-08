@@ -122,6 +122,13 @@
   - Thực hiện xác thực mật khẩu giả định (dummy verification) khi người dùng không tồn tại hoặc không hoạt động nhằm chuẩn hoá thời gian phản hồi giữa user tồn tại và không tồn tại.
 - [X] 22g. **Xác thực Chủ sở hữu của Step-Up Token**:
   - So sánh định danh người dùng trong Step-Up token với định danh người dùng đang đăng nhập trong `HttpContext.User` trước khi cho phép thực hiện hành động cần Step-Up.
+- [ ] 22h. **Refactor Authentication dùng Email làm Định danh Đăng nhập Duy nhất (Single Login Identifier - Issue #84)**:
+  - Loại bỏ thuộc tính `Username` khỏi domain entity `User`, DTOs (`AuthUserDto`, `UserDetailDto`, `AssignableUserDto`), DbContext Configuration, và Database Schema.
+  - Cập nhật toàn bộ các luồng xác thực (`LoginCommand`, `VerifyOtpCommand`, `SendOtpCommand`, `ResetPasswordCommand`, OTP Handlers) truy vấn người dùng duy nhất bằng `Email` (`x.Email == input`).
+  - Loại bỏ các phương thức và kiểm tra trùng lặp `Username` (`GetByUsernameWithRolesAsync`) trong Repositories và Command Handlers.
+  - Cập nhật `JwtProvider` phát hành Claim `ClaimTypes.Name` & `ClaimTypes.Email` dựa trên Email người dùng.
+  - Tạo Migration gỡ bỏ cột `Username` và Unique Index `IX_Users_Username` khỏi bảng `Users`.
+  - Cập nhật và bổ sung toàn bộ các Unit Tests bao gồm kiểm tra trùng lặp Email và các kịch bản xác thực mới.
 - [X] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
 - [X] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
 - [X] 24b. **Bảo mật Endpoint Giám sát (`MonitorController`)**:
