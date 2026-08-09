@@ -178,7 +178,7 @@ public class LoginCommandHandlerTests
         
         // Verify interactions
         _userTokenServiceMock.Verify(s =>
-            s.IssueTokensAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            s.IssueTokensAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     // Test 6: OTP gửi thất bại -> Throw Exception

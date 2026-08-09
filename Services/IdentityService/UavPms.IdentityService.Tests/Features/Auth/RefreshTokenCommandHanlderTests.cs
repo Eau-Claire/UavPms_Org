@@ -154,7 +154,7 @@ public class RefreshTokenCommandHandlerTests
             .ReturnsAsync(user);
         
         _userTokenServiceMock.Setup(s =>
-            s.IssueTokensAsync(user, command.UserAgent, null))
+            s.IssueTokensAsync(user, command.UserAgent, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(UavPms.IdentityService.Application.Features.Auth.DTOs.AuthResultDto.SuccessResult(
                 "new-access-token", 
                 "new-refresh-token", 

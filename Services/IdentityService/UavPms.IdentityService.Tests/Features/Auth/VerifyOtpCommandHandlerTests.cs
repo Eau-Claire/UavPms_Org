@@ -95,7 +95,7 @@ public class VerifyOtpCommandHandlerTests
              u.GetByEmailWithRolesAsync(command.Email))
             .ReturnsAsync(user);
         _userTokenServiceMock.Setup(s =>
-            s.IssueTokensAsync(user, command.UserAgent, It.IsAny<string>()))
+            s.IssueTokensAsync(user, command.UserAgent, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(UavPms.IdentityService.Application.Features.Auth.DTOs.AuthResultDto.SuccessResult(
                 "access-token", 
                 "refresh-token", 
@@ -174,7 +174,7 @@ public class VerifyOtpCommandHandlerTests
         _userRepositoryMock.Setup(u => u.GetByEmailWithRolesAsync(command.Email))
             .ReturnsAsync(user);
         _userTokenServiceMock.Setup(s =>
-            s.IssueTokensAsync(user, command.UserAgent, It.IsAny<string>()))
+            s.IssueTokensAsync(user, command.UserAgent, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(UavPms.IdentityService.Application.Features.Auth.DTOs.AuthResultDto.SuccessResult(
                 "access-token", 
                 "refresh-token", 

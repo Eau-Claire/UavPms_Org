@@ -11,6 +11,8 @@ using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 using RefreshTokenEntity = UavPms.IdentityService.Domain.Entities.RefreshToken;
 
+using Microsoft.Extensions.Options;
+
 namespace UavPms.IdentityService.Application.Common.Services;
 
 public class UserTokenService : IUserTokenService
@@ -24,15 +26,19 @@ public class UserTokenService : IUserTokenService
         IJwtProvider jwtProvider,
         IGenericRepository<RefreshTokenEntity> refreshTokenRepository,
         IUnitOfWork unitOfWork,
-        JwtOptions jwtOptions)
+        IOptions<JwtOptions> jwtOptions)
     {
         _jwtProvider = jwtProvider;
         _refreshTokenRepository = refreshTokenRepository;
         _unitOfWork = unitOfWork;
-        _jwtOptions = jwtOptions;
+        _jwtOptions = jwtOptions.Value;
     }
 
-    public async Task<AuthResultDto> IssueTokensAsync(User user, string? userAgent, string? deviceTrustToken = null)
+    public async Task<AuthResultDto> IssueTokensAsync(
+        User user, 
+        string? userAgent, 
+        string? deviceTrustToken = null, 
+        CancellationToken cancellationToken = default)
     {
         // 1. Trích xuất danh sách Roles của user
         var roles = user.UserRoles?.Select(r => r.Role!.RoleName).ToList() ?? new();
@@ -54,7 +60,7 @@ public class UserTokenService : IUserTokenService
             CreatedAt = DateTime.UtcNow,
         };
 
-        await _refreshTokenRepository.AddAsync(refreshTokenEntity, cancellationToken);
+        await _refreshTokenRepository.AddAsync(refreshTokenEntity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 5. Đóng gói DTO kết quả

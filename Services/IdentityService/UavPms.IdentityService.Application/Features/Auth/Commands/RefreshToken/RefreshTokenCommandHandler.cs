@@ -46,17 +46,17 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
                 x => x.UserId == token.UserId && 
                 x.RevokedAt == null, track: true);
             
-            foreach(var activeToken in activeTokens)
+            foreach (var activeToken in activeTokens)
             {
                 activeToken.RevokedAt = DateTime.UtcNow;
-                await _refreshTokenRepository.UpdateAsync(activeToken, cancellationToken);
+                await _refreshTokenRepository.UpdateAsync(activeToken);
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             throw new UnauthorizedAccessException("Revoked refresh token reused. Security breach detected. All active sessions revoked.");
         }
 
-        if(token.ExpiresAt < DateTime.UtcNow)
+        if (token.ExpiresAt < DateTime.UtcNow)
         {
             throw new UnauthorizedAccessException("Expired refresh token");
         }
@@ -69,6 +69,6 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
 
         token.RevokedAt = DateTime.UtcNow;
         
-        return await _userTokenService.IssueTokensAsync(user, request.UserAgent, cancellationToken);
+        return await _userTokenService.IssueTokensAsync(user, request.UserAgent, cancellationToken: cancellationToken);
     }
 }
