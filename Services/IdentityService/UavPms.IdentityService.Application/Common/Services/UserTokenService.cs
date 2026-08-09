@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using UavPms.IdentityService.Application.Common.Interfaces;
+using UavPms.IdentityService.Application.Common.Options;
 using UavPms.IdentityService.Application.Common.Utilities;
 using UavPms.IdentityService.Application.Features.Auth.DTOs;
 using UavPms.IdentityService.Domain.Entities;
@@ -17,18 +18,18 @@ public class UserTokenService : IUserTokenService
     private readonly IJwtProvider _jwtProvider;
     private readonly IGenericRepository<RefreshTokenEntity> _refreshTokenRepository;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IConfiguration _configuration;
+    private readonly JwtOptions _jwtOptions;
 
     public UserTokenService(
         IJwtProvider jwtProvider,
         IGenericRepository<RefreshTokenEntity> refreshTokenRepository,
         IUnitOfWork unitOfWork,
-        IConfiguration configuration)
+        JwtOptions jwtOptions)
     {
         _jwtProvider = jwtProvider;
         _refreshTokenRepository = refreshTokenRepository;
         _unitOfWork = unitOfWork;
-        _configuration = configuration;
+        _jwtOptions = jwtOptions;
     }
 
     public async Task<AuthResultDto> IssueTokensAsync(User user, string? userAgent, string? deviceTrustToken = null)
@@ -41,7 +42,7 @@ public class UserTokenService : IUserTokenService
         var refreshToken = _jwtProvider.GenerateRefreshToken();
 
         // 3. Đọc thời gian hết hạn AccessToken từ config (mặc định 60 phút)
-        var expiryMinutes = int.TryParse(_configuration["Jwt:ExpiryMinutes"], out var m) ? m : 60;
+        var expiryMinutes = _jwtOptions.ExpiryMinutes;
 
         // 4. Tạo entity RefreshToken & Băm RefreshToken bằng Pure Utility TokenHasher
         var refreshTokenEntity = new RefreshTokenEntity

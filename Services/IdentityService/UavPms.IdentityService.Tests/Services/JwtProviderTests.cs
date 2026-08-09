@@ -8,11 +8,13 @@ using UavPms.IdentityService.Infrastructure.Services;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
+using Microsoft.Extensions.Options;
+using UavPms.IdentityService.Application.Common.Options;
+
 namespace UavPms.IdentityService.Tests.Services;
 
 public class JwtProviderTests
 {
-    private readonly Mock<IConfiguration> _configMock;
     private readonly JwtProvider _jwtProvider;
     private const string SecretKey = "super_secret_key_123_456_789_0123_345";
     private const string Issuer = "UavPms_Issuer";
@@ -20,13 +22,15 @@ public class JwtProviderTests
 
     public JwtProviderTests()
     {
-        _configMock = new Mock<IConfiguration>();
-        _configMock.Setup(c => c["Jwt:SecretKey"]).Returns(SecretKey);
-        _configMock.Setup(c => c["Jwt:Issuer"]).Returns(Issuer);
-        _configMock.Setup(c => c["Jwt:Audience"]).Returns(Audience);
-        _configMock.Setup(c => c["Jwt:ExpiryMinutes"]).Returns("60");
+        var options = new JwtOptions
+        {
+            SecretKey = SecretKey,
+            Issuer = Issuer,
+            Audience = Audience,
+            ExpiryMinutes = 60
+        };
 
-        _jwtProvider = new JwtProvider(_configMock.Object);
+        _jwtProvider = new JwtProvider(Options.Create(options));
     }
 
     [Fact]
@@ -117,14 +121,18 @@ public class JwtProviderTests
         jwtToken.ValidTo.Should().BeCloseTo(expectedExpiry, TimeSpan.FromSeconds(10));
     }
 
-    // Test 5: Thiếu config SecretKey -> throw  InvalidOperationException
+    // Test 5: Emtpy SecretKey throws ArgumentException on Encoding
     [Fact]
     public void GenerateAccessToken_ShouldThrowException_WhenSecretKeyMissing()
     {
-        // arrange
-        var configMock = new Mock<IConfiguration>();
-        configMock.Setup(c => c["Jwt:SecretKey"]).Returns((string?)null);
-        var provider = new JwtProvider(configMock.Object);
+        var options = new JwtOptions
+        {
+            SecretKey = string.Empty,
+            Issuer = Issuer,
+            Audience = Audience,
+            ExpiryMinutes = 60
+        };
+        var provider = new JwtProvider(Options.Create(options));
 
         var user = new User
         {
@@ -133,12 +141,9 @@ public class JwtProviderTests
             FullName = "testuserfullname",
         };
 
-        // act
         Action act = () => provider.GenerateAccessToken(user, new List<string> { "Admin", "Operator" });
 
-        // assert
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("Jwt:SecretKey is not configured.");
+        act.Should().Throw<ArgumentException>();
     }
 
     // test 6: SteupUp token expire in 5 minutes

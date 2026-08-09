@@ -7,6 +7,7 @@ using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Infrastructure.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 using UavPms.IdentityService.Infrastructure.Services;
+using UavPms.IdentityService.Application.Common.Options;
 
 namespace UavPms.IdentityService.Infrastructure;
 
@@ -70,6 +71,10 @@ public static class DependencyInjection
 
         // Đăng ký Password Hasher và JWT Provider
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         services.AddScoped<IJwtProvider, JwtProvider>();
 
         // Đăng ký Monitor Repository
