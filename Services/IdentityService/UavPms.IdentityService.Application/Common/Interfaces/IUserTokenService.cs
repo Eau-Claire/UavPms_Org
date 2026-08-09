@@ -14,5 +14,6 @@ public interface IUserTokenService
     Task<AuthResultDto> IssueTokensAsync(
         User user,
         string? userAgent,
-        string? deviceTrustToken = null);
+        string? deviceTrustToken = null,
+        CancellationToken cancellationToken = default);
 }

@@ -54,8 +54,8 @@ public class UserTokenService : IUserTokenService
             CreatedAt = DateTime.UtcNow,
         };
 
-        await _refreshTokenRepository.AddAsync(refreshTokenEntity);
-        await _unitOfWork.SaveChangesAsync();
+        await _refreshTokenRepository.AddAsync(refreshTokenEntity, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 5. Đóng gói DTO kết quả
         var userDto = new AuthUserDto

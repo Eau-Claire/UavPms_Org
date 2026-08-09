@@ -41,12 +41,12 @@ public class LoginOtpStrategy : IOtpVerificationStrategy
         if (request.OtpPurpose == OtpPurpose.EmailVerification)
         {
             user.VerifyEmail();
-            await _userRepository.UpdateAsync(user);
+            await _userRepository.UpdateAsync(user, cancellationToken);
         }
         
         // 1. Cấp phát Authentication Tokens qua UserTokenService
         var deviceTrustToken = Guid.NewGuid().ToString("N");
-        var authResult = await _userTokenService.IssueTokensAsync(user, request.UserAgent, deviceTrustToken);
+        var authResult = await _userTokenService.IssueTokensAsync(user, request.UserAgent, deviceTrustToken, cancellationToken);
         
         // 2.Lưu TrustedDevice
         await _trustedDeviceRepository.AddAsync(new TrustedDevice
@@ -56,7 +56,7 @@ public class LoginOtpStrategy : IOtpVerificationStrategy
             ExpiresAt = DateTime.UtcNow.AddDays(30),
             LastUsedAt = DateTime.UtcNow,
             UserAgent = request.UserAgent ?? string.Empty
-        });
+        }, cancellationToken);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
