@@ -14,26 +14,19 @@ public class RefreshTokenCommandHandlerTests
 {
     private readonly Mock<IGenericRepository<RefreshTokenEntity>> _refreshTokenRepositoryMock;
     private readonly Mock<IUserRepository> _userRepositoryMock;
-    private readonly Mock<IJwtProvider> _jwtProviderMock;
-    private readonly Mock<IUnitOfWork> _unitOfWorkMock;
-    private readonly Mock<IConfiguration> _configurationMock;
+    private readonly Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService> _userTokenServiceMock;
     private readonly RefreshTokenCommandHandler _handler;
 
     public RefreshTokenCommandHandlerTests()
     {
         _refreshTokenRepositoryMock = new Mock<IGenericRepository<RefreshTokenEntity>>();
         _userRepositoryMock = new Mock<IUserRepository>();
-        _jwtProviderMock = new Mock<IJwtProvider>();
-        _unitOfWorkMock = new Mock<IUnitOfWork>();
-        _configurationMock = new Mock<IConfiguration>();
-        _configurationMock.Setup(c => c["Jwt:ExpiryMinutes"]).Returns("60");
+        _userTokenServiceMock = new Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService>();
 
         _handler = new RefreshTokenCommandHandler(
             _refreshTokenRepositoryMock.Object,
             _userRepositoryMock.Object,
-            _jwtProviderMock.Object,
-            _unitOfWorkMock.Object,
-            _configurationMock.Object
+            _userTokenServiceMock.Object
         );
     }
 
@@ -156,20 +149,22 @@ public class RefreshTokenCommandHandlerTests
             r.GetByIdWithRolesAsync(user.Id))
             .ReturnsAsync(user);
         
-        _jwtProviderMock.Setup(j =>
-            j.GenerateAccessToken(user, It.IsAny<IList<string>>()))
-            .Returns("new-access-token");
-        
-        _jwtProviderMock.Setup(j => 
-            j.GenerateRefreshToken())
-            .Returns("new-refresh-token");
+        _userTokenServiceMock.Setup(s =>
+            s.IssueTokensAsync(user, command.UserAgent, null))
+            .ReturnsAsync(UavPms.IdentityService.Application.Features.Auth.DTOs.AuthResultDto.SuccessResult(
+                "new-access-token", 
+                "new-refresh-token", 
+                3600, 
+                new UavPms.IdentityService.Application.Features.Auth.DTOs.AuthUserDto
+                {
+                    Id = user.Id,
+                    Email = user.Email,
+                    FullName = user.FullName,
+                    Roles = new List<string> { "Admin" }
+                }));
 
-        _unitOfWorkMock.Setup(u =>
-                u.SaveChangesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
-        
         // act
-        var result =  await _handler.Handle(command, CancellationToken.None);
+        var result = await _handler.Handle(command, CancellationToken.None);
         
         // assert
         result.Should().NotBeNull();
@@ -178,13 +173,6 @@ public class RefreshTokenCommandHandlerTests
         result.RefreshToken.Should().Be("new-refresh-token");
         result.User.Should().NotBeNull();
         result.User!.Roles.Should().Contain("Admin");
-        
-        // verify new refresh token 
-        _refreshTokenRepositoryMock.Verify( r=>
-            r.AddAsync(It.Is<RefreshTokenEntity>(t =>
-                t.UserId == user.Id && 
-                t.DeviceInfo == "UserAgent")), Times.Once);
-        _unitOfWorkMock.Verify(u=>u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
     
     // Test 5: Refresh token đã bị revoke -> UnauthorizedAccessException

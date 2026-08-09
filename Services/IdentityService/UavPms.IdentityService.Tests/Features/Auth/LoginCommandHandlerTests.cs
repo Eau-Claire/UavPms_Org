@@ -176,10 +176,8 @@ public class LoginCommandHandlerTests
         result.RefreshToken.Should().BeNull();
         
         // Verify interactions
-        _refreshTokenRepositoryMock.Verify(r =>
-            r.AddAsync(It.IsAny<RefreshToken>()), Times.Never);
-        _unitOfWorkMock.Verify(u =>
-            u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _userTokenServiceMock.Verify(s =>
+            s.IssueTokensAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     // Test 6: OTP gửi thất bại -> Throw Exception
