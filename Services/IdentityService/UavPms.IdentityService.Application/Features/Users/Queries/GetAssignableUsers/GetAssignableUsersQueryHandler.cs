@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using UavPms.IdentityService.Application.Features.Users.DTOs;
+using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 
 namespace UavPms.IdentityService.Application.Features.Users.Queries.GetAssignableUsers;
@@ -23,7 +24,7 @@ public class GetAssignableUsersQueryHandler : IRequestHandler<GetAssignableUsers
         var inspectors = await _userRepository.GetUsersByRoleAsync("Inspector");
 
         var result = inspectors
-            .Where(u => u.Status == "Active")
+            .Where(u => u.IsActive())
             .Select(u => new AssignableUserDto
             {
                 Id = u.Id,

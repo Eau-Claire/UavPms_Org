@@ -33,7 +33,7 @@ public class ChangePasswordOtpHandler : IOtpPurposeHandler
         }
 
         var user = await _userRepository.GetByIdAsync(userId, track: false);
-        if (user == null || user.Status != "Active")
+        if (user == null || !user.IsActive())
         {
             return PreconditionResult.Failure("User not found or inactive.");
         }

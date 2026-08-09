@@ -26,7 +26,7 @@ public class LoginOtpHandler : IOtpPurposeHandler
         }
 
         var user = await _userRepository.GetByEmailWithRolesAsync(email);
-        if (user == null || user.Status != "Active")
+        if (user == null || !user.IsActive())
         {
             return PreconditionResult.Failure("User not found or inactive.");
         }

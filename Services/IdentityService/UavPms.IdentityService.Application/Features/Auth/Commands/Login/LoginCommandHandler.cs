@@ -44,7 +44,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
 
         // 2. Kiểm tra mật khẩu (Xử lý chống Timing Attack nếu account không tồn tại hoặc inactive)
         var isPasswordValid = false;
-        if (user != null && user.Status == "Active" && !string.IsNullOrWhiteSpace(user.PasswordHash))
+        if (user != null && user.IsActive() && !string.IsNullOrWhiteSpace(user.PasswordHash))
         {
             isPasswordValid = _passwordHasher.Verify(user.PasswordHash, request.Password);
         }

@@ -24,7 +24,7 @@ public class StepUpOtpStrategy : IOtpVerificationStrategy
 
     public async Task<OtpVerifyResultDto> VerifyAsync(User user, VerifyOtpCommand request, CancellationToken cancellationToken)
     {
-        if (user.Status != "Active")
+        if (!user.IsActive())
         {
             throw new NotFoundException("User not found or inactive", user.Email);
         }

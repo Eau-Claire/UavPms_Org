@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Enums;
 
 namespace UavPms.IdentityService.Infrastructure.Persistence;
 
@@ -41,7 +42,7 @@ public static class DatabaseSeeder
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword("Operator123!", 10),
                 FullName = "UAV Operator",
                 Phone = "0987654321",
-                Status = "Active"
+                Status = UserStatus.Active
             };
             context.Users.Add(targetUser);
             await context.SaveChangesAsync();
@@ -155,7 +156,7 @@ public static class DatabaseSeeder
                     PasswordHash = passwordHash,
                     FullName = "System Administrator",
                     Phone = "0123456789",
-                    Status = "Active",
+                    Status = UserStatus.Active,
                     CreatedAt = DateTime.UtcNow
                 };
 

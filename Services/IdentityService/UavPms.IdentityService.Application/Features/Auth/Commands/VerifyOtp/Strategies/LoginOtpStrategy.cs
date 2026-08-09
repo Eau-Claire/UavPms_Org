@@ -33,15 +33,14 @@ public class LoginOtpStrategy : IOtpVerificationStrategy
 
     public async Task<OtpVerifyResultDto> VerifyAsync(User user, VerifyOtpCommand request, CancellationToken cancellationToken)
     {
-        if (request.OtpPurpose == OtpPurpose.Login && user.Status != "Active")
+        if (request.OtpPurpose == OtpPurpose.Login && !user.IsActive())
         {
             throw new BusinessRuleException("User account is not active.");
         }
 
         if (request.OtpPurpose == OtpPurpose.EmailVerification)
         {
-            user.IsEmailVerified = true;
-            user.Status = "Active";
+            user.VerifyEmail();
             await _userRepository.UpdateAsync(user);
         }
         

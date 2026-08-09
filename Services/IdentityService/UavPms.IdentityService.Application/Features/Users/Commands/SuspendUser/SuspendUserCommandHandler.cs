@@ -1,4 +1,5 @@
 using MediatR;
+using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 
 namespace UavPms.IdentityService.Application.Features.Users.Commands.SuspendUser;
@@ -22,7 +23,7 @@ public class SuspendUserCommandHandler : IRequestHandler<SuspendUserCommand, boo
             throw new KeyNotFoundException("User not found");
         }
         
-        user.Status = "Inactive";
+        user.Status = UserStatus.Inactive;
         
         await _userRepository.UpdateAsync(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

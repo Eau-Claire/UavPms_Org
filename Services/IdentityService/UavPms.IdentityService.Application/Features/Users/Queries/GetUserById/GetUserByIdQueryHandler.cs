@@ -27,7 +27,7 @@ public class GetUserByIdQueryHandler : IRequestHandler<GetUserByIdQuery, UserDet
             Email = user.Email,
             FullName = user.FullName,
             Phone = user.Phone,
-            Status = user.Status,
+            Status = user.Status.ToString(),
             CreatedAt = user.CreatedAt,
             Roles = user.UserRoles.Select(ur => ur.Role!.RoleName).ToList()
         };

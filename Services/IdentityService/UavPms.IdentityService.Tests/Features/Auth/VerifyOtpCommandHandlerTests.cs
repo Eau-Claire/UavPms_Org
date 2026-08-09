@@ -8,6 +8,7 @@ using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 using RefreshTokenEntity = UavPms.IdentityService.Domain.Entities.RefreshToken;
+using UavPms.IdentityService.Domain.Enums;
 
 namespace UavPms.IdentityService.Tests.Features.Auth;
 
@@ -54,7 +55,7 @@ public class VerifyOtpCommandHandlerTests
             Id = Guid.NewGuid(),
             Email = email,
             FullName = "Test User",
-            Status = "Active",
+            Status = UserStatus.Active,
             IsEmailVerified = true,
             UserRoles = new List<UserRole>
             {
@@ -144,7 +145,7 @@ public class VerifyOtpCommandHandlerTests
     public async Task Handle_ShouldThrowBusinessRuleException_WhenUserIsInactive()
     {
         var user = CreateActiveUser();
-        user.Status = "Inactive";
+        user.Status = UserStatus.Inactive;
         var command = new VerifyOtpCommand(user.Email, "123456", OtpPurpose.Login, "UserAgent");
 
         _otpServiceMock.Setup(o =>
@@ -164,7 +165,7 @@ public class VerifyOtpCommandHandlerTests
     {
         var user = CreateActiveUser();
         user.IsEmailVerified =false;
-        user.Status = "Pending";
+        user.Status = UserStatus.Pending;
         var command = new VerifyOtpCommand(user.Email, "123456", OtpPurpose.EmailVerification, "UserAgent");
         
         _otpServiceMock.Setup(o =>
@@ -193,7 +194,7 @@ public class VerifyOtpCommandHandlerTests
         var result = await _handler.Handle(command, CancellationToken.None);
         
         user.IsEmailVerified.Should().BeTrue();
-        user.Status.Should().Be("Active");
+        user.Status.Should().Be(UserStatus.Active);
         _userRepositoryMock.Verify(r => r.UpdateAsync(user), Times.Once);
         result.AuthResult.Should().NotBeNull();
     }

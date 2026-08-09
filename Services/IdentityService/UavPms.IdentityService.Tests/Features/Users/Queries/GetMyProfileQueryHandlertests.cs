@@ -3,6 +3,7 @@ using Moq;
 using UavPms.IdentityService.Application.Features.Users.Queries.GetMyProfile;
 using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
+using UavPms.IdentityService.Domain.Enums;
 
 namespace UavPms.IdentityService.Tests.Features.Users.Queries.GetMyProfile;
 
@@ -43,7 +44,7 @@ public class GetMyProfileQueryHandlerTests
             Id = userId,
             Email = "test@user.com",
             FullName = "test",
-            Status = "Inactive"
+            Status = UserStatus.Inactive
         };
         
         _mockUserRepo.Setup(u => u.GetByIdWithRolesAsync(userId))
@@ -65,7 +66,7 @@ public class GetMyProfileQueryHandlerTests
             Id = userId,
             FullName = "test",
             Email = "test@user.com",
-            Status = "Active",
+            Status = UserStatus.Active,
             UserRoles = new List<UserRole>
             {
                 new UserRole

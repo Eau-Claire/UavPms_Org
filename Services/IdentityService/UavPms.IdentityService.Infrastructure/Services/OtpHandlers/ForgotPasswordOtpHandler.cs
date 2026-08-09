@@ -26,7 +26,7 @@ public class ForgotPasswordOtpHandler : IOtpPurposeHandler
         }
 
         var user = await _userRepository.GetByEmailWithRolesAsync(email);
-        if (user == null || user.Status != "Active")
+        if (user == null || !user.IsActive())
         {
             // Silent success to prevent user enumeration
             return PreconditionResult.SilentSuccess();
