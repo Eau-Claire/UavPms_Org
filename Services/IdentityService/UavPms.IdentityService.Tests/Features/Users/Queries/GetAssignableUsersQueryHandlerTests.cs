@@ -8,6 +8,7 @@ using UavPms.IdentityService.Application.Features.Users.Queries.GetAssignableUse
 using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using Xunit;
+using UavPms.IdentityService.Domain.Enums;
 
 namespace UavPms.IdentityService.Tests.Features.Users.Queries.GetAssignableUsers;
 
@@ -27,8 +28,8 @@ public class GetUsersQueryHandlerTests
     {
         var inspectors = new List<User>
         {
-            new User { Id = Guid.NewGuid(), FullName = "Active Inspector", Email = "active@uavpms.com", Status = "Active" },
-            new User { Id = Guid.NewGuid(), FullName = "Inactive Inspector", Email = "inactive@uavpms.com", Status = "Suspended" }
+            new User { Id = Guid.NewGuid(), FullName = "Active Inspector", Email = "active@uavpms.com", Status = UserStatus.Active },
+            new User { Id = Guid.NewGuid(), FullName = "Inactive Inspector", Email = "inactive@uavpms.com", Status = UserStatus.Suspended }
         };
 
         _userRepositoryMock.Setup(repo => repo.GetUsersByRoleAsync("Inspector"))

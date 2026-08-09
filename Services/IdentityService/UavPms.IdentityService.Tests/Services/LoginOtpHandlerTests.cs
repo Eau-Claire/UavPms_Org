@@ -26,7 +26,7 @@ public class LoginOtpHandlerTests
         {
             Id = Guid.NewGuid(),
             Email = "uselessliem@gmail.com",
-            Status = "Active"
+            Status = UserStatus.Active
         };
 
         _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync("uselessliem@gmail.com"))

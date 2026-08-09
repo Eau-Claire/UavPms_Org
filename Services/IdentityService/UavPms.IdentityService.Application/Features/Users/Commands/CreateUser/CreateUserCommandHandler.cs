@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 
@@ -47,7 +48,7 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
             FullName = request.FullName,
             Phone = request.Phone,
             CreatedAt = DateTime.UtcNow,
-            Status = "Active"
+            Status = UserStatus.Active
         };
 
         user.UserRoles = rolesInDb.Select(role => new UserRole

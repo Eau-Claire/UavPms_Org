@@ -42,7 +42,7 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, bool>
         user.Email = request.Email;
         user.FullName = request.FullName;
         user.Phone = request.Phone;
-        user.Status = request.Status;
+        user.Status = Enum.TryParse<UavPms.IdentityService.Domain.Enums.UserStatus>(request.Status, true, out var parsedStatus) ? parsedStatus : UavPms.IdentityService.Domain.Enums.UserStatus.Active;
         
         user.UserRoles.Clear();
         var rolesInDb = await _roleRepository.FindAsync(r => request.Roles.Contains(r.RoleName));

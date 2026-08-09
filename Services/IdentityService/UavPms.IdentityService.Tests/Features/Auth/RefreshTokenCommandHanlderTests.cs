@@ -7,6 +7,7 @@ using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 using RefreshTokenEntity = UavPms.IdentityService.Domain.Entities.RefreshToken;
+using UavPms.IdentityService.Domain.Enums;
 
 namespace UavPms.IdentityService.Tests.Features.Auth;
 
@@ -39,7 +40,7 @@ public class RefreshTokenCommandHandlerTests
             Id = Guid.NewGuid(),
             Email = "user@test.com",
             FullName = "User",
-            Status = "Active",
+            Status = UserStatus.Active,
             UserRoles = new List<UserRole>
             {
                 new UserRole

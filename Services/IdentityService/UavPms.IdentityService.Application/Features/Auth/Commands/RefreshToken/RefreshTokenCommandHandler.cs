@@ -38,7 +38,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
 
         // 2. Tìm người dùng sở hữu token
         var user = await _userRepository.GetByIdWithRolesAsync(token.UserId);
-        if (user == null || user.Status != "Active")
+        if (user == null || !user.IsActive())
         {
             throw new UnauthorizedAccessException("User not found or inactive");
         }

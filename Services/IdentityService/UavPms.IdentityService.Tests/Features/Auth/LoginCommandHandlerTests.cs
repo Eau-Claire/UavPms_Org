@@ -6,6 +6,7 @@ using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
+using UavPms.IdentityService.Domain.Enums;
 
 namespace UavPms.IdentityService.Tests.Features.Auth;
 
@@ -48,7 +49,7 @@ public class LoginCommandHandlerTests
             Email = email,
             FullName = "Test User",
             PasswordHash = "hashed_password",
-            Status = "Active",
+            Status = UserStatus.Active,
             IsEmailVerified = true,
             UserRoles = new List<UserRole>
             {
@@ -89,7 +90,7 @@ public class LoginCommandHandlerTests
         var user = new User
         {
             Email = command.Email,
-            Status = "Inactive",
+            Status = UserStatus.Inactive,
             IsEmailVerified = true,
         };
         _userRepositoryMock.Setup(r => 
