@@ -15,30 +15,34 @@ public class VerifyOtpCommandHandlerTests
 {
     private readonly Mock<IOtpService> _otpServiceMock;
     private readonly Mock<IUserRepository> _userRepositoryMock;
+    private readonly UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.OtpVerificationStrategyResolver _strategyResolver;
+    private readonly Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService> _userTokenServiceMock;
     private readonly Mock<IJwtProvider> _jwtProviderMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
-    private readonly Mock<IConfiguration> _configurationMock;
-    private readonly Mock<IGenericRepository<RefreshTokenEntity>> _refreshTokenRepositoryMock;
     private readonly Mock<IGenericRepository<TrustedDevice>> _trustedDeviceRepositoryMock;
     private readonly VerifyOtpCommandHandler _handler;
+
     public VerifyOtpCommandHandlerTests()
     {
         _otpServiceMock = new Mock<IOtpService>();
         _userRepositoryMock = new Mock<IUserRepository>();
+        _userTokenServiceMock = new Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService>();
         _jwtProviderMock = new Mock<IJwtProvider>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
-        _configurationMock = new Mock<IConfiguration>();
-        _refreshTokenRepositoryMock = new Mock<IGenericRepository<RefreshTokenEntity>>();
         _trustedDeviceRepositoryMock = new Mock<IGenericRepository<TrustedDevice>>();
-        _configurationMock.Setup(c => c["Jwt:ExpiryMinutes"]).Returns("60");
+
+        var strategies = new List<UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.IOtpVerificationStrategy>
+        {
+            new UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.LoginOtpStrategy(_userTokenServiceMock.Object, _userRepositoryMock.Object, _trustedDeviceRepositoryMock.Object, _unitOfWorkMock.Object),
+            new UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.ForgotPasswordOtpStrategy(_otpServiceMock.Object),
+            new UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.StepUpOtpStrategy(_jwtProviderMock.Object, _otpServiceMock.Object)
+        };
+        _strategyResolver = new UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.OtpVerificationStrategyResolver(strategies);
+
         _handler = new VerifyOtpCommandHandler(
             _otpServiceMock.Object,
             _userRepositoryMock.Object,
-            _jwtProviderMock.Object,
-            _unitOfWorkMock.Object,
-            _configurationMock.Object,
-            _refreshTokenRepositoryMock.Object,
-            _trustedDeviceRepositoryMock.Object
+            _strategyResolver
         );
     }
     
@@ -89,10 +93,21 @@ public class VerifyOtpCommandHandlerTests
         _userRepositoryMock.Setup(u =>
              u.GetByEmailWithRolesAsync(command.Email))
             .ReturnsAsync(user);
-        _jwtProviderMock.Setup(j =>
-            j.GenerateAccessToken(user, It.IsAny<IList<string>>())).Returns("access-token");
-        _jwtProviderMock.Setup(j => 
-            j.GenerateRefreshToken()).Returns("refresh-token");
+        _userTokenServiceMock.Setup(s =>
+            s.IssueTokensAsync(user, command.UserAgent, It.IsAny<string>()))
+            .ReturnsAsync(UavPms.IdentityService.Application.Features.Auth.DTOs.AuthResultDto.SuccessResult(
+                "access-token", 
+                "refresh-token", 
+                3600, 
+                new UavPms.IdentityService.Application.Features.Auth.DTOs.AuthUserDto
+                {
+                    Id = user.Id,
+                    Email = user.Email,
+                    FullName = user.FullName,
+                    Roles = new List<string> { "Operator" }
+                }, 
+                "trust-token"));
+
         _unitOfWorkMock.Setup(u => 
             u.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
@@ -105,9 +120,7 @@ public class VerifyOtpCommandHandlerTests
         result.AuthResult!.AccessToken.Should().Be("access-token");
         result.AuthResult!.RefreshToken.Should().Be("refresh-token");
         result.AuthResult!.User.Should().NotBeNull();
-        result.AuthResult!.DeviceTrustToken.Should().NotBeNullOrEmpty();
         
-        _refreshTokenRepositoryMock.Verify(r => r.AddAsync(It.IsAny<RefreshTokenEntity>()), Times.Once);
         _trustedDeviceRepositoryMock.Verify(r => r.AddAsync(It.IsAny<TrustedDevice>()), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -159,11 +172,20 @@ public class VerifyOtpCommandHandlerTests
             .ReturnsAsync((true, "OK"));
         _userRepositoryMock.Setup(u => u.GetByEmailWithRolesAsync(command.Email))
             .ReturnsAsync(user);
-        _jwtProviderMock.Setup(j =>
-            j.GenerateAccessToken(user, It.IsAny<IList<string>>()))
-            .Returns("access-token");
-        _jwtProviderMock.Setup(j =>
-            j.GenerateRefreshToken()).Returns("refresh-token");
+        _userTokenServiceMock.Setup(s =>
+            s.IssueTokensAsync(user, command.UserAgent, It.IsAny<string>()))
+            .ReturnsAsync(UavPms.IdentityService.Application.Features.Auth.DTOs.AuthResultDto.SuccessResult(
+                "access-token", 
+                "refresh-token", 
+                3600, 
+                new UavPms.IdentityService.Application.Features.Auth.DTOs.AuthUserDto
+                {
+                    Id = user.Id,
+                    Email = user.Email,
+                    FullName = user.FullName,
+                    Roles = new List<string> { "Operator" }
+                }, 
+                "trust-token"));
         _unitOfWorkMock.Setup(u =>
             u.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
