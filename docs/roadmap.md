@@ -154,15 +154,15 @@
   - Tái sử dụng ở `LoginCommandHandler`, `RefreshTokenCommandHandler`, và `VerifyOtpCommandHandler`.
 - [x] 27e. **Strategy Pattern cho OTP Verification (`IOtpVerificationStrategy`)**:
   - Tách luồng `if-else` lồng nhau trong `VerifyOtpCommandHandler` thành các Strategy (`LoginOtpStrategy`, `ForgotPasswordOtpStrategy`, `StepUpOtpStrategy`) kèm `OtpVerificationStrategyResolver`.
-- [ ] 27f. **Strongly-Typed Options Pattern (`IOptions<JwtOptions>`)**:
+- [x] 27f. **Strongly-Typed Options Pattern (`IOptions<JwtOptions>`)**:
   - Tạo `JwtOptions` class bind cấu hình JWT từ `appsettings.json`, hỗ trợ `ValidateOnStart()` (Fail Fast) thay thế việc đọc string indexers `IConfiguration["Jwt:..."]`.
-- [ ] 27g. **Đóng gói Rich Domain Model & Enum `UserStatus`**:
+- [x] 27g. **Đóng gói Rich Domain Model & Enum `UserStatus`**:
   - Chuyển trường `User.Status` từ `string` sang Enum `UserStatus` (`Active`, `Inactive`, `Pending`, `Suspended`).
-  - Đóng gói các phương thức biến đổi trạng thái (`VerifyEmail()`, `Activate()`, `Suspend()`) vào bên trong Entity `User`.
-- [ ] 27h. **Refresh Token Reuse Detection & Revocation Cascade (OAuth 2.0 Security BCP)**:
+  - Đóng gói các phương thức biến đổi trạng thái (`VerifyEmail()`, `Activate()`, `Deactivate()`, `Suspend()`) vào bên trong Entity `User`.
+- [x] 27h. **Refresh Token Reuse Detection & Revocation Cascade (OAuth 2.0 Security BCP)**:
   - Phát hiện tái sử dụng Refresh Token đã bị thu hồi (`RevokedAt != null`) ➔ Tự động thu hồi TẤT CẢ các Refresh Token active của User để ngăn chặn tấn công chiếm đoạt session (Token Theft).
-- [ ] 27i. **Lan truyền `CancellationToken` xuyên suốt**:
-  - Bổ sung tham số `CancellationToken cancellationToken = default` cho tất cả phương thức bất đồng bộ trong `IUserTokenService` và Repositories.
+- [x] 27i. **Lan truyền `CancellationToken` xuyên suốt**:
+  - Bổ sung tham số `CancellationToken cancellationToken = default` cho tất cả phương thức bất đồng bộ trong `IUserTokenService` và các invocations liên quan.
 
 ---
 
