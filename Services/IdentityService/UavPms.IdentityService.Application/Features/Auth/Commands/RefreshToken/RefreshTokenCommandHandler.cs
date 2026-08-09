@@ -49,7 +49,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
             foreach(var activeToken in activeTokens)
             {
                 activeToken.RevokedAt = DateTime.UtcNow;
-                await _refreshTokenRepository.UpdateAsync(activeToken);
+                await _refreshTokenRepository.UpdateAsync(activeToken, cancellationToken);
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -69,6 +69,6 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
 
         token.RevokedAt = DateTime.UtcNow;
         
-        return await _userTokenService.IssueTokensAsync(user, request.UserAgent);
+        return await _userTokenService.IssueTokensAsync(user, request.UserAgent, cancellationToken);
     }
 }

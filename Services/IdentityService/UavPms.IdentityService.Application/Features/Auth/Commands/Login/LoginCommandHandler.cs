@@ -72,10 +72,10 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
         {
             trustedDevice.LastUsedAt = DateTime.UtcNow;
             trustedDevice.ExpiresAt = DateTime.UtcNow.AddDays(30);
-            await _trustedDeviceRepository.UpdateAsync(trustedDevice);
+            await _trustedDeviceRepository.UpdateAsync(trustedDevice, cancellationToken);
 
             // Cấp phát Token trực tiếp nếu là thiết bị tin cậy
-            return await _userTokenService.IssueTokensAsync(user, request.UserAgent, request.DeviceTrustToken);
+            return await _userTokenService.IssueTokensAsync(user, request.UserAgent, request.DeviceTrustToken, cancellationToken);
         }
 
         // 5. Nếu không phải thiết bị tin cậy -> Gửi OTP yêu cầu đăng nhập
