@@ -47,7 +47,7 @@ public class LoginOtpStrategy : IOtpVerificationStrategy
         
         // 1. Cấp phát Authentication Tokens qua UserTokenService
         var deviceTrustToken = Guid.NewGuid().ToString("N");
-        var authResult = await _userTokenService.IssueTokenAsync(user, request.UserAgent, deviceTrustToken);
+        var authResult = await _userTokenService.IssueTokensAsync(user, request.UserAgent, deviceTrustToken);
         
         // 2.Lưu TrustedDevice
         await _trustedDeviceRepository.AddAsync(new TrustedDevice
