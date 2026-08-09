@@ -83,7 +83,7 @@ public class RefreshTokenCommandHandlerTests
         
         // assert
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Invalid or expired refresh token");
+            .WithMessage("Invalid refresh token");
     }
     
     // Tset: 2: Refresh Token đã hết hạn => UnauthorizedAccessToken
@@ -97,7 +97,7 @@ public class RefreshTokenCommandHandlerTests
             Id = Guid.NewGuid(),
             UserId = Guid.NewGuid(),
             TokenHash = "token-hashed",
-            ExpiresAt = DateTime.Now.AddDays(-1),
+            ExpiresAt = DateTime.UtcNow.AddDays(-1),
             RevokedAt = null,
         };
         
@@ -110,7 +110,7 @@ public class RefreshTokenCommandHandlerTests
         
         // assert
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Invalid or expired refresh token");
+            .WithMessage("Expired refresh token");
     }
     
     // Test 3: User không tồn tại hoặc Inactive -> UnauthorizedException
@@ -179,21 +179,30 @@ public class RefreshTokenCommandHandlerTests
         result.User!.Roles.Should().Contain("Admin");
     }
     
-    // Test 5: Refresh token đã bị revoke -> UnauthorizedAccessException
+    // Test 5: Refresh token đã bị revoke -> Reuse Detection triggers revocation cascade
     [Fact]
     public async Task Handle_ShouldThrowUnauthorized_WhenTokenIsRevoked()
     {
-        var command = new  RefreshTokenCommand("revoked-token", "UserAgent");
+        var userId = Guid.NewGuid();
+        var command = new RefreshTokenCommand("revoked-token", "UserAgent");
+        var revokedToken = new RefreshTokenEntity
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            TokenHash = "revoked-hash",
+            ExpiresAt = DateTime.UtcNow.AddDays(1),
+            RevokedAt = DateTime.UtcNow.AddHours(-1)
+        };
          
         _refreshTokenRepositoryMock.Setup(r =>
             r.FindAsync(It.IsAny<Expression<Func<RefreshTokenEntity, bool>>>(), true))
-            .ReturnsAsync(new List<RefreshTokenEntity>());
+            .ReturnsAsync(new List<RefreshTokenEntity> { revokedToken });
         
         // act
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
         
         // assert
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Invalid or expired refresh token");
+            .WithMessage("*Revoked refresh token reused*");
     }
 }
