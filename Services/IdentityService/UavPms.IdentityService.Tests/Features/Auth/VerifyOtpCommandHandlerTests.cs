@@ -33,7 +33,7 @@ public class VerifyOtpCommandHandlerTests
 
         var strategies = new List<UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.IOtpVerificationStrategy>
         {
-            new UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.LoginOtpStrategy(_userTokenServiceMock.Object, _userRepositoryMock.Object, _trustedDeviceRepositoryMock.Object, _unitOfWorkMock.Object),
+            new UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.LoginOtpStrategy(_userRepositoryMock.Object, _unitOfWorkMock.Object, _userTokenServiceMock.Object, _trustedDeviceRepositoryMock.Object),
             new UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.ForgotPasswordOtpStrategy(_otpServiceMock.Object),
             new UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies.StepUpOtpStrategy(_jwtProviderMock.Object, _otpServiceMock.Object)
         };
