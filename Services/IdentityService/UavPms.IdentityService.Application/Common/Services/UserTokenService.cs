@@ -31,7 +31,7 @@ public class UserTokenService : IUserTokenService
         _configuration = configuration;
     }
 
-    public async Task<AuthResultDto> IssueTokenAsync(User user, string? userAgent, string? deviceTrustToken = null)
+    public async Task<AuthResultDto> IssueTokensAsync(User user, string? userAgent, string? deviceTrustToken = null)
     {
         // 1. Trích xuất danh sách Roles của user
         var roles = user.UserRoles?.Select(r => r.Role!.RoleName).ToList() ?? new();
