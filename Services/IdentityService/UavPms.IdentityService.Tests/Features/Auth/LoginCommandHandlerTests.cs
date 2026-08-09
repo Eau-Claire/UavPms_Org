@@ -6,7 +6,7 @@ using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
-using UavPms.IdentityService.Domain.Enums;
+
 
 namespace UavPms.IdentityService.Tests.Features.Auth;
 

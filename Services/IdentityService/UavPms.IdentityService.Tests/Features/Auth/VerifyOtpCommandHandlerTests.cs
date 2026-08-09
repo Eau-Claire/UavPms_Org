@@ -8,7 +8,7 @@ using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 using RefreshTokenEntity = UavPms.IdentityService.Domain.Entities.RefreshToken;
-using UavPms.IdentityService.Domain.Enums;
+
 
 namespace UavPms.IdentityService.Tests.Features.Auth;
 
