@@ -17,17 +17,20 @@ public class RefreshTokenCommandHandlerTests
     private readonly Mock<IUserRepository> _userRepositoryMock;
     private readonly Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService> _userTokenServiceMock;
     private readonly RefreshTokenCommandHandler _handler;
+    private readonly Mock<IUnitOfWork> _unitOfWorkMock;
 
     public RefreshTokenCommandHandlerTests()
     {
         _refreshTokenRepositoryMock = new Mock<IGenericRepository<RefreshTokenEntity>>();
         _userRepositoryMock = new Mock<IUserRepository>();
         _userTokenServiceMock = new Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService>();
+        _unitOfWorkMock = new Mock<IUnitOfWork>();
 
         _handler = new RefreshTokenCommandHandler(
             _refreshTokenRepositoryMock.Object,
             _userRepositoryMock.Object,
-            _userTokenServiceMock.Object
+            _userTokenServiceMock.Object,
+            _unitOfWorkMock.Object
         );
     }
 

@@ -12,41 +12,63 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
     private readonly IGenericRepository<RefreshTokenEntity> _refreshTokenRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUserTokenService _userTokenService;
+    private readonly IUnitOfWork _unitOfWork;
 
     public RefreshTokenCommandHandler(
         IGenericRepository<RefreshTokenEntity> refreshTokenRepository,
         IUserRepository userRepository,
-        IUserTokenService userTokenService)
+        IUserTokenService userTokenService,
+        IUnitOfWork unitOfWork)
     {
         _refreshTokenRepository = refreshTokenRepository;
         _userRepository = userRepository;
         _userTokenService = userTokenService;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<AuthResultDto> Handle(RefreshTokenCommand request, CancellationToken cancellationToken)
     {
         // 1. Tìm Refresh Token chưa bị thu hồi và chưa hết hạn
         var hash = TokenHasher.Hash(request.RefreshToken);
+
         var token = (await _refreshTokenRepository.FindAsync(
-            x => x.TokenHash == hash && x.RevokedAt == null,
+            x => x.TokenHash == hash,
             track: true)).FirstOrDefault();
 
-        if (token == null || token.ExpiresAt <= DateTime.UtcNow)
+        if (token == null)
         {
-            throw new UnauthorizedAccessException("Invalid or expired refresh token");
+            throw new UnauthorizedAccessException("Invalid refresh token");
         }
 
-        // 2. Tìm người dùng sở hữu token
+        if(token.RevokedAt != null)
+        {
+            var activeTokens = await _refreshTokenRepository.FindAsync(
+                x => x.UserId == token.UserId && 
+                x.RevokedAt == null, track: true);
+            
+            foreach(var activeToken in activeTokens)
+            {
+                activeToken.RevokedAt = DateTime.UtcNow;
+                await _refreshTokenRepository.UpdateAsync(activeToken);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            throw new UnauthorizedAccessException("Revoked refresh token reused. Security breach detected. All active sessions revoked.");
+        }
+
+        if(token.ExpiresAt < DateTime.UtcNow)
+        {
+            throw new UnauthorizedAccessException("Expired refresh token");
+        }
+
         var user = await _userRepository.GetByIdWithRolesAsync(token.UserId);
         if (user == null || !user.IsActive())
         {
             throw new UnauthorizedAccessException("User not found or inactive");
         }
 
-        // 3. Thu hồi token cũ (Revoke old token)
         token.RevokedAt = DateTime.UtcNow;
-
-        // 4. Cấp phát cặp Token mới qua Reusable UserTokenService
+        
         return await _userTokenService.IssueTokensAsync(user, request.UserAgent);
     }
 }
