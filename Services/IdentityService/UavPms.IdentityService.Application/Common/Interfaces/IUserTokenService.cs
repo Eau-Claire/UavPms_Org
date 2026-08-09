@@ -11,7 +11,7 @@ public interface IUserTokenService
     /// <summary>
     /// Sinh AccessToken & RefreshToken, lưu RFToken vào Db và trả về AuthResultDto
     /// </summary>
-    Task<AuthResultDto> IssueTokenAsync(
+    Task<AuthResultDto> IssueTokensAsync(
         User user,
         string? userAgent,
         string? deviceTrustToken = null);
