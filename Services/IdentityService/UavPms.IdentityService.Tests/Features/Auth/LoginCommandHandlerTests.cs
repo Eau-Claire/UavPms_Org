@@ -13,12 +13,9 @@ public class LoginCommandHandlerTests
 {
     private readonly Mock<IUserRepository> _userRepositoryMock;
     private readonly Mock<IPasswordHasher> _passwordHasherMock;
-    private readonly Mock<IJwtProvider> _jwtProviderMock;
-    private readonly Mock<IGenericRepository<RefreshToken>> _refreshTokenRepositoryMock;
+    private readonly Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService> _userTokenServiceMock;
     private readonly Mock<IOtpService> _otpServiceMock;
     private readonly Mock<IGenericRepository<TrustedDevice>> _trustedDeviceRepositoryMock;
-    private readonly Mock<IConfiguration> _configurationMock;
-    private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>> _loggerMock;
     private readonly LoginCommandHandler _handler;
 
@@ -26,25 +23,17 @@ public class LoginCommandHandlerTests
     {
         _userRepositoryMock = new Mock<IUserRepository>();
         _passwordHasherMock = new Mock<IPasswordHasher>();
-        _jwtProviderMock = new Mock<IJwtProvider>();
-        _refreshTokenRepositoryMock = new Mock<IGenericRepository<RefreshToken>>();
+        _userTokenServiceMock = new Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService>();
         _otpServiceMock = new Mock<IOtpService>();
         _trustedDeviceRepositoryMock = new Mock<IGenericRepository<TrustedDevice>>();
-        _configurationMock = new Mock<IConfiguration>();
-        _unitOfWorkMock = new Mock<IUnitOfWork>();
         _loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>();
 
-        _configurationMock.Setup(c => c["Jwt:ExpiryMinutes"]).Returns("60");
-        
         _handler = new LoginCommandHandler(
             _userRepositoryMock.Object,
             _passwordHasherMock.Object,
-            _jwtProviderMock.Object,
-            _refreshTokenRepositoryMock.Object,
+            _userTokenServiceMock.Object,
             _otpServiceMock.Object,
             _trustedDeviceRepositoryMock.Object,
-            _configurationMock.Object,
-            _unitOfWorkMock.Object,
             _loggerMock.Object
         );
     }
