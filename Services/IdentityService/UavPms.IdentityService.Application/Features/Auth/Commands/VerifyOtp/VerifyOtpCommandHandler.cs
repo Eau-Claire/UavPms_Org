@@ -1,15 +1,9 @@
-using System.Security.Cryptography;
-using System.Text;
 using MediatR;
-using Microsoft.Extensions.Configuration;
 using UavPms.IdentityService.Application.Common.Exceptions;
 using UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies;
 using UavPms.IdentityService.Application.Features.Auth.DTOs;
-using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
-using RefreshTokenEntity = UavPms.IdentityService.Domain.Entities.RefreshToken;
-using UavPms.IdentityService.Domain.Entities;
 
 namespace UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp;
 
@@ -31,9 +25,19 @@ public class VerifyOtpCommandHandler : IRequestHandler<VerifyOtpCommand, OtpVeri
     public async Task<OtpVerifyResultDto> Handle(VerifyOtpCommand request, CancellationToken cancellationToken)
     {
         // 1. Lấy thông tin user
-        vả
+        var targetUser = await _userRepository.GetByEmailWithRolesAsync(request.Email);
+        if (targetUser == null)
+        {
+            throw new BusinessRuleException("User not found");
+        }
         // 2. Xắc thực mã OTP quá Redis OTP Service
-        
+        var verification = await _otpService.VerifyOtpAsync(targetUser.Email, request.Code, request.OtpPurpose);
+        if (!verification.IsValid)
+        {
+            throw new BusinessRuleException(verification.Message);
+        }
         // 3. Ủy quyền xử lý cho Strategy phù hợp
+        var strategy = _strategyResolver.Resolve(request.OtpPurpose);
+        return await strategy.VerifyAsync(targetUser, request, cancellationToken);
     }
 }
