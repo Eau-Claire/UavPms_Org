@@ -2,6 +2,9 @@ using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using UavPms.IdentityService.Application.Common.Behaviors;
+using UavPms.IdentityService.Application.Common.Interfaces;
+using UavPms.IdentityService.Application.Common.Services;
+using UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.Strategies;
 
 namespace UavPms.IdentityService.Application;
 
@@ -29,6 +32,15 @@ public static class DependencyInjection
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
         });
         
+        // Đăng ký UserTokenService
+        services.AddScoped<IUserTokenService, UserTokenService>();
+
+        // Đăng ký các Strategies cho OTP Verification
+        services.AddScoped<IOtpVerificationStrategy, LoginOtpStrategy>();
+        services.AddScoped<IOtpVerificationStrategy, ForgotPasswordOtpStrategy>();
+        services.AddScoped<IOtpVerificationStrategy, StepUpOtpStrategy>();
+        services.AddScoped<OtpVerificationStrategyResolver>();
+
         return services;
     }
 }
