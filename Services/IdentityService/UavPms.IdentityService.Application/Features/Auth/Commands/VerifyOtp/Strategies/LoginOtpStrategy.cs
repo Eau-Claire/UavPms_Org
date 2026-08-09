@@ -41,7 +41,7 @@ public class LoginOtpStrategy : IOtpVerificationStrategy
         if (request.OtpPurpose == OtpPurpose.EmailVerification)
         {
             user.VerifyEmail();
-            await _userRepository.UpdateAsync(user, cancellationToken);
+            await _userRepository.UpdateAsync(user);
         }
         
         // 1. Cấp phát Authentication Tokens qua UserTokenService
@@ -56,7 +56,7 @@ public class LoginOtpStrategy : IOtpVerificationStrategy
             ExpiresAt = DateTime.UtcNow.AddDays(30),
             LastUsedAt = DateTime.UtcNow,
             UserAgent = request.UserAgent ?? string.Empty
-        }, cancellationToken);
+        });
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
