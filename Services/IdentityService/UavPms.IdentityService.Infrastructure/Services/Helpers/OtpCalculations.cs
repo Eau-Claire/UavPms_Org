@@ -26,17 +26,16 @@ public static class OtpCalculations
     }
     
     /// <summary>
-    /// Calculate the remaining time for OTP expiration.
+    /// Evaluate attempts.
     /// </summary>
-    public static (bool Exceeded, int RemainingAttempts) CalculateRemainingAttempts(
-        int attempts,
+    public static (bool Exceeded, int RemainingAttempts) EvaluateAttempts(
+        long attempts,
         int maxAttempts = 5)
     {
         if(attempts >= maxAttempts) return (true, 0);
         
-        var remaining = maxAttempts - attempts;
+        var remaining = maxAttempts - (int)attempts;
         return (false, remaining);
     }
-    
-    
+
 }
