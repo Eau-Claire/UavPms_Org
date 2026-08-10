@@ -21,7 +21,7 @@ public class SupabaseFileStorageService : IFileStorageService
         _supabaseOptions = supabaseOptions.Value;
     }
 
-    public async Task<string> SaveImageAsync(Stream fileStream, string fileName)
+    public async Task<string> SaveImageAsync(Stream fileStream, string fileName, CancellationToken cancellationToken = default)
     {
         var supabaseUrl = _supabaseOptions.Url.TrimEnd('/');
         var supabaseKey = _supabaseOptions.ApiKey;
@@ -55,14 +55,14 @@ public class SupabaseFileStorageService : IFileStorageService
 
         // Read stream into byte array
         using var ms = new MemoryStream();
-        await fileStream.CopyToAsync(ms);
+        await fileStream.CopyToAsync(ms, cancellationToken);
         var bytes = ms.ToArray();
 
         var content = new ByteArrayContent(bytes);
         content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
         request.Content = content;
 
-        var response = await _httpClient.SendAsync(request);
+        var response = await _httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -77,7 +77,7 @@ public class SupabaseFileStorageService : IFileStorageService
         return publicUrl;
     }
 
-    public async Task DeleteImageAsync(string imagePath)
+    public async Task DeleteImageAsync(string imagePath, CancellationToken cancellationToken = default)
     {
         var supabaseUrl = _supabaseOptions.Url.TrimEnd('/');
         var supabaseKey = _supabaseOptions.ApiKey;
@@ -100,11 +100,11 @@ public class SupabaseFileStorageService : IFileStorageService
             request.Headers.Add("Authorization", $"Bearer {supabaseKey}");
             request.Headers.Add("apikey", supabaseKey);
 
-            var response = await _httpClient.SendAsync(request);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorBody = await response.Content.ReadAsStringAsync();
+                var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
                 _logger.LogWarning("Failed to delete image from Supabase Storage: {ErrorBody}", errorBody);
             }
         }
