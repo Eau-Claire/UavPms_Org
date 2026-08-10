@@ -14,8 +14,8 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using UavPms.NotificationService.Application;
 using UavPms.NotificationService.Domain.Interfaces.Services;
 using UavPms.NotificationService.Infrastructure;
-using UavPms.NotificationService.Infrastructure.Messaging;
 using UavPms.NotificationService.Infrastructure.Persistence;
+using UavPms.NotificationService.Infrastructure.Messaging; 
 using UavPms.NotificationService.API.Hubs;
 using UavPms.NotificationService.API.Jobs;
 using UavPms.NotificationService.API.Middlewares;
@@ -179,7 +179,6 @@ if (app.Configuration.GetValue<bool>("RunMigrations"))
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     dbContext.Database.Migrate();
-    await DatabaseSeeder.SeedAsync(dbContext);
 }
 else
 {

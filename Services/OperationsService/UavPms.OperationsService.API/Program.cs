@@ -103,7 +103,6 @@ if (app.Configuration.GetValue<bool>("RunMigrations"))
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     dbContext.Database.Migrate();
-    await DatabaseSeeder.SeedAsync(dbContext);
 }
 else
 {
