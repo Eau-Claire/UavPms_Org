@@ -170,6 +170,7 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.Property(e => e.Title).HasMaxLength(256).IsRequired();
         builder.Property(e => e.RouteData).HasColumnType("text").IsRequired();
         builder.Property(e => e.DroneCode).HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Status).HasConversion<string>();
 
         builder.HasOne(e => e.Manager)
             .WithMany()
@@ -372,6 +373,9 @@ public class MaintenanceTicketConfiguration : IEntityTypeConfiguration<Maintenan
         builder.HasKey(e => e.Id);
         builder.HasIndex(e => e.TicketCode).IsUnique();
 
+        builder.Property(e => e.Status).HasConversion<string>();
+        builder.Property(e => e.Priority).HasConversion<string>();
+        
         builder.HasOne(e => e.Anomaly)
             .WithMany(a => a.MaintenanceTickets)
             .HasForeignKey(e => e.AnomalyId)

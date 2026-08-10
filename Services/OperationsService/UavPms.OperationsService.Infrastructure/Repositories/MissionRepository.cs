@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Infrastructure.Persistence;
+using UavPms.OperationsService.Domain.Enums;
 
 namespace UavPms.OperationsService.Infrastructure.Repositories;
 
@@ -32,10 +33,11 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
                                      m.MissionCode.Contains(search));
         }
 
-        if (!string.IsNullOrWhiteSpace(status))
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<MissionStatus>(status, true, out var parsedStatus))
         {
-            query = query.Where(m => m.Status == status);
+            query = query.Where(m => m.Status == parsedStatus);
         }
+
         
         query = ApplySorting(query, sortBy, sortDescending);
 
