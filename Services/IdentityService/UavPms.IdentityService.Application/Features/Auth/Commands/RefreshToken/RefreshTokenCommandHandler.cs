@@ -1,15 +1,8 @@
-using System;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using MediatR;
-using Microsoft.Extensions.Configuration;
+using UavPms.IdentityService.Application.Common.Interfaces;
+using UavPms.IdentityService.Application.Common.Utilities;
 using UavPms.IdentityService.Application.Features.Auth.DTOs;
-using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
-using UavPms.IdentityService.Domain.Interfaces.Services;
 using RefreshTokenEntity = UavPms.IdentityService.Domain.Entities.RefreshToken;
 
 namespace UavPms.IdentityService.Application.Features.Auth.Commands.RefreshToken;
@@ -18,74 +11,64 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
 {
     private readonly IGenericRepository<RefreshTokenEntity> _refreshTokenRepository;
     private readonly IUserRepository _userRepository;
-    private readonly IJwtProvider _jwtProvider;
+    private readonly IUserTokenService _userTokenService;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IConfiguration _configuration;
 
     public RefreshTokenCommandHandler(
         IGenericRepository<RefreshTokenEntity> refreshTokenRepository,
         IUserRepository userRepository,
-        IJwtProvider jwtProvider,
-        IUnitOfWork unitOfWork,
-        IConfiguration configuration)
+        IUserTokenService userTokenService,
+        IUnitOfWork unitOfWork)
     {
         _refreshTokenRepository = refreshTokenRepository;
         _userRepository = userRepository;
-        _jwtProvider = jwtProvider;
+        _userTokenService = userTokenService;
         _unitOfWork = unitOfWork;
-        _configuration = configuration;
     }
-    
+
     public async Task<AuthResultDto> Handle(RefreshTokenCommand request, CancellationToken cancellationToken)
     {
-        var hash = HashToken(request.RefreshToken);
+        // 1. Tìm Refresh Token chưa bị thu hồi và chưa hết hạn
+        var hash = TokenHasher.Hash(request.RefreshToken);
+
         var token = (await _refreshTokenRepository.FindAsync(
-            x => x.TokenHash == hash && x.RevokedAt == null,
+            x => x.TokenHash == hash,
             track: true)).FirstOrDefault();
-        if (token == null || token.ExpiresAt <= DateTime.UtcNow)
+
+        if (token == null)
         {
-            throw new UnauthorizedAccessException("Invalid or expired refresh token");
+            throw new UnauthorizedAccessException("Invalid refresh token");
         }
-        
+
+        if(token.RevokedAt != null)
+        {
+            var activeTokens = await _refreshTokenRepository.FindAsync(
+                x => x.UserId == token.UserId && 
+                x.RevokedAt == null, track: true);
+            
+            foreach (var activeToken in activeTokens)
+            {
+                activeToken.RevokedAt = DateTime.UtcNow;
+                await _refreshTokenRepository.UpdateAsync(activeToken);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            throw new UnauthorizedAccessException("Revoked refresh token reused. Security breach detected. All active sessions revoked.");
+        }
+
+        if (token.ExpiresAt < DateTime.UtcNow)
+        {
+            throw new UnauthorizedAccessException("Expired refresh token");
+        }
+
         var user = await _userRepository.GetByIdWithRolesAsync(token.UserId);
-        if (user == null || user.Status != "Active")
+        if (user == null || !user.IsActive())
         {
             throw new UnauthorizedAccessException("User not found or inactive");
         }
-        
+
         token.RevokedAt = DateTime.UtcNow;
-        var roles = user.UserRoles.Select(r => r.Role!.RoleName).ToList();
-        var newAccess = _jwtProvider.GenerateAccessToken(user, roles);
-        var newRefresh =  _jwtProvider.GenerateRefreshToken();
-        var expiryMinutes = int.TryParse(_configuration["Jwt:ExpiryMinutes"], out var m) ? m : 60;
-
-        await _refreshTokenRepository.AddAsync(new RefreshTokenEntity
-        {
-            UserId = user.Id,
-            TokenHash = HashToken(newRefresh),
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
-            DeviceInfo = request.UserAgent ?? string.Empty,
-            CreatedAt = DateTime.UtcNow,
-        });
         
-        await _unitOfWork.SaveChangesAsync();
-
-        var userDto = new AuthUserDto
-        {
-            Id = user.Id,
-            Email = user.Email,
-            Username = user.Username,
-            FullName = user.FullName,
-            Roles = roles,
-        };
-        
-        return AuthResultDto.SuccessResult(newAccess, newRefresh, expiryMinutes * 60, userDto);
-    }
-
-    private static string HashToken(string token)
-    {
-        var bytes = Encoding.UTF8.GetBytes(token);
-        var hashBytes = SHA256.HashData(bytes);
-        return Convert.ToBase64String(hashBytes);
+        return await _userTokenService.IssueTokensAsync(user, request.UserAgent, cancellationToken: cancellationToken);
     }
 }

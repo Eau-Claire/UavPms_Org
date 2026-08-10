@@ -33,8 +33,7 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, bool>
             throw new KeyNotFoundException("User not found");
         }
         
-        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email)
-            ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email);
         if (existingEmail != null && existingEmail.Id != user.Id)
         {
             throw new ArgumentException("Email is already in use");
@@ -43,7 +42,7 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, bool>
         user.Email = request.Email;
         user.FullName = request.FullName;
         user.Phone = request.Phone;
-        user.Status = request.Status;
+        user.Status = Enum.TryParse<UavPms.IdentityService.Domain.Enums.UserStatus>(request.Status, true, out var parsedStatus) ? parsedStatus : UavPms.IdentityService.Domain.Enums.UserStatus.Active;
         
         user.UserRoles.Clear();
         var rolesInDb = await _roleRepository.FindAsync(r => request.Roles.Contains(r.RoleName));

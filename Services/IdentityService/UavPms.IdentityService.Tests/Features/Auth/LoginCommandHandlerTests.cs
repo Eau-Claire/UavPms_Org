@@ -7,18 +7,16 @@ using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 
+
 namespace UavPms.IdentityService.Tests.Features.Auth;
 
 public class LoginCommandHandlerTests
 {
     private readonly Mock<IUserRepository> _userRepositoryMock;
     private readonly Mock<IPasswordHasher> _passwordHasherMock;
-    private readonly Mock<IJwtProvider> _jwtProviderMock;
-    private readonly Mock<IGenericRepository<RefreshToken>> _refreshTokenRepositoryMock;
+    private readonly Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService> _userTokenServiceMock;
     private readonly Mock<IOtpService> _otpServiceMock;
     private readonly Mock<IGenericRepository<TrustedDevice>> _trustedDeviceRepositoryMock;
-    private readonly Mock<IConfiguration> _configurationMock;
-    private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>> _loggerMock;
     private readonly LoginCommandHandler _handler;
 
@@ -26,41 +24,32 @@ public class LoginCommandHandlerTests
     {
         _userRepositoryMock = new Mock<IUserRepository>();
         _passwordHasherMock = new Mock<IPasswordHasher>();
-        _jwtProviderMock = new Mock<IJwtProvider>();
-        _refreshTokenRepositoryMock = new Mock<IGenericRepository<RefreshToken>>();
+        _userTokenServiceMock = new Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService>();
         _otpServiceMock = new Mock<IOtpService>();
         _trustedDeviceRepositoryMock = new Mock<IGenericRepository<TrustedDevice>>();
-        _configurationMock = new Mock<IConfiguration>();
-        _unitOfWorkMock = new Mock<IUnitOfWork>();
         _loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<LoginCommandHandler>>();
 
-        _configurationMock.Setup(c => c["Jwt:ExpiryMinutes"]).Returns("60");
-        
         _handler = new LoginCommandHandler(
             _userRepositoryMock.Object,
             _passwordHasherMock.Object,
-            _jwtProviderMock.Object,
-            _refreshTokenRepositoryMock.Object,
+            _userTokenServiceMock.Object,
             _otpServiceMock.Object,
             _trustedDeviceRepositoryMock.Object,
-            _configurationMock.Object,
-            _unitOfWorkMock.Object,
             _loggerMock.Object
         );
     }
 
     #region  Helper: Create User template with roles
 
-    private static User CreateActivateUser(string email = "user@test.com", string username = "testuser")
+    private static User CreateActivateUser(string email = "user@test.com")
     {
         return new User
         {
             Id = Guid.NewGuid(),
             Email = email,
             FullName = "Test User",
-            Username = username,
             PasswordHash = "hashed_password",
-            Status = "Active",
+            Status = UserStatus.Active,
             IsEmailVerified = true,
             UserRoles = new List<UserRole>
             {
@@ -81,8 +70,6 @@ public class LoginCommandHandlerTests
         var command = new LoginCommand("nonexistuser@gmail.com", "password123", null, "UserAgent");
         _userRepositoryMock.Setup(r => 
             r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
-        _userRepositoryMock.Setup(r => 
-            r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
         _passwordHasherMock.Setup(p =>
             p.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
         
@@ -103,7 +90,7 @@ public class LoginCommandHandlerTests
         var user = new User
         {
             Email = command.Email,
-            Status = "Inactive",
+            Status = UserStatus.Inactive,
             IsEmailVerified = true,
         };
         _userRepositoryMock.Setup(r => 
@@ -190,102 +177,11 @@ public class LoginCommandHandlerTests
         result.RefreshToken.Should().BeNull();
         
         // Verify interactions
-        _refreshTokenRepositoryMock.Verify(r =>
-            r.AddAsync(It.IsAny<RefreshToken>()), Times.Never);
-        _unitOfWorkMock.Verify(u =>
-            u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-    }
-    
-    // Test 7: Login bằng Username cũng phải hoạt động và OTP gửi về Email của user.
-    [Fact]
-    public async Task Handle_ShouldFindUserByUsername_WhenEmailLookupReturnsNull()
-    {
-        var user = CreateActivateUser();
-        var command = new LoginCommand(user.Email, "password123", null, "UserAgent");
-        
-        // email lookup trả null, username trả user
-        _userRepositoryMock.Setup(r =>
-            r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
-        _userRepositoryMock.Setup(r =>
-            r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync(user);
-        _passwordHasherMock.Setup(p =>
-            p.Verify(user.PasswordHash, command.Password)).Returns(true);
-        _otpServiceMock.Setup(o =>
-            o.GenerateAndSendOtpAsync(user.Email, OtpPurpose.Login, false))
-            .ReturnsAsync((true, "OTP sent"));
-        
-        // act
-        var result = await _handler.Handle(command, CancellationToken.None);
-        
-        // assert
-        result.Should().NotBeNull();
-        result.OtpRequired.Should().BeTrue();
-        _userRepositoryMock.Verify(r => 
-            r.GetByUsernameWithRolesAsync(command.Email), Times.Once);
-        _otpServiceMock.Verify(o =>
-            o.GenerateAndSendOtpAsync(user.Email, OtpPurpose.Login, false), Times.Once);
+        _userTokenServiceMock.Verify(s =>
+            s.IssueTokensAsync(It.IsAny<User>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task Handle_ShouldUseUsername_WhenEmailUserPasswordFails()
-    {
-        // Account A: Email = uselessliem@gmail.com
-        var accountA = CreateActivateUser("uselessliem@gmail.com", "an3439201@gmail.com");
-        accountA.PasswordHash = "hash_A";
-        // Account B: Username = uselessliem@gmail.com, Email = testing@123gmail.com
-        var accountB = CreateActivateUser("testing@123gmail.com", "uselessliem@gmail.com");
-        accountB.PasswordHash = "hash_B";
-
-        var command = new LoginCommand("uselessliem@gmail.com", "passwordB", null, "UserAgent");
-
-        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(accountA);
-        _userRepositoryMock.Setup(r => r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync(accountB);
-
-        _passwordHasherMock.Setup(p => p.Verify("hash_A", command.Password)).Returns(false);
-        _passwordHasherMock.Setup(p => p.Verify("hash_B", command.Password)).Returns(true);
-
-        _otpServiceMock.Setup(o => o.GenerateAndSendOtpAsync(accountB.Email, OtpPurpose.Login, It.IsAny<bool>()))
-            .ReturnsAsync((true, "OTP sent"));
-
-        // act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // assert
-        result.Should().NotBeNull();
-        result.OtpRequired.Should().BeTrue();
-        result.Email.Should().Be("testing@123gmail.com");
-        _otpServiceMock.Verify(o => o.GenerateAndSendOtpAsync("testing@123gmail.com", OtpPurpose.Login, false), Times.Once);
-    }
-
-    [Fact]
-    public async Task Handle_ShouldPreferUsername_WhenIdentifierMatchesEmailAndUsernameOfDifferentUsers()
-    {
-        // Account A: Email = uselessliem@gmail.com
-        var accountA = CreateActivateUser("uselessliem@gmail.com", "an3439201@gmail.com");
-        accountA.PasswordHash = "shared_hash_A";
-        // Account B: Username = uselessliem@gmail.com, Email = testing@123gmail.com
-        var accountB = CreateActivateUser("testing@123gmail.com", "uselessliem@gmail.com");
-        accountB.PasswordHash = "shared_hash_B";
-
-        var command = new LoginCommand("uselessliem@gmail.com", "samePassword", null, "UserAgent");
-
-        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(accountA);
-        _userRepositoryMock.Setup(r => r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync(accountB);
-        _passwordHasherMock.Setup(p => p.Verify("shared_hash_A", command.Password)).Returns(true);
-        _passwordHasherMock.Setup(p => p.Verify("shared_hash_B", command.Password)).Returns(true);
-        _otpServiceMock.Setup(o => o.GenerateAndSendOtpAsync(accountB.Email, OtpPurpose.Login, It.IsAny<bool>()))
-            .ReturnsAsync((true, "OTP sent"));
-
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        result.Should().NotBeNull();
-        result.OtpRequired.Should().BeTrue();
-        result.Email.Should().Be("testing@123gmail.com");
-        _otpServiceMock.Verify(o =>
-            o.GenerateAndSendOtpAsync("testing@123gmail.com", OtpPurpose.Login, false), Times.Once);
-    }
-    
-    // Test 8: OTP gửi thất bại -> Throw Exception
+    // Test 6: OTP gửi thất bại -> Throw Exception
     [Fact]
     public async Task Handle_ShouldThrowException_WhenOtpSendFails()
     {
@@ -293,7 +189,7 @@ public class LoginCommandHandlerTests
         var command = new LoginCommand(user.Email, "password123", null, "UserAgent");
         
         _userRepositoryMock.Setup(r =>
-            r.GetByUsernameWithRolesAsync(command.Email)).ReturnsAsync(user);
+            r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync(user);
         _passwordHasherMock.Setup(p =>
             p.Verify(user.PasswordHash, command.Password)).Returns(true);
         _otpServiceMock.Setup(o =>
@@ -329,3 +225,4 @@ public class LoginCommandHandlerTests
             .WithMessage("Invalid credentials");
     }
 }
+

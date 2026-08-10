@@ -1,11 +1,12 @@
 using System;
 using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 using StackExchange.Redis;
+using UavPms.IdentityService.Application.Common.Utilities;
 using UavPms.IdentityService.Domain.Contracts;
 using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Services;
+using UavPms.IdentityService.Infrastructure.Services.Helpers;
 
 namespace UavPms.IdentityService.Infrastructure.Services;
 
@@ -24,35 +25,24 @@ public class RedisOtpService : IOtpService
 
     private IDatabase GetDb() => _redis.GetDatabase();
 
-    private static string HashToken(string token)
-    {
-        var bytes = Encoding.UTF8.GetBytes(token);
-        var hashBytes = SHA256.HashData(bytes);
-        return Convert.ToBase64String(hashBytes);
-    }
-
     public async Task<(bool Success, string Message)> GenerateAndSendOtpAsync(string email, OtpPurpose purpose, bool isResend = false)
     {
         var db = GetDb();
-        var otpKey = $"otp:{purpose.ToString().ToLower()}:{email}";
-        var attemptsKey = $"otp:{purpose.ToString().ToLower()}:{email}:attempts";
+        var otpKey = RedisKeyBuilder.OtpKey(purpose, email);
+        var attemptsKey = RedisKeyBuilder.AttemptsKey(purpose, email);
 
         if (isResend)
         {
             var ttl = await db.KeyTimeToLiveAsync(otpKey);
-            if (ttl.HasValue && ttl.Value > TimeSpan.FromMinutes(2.5)) // less than 30s elapsed
+            var (isCooldownActive, remainingSeconds) = OtpCalculations.CalculateCooldown(ttl);
+            if (isCooldownActive)
             {
-                var elapsedSeconds = 180 - (int)ttl.Value.TotalSeconds;
-                var remaining = 30 - elapsedSeconds;
-                if (remaining > 0)
-                {
-                    return (false, $"Please wait {remaining} seconds before requesting a new OTP.");
-                }
+                return (false, $"Please wait {remainingSeconds} seconds before requesting a new OTP.");
             }
         }
 
         var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-        var hashedCode = HashToken(code);
+        var hashedCode = TokenHasher.Hash(code);
         var expiryTime = DateTime.UtcNow.AddMinutes(3);
 
         try
@@ -81,8 +71,8 @@ public class RedisOtpService : IOtpService
     public async Task<(bool IsValid, string Message)> VerifyOtpAsync(string email, string code, OtpPurpose purpose)
     {
         var db = GetDb();
-        var otpKey = $"otp:{purpose.ToString().ToLower()}:{email}";
-        var attemptsKey = $"otp:{purpose.ToString().ToLower()}:{email}:attempts";
+        var otpKey = RedisKeyBuilder.OtpKey(purpose, email);
+        var attemptsKey = RedisKeyBuilder.AttemptsKey(purpose, email);
 
         // Check if OTP key exists
         var savedOtpHash = await db.StringGetAsync(otpKey);
@@ -92,7 +82,7 @@ public class RedisOtpService : IOtpService
         }
 
         // Verify the code
-        var codeHash = HashToken(code);
+        var codeHash = TokenHasher.Hash(code);
         if (savedOtpHash == codeHash)
         {
             // Verify correct -> delete both keys
@@ -111,14 +101,14 @@ public class RedisOtpService : IOtpService
                 await db.KeyExpireAsync(attemptsKey, ttl.Value);
             }
 
-            if (attempts >= 5)
+            var (exceeded, remainingAttempts) = OtpCalculations.EvaluateAttempts(attempts);
+            if (exceeded)
             {
                 // Reached 5 attempts -> delete both keys
                 await db.KeyDeleteAsync(new RedisKey[] { otpKey, attemptsKey });
                 return (false, "Maximum verification attempts exceeded. Please request a new OTP.");
             }
 
-            var remainingAttempts = 5 - attempts;
             return (false, $"Invalid OTP code. You have {remainingAttempts} attempts remaining.");
         }
     }
@@ -127,14 +117,14 @@ public class RedisOtpService : IOtpService
     public async Task SaveVerificationTokenAsync(string tokenHash, string email, TimeSpan expiry)
     {
         var db = GetDb();
-        var key = $"verification-token:{tokenHash}";
+        var key = RedisKeyBuilder.VerificationTokenKey(tokenHash);
         await db.StringSetAsync(key, email, expiry);
     }
 
     public async Task<string?> GetVerificationTokenEmailAsync(string tokenHash)
     {
         var db = GetDb();
-        var key = $"verification-token:{tokenHash}";
+        var key = RedisKeyBuilder.VerificationTokenKey(tokenHash);
         var email = await db.StringGetAsync(key);
         return email.HasValue ? email.ToString() : null;
     }
@@ -142,21 +132,21 @@ public class RedisOtpService : IOtpService
     public async Task DeleteVerificationTokenAsync(string tokenHash)
     {
         var db = GetDb();
-        var key = $"verification-token:{tokenHash}";
+        var key = RedisKeyBuilder.VerificationTokenKey(tokenHash);
         await db.KeyDeleteAsync(key);
     }
 
     public async Task SaveStepUpTokenAsync(string userId, string purpose, string stepUpToken, TimeSpan expiry)
     {
         var db = GetDb();
-        var key = $"step-up:{userId}:{purpose.ToLower()}";
+        var key = RedisKeyBuilder.StepUpKey(userId, purpose);
         await db.StringSetAsync(key, stepUpToken, expiry);
     }
 
     public async Task<string?> GetStepUpTokenAsync(string userId, string purpose)
     {
         var db = GetDb();
-        var key = $"step-up:{userId}:{purpose.ToLower()}";
+        var key = RedisKeyBuilder.StepUpKey(userId, purpose);
         var token = await db.StringGetAsync(key);
         return token.HasValue ? token.ToString() : null;
     }
@@ -164,7 +154,7 @@ public class RedisOtpService : IOtpService
     public async Task DeleteStepUpTokenAsync(string userId, string purpose)
     {
         var db = GetDb();
-        var key = $"step-up:{userId}:{purpose.ToLower()}";
+        var key = RedisKeyBuilder.StepUpKey(userId, purpose);
         await db.KeyDeleteAsync(key);
     }
 }

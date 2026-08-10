@@ -4,7 +4,7 @@ public class AuditLogDto
 {
     public Guid Id { get; set; }
     public Guid? UserId { get; set; }
-    public string? OperatorUsername { get; set; }
+    public string? OperatorEmail { get; set; }
     public string TableName { get; set; } = string.Empty;
     public Guid RecordId { get; set; }
     public string ActionType { get; set; } = string.Empty;

@@ -23,7 +23,6 @@ public class ReceiveVisionDetectionCommandHandler
     private readonly IGenericRepository<DefectCategory> _defectCategoryRepository;
     private readonly IUserRepository _userRepository;
     private readonly INotificationRepository _notificationRepository;
-    private readonly IEmailService _emailService;
     private readonly IEventPublisher _eventPublisher;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
@@ -37,7 +36,6 @@ public class ReceiveVisionDetectionCommandHandler
         IGenericRepository<DefectCategory> defectCategoryRepository,
         IUserRepository userRepository,
         INotificationRepository notificationRepository,
-        IEmailService emailService,
         IEventPublisher eventPublisher,
         IUnitOfWork unitOfWork,
         IFileStorageService fileStorageService,
@@ -50,7 +48,6 @@ public class ReceiveVisionDetectionCommandHandler
         _defectCategoryRepository = defectCategoryRepository;
         _userRepository = userRepository;
         _notificationRepository = notificationRepository;
-        _emailService = emailService;
         _eventPublisher = eventPublisher;
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
@@ -239,8 +236,6 @@ public class ReceiveVisionDetectionCommandHandler
                 {
                     try
                     {
-                        await _emailService.SendEmailAsync(user.Email, title, body);
-                        
                         notification.IsPushed = true;
                         notification.PushedAt = DateTime.UtcNow;
                         await _notificationRepository.UpdateAsync(notification);

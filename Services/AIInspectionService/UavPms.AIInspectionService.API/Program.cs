@@ -10,10 +10,10 @@ using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using UavPms.AIInspectionService.Application;
-
 using UavPms.AIInspectionService.Infrastructure;
-using UavPms.AIInspectionService.Infrastructure.Messaging;
 using UavPms.AIInspectionService.Infrastructure.Persistence;
+using UavPms.AIInspectionService.Infrastructure.Messaging;
+
 using UavPms.AIInspectionService.API.Middlewares;
 
 using UavPms.AIInspectionService.API.Swagger;
@@ -118,7 +118,6 @@ if (app.Configuration.GetValue<bool>("RunMigrations"))
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     dbContext.Database.Migrate();
-    await DatabaseSeeder.SeedAsync(dbContext);
 }
 else
 {

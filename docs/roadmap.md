@@ -122,6 +122,13 @@
   - Thực hiện xác thực mật khẩu giả định (dummy verification) khi người dùng không tồn tại hoặc không hoạt động nhằm chuẩn hoá thời gian phản hồi giữa user tồn tại và không tồn tại.
 - [X] 22g. **Xác thực Chủ sở hữu của Step-Up Token**:
   - So sánh định danh người dùng trong Step-Up token với định danh người dùng đang đăng nhập trong `HttpContext.User` trước khi cho phép thực hiện hành động cần Step-Up.
+- [X] 22h. **Refactor Authentication dùng Email làm Định danh Đăng nhập Duy nhất (Single Login Identifier - Issue #84)**:
+  - Loại bỏ thuộc tính `Username` khỏi domain entity `User`, DTOs (`AuthUserDto`, `UserDetailDto`, `AssignableUserDto`), DbContext Configuration, và Database Schema.
+  - Cập nhật toàn bộ các luồng xác thực (`LoginCommand`, `VerifyOtpCommand`, `SendOtpCommand`, `ResetPasswordCommand`, OTP Handlers) truy vấn người dùng duy nhất bằng `Email` (`x.Email == input`).
+  - Loại bỏ các phương thức và kiểm tra trùng lặp `Username` (`GetByUsernameWithRolesAsync`) trong Repositories và Command Handlers.
+  - Cập nhật `JwtProvider` phát hành Claim `ClaimTypes.Name` & `ClaimTypes.Email` dựa trên Email người dùng.
+  - Tạo Migration gỡ bỏ cột `Username` và Unique Index `IX_Users_Username` khỏi bảng `Users`.
+  - Cập nhật và bổ sung toàn bộ các Unit Tests bao gồm kiểm tra trùng lặp Email và các kịch bản xác thực mới.
 - [X] 23. **Truy vấn Profile cá nhân (`GetMyProfileQuery`)**: Lấy thông tin tài khoản hiện tại dựa trên token gửi lên.
 - [X] 24. **Cấu hình JwtBearerAuthentication**: Đăng ký Middleware xác thực JWT trong `Program.cs`. Thiết lập các Policy bảo vệ API dựa trên các vai trò: `SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`.
 - [X] 24b. **Bảo mật Endpoint Giám sát (`MonitorController`)**:
@@ -137,16 +144,36 @@
 - [X] 27. **API truy cập lịch sử Audit (`GetAuditLogsQuery`)**: Dành riêng cho `SystemAdmin` và `Manager` giám sát các tác vụ nhạy cảm trong hệ thống.
 - [x] 27b. **API lấy danh sách người dùng cho phân công chuyến bay (`GetAssignableUsersQuery` / `GET /api/v1/users/assignable`)**: Yêu cầu quyền quản trị (`SystemAdmin`/`Manager`), chỉ trả về người dùng hoạt động (`Status == "Active"`) có vai trò `Inspector`, không bao gồm thông tin nhạy cảm.
 
+### Phase 3.3: Tái Cấu Trúc Kiến Trúc & Bảo Mật Nâng Cao cho IdentityService (Refactoring & Enterprise Best Practices)
+- [x] 27c. **Pure Functions & Common Utilities**:
+  - Trích xuất `TokenHasher` băm SHA256 string (Pure Function).
+  - Trích xuất `RedisKeyBuilder` định dạng Redis Keys (Pure Function).
+  - Trích xuất `OtpCalculations` tính toán Cooldown và giới hạn số lần thử nhập sai (Pure Function).
+- [x] 27d. **Reusable Auth Component (`IUserTokenService`)**:
+  - Đóng gói `UserTokenService` chịu trách nhiệm sinh cặp AccessToken + RefreshToken, lưu Session Entity và trả về `AuthResultDto`.
+  - Tái sử dụng ở `LoginCommandHandler`, `RefreshTokenCommandHandler`, và `VerifyOtpCommandHandler`.
+- [x] 27e. **Strategy Pattern cho OTP Verification (`IOtpVerificationStrategy`)**:
+  - Tách luồng `if-else` lồng nhau trong `VerifyOtpCommandHandler` thành các Strategy (`LoginOtpStrategy`, `ForgotPasswordOtpStrategy`, `StepUpOtpStrategy`) kèm `OtpVerificationStrategyResolver`.
+- [x] 27f. **Strongly-Typed Options Pattern (`IOptions<JwtOptions>`)**:
+  - Tạo `JwtOptions` class bind cấu hình JWT từ `appsettings.json`, hỗ trợ `ValidateOnStart()` (Fail Fast) thay thế việc đọc string indexers `IConfiguration["Jwt:..."]`.
+- [x] 27g. **Đóng gói Rich Domain Model & Enum `UserStatus`**:
+  - Chuyển trường `User.Status` từ `string` sang Enum `UserStatus` (`Active`, `Inactive`, `Pending`, `Suspended`).
+  - Đóng gói các phương thức biến đổi trạng thái (`VerifyEmail()`, `Activate()`, `Deactivate()`, `Suspend()`) vào bên trong Entity `User`.
+- [x] 27h. **Refresh Token Reuse Detection & Revocation Cascade (OAuth 2.0 Security BCP)**:
+  - Phát hiện tái sử dụng Refresh Token đã bị thu hồi (`RevokedAt != null`) ➔ Tự động thu hồi TẤT CẢ các Refresh Token active của User để ngăn chặn tấn công chiếm đoạt session (Token Theft).
+- [x] 27i. **Lan truyền `CancellationToken` xuyên suốt**:
+  - Bổ sung tham số `CancellationToken cancellationToken = default` cho tất cả phương thức bất đồng bộ trong `IUserTokenService` và các invocations liên quan.
+
 ---
 
 ## EPIC 4: QUẢN LÝ TÀI SẢN LƯỚI ĐIỆN & GIS (Asset & Spatial Module)
 
 ### Phase 4.1: API Quản lý Tài sản (Hierarchy Asset Registry)
-- [ ] 28. **CRUD API phân cấp tài sản**:
+- [x] 28. **CRUD API phân cấp tài sản**:
   - CRUD cho `Regions`, `Substations`, `TransmissionLines`.
   - Quản lý `Towers` (Cột điện) và `Assets` (Thiết bị gắn trên cột như bát sứ, dây cáp, thanh giằng...).
-- [ ] 29. **Lệnh tạo Cột điện địa không gian (`CreateTowerCommand`)**: Nhận toạ độ phẳng Lat/Lng từ client, tự động tạo đối tượng địa lý `Point` (SRID 4326) để lưu trữ vào trường `geom`.
-- [ ] 30. **Nhập dữ liệu hàng loạt từ file Excel (`ImportTowersCommand`)**: Đọc file Excel danh sách cột điện truyền tải cùng toạ độ địa lý, thực hiện bulk insert tối ưu hiệu năng và tự động gán các loại thiết bị (`Assets`) mặc định lên các cột tương ứng.
+- [x] 29. **Lệnh tạo Cột điện địa không gian (`CreateTowerCommand`)**: Nhận toạ độ phẳng Lat/Lng từ client, tự động tạo đối tượng địa lý `Point` (SRID 4326) để lưu trữ vào trường `geom`.
+- [x] 30. **Nhập dữ liệu hàng loạt từ file Excel (`ImportTowersCommand`)**: Đọc file Excel danh sách cột điện truyền tải cùng toạ độ địa lý, thực hiện bulk insert tối ưu hiệu năng và tự động gán các loại thiết bị (`Assets`) mặc định lên các cột tương ứng.
 
 ### Phase 4.2: Truy vấn Không gian Bản đồ (GIS API)
 - [ ] 31. **Truy vấn lấy tài sản theo viewport bản đồ (`GetAssetsInBoundingBoxQuery`)**: Nhận toạ độ hộp giới hạn (Bounding Box: MinLat, MinLng, MaxLat, MaxLng) từ bản đồ LeafletJS, trả về danh sách các cột điện, trạm biến áp nằm bên trong vùng hiển thị để tối ưu băng thông.
@@ -165,10 +192,10 @@
 - [ ] 36. **API nạp Nhật ký bay (`UploadFlightLogCommand`)**: Inspector tải lên tệp log chuyến bay từ drone (chứa chuỗi GPS track dạng JSONB, pin thấp nhất ghi nhận, độ cao tối đa, thời gian bay) để lưu vào bảng `MissionFlightLogs`.
 
 ### Phase 5.2: Tải lên hình ảnh kiểm định & Báo cáo Sự cố
-- [ ] 37. **API Tải ảnh/video kiểm tra (`UploadInspectionMediaCommand`)**: Inspector tải lên các tệp đa phương tiện độ phân giải cao thu thập từ UAV, liên kết tệp đó với `MissionId` và `AssetId` cụ thể.
+- [x] 37. **API Tải ảnh/video kiểm tra (`UploadInspectionMediaCommand`)**: Inspector tải lên các tệp đa phương tiện độ phân giải cao thu thập từ UAV, liên kết tệp đó với `MissionId` và `AssetId` cụ thể.
 - [ ] 38. **Dịch vụ tự động phân tích GPS EXIF**: Viết Service đọc siêu dữ liệu EXIF của tệp ảnh tải lên, trích xuất toạ độ GPS lúc chụp và thời gian chụp để lưu vào trường `geom` và `captured_at` của bảng `InspectionMedia`.
-- [ ] 39. **Hạ tầng Lưu trữ Tệp (`IFileStorageService`)**: Triển khai lưu trữ vật lý trên Local Disk hoặc tích hợp Object Storage (MinIO/S3).
-- [ ] 40. **Bắn sự kiện xử lý AI**: Sau khi lưu ảnh thành công, tự động phát hành sự kiện `MediaUploadedEvent` thông qua RabbitMQ hoặc MediatR nội bộ để kích hoạt chuỗi phân tích AI ngầm.
+- [x] 39. **Hạ tầng Lưu trữ Tệp (`IFileStorageService`)**: Triển khai lưu trữ vật lý trên Local Disk hoặc tích hợp Object Storage (MinIO/S3).
+- [x] 40. **Bắn sự kiện xử lý AI**: Sau khi lưu ảnh thành công, tự động phát hành sự kiện `MediaUploadedEvent` / `ImageUploadedEvent` thông qua RabbitMQ hoặc MediatR nội bộ để kích hoạt chuỗi phân tích AI ngầm.
 - [ ] 41. **API báo cáo sự cố hiện trường (`SubmitIncidentReportCommand`)**: Cho phép Inspector gửi báo cáo khẩn cấp khi gặp sự cố bất ngờ ngoài thực địa (drone rơi, thời tiết xấu hoãn bay, hoặc phát hiện phá hoại, sạt lở hành lang lưới điện cần can thiệp ngay) lưu vào bảng `IncidentReports`.
 
 ---
@@ -176,14 +203,14 @@
 ## EPIC 6: AI PIPELINE & THẨM ĐỊNH LỖI (AI Defect Detection & HITL)
 
 ### Phase 6.1: Tích hợp Python YOLOv8 & Phân loại sự cố
-- [ ] 42. **HTTP Client tích hợp Polly**: Tạo bộ kết nối HTTP hoặc RabbitMQ Consumer kết nối với máy chủ xử lý Python AI. Sử dụng thư viện Polly để cấu hình cơ chế tự động thử lại (Retry) và ngắt mạch (Circuit Breaker) đề phòng máy chủ AI quá tải.
-- [ ] 43. **Đồng bộ Kết quả Phân tích AI**: Tiếp nhận danh sách các hộp giới hạn (bounding box), độ tin cậy (confidence score) và phân loại lỗi từ Python AI (5 nhóm lỗi: Corrosion, Surface Crack, Vegetation Encroachment, Missing Components, Insulator Damage).
-- [ ] 44. **Tự động lưu sự cố (`DetectedAnomalies`)**: Lưu thông tin sự cố vào cơ sở dữ liệu với trạng thái mặc định là `Pending` (Chờ thẩm định).
-- [ ] 45. **Tự động Kích hoạt Cảnh báo Khẩn cấp**: Nếu lỗi phát hiện nằm trong danh mục sự cố khẩn cấp (cờ `is_emergency_class` là true trong bảng `DefectCategories` bao gồm: Cháy/Nhiệt độ cao, Đứt dây cáp, Đổ cột điện), hệ thống lập tức tự động tạo bản ghi `EmergencyAlert` với mức độ ưu tiên cao nhất (`Priority` = Critical).
+- [x] 42. **HTTP Client / Message Consumer tích hợp Python AI**: Tạo bộ kết nối HTTP hoặc RabbitMQ Consumer kết nối với máy chủ xử lý Python AI. Sử dụng thư viện Polly để cấu hình cơ chế tự động thử lại (Retry) và ngắt mạch (Circuit Breaker) đề phòng máy chủ AI quá tải.
+- [x] 43. **Đồng bộ Kết quả Phân tích AI**: Tiếp nhận danh sách các hộp giới hạn (bounding box), độ tin cậy (confidence score) và phân loại lỗi từ Python AI (5 nhóm lỗi: Corrosion, Surface Crack, Vegetation Encroachment, Missing Components, Insulator Damage).
+- [x] 44. **Tự động lưu sự cố (`DetectedAnomalies`)**: Lưu thông tin sự cố vào cơ sở dữ liệu với trạng thái mặc định là `Pending` (Chờ thẩm định).
+- [x] 45. **Tự động Kích hoạt Cảnh báo Khẩn cấp**: Nếu lỗi phát hiện nằm trong danh mục sự cố khẩn cấp (cờ `is_emergency_class` là true trong bảng `DefectCategories` bao gồm: Cháy/Nhiệt độ cao, Đứt dây cáp, Đổ cột điện), hệ thống lập tức tự động tạo bản ghi `EmergencyAlert` với mức độ ưu tiên cao nhất (`Priority` = Critical).
 
 ### Phase 6.2: Nghiệp vụ Duyệt lỗi của Analyst (Human-in-the-loop)
-- [ ] 46. **API lấy danh sách lỗi chờ duyệt phân trang (`GetPendingAnomaliesQuery`)**: Hiển thị ảnh chụp gốc, khung bounding box do AI vẽ đè lên và các thông số đi kèm để Analyst thẩm định.
-- [ ] 47. **Lệnh duyệt lỗi (`ValidateAnomalyCommand`)**: Analyst có quyền xác nhận lỗi (`Confirmed` - lỗi chính xác) hoặc bác bỏ lỗi (`Rejected` - nhận diện sai của AI), cập nhật ghi chú cá nhân (`analyst_notes`), hệ thống tự động lưu ID của Analyst và thời điểm duyệt.
+- [x] 46. **API lấy danh sách lỗi chờ duyệt phân trang (`GetMissionAiDetectionsQuery`)**: Hiển thị ảnh chụp gốc, khung bounding box do AI vẽ đè lên và các thông số đi kèm để Analyst thẩm định.
+- [x] 47. **Lệnh duyệt lỗi (`ReviewMissionAiDetectionCommand`)**: Analyst có quyền xác nhận lỗi (`Confirmed` - lỗi chính xác) hoặc bác bỏ lỗi (`Rejected` - nhận diện sai của AI), cập nhật ghi chú cá nhân (`analyst_notes`), hệ thống tự động lưu ID của Analyst và thời điểm duyệt.
 
 ---
 
@@ -235,8 +262,8 @@
 ## EPIC 10: THÔNG BÁO HỆ THỐNG & BÁO CÁO THỐNG KÊ (Notifications & Analytics)
 
 ### Phase 10.1: Dịch vụ Thông báo in-app (Notifications Service)
-- [ ] 61. **Phát triển `NotificationService`**: Viết cơ chế lưu trữ và phân phối thông báo in-app vào bảng `Notifications`.
-- [ ] 62. **Tích hợp thông báo tự động theo sự kiện**:
+- [x] 61. **Phát triển `NotificationService`**: Viết cơ chế lưu trữ và phân phối thông báo in-app vào bảng `Notifications`.
+- [x] 62. **Tích hợp thông báo tự động theo sự kiện**:
   - Gửi thông báo cho Inspector khi được giao chuyến bay mới.
   - Gửi thông báo cho Analyst khi có hình ảnh kiểm tra mới cần duyệt hoặc cảnh báo khẩn cấp mới.
   - Gửi thông báo cho Technician khi có phiếu bảo trì mới được gán.

@@ -12,14 +12,6 @@ public class UserRepository : GenericRepository<User>, IUserRepository
     {
     }
 
-    public async Task<User?> GetByUsernameWithRolesAsync(string username)
-    {
-        return await _context.Users
-            .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.Username == username);
-    }
-
     public async Task<User?> GetByEmailWithRolesAsync(string email)
     {
         return await _context.Users
@@ -56,7 +48,6 @@ public class UserRepository : GenericRepository<User>, IUserRepository
         {
             var lowerSearch = search.ToLower();
             query = query.Where(u =>
-                u.Username.ToLower().Contains(lowerSearch) ||
                 u.Email.ToLower().Contains(lowerSearch) ||
                 u.FullName.ToLower().Contains(lowerSearch)
             );

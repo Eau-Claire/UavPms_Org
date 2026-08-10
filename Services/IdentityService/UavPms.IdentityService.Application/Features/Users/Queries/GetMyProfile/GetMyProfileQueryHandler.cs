@@ -17,7 +17,7 @@ public class GetMyProfileQueryHandler : IRequestHandler<GetMyProfileQuery, AuthU
     public async Task<AuthUserDto> Handle(GetMyProfileQuery request, CancellationToken cancellationToken)
     {
         var user = await _userRepository.GetByIdWithRolesAsync(request.UserId);
-        if (user == null || user.Status == "Inactive")
+        if (user == null || !user.IsActive())
         {
             throw new UnauthorizedAccessException("User not found or inactive");
         }
@@ -26,7 +26,6 @@ public class GetMyProfileQueryHandler : IRequestHandler<GetMyProfileQuery, AuthU
         {
             Id = user.Id,
             Email = user.Email,
-            Username = user.Username,
             FullName = user.FullName,
             Roles = user.UserRoles.Select(ur => ur.Role!.RoleName).ToList(),
         };

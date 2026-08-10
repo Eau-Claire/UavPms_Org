@@ -25,9 +25,8 @@ public class LoginOtpHandler : IOtpPurposeHandler
             return PreconditionResult.Failure("Email is required.");
         }
 
-        var user = await _userRepository.GetByUsernameWithRolesAsync(email)
-                   ?? await _userRepository.GetByEmailWithRolesAsync(email);
-        if (user == null || user.Status != "Active")
+        var user = await _userRepository.GetByEmailWithRolesAsync(email);
+        if (user == null || !user.IsActive())
         {
             return PreconditionResult.Failure("User not found or inactive.");
         }

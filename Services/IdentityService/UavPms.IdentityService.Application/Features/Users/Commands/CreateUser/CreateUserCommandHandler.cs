@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 
@@ -31,18 +32,10 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
 
     public async Task<Guid> Handle(CreateUserCommand request, CancellationToken cancellationToken)
     {
-        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email)
-            ?? await _userRepository.GetByUsernameWithRolesAsync(request.Email);
+        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email);
         if (existingEmail != null)
         {
             throw new ArgumentException("Email already exists.");
-        }
-
-        var existingUsername = await _userRepository.GetByUsernameWithRolesAsync(request.Username)
-            ?? await _userRepository.GetByEmailWithRolesAsync(request.Username);
-        if (existingUsername != null)
-        {
-            throw new ArgumentException("Username already exists");
         }
 
         var rolesInDb = await _roleRepository.FindAsync(r => request.Roles.Contains(r.RoleName));
@@ -50,13 +43,12 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Username = request.Username,
             Email = request.Email,
             PasswordHash = _passwordHasher.Hash(request.Password),
             FullName = request.FullName,
             Phone = request.Phone,
             CreatedAt = DateTime.UtcNow,
-            Status = "Active"
+            Status = UserStatus.Active
         };
 
         user.UserRoles = rolesInDb.Select(role => new UserRole
