@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices.JavaScript;
 using MediatR;
 using NetTopologySuite;
 using NetTopologySuite.Geometries;
@@ -42,8 +41,7 @@ public class UpdateTransmissionLineCommandHandler : IRequestHandler<UpdateTransm
         Geometry? geom = null;
         if (!string.IsNullOrEmpty(request.GeomWkt))
         {
-            var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
-            var wktReader = new WKTReader(geometryFactory);
+            var wktReader = new WKTReader(new NtsGeometryServices(new PrecisionModel(), 4326));
 
             try
             {
