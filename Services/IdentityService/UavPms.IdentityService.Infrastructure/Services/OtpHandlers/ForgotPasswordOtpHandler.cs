@@ -1,0 +1,37 @@
+using System.Threading.Tasks;
+using System.Security.Claims;
+using UavPms.IdentityService.Domain.Enums;
+using UavPms.IdentityService.Domain.Interfaces.Services;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
+
+namespace UavPms.IdentityService.Infrastructure.Services.OtpHandlers;
+
+public class ForgotPasswordOtpHandler : IOtpPurposeHandler
+{
+    private readonly IUserRepository _userRepository;
+
+    public ForgotPasswordOtpHandler(IUserRepository userRepository)
+    {
+        _userRepository = userRepository;
+    }
+
+    public OtpPurpose Purpose => OtpPurpose.ForgotPassword;
+    public bool RequiresAuthentication => false;
+
+    public async Task<PreconditionResult> ValidatePreconditionAsync(string? email, ClaimsPrincipal? currentUser)
+    {
+        if (string.IsNullOrEmpty(email))
+        {
+            return PreconditionResult.Failure("Email is required.");
+        }
+
+        var user = await _userRepository.GetByEmailWithRolesAsync(email);
+        if (user == null || !user.IsActive())
+        {
+            // Silent success to prevent user enumeration
+            return PreconditionResult.SilentSuccess();
+        }
+
+        return PreconditionResult.Success(user.Email);
+    }
+}

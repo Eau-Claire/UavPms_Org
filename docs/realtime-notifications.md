@@ -73,6 +73,7 @@ Current event:
 
 ```text
 NotificationReceived
+AiAnalysisStatusChanged
 ```
 
 Reserved future events:
@@ -102,6 +103,27 @@ UnreadCountChanged
 ```
 
 The payload intentionally omits unnecessary database fields. Clients should call the REST detail/history APIs when they need full persisted data.
+
+`AiAnalysisStatusChanged` is sent to the uploading user's group when a mission AI request is queued and when the AI result consumer marks it completed or failed:
+
+```json
+{
+  "requestId": "...",
+  "batchId": "...",
+  "missionId": "...",
+  "mediaId": "...",
+  "mediaType": "Video",
+  "status": "Pending",
+  "savedDetections": 0,
+  "createdAlerts": 0,
+  "errorCode": null,
+  "errorMessage": null,
+  "createdAt": "...",
+  "completedAt": null
+}
+```
+
+Frontend clients should listen for `AiAnalysisStatusChanged`. When `status` is `Completed`, call the mission detections API to refresh timeline/frame/crop results. When `status` is `Failed`, show `errorMessage`.
 
 ## Scalability note
 

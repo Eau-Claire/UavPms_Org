@@ -48,7 +48,7 @@ PMS_BRIDGE_SOFTWARE_VERSION=1.0.0
 Mở terminal và di chuyển đến thư mục dự án PMS:
 ```bash
 cd /home/minhchau/Documents/PMS
-dotnet run --project UavPms.WebApi
+dotnet run --project Services/AIInspectionService/UavPms.AIInspectionService.csproj --urls http://localhost:5196
 ```
 Đợi log hiển thị thông báo ứng dụng đã chạy:
 `Now listening on: http://localhost:5196`

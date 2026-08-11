@@ -1,0 +1,208 @@
+using System.Linq.Expressions;
+using FluentAssertions;
+using Microsoft.Extensions.Configuration;
+using Moq;
+using UavPms.IdentityService.Application.Features.Auth.Commands.RefreshToken;
+using UavPms.IdentityService.Domain.Entities;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
+using UavPms.IdentityService.Domain.Interfaces.Services;
+using RefreshTokenEntity = UavPms.IdentityService.Domain.Entities.RefreshToken;
+using UavPms.IdentityService.Domain.Enums;
+
+namespace UavPms.IdentityService.Tests.Features.Auth;
+
+public class RefreshTokenCommandHandlerTests
+{
+    private readonly Mock<IGenericRepository<RefreshTokenEntity>> _refreshTokenRepositoryMock;
+    private readonly Mock<IUserRepository> _userRepositoryMock;
+    private readonly Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService> _userTokenServiceMock;
+    private readonly RefreshTokenCommandHandler _handler;
+    private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+
+    public RefreshTokenCommandHandlerTests()
+    {
+        _refreshTokenRepositoryMock = new Mock<IGenericRepository<RefreshTokenEntity>>();
+        _userRepositoryMock = new Mock<IUserRepository>();
+        _userTokenServiceMock = new Mock<UavPms.IdentityService.Application.Common.Interfaces.IUserTokenService>();
+        _unitOfWorkMock = new Mock<IUnitOfWork>();
+
+        _handler = new RefreshTokenCommandHandler(
+            _refreshTokenRepositoryMock.Object,
+            _userRepositoryMock.Object,
+            _userTokenServiceMock.Object,
+            _unitOfWorkMock.Object
+        );
+    }
+
+    #region Helper
+
+    private static User CreateActivateUser()
+    {
+        return new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "user@test.com",
+            FullName = "User",
+            Status = UserStatus.Active,
+            UserRoles = new List<UserRole>
+            {
+                new UserRole
+                {
+                    Role = new Role { Id = 1, RoleName = "Admin" }
+                }
+            }
+        };
+    }
+
+    private static RefreshTokenEntity CreateRefreshToken(Guid userId)
+    {
+        return new RefreshTokenEntity
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            TokenHash = "token-hashed",
+            ExpiresAt = DateTime.Now.AddDays(5),
+            RevokedAt = null,
+            CreatedAt = DateTime.UtcNow.AddDays(-2),
+        };
+    }
+
+    #endregion
+    
+    // Test 1: Refresh TOken không tồn tại -> UnauthorizedAccessException
+    [Fact]
+    public async Task Handle_ShouldThrowUnauthorized_WhenTokenNotFound()
+    {
+        var command = new RefreshTokenCommand("invalid-token", "UserAgent");
+        _refreshTokenRepositoryMock.Setup(r =>
+            r.FindAsync(It.IsAny<Expression<Func<RefreshTokenEntity, bool>>>(), true))
+            .ReturnsAsync(new List<RefreshTokenEntity>()); // Không tìm thấy
+        
+        // act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Invalid refresh token");
+    }
+    
+    // Tset: 2: Refresh Token đã hết hạn => UnauthorizedAccessToken
+    [Fact]
+    public async Task Handle_ShouldThrowUnauthorized_WhenTokenExpired()
+    {
+        // arrange
+        var command = new RefreshTokenCommand("expired-token", "UserAgent");
+        var expiredToken = new RefreshTokenEntity
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            TokenHash = "token-hashed",
+            ExpiresAt = DateTime.UtcNow.AddDays(-1),
+            RevokedAt = null,
+        };
+        
+        _refreshTokenRepositoryMock.Setup(r =>
+            r.FindAsync(It.IsAny<Expression<Func<RefreshTokenEntity, bool>>>(), true))
+            .ReturnsAsync(new List<RefreshTokenEntity> { expiredToken });
+        
+        // act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("Expired refresh token");
+    }
+    
+    // Test 3: User không tồn tại hoặc Inactive -> UnauthorizedException
+    [Fact]
+    public async Task Handle_ShouldThrowUnauthorized_WhenUserNotFoundOrInactive()
+    {
+        // arrange
+        var userId = Guid.NewGuid();
+        var command = new RefreshTokenCommand("valid-token", "UserAgent");
+        var token = CreateRefreshToken(userId);
+        
+        _refreshTokenRepositoryMock.Setup(r =>
+            r.FindAsync(It.IsAny<Expression<Func<RefreshTokenEntity, bool>>>(), true))
+            .ReturnsAsync(new List<RefreshTokenEntity>{ token });
+        _userRepositoryMock.Setup(r =>
+            r.GetByIdWithRolesAsync(userId))
+            .ReturnsAsync((User?)null); // User does not exist
+        
+        // act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("User not found or inactive");
+    }
+    
+    // Test 4: Refresh thành công -> revoke old token, trả new token pair
+    [Fact]
+    public async Task Handle_ShouldRevokeOldAndReturnNewTokens_WhenValid()
+    {
+        var user = CreateActivateUser();
+        var command = new RefreshTokenCommand("valid-token", "UserAgent");
+        var existingToken =  CreateRefreshToken(user.Id);
+        
+        _refreshTokenRepositoryMock.Setup(r => 
+            r.FindAsync(It.IsAny<Expression<Func<RefreshTokenEntity, bool>>>(), true))
+            .ReturnsAsync(new List<RefreshTokenEntity> { existingToken });
+        
+        _userRepositoryMock.Setup(r => 
+            r.GetByIdWithRolesAsync(user.Id))
+            .ReturnsAsync(user);
+        
+        _userTokenServiceMock.Setup(s =>
+            s.IssueTokensAsync(user, command.UserAgent, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UavPms.IdentityService.Application.Features.Auth.DTOs.AuthResultDto.SuccessResult(
+                "new-access-token", 
+                "new-refresh-token", 
+                3600, 
+                new UavPms.IdentityService.Application.Features.Auth.DTOs.AuthUserDto
+                {
+                    Id = user.Id,
+                    Email = user.Email,
+                    FullName = user.FullName,
+                    Roles = new List<string> { "Admin" }
+                }));
+
+        // act
+        var result = await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        result.Should().NotBeNull();
+        result.Success.Should().BeTrue();
+        result.AccessToken.Should().Be("new-access-token");
+        result.RefreshToken.Should().Be("new-refresh-token");
+        result.User.Should().NotBeNull();
+        result.User!.Roles.Should().Contain("Admin");
+    }
+    
+    // Test 5: Refresh token đã bị revoke -> Reuse Detection triggers revocation cascade
+    [Fact]
+    public async Task Handle_ShouldThrowUnauthorized_WhenTokenIsRevoked()
+    {
+        var userId = Guid.NewGuid();
+        var command = new RefreshTokenCommand("revoked-token", "UserAgent");
+        var revokedToken = new RefreshTokenEntity
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            TokenHash = "revoked-hash",
+            ExpiresAt = DateTime.UtcNow.AddDays(1),
+            RevokedAt = DateTime.UtcNow.AddHours(-1)
+        };
+         
+        _refreshTokenRepositoryMock.Setup(r =>
+            r.FindAsync(It.IsAny<Expression<Func<RefreshTokenEntity, bool>>>(), true))
+            .ReturnsAsync(new List<RefreshTokenEntity> { revokedToken });
+        
+        // act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+        
+        // assert
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("*Revoked refresh token reused*");
+    }
+}

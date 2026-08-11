@@ -1,0 +1,33 @@
+using MediatR;
+using UavPms.IdentityService.Application.Features.Auth.DTOs;
+using UavPms.IdentityService.Application.Features.Users.Queries.GetMyProfile;
+using UavPms.IdentityService.Domain.Interfaces.Repositories;
+
+namespace UavPms.IdentityService.Application.Features.Users.Queries.GetMyProfile;
+
+public class GetMyProfileQueryHandler : IRequestHandler<GetMyProfileQuery, AuthUserDto>
+{
+    private readonly IUserRepository _userRepository;
+
+    public GetMyProfileQueryHandler(IUserRepository userRepository)
+    {
+        _userRepository = userRepository;
+    }
+    
+    public async Task<AuthUserDto> Handle(GetMyProfileQuery request, CancellationToken cancellationToken)
+    {
+        var user = await _userRepository.GetByIdWithRolesAsync(request.UserId);
+        if (user == null || !user.IsActive())
+        {
+            throw new UnauthorizedAccessException("User not found or inactive");
+        }
+
+        return new AuthUserDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            FullName = user.FullName,
+            Roles = user.UserRoles.Select(ur => ur.Role!.RoleName).ToList(),
+        };
+    }
+}
