@@ -18,4 +18,10 @@ public class Notification
     public DateTime? PushedAt { get; set; }
 
     public virtual User? User { get; set; }
+    
+    public void MarkAsRead()
+    {
+        IsRead = true;
+        ReadAt = DateTime.UtcNow;
+    }
 }
