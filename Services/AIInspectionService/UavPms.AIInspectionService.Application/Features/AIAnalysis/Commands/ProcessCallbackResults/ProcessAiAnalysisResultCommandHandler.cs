@@ -1,15 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using UavPms.Shared.Contracts.Events;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
 using UavPms.AIInspectionService.Application.Interfaces;
-using UavPms.AIInspectionService.Domain.Contracts;
+using UavPms.AIInspectionService.Application.Common.Utilities;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
@@ -216,7 +211,10 @@ public class ProcessAiAnalysisResultCommandHandler
                             : $"AI evaluation: severity={evaluation.Severity}, risk={evaluation.RiskLevel}, score={evaluation.PriorityScore}. {evaluation.Reason}";
 
                         // 5. Check if it's an emergency alert
-                        if (evaluation.RequiresImmediateAlert)
+                        var isEmergency = evaluation.RequiresImmediateAlert ||
+                            BoundingBoxCalculations.IsEmergencyClass(detection.CategoryCode);
+
+                        if (isEmergency)
                         {
                             var latencySeconds = (int)Math.Max(0, (DateTime.UtcNow - request.CompletedAt).TotalSeconds);
 
@@ -231,10 +229,10 @@ public class ProcessAiAnalysisResultCommandHandler
                                 TriggeredAt = DateTime.UtcNow,
                                 DeliveryLatencySeconds = latencySeconds
                             };
-
+                            
                             await _emergencyAlertRepo.AddAsync(alert);
                             createdAlerts++;
-
+                            
                             await _eventPublisher.PublishAsync(new DefectDetectedEvent
                             {
                                 InspectionId = media.MissionId,
@@ -245,7 +243,7 @@ public class ProcessAiAnalysisResultCommandHandler
                                 DefectType = $"{category.CategoryName} ({evaluation.Severity})",
                                 DetectedAt = DateTime.UtcNow
                             });
-
+                            
                             // 6. Send Notification to Mission Manager
                             if (media.Mission != null)
                             {

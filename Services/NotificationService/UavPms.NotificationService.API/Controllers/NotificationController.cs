@@ -28,7 +28,7 @@ public class NotificationController : ControllerBase
     }
 
     [HttpGet("history")]
-    public async Task<IActionResult> GetHistory([FromQuery] string userId)
+    public async Task<IActionResult> GetHistory([FromQuery] string userId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(userId))
         {
@@ -41,28 +41,28 @@ public class NotificationController : ControllerBase
         }
 
         var query = new GetNotificationsQuery(userGuid);
-        var result = await _mediator.Send(query);
+        var result = await _mediator.Send(query, cancellationToken);
         return Ok(new ApiResponse(true, "Notifications retrieved successfully", result));
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
         var query = new GetNotificationByIdQuery(id);
-        var result = await _mediator.Send(query);
+        var result = await _mediator.Send(query, cancellationToken);
         return Ok(new ApiResponse(true, "Notification retrieved successfully", result));
     }
 
     [HttpPut("{id:guid}/read")]
-    public async Task<IActionResult> MarkAsRead(Guid id)
+    public async Task<IActionResult> MarkAsRead(Guid id, CancellationToken cancellationToken = default)
     {
         var command = new MarkNotificationAsReadCommand(id);
-        await _mediator.Send(command);
+        await _mediator.Send(command, cancellationToken);
         return Ok(new ApiResponse(true, "Notification marked as read successfully."));
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateNotification([FromBody] CreateNotificationRequest request)
+    public async Task<IActionResult> CreateNotification([FromBody] CreateNotificationRequest request, CancellationToken cancellationToken = default)
     {
         var command = new CreateNotificationCommand(
             request.UserId, 
@@ -73,15 +73,15 @@ public class NotificationController : ControllerBase
             request.Body
         );
         
-        var result = await _mediator.Send(command);
+        var result = await _mediator.Send(command, cancellationToken);
         return CreatedAtAction(nameof(GetHistory), new { userId = result.UserId.ToString() }, result);
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> DeleteNotification(Guid id)
+    public async Task<IActionResult> DeleteNotification(Guid id, CancellationToken cancellationToken = default)
     {
         var command = new DeleteNotificationCommand(id);
-        await _mediator.Send(command);
+        await _mediator.Send(command, cancellationToken);
         return Ok(new ApiResponse(true, "Notification deleted successfully."));
     }
 

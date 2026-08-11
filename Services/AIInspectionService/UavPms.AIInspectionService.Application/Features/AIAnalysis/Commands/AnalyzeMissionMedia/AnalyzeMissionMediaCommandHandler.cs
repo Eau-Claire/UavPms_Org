@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using UavPms.Shared.Contracts.Events;
@@ -11,6 +6,8 @@ using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
+using Microsoft.Extensions.Options;
+using UavPms.AIInspectionService.Application.Common.Options;
 
 namespace UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
 
@@ -29,10 +26,11 @@ public class AnalyzeMissionMediaCommandHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
     private readonly IEventPublisher _eventPublisher;
-
+    
     private readonly ICurrentUserServices _currentUser;
     private readonly ILogger<AnalyzeMissionMediaCommandHandler> _logger;
-
+    private readonly PythonAIOptions _pythonAIOptions;
+    
     public AnalyzeMissionMediaCommandHandler(
         IGenericRepository<Mission> missionRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
@@ -41,7 +39,8 @@ public class AnalyzeMissionMediaCommandHandler
         IFileStorageService fileStorageService,
         IEventPublisher eventPublisher,
         ICurrentUserServices currentUser,
-        ILogger<AnalyzeMissionMediaCommandHandler> logger)
+        ILogger<AnalyzeMissionMediaCommandHandler> logger,
+        IOptions<PythonAIOptions> pythonAIOptions)
     {
         _missionRepository = missionRepository;
         _mediaRepository = mediaRepository;
@@ -51,6 +50,7 @@ public class AnalyzeMissionMediaCommandHandler
         _eventPublisher = eventPublisher;
         _currentUser = currentUser;
         _logger = logger;
+        _pythonAIOptions = pythonAIOptions.Value;
     }
 
     public async Task<AIAnalysisBatchUploadResult> Handle(
