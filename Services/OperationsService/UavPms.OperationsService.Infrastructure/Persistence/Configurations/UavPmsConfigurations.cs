@@ -156,6 +156,8 @@ public class UavConfiguration : IEntityTypeConfiguration<Uav>
         builder.Property(e => e.CurrentLocation).HasColumnType("geometry");
         builder.HasIndex(e => e.CurrentLocation).HasMethod("gist");
         builder.HasIndex(e => e.UavCode).IsUnique();
+
+        builder.Property(e => e.Status).HasConversion<string>();
     }
 }
 

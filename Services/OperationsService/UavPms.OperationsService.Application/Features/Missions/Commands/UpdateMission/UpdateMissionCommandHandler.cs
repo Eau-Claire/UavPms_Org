@@ -48,7 +48,7 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
                 Id = Guid.NewGuid(),
                 UavCode = request.DroneCode,
                 Model = "Standard",
-                Status = "Active",
+                Status = DroneStatus.Idle,
                 BatteryLevel = 100,
                 CreatedAt = DateTime.Now,
             };

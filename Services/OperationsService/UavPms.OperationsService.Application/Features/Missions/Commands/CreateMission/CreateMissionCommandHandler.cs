@@ -50,7 +50,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
                 Id = Guid.NewGuid(),
                 UavCode = request.DroneCode,
                 Model = "Standard",
-                Status = "Active",
+                Status = DroneStatus.Idle,
                 BatteryLevel = 100,
                 CreatedAt = DateTime.UtcNow,
             };
