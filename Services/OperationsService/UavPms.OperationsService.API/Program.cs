@@ -14,6 +14,7 @@ using UavPms.OperationsService.Infrastructure;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.OperationsService.API.Middlewares;
 using UavPms.OperationsService.API.Swagger;
+using UavPms.OperationsService.Application.Common.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,19 +60,18 @@ builder.Services.AddAuthentication(options =>
     })
     .AddJwtBearer(options =>
     {
-        var jwtSettings = builder.Configuration.GetSection("Jwt");
-        var secretKey = jwtSettings["SecretKey"] ??
-                        throw new InvalidOperationException("Jwt:SecretKey is not configured in appsettings.");
-
+        var jwtSettings = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
+            ?? throw new InvalidOperationException("Jwt configuration section is missing or invalid.");
+        
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings["Issuer"],
-            ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+            ValidIssuer = jwtSettings.Issuer,
+            ValidAudience = jwtSettings.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
             ClockSkew = TimeSpan.Zero
         };
     });
@@ -125,8 +125,11 @@ else
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 
-var rawPath = builder.Configuration["FileStorage:AlertImagesPath"] ?? "uav_storage/images";
-var imagePath = Path.IsPathRooted(rawPath) ? rawPath : Path.Combine(builder.Environment.ContentRootPath, rawPath);
+var fileOptions = builder.Configuration.GetSection(FileStorageOptions.SectionName).Get<FileStorageOptions>() 
+                  ?? new FileStorageOptions();
+var rawPath = fileOptions.AlertImagesPath;
+var imagePath = Path.IsPathRooted(rawPath) 
+    ? rawPath : Path.Combine(builder.Environment.ContentRootPath, rawPath);
 
 try
 {

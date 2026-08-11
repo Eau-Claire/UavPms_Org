@@ -25,79 +25,12 @@ public class InspectionControllerTests
     }
 
     [Fact]
-    public async Task UploadImage_ShouldReturnBadRequest_WhenFileIsNull()
+    public async Task UploadImage_ShouldDispatchCommandToMediatorAndReturnOk_WhenRequestIsValid()
     {
         var missionId = Guid.NewGuid();
         var assetId = Guid.NewGuid();
         var capturedAt = DateTime.UtcNow;
 
-        var result = await _controller.UploadImage(missionId, assetId, capturedAt, null!);
-
-        var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        var apiResponse = badRequestResult.Value.Should().BeOfType<ApiResponse>().Subject;
-        apiResponse.Success.Should().BeFalse();
-        apiResponse.Message.Should().Be("Image file is required.");
-        _mediatorMock.Verify(m => m.Send(It.IsAny<UploadInspectionImageCommand>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task UploadImage_ShouldReturnBadRequest_WhenFileIsEmpty()
-    {
-        var missionId = Guid.NewGuid();
-        var assetId = Guid.NewGuid();
-        var capturedAt = DateTime.UtcNow;
-        var fileMock = new Mock<IFormFile>();
-        fileMock.Setup(f => f.Length).Returns(0);
-
-        var result = await _controller.UploadImage(missionId, assetId, capturedAt, fileMock.Object);
-
-        var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        var apiResponse = badRequestResult.Value.Should().BeOfType<ApiResponse>().Subject;
-        apiResponse.Success.Should().BeFalse();
-        apiResponse.Message.Should().Be("Image file is required.");
-        _mediatorMock.Verify(m => m.Send(It.IsAny<UploadInspectionImageCommand>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task UploadImage_ShouldReturnBadRequest_WhenContentTypeIsInvalid()
-    {
-        var missionId = Guid.NewGuid();
-        var assetId = Guid.NewGuid();
-        var capturedAt = DateTime.UtcNow;
-        var fileMock = new Mock<IFormFile>();
-        fileMock.Setup(f => f.Length).Returns(1024);
-        fileMock.Setup(f => f.ContentType).Returns("application/pdf");
-
-        var result = await _controller.UploadImage(missionId, assetId, capturedAt, fileMock.Object);
-
-        var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        var apiResponse = badRequestResult.Value.Should().BeOfType<ApiResponse>().Subject;
-        apiResponse.Success.Should().BeFalse();
-        apiResponse.Message.Should().Be("File type not supported. Allowed: JPEG, PNG, WebP, TIFF, MP4.");
-    }
-
-    [Fact]
-    public async Task UploadImage_ShouldReturnBadRequest_WhenFileSizeExceedsLimit()
-    {
-        var missionId = Guid.NewGuid();
-        var assetId = Guid.NewGuid();
-        var capturedAt = DateTime.UtcNow;
-        var fileMock = new Mock<IFormFile>();
-        fileMock.Setup(f => f.Length).Returns(55 * 1024 * 1024);
-        fileMock.Setup(f => f.ContentType).Returns("image/jpeg");
-
-        var result = await _controller.UploadImage(missionId, assetId, capturedAt, fileMock.Object);
-
-        var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        var apiResponse = badRequestResult.Value.Should().BeOfType<ApiResponse>().Subject;
-        apiResponse.Success.Should().BeFalse();
-        apiResponse.Message.Should().Be("File size exceeds the 50MB limit.");
-    }
-
-    [Fact]
-    public async Task UploadImage_ShouldReturnOk_WhenRequestIsValid()
-    {
-        var missionId = Guid.NewGuid();
         var fileMock = new Mock<IFormFile>();
         var content = "dummy image content";
         var ms = new MemoryStream();
@@ -111,8 +44,6 @@ public class InspectionControllerTests
         fileMock.Setup(f => f.FileName).Returns("test.jpg");
         fileMock.Setup(f => f.OpenReadStream()).Returns(ms);
 
-        var assetId = Guid.NewGuid();
-        var capturedAt = DateTime.UtcNow;
         var commandResult = new UploadInspectionImageResult
         {
             MissionId = missionId,

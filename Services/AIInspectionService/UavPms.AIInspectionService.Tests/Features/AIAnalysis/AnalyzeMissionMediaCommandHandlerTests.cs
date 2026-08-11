@@ -6,8 +6,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
+using UavPms.AIInspectionService.Application.Common.Options;
 using UavPms.AIInspectionService.Domain.Contracts;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
@@ -49,9 +51,12 @@ public class AnalyzeMissionMediaCommandHandlerTests
             _fileStorageMock.Object,
             _eventPublisherMock.Object,
             _currentUserMock.Object,
-            _loggerMock.Object
+            _loggerMock.Object,
+            Microsoft.Extensions.Options.Options.Create(new PythonAIOptions())
         );
+
     }
+
 
     [Fact]
     public async Task Handle_ShouldThrowKeyNotFoundException_WhenMissionDoesNotExist()

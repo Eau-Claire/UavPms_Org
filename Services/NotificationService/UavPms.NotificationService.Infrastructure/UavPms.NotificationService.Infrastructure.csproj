@@ -26,6 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\OperationsService\UavPms.OperationsService.Application\UavPms.OperationsService.Application.csproj" />
     <ProjectReference Include="..\UavPms.NotificationService.Application\UavPms.NotificationService.Application.csproj" />
     <ProjectReference Include="..\UavPms.NotificationService.Domain\UavPms.NotificationService.Domain.csproj" />
   </ItemGroup>

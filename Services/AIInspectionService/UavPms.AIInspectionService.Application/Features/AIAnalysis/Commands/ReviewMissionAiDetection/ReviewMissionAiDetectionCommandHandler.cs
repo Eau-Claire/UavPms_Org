@@ -41,12 +41,15 @@ public class ReviewMissionAiDetectionCommandHandler
             throw new KeyNotFoundException($"Detected anomaly with ID '{request.DetectionId}' was not found in mission '{request.MissionId}'.");
         }
 
-        anomaly.ValidationStatus = NormalizeDecision(request.Decision);
-        anomaly.AnalystNotes = request.Notes?.Trim() ?? string.Empty;
-        anomaly.AnalystId = _currentUser.UserId;
-        anomaly.ValidatedAt = DateTime.UtcNow;
-        anomaly.UpdatedAt = DateTime.UtcNow;
-        anomaly.UpdatedBy = _currentUser.UserId;
+        var decision = NormalizeDecision(request.Decision);
+        if (decision == "Accepted")
+        {
+            anomaly.Confirm(_currentUser.UserId, request.Notes);
+        }
+        else
+        {
+            anomaly.Reject(_currentUser.UserId, request.Notes);
+        }
 
         await _anomalyRepository.UpdateAsync(anomaly);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
