@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using UavPms.NotificationService.Application.Common.Options;
 using UavPms.NotificationService.Infrastructure.Persistence;
 using UavPms.NotificationService.Infrastructure.Messaging;
 using UavPms.NotificationService.Domain.Interfaces.Repositories;
 using UavPms.NotificationService.Infrastructure.Repositories;
 using UavPms.NotificationService.Domain.Interfaces.Services;
 using UavPms.NotificationService.Infrastructure.Services;
+using UavPms.OperationsService.Application.Common.Options;
 
 namespace UavPms.NotificationService.Infrastructure;
 
@@ -34,6 +36,18 @@ public static class DependencyInjection
             
             options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
+        
+        // Đăng ký Strongly-Typed Options với Validation & ValidateOnStart
+        services.AddOptions<SendGridOptions>()
+            .Bind(configuration.GetSection(SendGridOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<RabbitMQOptions>()
+            .Bind(configuration.GetSection(RabbitMQOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         
         // Đăng ký RabbitMQ Connection (conditional - fallback to NoOp)
         var rabbitHost = configuration["RabbitMQ:HostName"];
