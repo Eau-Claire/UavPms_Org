@@ -1,5 +1,6 @@
 using UavPms.InspectionEvaluationService.Infrastructure.Services;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using UavPms.InspectionEvaluationService.Application.Common.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +24,11 @@ builder.WebHost.ConfigureKestrel(options =>
         });
     }
 });
+
+builder.Services.AddOptions<EvaluationThresholdOptions>()
+    .Bind(builder.Configuration.GetSection(EvaluationThresholdOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Services.AddGrpc();
 builder.Services.AddHealthChecks();
