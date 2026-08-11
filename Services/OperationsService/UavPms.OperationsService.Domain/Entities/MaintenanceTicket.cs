@@ -33,10 +33,6 @@ public class MaintenanceTicket : BaseEntity
     {
         TechnicianId = technicianId;
         AssignedAt = DateTime.UtcNow;
-        if (Status == TicketStatus.Open)
-        {
-            Status = TicketStatus.Open;
-        }
     }
     public void StartProgress()
     {

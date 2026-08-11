@@ -54,7 +54,7 @@ public class Mission : BaseEntity
 
     public void Cancel()
     {
-        if (Status != MissionStatus.Completed)
+        if (Status == MissionStatus.Completed || Status == MissionStatus.Cancelled)
             throw new InvalidOperationException($"Cannot cancel mission with status {Status}.");
         
         Status = MissionStatus.Cancelled;

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UavPms.IdentityService.Application.Common.Options;
+namespace UavPms.OperationsService.Application.Common.Options;
 
 public class JwtOptions
 {
