@@ -270,6 +270,8 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
         builder.Property(e => e.CropUrl).HasMaxLength(2048);
         builder.Property(e => e.TowerId).HasMaxLength(128);
 
+        builder.Property(e => e.ValidationStatus).HasConversion<string>();
+
         builder.HasOne(e => e.Media)
             .WithMany(m => m.DetectedAnomalies)
             .HasForeignKey(e => e.MediaId)
@@ -298,6 +300,9 @@ public class EmergencyAlertConfiguration : IEntityTypeConfiguration<EmergencyAle
     {
         builder.ToTable("EmergencyAlerts");
         builder.HasKey(e => e.Id);
+        
+        builder.Property(e => e.Status).HasConversion<string>();
+        builder.Property(e => e.Priority).HasConversion<string>();
 
         builder.HasOne(e => e.Anomaly)
             .WithMany(a => a.EmergencyAlerts)

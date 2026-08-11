@@ -53,7 +53,8 @@ public class AIAnalysisController : ControllerBase
     public async Task<IActionResult> Upload(
         List<IFormFile> files,
         [FromForm] AnalysisType analysisType = AnalysisType.General,
-        [FromForm] string? notes = null)
+        [FromForm] string? notes = null, 
+        CancellationToken cancellationToken = default)
     {
         // Validate file presence
         if (files == null || files.Count == 0)
@@ -149,7 +150,7 @@ public class AIAnalysisController : ControllerBase
             Notes = notes
         };
 
-        var results = await _mediator.Send(command);
+        var results = await _mediator.Send(command, cancellationToken);
 
         // Dispose tất cả stream sau khi xử lý xong
         foreach (var item in fileItems)
@@ -168,9 +169,9 @@ public class AIAnalysisController : ControllerBase
     /// Lấy kết quả phân tích AI theo ID.
     /// </summary>
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
-        var result = await _mediator.Send(new GetAIAnalysisByIdQuery(id));
+        var result = await _mediator.Send(new GetAIAnalysisByIdQuery(id), cancellationToken);
         return Ok(new ApiResponse(true, "AI analysis result retrieved successfully.", result));
     }
 
@@ -191,7 +192,8 @@ public class AIAnalysisController : ControllerBase
         [FromForm] IFormFileCollection files,
         [FromForm] AnalysisType analysisType = AnalysisType.General,
         [FromForm] string preferredModel = "SERVER",
-        [FromForm] string? notes = null)
+        [FromForm] string? notes = null,
+        CancellationToken cancellationToken = default)
     {
         if (files == null || files.Count == 0)
         {
@@ -244,7 +246,7 @@ public class AIAnalysisController : ControllerBase
                 Notes = notes
             };
 
-            var result = await _mediator.Send(command);
+            var result = await _mediator.Send(command, cancellationToken);
 
             return Ok(new ApiResponse(true, "AI analysis batch created and queued for processing.", result));
         }
@@ -262,9 +264,9 @@ public class AIAnalysisController : ControllerBase
     /// List mission media that have AI detections, including bounding boxes for FE overlays.
     /// </summary>
     [HttpGet("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/detections")]
-    public async Task<IActionResult> GetMissionAiDetections(Guid missionId)
+    public async Task<IActionResult> GetMissionAiDetections(Guid missionId, CancellationToken cancellationToken = default)
     {
-        var result = await _mediator.Send(new GetMissionAiDetectionsQuery(missionId));
+        var result = await _mediator.Send(new GetMissionAiDetectionsQuery(missionId), cancellationToken);
         return Ok(new ApiResponse(true, "Mission AI detections retrieved successfully.", result));
     }
 
@@ -276,7 +278,8 @@ public class AIAnalysisController : ControllerBase
     public async Task<IActionResult> ReviewMissionAiDetection(
         Guid missionId,
         Guid detectionId,
-        [FromBody] ReviewMissionAiDetectionRequest request)
+        [FromBody] ReviewMissionAiDetectionRequest request,
+        CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new ReviewMissionAiDetectionCommand
         {
@@ -284,7 +287,7 @@ public class AIAnalysisController : ControllerBase
             DetectionId = detectionId,
             Decision = request.Decision,
             Notes = request.Notes
-        });
+        }, cancellationToken);
 
         return Ok(new ApiResponse(true, "AI detection review saved successfully.", result));
     }
@@ -298,7 +301,8 @@ public class AIAnalysisController : ControllerBase
         Guid mediaId,
         [FromQuery] AnalysisType analysisType = AnalysisType.General,
         [FromQuery] string preferredModel = "SERVER",
-        [FromQuery] string? notes = null)
+        [FromQuery] string? notes = null,
+        CancellationToken cancellationToken = default)
     {
         var command = new AnalyzeExistingMediaCommand
         {
@@ -309,7 +313,7 @@ public class AIAnalysisController : ControllerBase
             Notes = notes
         };
 
-        var result = await _mediator.Send(command);
+        var result = await _mediator.Send(command, cancellationToken);
 
         return Ok(new ApiResponse(true, "AI analysis request created and queued for processing.", result));
     }

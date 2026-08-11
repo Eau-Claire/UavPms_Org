@@ -1,7 +1,10 @@
+using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using UavPms.Grpc.InspectionEvaluation;
+using UavPms.InspectionEvaluationService.Application.Common.Options;
 using UavPms.InspectionEvaluationService.Infrastructure.Services;
 using Xunit;
 
@@ -15,7 +18,8 @@ public class InspectionEvaluationGrpcServiceTests
     public InspectionEvaluationGrpcServiceTests()
     {
         _loggerMock = new Mock<ILogger<InspectionEvaluationGrpcService>>();
-        _service = new InspectionEvaluationGrpcService(_loggerMock.Object);
+        var options = Options.Create(new EvaluationThresholdOptions());
+        _service = new InspectionEvaluationGrpcService(options, _loggerMock.Object);
     }
 
     [Fact]

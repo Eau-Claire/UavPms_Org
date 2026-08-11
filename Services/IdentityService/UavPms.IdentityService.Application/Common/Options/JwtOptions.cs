@@ -7,6 +7,7 @@ public class JwtOptions
     public const string SectionName = "Jwt";
     
     [Required(ErrorMessage = "Jwt:Secret is required.")]
+    [MinLength(32, ErrorMessage = "Jwt:Secret must be at least 32 characters long.")]
     public string SecretKey { get; set; } = string.Empty;
     
     [Required(ErrorMessage = "Jwt:Issuer is required.")]

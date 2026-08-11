@@ -75,7 +75,7 @@ public class UploadInspectionImageCommandHandlerTests
         await act.Should().ThrowAsync<KeyNotFoundException>()
             .WithMessage($"Mission with ID '{missionId}' was not found.");
 
-        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>()), Times.Never);
+        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
         _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<ImageUploadedEvent>()), Times.Never);
@@ -112,7 +112,7 @@ public class UploadInspectionImageCommandHandlerTests
         await act.Should().ThrowAsync<KeyNotFoundException>()
             .WithMessage($"Asset with ID '{assetId}' was not found.");
 
-        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>()), Times.Never);
+        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
         _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<ImageUploadedEvent>()), Times.Never);
@@ -160,7 +160,7 @@ public class UploadInspectionImageCommandHandlerTests
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("You are not assigned to this mission.");
 
-        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>()), Times.Never);
+        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
         _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<ImageUploadedEvent>()), Times.Never);
@@ -204,7 +204,7 @@ public class UploadInspectionImageCommandHandlerTests
 
         _currentUserServicesMock.Setup(s => s.UserId).Returns(inspectorId);
 
-        _fileStorageServiceMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), fileName))
+        _fileStorageServiceMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), fileName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(fileUrl);
 
         // Act
@@ -216,7 +216,7 @@ public class UploadInspectionImageCommandHandlerTests
         result.FileUrl.Should().Be(fileUrl);
         result.MediaType.Should().Be("Image");
 
-        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), fileName), Times.Once);
+        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), fileName, It.IsAny<CancellationToken>()), Times.Once);
         
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.Is<InspectionMedia>(m =>
              m.MissionId == missionId &&

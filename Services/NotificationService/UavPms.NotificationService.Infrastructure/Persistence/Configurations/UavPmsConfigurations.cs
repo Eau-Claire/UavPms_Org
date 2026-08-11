@@ -440,6 +440,8 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.ToTable("Notifications");
         builder.HasKey(e => e.Id);
 
+        builder.Property(e => e.Type).HasConversion<string>();
+
         builder.HasOne(e => e.User)
             .WithMany()
             .HasForeignKey(e => e.UserId)

@@ -35,6 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\OperationsService\UavPms.OperationsService.Application\UavPms.OperationsService.Application.csproj" />
     <ProjectReference Include="..\UavPms.AIInspectionService.Application\UavPms.AIInspectionService.Application.csproj" />
     <ProjectReference Include="..\UavPms.AIInspectionService.Domain\UavPms.AIInspectionService.Domain.csproj" />
   </ItemGroup>

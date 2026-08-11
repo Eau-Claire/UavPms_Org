@@ -26,6 +26,6 @@ public class DeleteNotificationCommandHandler : IRequestHandler<DeleteNotificati
         }
         
         await _notificationRepository.DeleteAsync(n);
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }
