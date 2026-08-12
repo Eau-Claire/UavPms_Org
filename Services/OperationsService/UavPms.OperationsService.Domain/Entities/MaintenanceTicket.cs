@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UavPms.OperationsService.Domain.Common;
+using UavPms.OperationsService.Domain.Enums;
 
 namespace UavPms.OperationsService.Domain.Entities;
 
@@ -11,8 +12,8 @@ public class MaintenanceTicket : BaseEntity
     public Guid AssetId { get; set; }
     public Guid ManagerId { get; set; }
     public Guid TechnicianId { get; set; }
-    public string Status { get; set; } = string.Empty;
-    public string Priority { get; set; } = string.Empty;
+    public TicketStatus Status { get; set; } = TicketStatus.Open;
+    public TicketPriority Priority { get; set; } = TicketPriority.Medium;
     public string Description { get; set; } = string.Empty;
     public DateTime? DueDate { get; set; }
     public DateTime? AssignedAt { get; set; }
@@ -26,4 +27,38 @@ public class MaintenanceTicket : BaseEntity
 
     public virtual ICollection<MaintenanceProof> MaintenanceProofs { get; set; } = new List<MaintenanceProof>();
     public virtual ICollection<MaterialLog> MaterialLogs { get; set; } = new List<MaterialLog>();
+    
+    #region Rich Domain Methods
+    public void AssignToTechnician(Guid technicianId)
+    {
+        TechnicianId = technicianId;
+        AssignedAt = DateTime.UtcNow;
+    }
+    public void StartProgress()
+    {
+        if (Status != TicketStatus.Open)
+        {
+            throw new InvalidOperationException($"Cannot start progress on ticket in status '{Status}'. Must be Open.");
+        }
+        Status = TicketStatus.InProgress;
+        StartedAt = DateTime.UtcNow;
+    }
+    public void SubmitForVerification()
+    {
+        if (Status != TicketStatus.InProgress)
+        {
+            throw new InvalidOperationException($"Cannot submit ticket for verification from status '{Status}'. Must be InProgress.");
+        }
+        Status = TicketStatus.PendingVerification;
+    }
+    public void Resolve()
+    {
+        Status = TicketStatus.Resolved;
+        ResolvedAt = DateTime.UtcNow;
+    }
+    public void Close()
+    {
+        Status = TicketStatus.Closed;
+    }
+    #endregion
 }

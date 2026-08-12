@@ -1,12 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Domain.Models.Monitor;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using UavPms.OperationsService.Domain.Enums;
 using static UavPms.OperationsService.Domain.Models.Monitor.DefectStatisticsModel;
 
 namespace UavPms.OperationsService.Infrastructure.Repositories
@@ -121,9 +117,9 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync(cancellationToken);
 
-            var pending = missionStats.FirstOrDefault(m => m.Status == "Scheduled")?.Count ?? 0;
-            var inProgress = missionStats.FirstOrDefault(m => m.Status == "InProgress")?.Count ?? 0;
-            var completed = missionStats.FirstOrDefault(m => m.Status == "Completed")?.Count ?? 0;
+            var pending = missionStats.FirstOrDefault(m => m.Status == MissionStatus.Pending)?.Count ?? 0;
+            var inProgress = missionStats.FirstOrDefault(m => m.Status == MissionStatus.Executing)?.Count ?? 0;
+            var completed = missionStats.FirstOrDefault(m => m.Status == MissionStatus.Completed)?.Count ?? 0;
 
             return new MissionStatusOverviewModel
             {
@@ -168,9 +164,9 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync(cancellationToken);
 
-            var pendingMissions = missionStats.FirstOrDefault(s => s.Status == "Scheduled")?.Count ?? 0;
-            var inProgressMissions = missionStats.FirstOrDefault(s => s.Status == "InProgress")?.Count ?? 0;
-            var completedMissions = missionStats.FirstOrDefault(s => s.Status == "Completed")?.Count ?? 0;
+            var pendingMissions = missionStats.FirstOrDefault(s => s.Status == MissionStatus.Pending)?.Count ?? 0;
+            var inProgressMissions = missionStats.FirstOrDefault(s => s.Status == MissionStatus.Executing)?.Count ?? 0;
+            var completedMissions = missionStats.FirstOrDefault(s => s.Status == MissionStatus.Completed)?.Count ?? 0;
             var totalMissions = missionStats.Sum(s => s.Count);
 
             // 2. Get total inspection media count

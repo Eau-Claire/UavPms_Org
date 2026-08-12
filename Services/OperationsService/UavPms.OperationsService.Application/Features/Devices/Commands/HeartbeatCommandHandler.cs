@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 
 namespace UavPms.OperationsService.Application.Features.Devices.Commands;
@@ -37,7 +38,7 @@ public class HeartbeatCommandHandler : IRequestHandler<HeartbeatCommand, object>
         }
 
         uav.BatteryLevel = request.Battery;
-        uav.Status = "Online";
+        uav.Status = DroneStatus.Idle;
 
         await _uavRepository.UpdateAsync(uav);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

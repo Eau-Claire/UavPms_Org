@@ -286,3 +286,31 @@
 - [ ] 66. **Tích hợp QuestPDF & EPPlus xuất báo cáo**:
   - Triển khai API xuất danh sách sự cố và vật tư tiêu hao bảo trì ra tệp Excel (`EPPlus`).
   - Triển khai API xuất Báo cáo kỹ thuật tổng hợp tình trạng sức khoẻ lưới điện kèm đồ thị trực quan ra tệp PDF (`QuestPDF`).
+
+---
+
+## EPIC 11: TÁI CẤU TRÚC KIẾN TRÚC & BẢO MẬT CHUẨN DOANH NGHIỆP CHO 4 MICROSERVICES CÒN LẠI (Operations, AIInspection, Notification, InspectionEvaluation)
+
+### Phase 11.1: Refactoring OperationsService
+- [x] 67. **Strongly-Typed Options Pattern (`SupabaseOptions`, `RabbitMQOptions`)**: Ép kiểu cấu hình với `ValidateOnStart()` (Fail Fast) thay vì đọc indexer `IConfiguration["..."]`.
+- [x] 68. **Pure Utility (`FileSanitizer`)**: Trích xuất bộ chuẩn hóa tên tệp và kiểm tra định dạng mở rộng tập tin an toàn.
+- [x] 69. **Rich Domain Model & Enums (`MissionStatus`, `TicketStatus`, `TicketPriority`)**: Thay thế các chuỗi magic string bằng Enum và đóng gói các hành vi chuyển trạng thái trong domain entity (`Mission.cs`, `MaintenanceTicket.cs`).
+- [x] 70. **Lan truyền `CancellationToken`**: Bổ sung tham số `CancellationToken cancellationToken = default` xuyên suốt `IFileStorageService` và các Handlers.
+
+### Phase 11.2: Refactoring AIInspectionService
+- [ ] 71. **Strongly-Typed Options Pattern (`PythonAIOptions`, `RabbitMQOptions`)**: Đóng gói cấu hình kết nối AI với `ValidateOnStart()`.
+- [ ] 72. **Pure Utility (`BoundingBoxCalculations`)**: Trích xuất hàm static tính toán chỉ số IOU, diện tích hộp giới hạn và tỉ lệ khung hình.
+- [ ] 73. **Rich Domain Model & Enums (`AnomalyStatus`, `EmergencyAlertPriority`, `MediaValidationStatus`)**: Đóng gói các trạng thái sự cố và quy trình thẩm định lỗi AI (`Anomaly.Confirm()`, `Anomaly.Reject()`).
+- [ ] 74. **Lan truyền `CancellationToken`**: Bổ sung `CancellationToken` cho `IAIAnalysisService`, HTTP Client kết nối Python AI và các Handlers.
+
+### Phase 11.3: Refactoring NotificationService
+- [ ] 75. **Strongly-Typed Options Pattern (`SendGridOptions`, `SupabaseOptions`, `RabbitMQOptions`)**: Đóng gói cấu hình gửi email/thông báo với DataAnnotations Validation.
+- [ ] 76. **Pure Utility (`NotificationFormatter`)**: Trích xuất hàm định dạng tiêu đề, nội dung và thay thế template biến thông báo.
+- [ ] 77. **Rich Domain Model & Enums (`NotificationType`)**: Chuyển đổi thuộc tính `Type` sang Enum và đóng gói hành vi `Notification.MarkAsRead()`.
+- [ ] 78. **Lan truyền `CancellationToken`**: Bổ sung `CancellationToken` cho `IEmailService`, `IRealtimeNotificationService` và các Handlers.
+
+### Phase 11.4: Refactoring InspectionEvaluationService
+- [ ] 79. **Strongly-Typed Options Pattern (`HealthCalculationOptions`)**: Đóng gói cấu hình trọng số công thức tính điểm sức khỏe 50-20-20-10.
+- [ ] 80. **Pure Utility (`HealthScoreCalculations`)**: Trích xuất hàm tính điểm sức khỏe (0-100) và gán nhãn mức độ rủi ro (`Low`, `Medium`, `High`, `Critical`).
+- [ ] 81. **Rich Domain Model & Enums (`RiskLevel`)**: Cập nhật Enum `RiskLevel` và đóng gói phương thức `Asset.UpdateHealthScore(...)`.
+- [ ] 82. **Lan truyền `CancellationToken`**: Bổ sung `CancellationToken` cho `IAssetHealthService` và các Handlers.

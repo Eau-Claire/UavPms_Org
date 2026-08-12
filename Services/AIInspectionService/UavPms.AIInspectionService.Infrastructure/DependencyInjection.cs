@@ -11,6 +11,8 @@ using UavPms.AIInspectionService.Infrastructure.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.AIInspectionService.Infrastructure.Services;
 using UavPms.Grpc.InspectionEvaluation;
+using UavPms.AIInspectionService.Application.Common.Options;
+using UavPms.OperationsService.Application.Common.Options;
 
 namespace UavPms.AIInspectionService.Infrastructure;
 
@@ -23,6 +25,17 @@ public static class DependencyInjection
 
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
     {
+        // Đăng ký Strongly-Typed Options với Validation & ValidateOnStart
+        services.AddOptions<PythonAIOptions>()
+            .Bind(configuration.GetSection(PythonAIOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<RabbitMQOptions>()
+            .Bind(configuration.GetSection(RabbitMQOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.Configure<AIAnalysisResultMessagingOptions>(configuration.GetSection(AIAnalysisResultMessagingOptions.SectionName));
 
         // Truyền Connection String vào cấu hình UseNpgsql

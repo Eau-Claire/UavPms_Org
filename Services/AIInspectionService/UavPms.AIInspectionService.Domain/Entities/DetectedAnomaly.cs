@@ -35,4 +35,23 @@ public class DetectedAnomaly : BaseEntity
 
     public virtual ICollection<EmergencyAlert> EmergencyAlerts { get; set; } = new List<EmergencyAlert>();
     public virtual ICollection<MaintenanceTicket> MaintenanceTickets { get; set; } = new List<MaintenanceTicket>();
+
+    #region Rich domain methods
+
+    public void Confirm(Guid analystId, string notes)
+    {
+        AnalystId = analystId;
+        AnalystNotes = notes ?? string.Empty;
+        ValidationStatus = "Confirmed";
+        ValidatedAt = DateTime.UtcNow;
+    }
+
+    public void Reject(Guid analystId, string notes)
+    {
+        AnalystId = analystId;
+        AnalystNotes = notes ?? string.Empty;
+        ValidationStatus = "Rejected";
+        ValidatedAt = DateTime.UtcNow;
+    }
+    #endregion
 }

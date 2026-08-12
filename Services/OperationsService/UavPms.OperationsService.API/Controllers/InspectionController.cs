@@ -34,28 +34,10 @@ public class InspectionController : ControllerBase
         [FromForm] Guid missionId,
         [FromForm] Guid assetId,
         [FromForm] DateTime capturedAt,
-        IFormFile file)
+        IFormFile file,
+        CancellationToken cancellationToken = default)
     {
-        if (file == null || file.Length == 0)
-        {
-            return BadRequest(new ApiResponse(false, "Image file is required."));
-        }
-
-        // Validate file type
-        var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp", "image/tiff", "video/mp4" };
-        if (Array.IndexOf(allowedTypes, file.ContentType.ToLower()) < 0)
-        {
-            return BadRequest(new ApiResponse(false, "File type not supported. Allowed: JPEG, PNG, WebP, TIFF, MP4."));
-        }
-
-        // Validate file size (max 50MB)
-        const long maxSize = 50 * 1024 * 1024;
-        if (file.Length > maxSize)
-        {
-            return BadRequest(new ApiResponse(false, "File size exceeds the 50MB limit."));
-        }
-
-        await using var stream = file.OpenReadStream();
+        await using var stream = file?.OpenReadStream() ?? Stream.Null;
 
         var command = new UploadInspectionImageCommand
         {
@@ -63,11 +45,11 @@ public class InspectionController : ControllerBase
             AssetId = assetId,
             CapturedAt = capturedAt,
             FileStream = stream,
-            FileName = file.FileName,
-            ContentType = file.ContentType
+            FileName = file?.FileName ?? string.Empty,
+            ContentType = file?.ContentType ?? string.Empty,
         };
 
-        var result = await _mediator.Send(command);
+        var result = await _mediator.Send(command, cancellationToken);
 
         return Ok(new ApiResponse(true, "Image uploaded successfully.", result));
     }
@@ -76,9 +58,9 @@ public class InspectionController : ControllerBase
     /// Lấy báo cáo kiểm tra theo ID
     /// </summary>
     [HttpGet("report/{id:guid}")]
-    public async Task<IActionResult> GetReportById(Guid id)
+    public async Task<IActionResult> GetReportById(Guid id, CancellationToken cancellationToken = default)
     {
-        var result = await _mediator.Send(new GetInspectionReportByIdQuery(id));
+        var result = await _mediator.Send(new GetInspectionReportByIdQuery(id), cancellationToken);
         return Ok(new ApiResponse(true, "Inspection report retrieved successfully.", result));
     }
 
@@ -86,9 +68,9 @@ public class InspectionController : ControllerBase
     /// Lấy lịch sử kiểm tra theo mã nhiệm vụ
     /// </summary>
     [HttpGet("mission/{missionId:guid}")]
-    public async Task<IActionResult> GetByMission(Guid missionId)
+    public async Task<IActionResult> GetByMission(Guid missionId, CancellationToken cancellationToken = default)
     {
-        var result = await _mediator.Send(new GetInspectionsByMissionQuery(missionId));
+        var result = await _mediator.Send(new GetInspectionsByMissionQuery(missionId), cancellationToken);
         return Ok(new ApiResponse(true, "Mission inspection history retrieved successfully.", result));
     }
 }

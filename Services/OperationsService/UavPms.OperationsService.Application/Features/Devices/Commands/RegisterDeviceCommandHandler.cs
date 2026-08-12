@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 
 namespace UavPms.OperationsService.Application.Features.Devices.Commands;
@@ -41,7 +42,7 @@ public class RegisterDeviceCommandHandler : IRequestHandler<RegisterDeviceComman
             Id = Guid.NewGuid(),
             UavCode = request.SerialNumber,
             Model = $"Raspberry Pi (SW: {request.SoftwareVersion})",
-            Status = "Active", // Thiết lập Active luôn
+            Status = DroneStatus.Idle, // Thiết lập Active luôn
             BatteryLevel = 100
         };
 

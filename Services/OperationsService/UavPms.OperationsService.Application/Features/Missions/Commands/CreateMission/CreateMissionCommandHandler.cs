@@ -3,6 +3,7 @@ using UavPms.Shared.Contracts.Events;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Missions.DTOs;
 using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 
@@ -49,7 +50,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
                 Id = Guid.NewGuid(),
                 UavCode = request.DroneCode,
                 Model = "Standard",
-                Status = "Active",
+                Status = DroneStatus.Idle,
                 BatteryLevel = 100,
                 CreatedAt = DateTime.UtcNow,
             };
@@ -66,7 +67,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             RouteData = request.RouteData,
             AssignedToUserId = request.AssignedToUserId,
             DroneCode = request.DroneCode,
-            Status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status,
+            Status = Enum.TryParse<MissionStatus>(request.Status, true, out var parsedStatus) ? parsedStatus : MissionStatus.Pending,
             Description = request.Description ?? string.Empty,
             ManagerId = _currentUserServices.UserId != Guid.Empty ? _currentUserServices.UserId : Guid.Empty,
             InspectorId = request.AssignedToUserId,
@@ -86,7 +87,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             AssignedToUserId = mission.AssignedToUserId,
             ManagerId = mission.ManagerId,
             DroneCode = mission.DroneCode,
-            Status = mission.Status,
+            Status = mission.Status.ToString(),
             Description = mission.Description,
             CreatedAt = mission.CreatedAt,
         };
@@ -102,7 +103,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             AssignedToUserId = mission.AssignedToUserId,
             AssignedToEmail = assignedUser.Email,
             DroneCode = mission.DroneCode,
-            Status = mission.Status,
+            Status = mission.Status.ToString(),
             Description = mission.Description,
             ManagerId = mission.ManagerId,
             ManagerEmail = _currentUserServices.Email ?? string.Empty,

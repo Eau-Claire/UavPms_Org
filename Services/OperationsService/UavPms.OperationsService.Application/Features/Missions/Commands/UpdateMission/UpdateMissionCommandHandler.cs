@@ -2,6 +2,7 @@ using MediatR;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Missions.DTOs;
 using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 
 namespace UavPms.OperationsService.Application.Features.Missions.Commands.UpdateMission;
@@ -47,7 +48,7 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
                 Id = Guid.NewGuid(),
                 UavCode = request.DroneCode,
                 Model = "Standard",
-                Status = "Active",
+                Status = DroneStatus.Idle,
                 BatteryLevel = 100,
                 CreatedAt = DateTime.Now,
             };
@@ -60,7 +61,7 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
         misison.InspectorId = request.AssignedToUserId;
         misison.DroneCode = request.DroneCode;
         misison.UavId = uav.Id;
-        misison.Status = request.Status;
+        misison.Status = misison.Status = Enum.TryParse<MissionStatus>(request.Status, true, out var parsedStatus) ? parsedStatus : misison.Status;
         misison.Description = request.Description ?? string.Empty;
         misison.UpdatedAt = DateTime.UtcNow;
         
@@ -80,7 +81,7 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
             AssignedToUserId = misison.AssignedToUserId,
             AssignedToEmail = assignedUser.Email,
             DroneCode = misison.DroneCode,
-            Status = misison.Status,
+            Status = misison.Status.ToString(),
             Description = misison.Description,
             ManagerId = misison.ManagerId,
             ManagerEmail = manager?.Email ?? string.Empty,

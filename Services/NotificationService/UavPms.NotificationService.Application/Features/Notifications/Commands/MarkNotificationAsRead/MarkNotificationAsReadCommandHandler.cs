@@ -26,6 +26,6 @@ public class MarkNotificationAsReadCommandHandler : IRequestHandler<MarkNotifica
         }
         
         await _notificationRepository.MarkAsReadAsync(n.Id);
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

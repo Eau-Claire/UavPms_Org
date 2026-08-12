@@ -38,7 +38,7 @@ public class LocalFileStorageService : IFileStorageService
         }
     }
 
-    public async Task<string> SaveImageAsync(Stream fileStream, string fileName)
+    public async Task<string> SaveImageAsync(Stream fileStream, string fileName, CancellationToken cancellationToken = default)
     {
         // 1. Sanitize: extract only the file name portion (防 path traversal like ../../etc/passwd)
         var safeFileName = Path.GetFileName(fileName);
@@ -68,7 +68,7 @@ public class LocalFileStorageService : IFileStorageService
         }
 
         await using var outputStream = new FileStream(filePath, FileMode.Create);
-        await fileStream.CopyToAsync(outputStream);
+        await fileStream.CopyToAsync(outputStream, cancellationToken);
 
         _logger.LogInformation("Saved image to {FilePath}", filePath);
 
@@ -77,7 +77,7 @@ public class LocalFileStorageService : IFileStorageService
         return $"/images/{encodedFileName}";
     }
 
-    public Task DeleteImageAsync(string imagePath)
+    public Task DeleteImageAsync(string imagePath, CancellationToken cancellationToken = default)
     {
         // imagePath is a relative path like /images/filename (may be URL-encoded)
         var rawFileName = Path.GetFileName(imagePath);

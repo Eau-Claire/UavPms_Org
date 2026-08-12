@@ -7,6 +7,7 @@ using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Infrastructure.Repositories;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Services;
+using UavPms.OperationsService.Application.Common.Options;
 
 namespace UavPms.OperationsService.Infrastructure;
 
@@ -34,7 +35,25 @@ public static class DependencyInjection
             
             options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
-        
+
+        // Đang ký Strongly-Typed Options với Validation & ValidateOnStart
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddOptions<FileStorageOptions>()
+            .Bind(configuration.GetSection(FileStorageOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddOptions<SupabaseOptions>()
+            .Bind(configuration.GetSection(SupabaseOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddOptions<RabbitMQOptions>()
+            .Bind(configuration.GetSection(RabbitMQOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // Đăng ký RabbitMQ Connection (conditional - fallback to NoOp)
         var rabbitHost = configuration["RabbitMQ:HostName"];
         if (!string.IsNullOrEmpty(rabbitHost))

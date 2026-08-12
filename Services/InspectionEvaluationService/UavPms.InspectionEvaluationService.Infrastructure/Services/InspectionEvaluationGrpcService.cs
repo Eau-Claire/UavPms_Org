@@ -1,59 +1,52 @@
+using System.Threading.Tasks;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using UavPms.Grpc.InspectionEvaluation;
+using UavPms.InspectionEvaluationService.Application.Common.Options;
+using UavPms.InspectionEvaluationService.Application.Common.Utilities;
 
 namespace UavPms.InspectionEvaluationService.Infrastructure.Services;
 
-public class InspectionEvaluationGrpcService(
-    ILogger<InspectionEvaluationGrpcService> logger)
-    : InspectionEvaluation.InspectionEvaluationBase
+public class InspectionEvaluationGrpcService : InspectionEvaluation.InspectionEvaluationBase
 {
+    private readonly EvaluationThresholdOptions _options;
+    private readonly ILogger<InspectionEvaluationGrpcService> _logger;
+
+    public InspectionEvaluationGrpcService(
+        IOptions<EvaluationThresholdOptions> options,
+        ILogger<InspectionEvaluationGrpcService> logger)
+    {
+        _options = options.Value;
+        _logger = logger;
+    }
+
     public override Task<EvaluateDetectionResponse> EvaluateDetection(
         EvaluateDetectionRequest request,
         ServerCallContext context)
     {
-        var confidence = Math.Clamp(request.Confidence, 0, 1);
-        var emergencyWeight = request.IsEmergencyClass ? 45 : 0;
-        var confidenceWeight = (int)Math.Round(confidence * 55);
-        var priorityScore = Math.Clamp(emergencyWeight + confidenceWeight, 0, 100);
+        var result = DetectionEvaluationEngine.Evaluate(
+            request.CategoryCode,
+            request.Confidence,
+            request.IsEmergencyClass,
+            _options);
 
-        var severity = priorityScore switch
-        {
-            >= 90 => "Critical",
-            >= 75 => "High",
-            >= 50 => "Medium",
-            _ => "Low"
-        };
-
-        var riskLevel = severity switch
-        {
-            "Critical" => "ImmediateAction",
-            "High" => "UrgentReview",
-            "Medium" => "PlannedReview",
-            _ => "Monitor"
-        };
-
-        var requiresImmediateAlert = request.IsEmergencyClass && confidence >= 0.80;
-        var reason = requiresImmediateAlert
-            ? $"Emergency category {request.CategoryCode} exceeded confidence threshold ({confidence:P1})."
-            : $"Category {request.CategoryCode} evaluated with confidence {confidence:P1}.";
-
-        logger.LogInformation(
-            "Evaluated detection {DetectionId}: Category={CategoryCode}, Confidence={Confidence}, Severity={Severity}, Risk={RiskLevel}, Score={PriorityScore}",
+        _logger.LogInformation(
+            "Evaluated detection {DetectionId}: Category={CategoryCode}, Confidence={Confidence:P1}, Severity={Severity}, Risk={RiskLevel}, Score={PriorityScore}",
             request.DetectionId,
             request.CategoryCode,
-            confidence,
-            severity,
-            riskLevel,
-            priorityScore);
+            request.Confidence,
+            result.Severity,
+            result.RiskLevel,
+            result.PriorityScore);
 
         return Task.FromResult(new EvaluateDetectionResponse
         {
-            Severity = severity,
-            RiskLevel = riskLevel,
-            PriorityScore = priorityScore,
-            RequiresImmediateAlert = requiresImmediateAlert,
-            Reason = reason
+            Severity = result.Severity.ToString(),
+            RiskLevel = result.RiskLevel.ToString(),
+            PriorityScore = result.PriorityScore,
+            RequiresImmediateAlert = result.RequiresImmediateAlert,
+            Reason = result.Reason
         });
     }
 }
