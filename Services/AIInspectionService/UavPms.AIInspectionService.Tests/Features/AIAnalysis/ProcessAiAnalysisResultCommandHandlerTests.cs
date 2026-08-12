@@ -462,6 +462,13 @@ public class ProcessAiAnalysisResultCommandHandlerTests
             m.ValidationStatus == "PendingReview"
         )), Times.Once);
 
+        _eventPublisherMock.Verify(e => e.PublishAsync(It.Is<DefectDetectedEvent>(evt =>
+            evt.InspectionId == existingMedia.MissionId &&
+            evt.MissionId == existingMedia.MissionId &&
+            evt.ImageUrl == "https://storage/frame-360.jpg" &&
+            evt.IsDefect &&
+            evt.DefectType == "Broken Insulator")), Times.Once);
+
         existingRequest.Status.Should().Be(AIAnalysisStatus.Completed);
         existingRequest.CompletedAt.Should().Be(command.CompletedAt);
 
@@ -556,6 +563,11 @@ public class ProcessAiAnalysisResultCommandHandlerTests
                 n.UserId == managerId &&
                 n.Type == "CriticalAlert" &&
                 n.ReferenceType == "EmergencyAlert")), Times.Once);
+        _eventPublisherMock.Verify(e => e.PublishAsync(
+            It.Is<DefectDetectedEvent>(d =>
+                d.MissionId == existingMedia.MissionId &&
+                d.IsDefect &&
+                d.DefectType == "Vegetation Encroachment")), Times.Once);
 
         _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);

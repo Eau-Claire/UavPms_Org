@@ -24,11 +24,21 @@ docker compose up -d --build webapi
 
 ## Behavior
 
-The mock worker consumes RabbitMQ queue:
+The mock worker consumes separate RabbitMQ queues by media type:
 
 ```text
-ai.analysis.server.requested
+ai.analysis.server.image.requested
+ai.analysis.server.video.requested
 ```
+
+Routing keys:
+
+```text
+identity.event.aianalysisrequestedevent.server.image
+identity.event.aianalysisrequestedevent.server.video
+```
+
+Real AI workers should bind image and video workers to separate queues with the same routing-key pattern. Edge workers use the `edge.image` and `edge.video` suffixes.
 
 For each `AIAnalysisRequestedEvent`, it calls the normal `ProcessAiAnalysisResultCommand` path and creates one deterministic detection with a bounding box.
 

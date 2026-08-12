@@ -1,7 +1,6 @@
 using MediatR;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Missions.DTOs;
-using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 
@@ -43,16 +42,7 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
         var uav = await _uavRepository.GetByUavCodeAsync(request.DroneCode);
         if (uav == null)
         {
-            uav = new Uav
-            {
-                Id = Guid.NewGuid(),
-                UavCode = request.DroneCode,
-                Model = "Standard",
-                Status = DroneStatus.Idle,
-                BatteryLevel = 100,
-                CreatedAt = DateTime.Now,
-            };
-            await _uavRepository.AddAsync(uav);
+            throw new NotFoundException("Drone", request.DroneCode);
         }
         
         misison.Title = request.Title;

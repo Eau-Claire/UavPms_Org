@@ -25,7 +25,7 @@ public class RabbitMqEventPublisher : IEventPublisher
         var baseRoutingKey = $"identity.event.{eventName.ToLowerInvariant()}";
         if (@event is AIAnalysisRequestedEvent aiAnalysisRequestedEvent)
         {
-            return $"{baseRoutingKey}.{ResolveAiRuntime(aiAnalysisRequestedEvent.PreferredModel)}";
+            return $"{baseRoutingKey}.{ResolveAiRuntime(aiAnalysisRequestedEvent.PreferredModel)}.{ResolveMediaType(aiAnalysisRequestedEvent.MediaType)}";
         }
 
         return baseRoutingKey;
@@ -40,6 +40,13 @@ public class RabbitMqEventPublisher : IEventPublisher
         }
 
         return "server";
+    }
+
+    private static string ResolveMediaType(string? mediaType)
+    {
+        return string.Equals(mediaType, "Video", StringComparison.OrdinalIgnoreCase)
+            ? "video"
+            : "image";
     }
 
     public async Task PublishAsync<T>(T @event) where T : class

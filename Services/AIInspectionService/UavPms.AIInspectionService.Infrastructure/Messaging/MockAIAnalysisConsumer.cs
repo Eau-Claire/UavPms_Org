@@ -36,8 +36,10 @@ public class MockAIAnalysisConsumer : BackgroundService
 
     private const string ExchangeName = "identity-exchange";
     private const string DeadLetterExchangeName = "ai.analysis.dlx";
-    private const string QueueName = "ai.analysis.server.requested";
-    private const string RoutingKey = "identity.event.aianalysisrequestedevent.server";
+    private const string ImageQueueName = "ai.analysis.server.image.requested";
+    private const string VideoQueueName = "ai.analysis.server.video.requested";
+    private const string ImageRoutingKey = "identity.event.aianalysisrequestedevent.server.image";
+    private const string VideoRoutingKey = "identity.event.aianalysisrequestedevent.server.video";
 
     public MockAIAnalysisConsumer(
         ILogger<MockAIAnalysisConsumer> logger,
@@ -74,35 +76,33 @@ public class MockAIAnalysisConsumer : BackgroundService
                 autoDelete: false,
                 cancellationToken: stoppingToken);
 
-            await _channel.QueueDeclareAsync(
-                queue: QueueName,
-                durable: true,
-                exclusive: false,
-                autoDelete: false,
-                arguments: new Dictionary<string, object?>
-                {
-                    ["x-dead-letter-exchange"] = DeadLetterExchangeName
-                },
-                cancellationToken: stoppingToken);
+            await DeclareQueueAsync(ImageQueueName, ImageRoutingKey, stoppingToken);
+            await DeclareQueueAsync(VideoQueueName, VideoRoutingKey, stoppingToken);
 
-            await _channel.QueueBindAsync(
-                queue: QueueName,
-                exchange: ExchangeName,
-                routingKey: RoutingKey,
-                cancellationToken: stoppingToken);
+            await _channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 2, global: false, cancellationToken: stoppingToken);
 
-            await _channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
+            var imageConsumer = new AsyncEventingBasicConsumer(_channel);
+            imageConsumer.ReceivedAsync += async (_, ea) => await ProcessMessageAsync(ea, stoppingToken);
 
-            var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.ReceivedAsync += async (_, ea) => await ProcessMessageAsync(ea, stoppingToken);
+            var videoConsumer = new AsyncEventingBasicConsumer(_channel);
+            videoConsumer.ReceivedAsync += async (_, ea) => await ProcessMessageAsync(ea, stoppingToken);
 
             await _channel.BasicConsumeAsync(
-                queue: QueueName,
+                queue: ImageQueueName,
                 autoAck: false,
-                consumer: consumer,
+                consumer: imageConsumer,
                 cancellationToken: stoppingToken);
 
-            _logger.LogWarning("MockAIAnalysisConsumer is listening on queue '{QueueName}'", QueueName);
+            await _channel.BasicConsumeAsync(
+                queue: VideoQueueName,
+                autoAck: false,
+                consumer: videoConsumer,
+                cancellationToken: stoppingToken);
+
+            _logger.LogWarning(
+                "MockAIAnalysisConsumer is listening on image queue '{ImageQueueName}' and video queue '{VideoQueueName}'",
+                ImageQueueName,
+                VideoQueueName);
 
             await Task.Delay(Timeout.Infinite, stoppingToken);
         }
@@ -114,6 +114,31 @@ public class MockAIAnalysisConsumer : BackgroundService
         {
             _logger.LogError(ex, "MockAIAnalysisConsumer encountered an error. It will not retry until the host restarts.");
         }
+    }
+
+    private async Task DeclareQueueAsync(string queueName, string routingKey, CancellationToken cancellationToken)
+    {
+        if (_channel == null)
+        {
+            return;
+        }
+
+        await _channel.QueueDeclareAsync(
+                queue: queueName,
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: new Dictionary<string, object?>
+                {
+                    ["x-dead-letter-exchange"] = DeadLetterExchangeName
+                },
+                cancellationToken: cancellationToken);
+
+        await _channel.QueueBindAsync(
+                queue: queueName,
+                exchange: ExchangeName,
+                routingKey: routingKey,
+                cancellationToken: cancellationToken);
     }
 
     private async Task ProcessMessageAsync(BasicDeliverEventArgs ea, CancellationToken cancellationToken)

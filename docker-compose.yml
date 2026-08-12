@@ -64,6 +64,15 @@ services:
       retries: 5
     restart: always
 
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: uav-mosquitto
+    expose:
+      - "1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    restart: always
+
   gateway:
     image: uavpms-gateway:latest
     container_name: uav-gateway
@@ -136,6 +145,14 @@ services:
       - "8080"
     environment:
       <<: *service-environment
+      Mqtt__Enabled: ${MQTT_ENABLED:-true}
+      Mqtt__Host: mosquitto
+      Mqtt__Port: 1883
+      Mqtt__ClientId: uav-pms-operations-service
+      Mqtt__StatusTopic: uav/+/status
+      Mqtt__TelemetryTopic: uav/+/telemetry
+      Mqtt__OfflineTimeoutSeconds: ${MQTT_OFFLINE_TIMEOUT_SECONDS:-30}
+      Mqtt__LiveStateTtlSeconds: ${MQTT_LIVE_STATE_TTL_SECONDS:-30}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -143,6 +160,8 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_healthy
+      mosquitto:
+        condition: service_started
     restart: always
 
   aiinspectionservice:
