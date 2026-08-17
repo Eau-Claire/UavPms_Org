@@ -21,6 +21,8 @@ x-service-environment: &service-environment
   MockAI__Enabled: ${MOCK_AI_ENABLED:-false}
   MockAI__CategoryCode: ${MOCK_AI_CATEGORY_CODE:-}
   MockAI__Confidence: ${MOCK_AI_CONFIDENCE:-0.92}
+  MockAI__ImageConcurrency: ${MOCK_AI_IMAGE_CONCURRENCY:-2}
+  MockAI__VideoConcurrency: ${MOCK_AI_VIDEO_CONCURRENCY:-1}
   Supabase__Url: ${SUPABASE_URL}
   Supabase__ApiKey: ${SUPABASE_API_KEY}
   Supabase__Bucket: ${SUPABASE_BUCKET}

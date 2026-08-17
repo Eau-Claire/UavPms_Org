@@ -31,15 +31,13 @@ public class MockAIAnalysisConsumer : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
 
-    private IConnection? _connection;
-    private IChannel? _channel;
-
     private const string ExchangeName = "identity-exchange";
     private const string DeadLetterExchangeName = "ai.analysis.dlx";
     private const string ImageQueueName = "ai.analysis.server.image.requested";
     private const string VideoQueueName = "ai.analysis.server.video.requested";
     private const string ImageRoutingKey = "identity.event.aianalysisrequestedevent.server.image";
     private const string VideoRoutingKey = "identity.event.aianalysisrequestedevent.server.video";
+    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
 
     public MockAIAnalysisConsumer(
         ILogger<MockAIAnalysisConsumer> logger,
@@ -57,73 +55,106 @@ public class MockAIAnalysisConsumer : BackgroundService
     {
         _logger.LogWarning("MockAIAnalysisConsumer is ENABLED. This is for demo/testing only and must be disabled when a real AI worker is running.");
 
-        try
+        var imageConcurrency = GetPositiveInt("MockAI:ImageConcurrency", 2);
+        var videoConcurrency = GetPositiveInt("MockAI:VideoConcurrency", 1);
+        var consumers = new List<Task>(imageConcurrency + videoConcurrency);
+
+        for (var i = 0; i < imageConcurrency; i++)
         {
-            _connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
-            _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
-
-            await _channel.ExchangeDeclareAsync(
-                exchange: ExchangeName,
-                type: ExchangeType.Topic,
-                durable: true,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
-
-            await _channel.ExchangeDeclareAsync(
-                exchange: DeadLetterExchangeName,
-                type: ExchangeType.Fanout,
-                durable: true,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
-
-            await DeclareQueueAsync(ImageQueueName, ImageRoutingKey, stoppingToken);
-            await DeclareQueueAsync(VideoQueueName, VideoRoutingKey, stoppingToken);
-
-            await _channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 2, global: false, cancellationToken: stoppingToken);
-
-            var imageConsumer = new AsyncEventingBasicConsumer(_channel);
-            imageConsumer.ReceivedAsync += async (_, ea) => await ProcessMessageAsync(ea, stoppingToken);
-
-            var videoConsumer = new AsyncEventingBasicConsumer(_channel);
-            videoConsumer.ReceivedAsync += async (_, ea) => await ProcessMessageAsync(ea, stoppingToken);
-
-            await _channel.BasicConsumeAsync(
-                queue: ImageQueueName,
-                autoAck: false,
-                consumer: imageConsumer,
-                cancellationToken: stoppingToken);
-
-            await _channel.BasicConsumeAsync(
-                queue: VideoQueueName,
-                autoAck: false,
-                consumer: videoConsumer,
-                cancellationToken: stoppingToken);
-
-            _logger.LogWarning(
-                "MockAIAnalysisConsumer is listening on image queue '{ImageQueueName}' and video queue '{VideoQueueName}'",
-                ImageQueueName,
-                VideoQueueName);
-
-            await Task.Delay(Timeout.Infinite, stoppingToken);
+            consumers.Add(ConsumeQueueAsync(ImageQueueName, ImageRoutingKey, "image", i + 1, stoppingToken));
         }
-        catch (OperationCanceledException)
+
+        for (var i = 0; i < videoConcurrency; i++)
         {
-            _logger.LogInformation("MockAIAnalysisConsumer is stopping.");
+            consumers.Add(ConsumeQueueAsync(VideoQueueName, VideoRoutingKey, "video", i + 1, stoppingToken));
         }
-        catch (Exception ex)
+
+        _logger.LogWarning(
+            "Mock AI started {ImageConcurrency} image worker(s) and {VideoConcurrency} video worker(s)",
+            imageConcurrency,
+            videoConcurrency);
+
+        await Task.WhenAll(consumers);
+    }
+
+    private async Task ConsumeQueueAsync(
+        string queueName,
+        string routingKey,
+        string mediaType,
+        int workerNumber,
+        CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _logger.LogError(ex, "MockAIAnalysisConsumer encountered an error. It will not retry until the host restarts.");
+            try
+            {
+                await using var connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
+                await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
+
+                await channel.ExchangeDeclareAsync(
+                    exchange: ExchangeName,
+                    type: ExchangeType.Topic,
+                    durable: true,
+                    autoDelete: false,
+                    cancellationToken: stoppingToken);
+
+                await channel.ExchangeDeclareAsync(
+                    exchange: DeadLetterExchangeName,
+                    type: ExchangeType.Fanout,
+                    durable: true,
+                    autoDelete: false,
+                    cancellationToken: stoppingToken);
+
+                await DeclareQueueAsync(channel, queueName, routingKey, stoppingToken);
+                await channel.BasicQosAsync(0, 1, false, stoppingToken);
+
+                var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                connection.ConnectionShutdownAsync += (_, _) =>
+                {
+                    disconnected.TrySetResult();
+                    return Task.CompletedTask;
+                };
+                channel.ChannelShutdownAsync += (_, _) =>
+                {
+                    disconnected.TrySetResult();
+                    return Task.CompletedTask;
+                };
+
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += (_, ea) => ProcessMessageAsync(ea, channel, stoppingToken);
+
+                await channel.BasicConsumeAsync(queueName, false, consumer, stoppingToken);
+                _logger.LogInformation(
+                    "Mock AI {MediaType} worker {WorkerNumber} is listening on '{QueueName}'",
+                    mediaType,
+                    workerNumber,
+                    queueName);
+
+                await disconnected.Task.WaitAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Mock AI {MediaType} worker {WorkerNumber} disconnected; retrying in {DelaySeconds} seconds",
+                    mediaType,
+                    workerNumber,
+                    ReconnectDelay.TotalSeconds);
+            }
+
+            if (!stoppingToken.IsCancellationRequested)
+            {
+                await Task.Delay(ReconnectDelay, stoppingToken);
+            }
         }
     }
 
-    private async Task DeclareQueueAsync(string queueName, string routingKey, CancellationToken cancellationToken)
+    private static async Task DeclareQueueAsync(IChannel channel, string queueName, string routingKey, CancellationToken cancellationToken)
     {
-        if (_channel == null)
-        {
-            return;
-        }
-
-        await _channel.QueueDeclareAsync(
+        await channel.QueueDeclareAsync(
                 queue: queueName,
                 durable: true,
                 exclusive: false,
@@ -134,20 +165,15 @@ public class MockAIAnalysisConsumer : BackgroundService
                 },
                 cancellationToken: cancellationToken);
 
-        await _channel.QueueBindAsync(
+        await channel.QueueBindAsync(
                 queue: queueName,
                 exchange: ExchangeName,
                 routingKey: routingKey,
                 cancellationToken: cancellationToken);
     }
 
-    private async Task ProcessMessageAsync(BasicDeliverEventArgs ea, CancellationToken cancellationToken)
+    private async Task ProcessMessageAsync(BasicDeliverEventArgs ea, IChannel channel, CancellationToken cancellationToken)
     {
-        if (_channel == null)
-        {
-            return;
-        }
-
         try
         {
             var json = Encoding.UTF8.GetString(ea.Body.ToArray());
@@ -159,7 +185,7 @@ public class MockAIAnalysisConsumer : BackgroundService
             if (aiRequestEvent == null)
             {
                 _logger.LogWarning("Mock AI received invalid message: {Message}", json);
-                await _channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
+                await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
                 return;
             }
 
@@ -187,7 +213,7 @@ public class MockAIAnalysisConsumer : BackgroundService
                     CompletedAt = DateTime.UtcNow
                 }, cancellationToken);
 
-                await _channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
+                await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
                 return;
             }
 
@@ -231,12 +257,12 @@ public class MockAIAnalysisConsumer : BackgroundService
                 result.SavedDetections,
                 result.CreatedAlerts);
 
-            await _channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
+            await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Mock AI failed to process message.");
-            await _channel.BasicNackAsync(ea.DeliveryTag, false, requeue: false, cancellationToken);
+            await channel.BasicNackAsync(ea.DeliveryTag, false, requeue: false, cancellationToken);
         }
     }
 
@@ -277,10 +303,8 @@ public class MockAIAnalysisConsumer : BackgroundService
         return int.TryParse(_configuration[key], out var value) ? value : fallback;
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
+    private int GetPositiveInt(string key, int fallback)
     {
-        if (_channel != null) await _channel.CloseAsync(cancellationToken);
-        if (_connection != null) await _connection.CloseAsync(cancellationToken);
-        await base.StopAsync(cancellationToken);
+        return int.TryParse(_configuration[key], out var value) && value > 0 ? value : fallback;
     }
 }
