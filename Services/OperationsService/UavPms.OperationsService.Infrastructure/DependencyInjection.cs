@@ -53,6 +53,10 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(RabbitMQOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+        services.AddOptions<MqttOptions>()
+            .Bind(configuration.GetSection(MqttOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         // Đăng ký RabbitMQ Connection (conditional - fallback to NoOp)
         var rabbitHost = configuration["RabbitMQ:HostName"];
@@ -95,6 +99,11 @@ public static class DependencyInjection
 
         // Đăng ký Inspection Media Repository
         services.AddScoped<IInspectionMediaRepository, InspectionMediaRepository>();
+        services.AddScoped<IDroneLiveStateService, RedisDroneLiveStateService>();
+        if (configuration.GetValue<bool>("Mqtt:Enabled"))
+        {
+            services.AddHostedService<MqttDroneConsumer>();
+        }
 
         // Đăng ký HttpContextAccessor và CurrentUserServices
         services.AddHttpContextAccessor();

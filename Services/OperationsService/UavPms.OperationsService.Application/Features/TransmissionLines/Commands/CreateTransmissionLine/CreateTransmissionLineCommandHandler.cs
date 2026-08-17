@@ -36,7 +36,7 @@ public class CreateTransmissionLineCommandHandler : IRequestHandler<CreateTransm
         Geometry? geom = null;
         if (!string.IsNullOrEmpty(request.GeomWkt))
         {
-            var wktReader = new WKTReader(NtsGeometryServices.Instance);
+            var wktReader = new WKTReader(new NtsGeometryServices(new PrecisionModel(), 4326));
 
             try
             {

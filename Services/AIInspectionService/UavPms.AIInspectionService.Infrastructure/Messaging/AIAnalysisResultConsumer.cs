@@ -18,6 +18,7 @@ namespace UavPms.AIInspectionService.Infrastructure.Messaging;
 
 public class AIAnalysisResultConsumer : BackgroundService
 {
+    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -27,9 +28,6 @@ public class AIAnalysisResultConsumer : BackgroundService
     private readonly RabbitMqConnection _rabbitMqConnection;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly AIAnalysisResultMessagingOptions _options;
-
-    private IConnection? _connection;
-    private IChannel? _channel;
 
     public AIAnalysisResultConsumer(
         ILogger<AIAnalysisResultConsumer> logger,
@@ -45,39 +43,81 @@ public class AIAnalysisResultConsumer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("AIAnalysisResultConsumer is starting...");
+        _logger.LogInformation("AIAnalysisResultConsumer starting");
 
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
-            _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
-            await _channel.BasicQosAsync(0, _options.PrefetchCount, false, stoppingToken);
-
-            await DeclareTopologyAsync(_channel, stoppingToken);
-
-            var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.ReceivedAsync += async (_, ea) =>
+            try
             {
-                await HandleMessageAsync(ea, _channel, stoppingToken);
-            };
+                _logger.LogInformation("Connecting to RabbitMQ");
+                await using var connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
+                _logger.LogInformation("RabbitMQ connection established");
 
-            await _channel.BasicConsumeAsync(
-                queue: _options.QueueName,
-                autoAck: false,
-                consumer: consumer,
-                cancellationToken: stoppingToken);
+                var channelOptions = new CreateChannelOptions(
+                    publisherConfirmationsEnabled: true,
+                    publisherConfirmationTrackingEnabled: true);
+                await using var channel = await connection.CreateChannelAsync(channelOptions, stoppingToken);
+                await channel.BasicQosAsync(0, _options.PrefetchCount, false, stoppingToken);
+                await DeclareTopologyAsync(channel, stoppingToken);
 
-            _logger.LogInformation("AIAnalysisResultConsumer is now listening on queue '{QueueName}'", _options.QueueName);
-            await Task.Delay(Timeout.Infinite, stoppingToken);
+                var connectionLost = new TaskCompletionSource<ShutdownEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+                connection.ConnectionShutdownAsync += (_, args) =>
+                {
+                    connectionLost.TrySetResult(args);
+                    return Task.CompletedTask;
+                };
+                channel.ChannelShutdownAsync += (_, args) =>
+                {
+                    connectionLost.TrySetResult(args);
+                    return Task.CompletedTask;
+                };
+
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += (_, ea) => HandleMessageAsync(ea, channel, stoppingToken);
+
+                await channel.BasicConsumeAsync(
+                    queue: _options.QueueName,
+                    autoAck: false,
+                    consumer: consumer,
+                    cancellationToken: stoppingToken);
+
+                _logger.LogInformation("Consumer started on queue {QueueName}", _options.QueueName);
+                var shutdown = await connectionLost.Task.WaitAsync(stoppingToken);
+                _logger.LogWarning(
+                    "RabbitMQ connection lost. ReplyCode={ReplyCode}, ReplyText={ReplyText}",
+                    shutdown.ReplyCode,
+                    shutdown.ReplyText);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    "RabbitMQ unavailable. ExceptionType={ExceptionType}, ErrorMessage={ErrorMessage}",
+                    ex.GetType().Name,
+                    ex.Message);
+            }
+
+            if (!stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("Consumer reconnecting");
+                _logger.LogWarning(
+                    "RabbitMQ unavailable; retrying in {RetryDelaySeconds} seconds",
+                    ReconnectDelay.TotalSeconds);
+                try
+                {
+                    await Task.Delay(ReconnectDelay, stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+            }
         }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("AIAnalysisResultConsumer is stopping.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AIAnalysisResultConsumer encountered an error. It will not retry until the host restarts.");
-        }
+
+        _logger.LogInformation("Consumer stopped");
     }
 
     public async Task HandleMessageAsync(BasicDeliverEventArgs ea, IChannel channel, CancellationToken cancellationToken)
@@ -126,13 +166,6 @@ public class AIAnalysisResultConsumer : BackgroundService
             _logger.LogError(ex, "Failed to process AI analysis result. DeliveryTag={DeliveryTag}", ea.DeliveryTag);
             await channel.BasicNackAsync(ea.DeliveryTag, false, requeue: false, cancellationToken);
         }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_channel != null) await _channel.CloseAsync(cancellationToken);
-        if (_connection != null) await _connection.CloseAsync(cancellationToken);
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task DeclareTopologyAsync(IChannel channel, CancellationToken cancellationToken)

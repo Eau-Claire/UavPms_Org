@@ -21,6 +21,8 @@ x-service-environment: &service-environment
   MockAI__Enabled: ${MOCK_AI_ENABLED:-false}
   MockAI__CategoryCode: ${MOCK_AI_CATEGORY_CODE:-}
   MockAI__Confidence: ${MOCK_AI_CONFIDENCE:-0.92}
+  MockAI__ImageConcurrency: ${MOCK_AI_IMAGE_CONCURRENCY:-2}
+  MockAI__VideoConcurrency: ${MOCK_AI_VIDEO_CONCURRENCY:-1}
   Supabase__Url: ${SUPABASE_URL}
   Supabase__ApiKey: ${SUPABASE_API_KEY}
   Supabase__Bucket: ${SUPABASE_BUCKET}
@@ -62,6 +64,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: always
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: uav-mosquitto
+    expose:
+      - "1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
     restart: always
 
   gateway:
@@ -136,6 +147,14 @@ services:
       - "8080"
     environment:
       <<: *service-environment
+      Mqtt__Enabled: ${MQTT_ENABLED:-true}
+      Mqtt__Host: mosquitto
+      Mqtt__Port: 1883
+      Mqtt__ClientId: uav-pms-operations-service
+      Mqtt__StatusTopic: uav/+/status
+      Mqtt__TelemetryTopic: uav/+/telemetry
+      Mqtt__OfflineTimeoutSeconds: ${MQTT_OFFLINE_TIMEOUT_SECONDS:-30}
+      Mqtt__LiveStateTtlSeconds: ${MQTT_LIVE_STATE_TTL_SECONDS:-30}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -143,6 +162,8 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_healthy
+      mosquitto:
+        condition: service_started
     restart: always
 
   aiinspectionservice:

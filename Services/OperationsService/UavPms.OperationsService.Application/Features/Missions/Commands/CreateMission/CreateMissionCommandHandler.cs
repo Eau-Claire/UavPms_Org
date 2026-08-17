@@ -45,16 +45,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
         var uav = await _uavRepository.GetByUavCodeAsync(request.DroneCode);
         if (uav == null)
         {
-            uav = new Uav
-            {
-                Id = Guid.NewGuid(),
-                UavCode = request.DroneCode,
-                Model = "Standard",
-                Status = DroneStatus.Idle,
-                BatteryLevel = 100,
-                CreatedAt = DateTime.UtcNow,
-            };
-            await _uavRepository.AddAsync(uav);
+            throw new NotFoundException("Drone", request.DroneCode);
         }
 
         var missionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmss}";

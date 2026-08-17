@@ -5,11 +5,11 @@ namespace UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.St
 
 public class OtpVerificationStrategyResolver
 {
-    private readonly List<IOtpVerificationStrategy> _strategies;
+    private readonly IReadOnlyList<IOtpVerificationStrategy> _strategies;
 
-    public OtpVerificationStrategyResolver(List<IOtpVerificationStrategy> strategies)
+    public OtpVerificationStrategyResolver(IEnumerable<IOtpVerificationStrategy> strategies)
     {
-        _strategies = strategies;
+        _strategies = strategies.ToList();
     }
 
     public IOtpVerificationStrategy Resolve(OtpPurpose purpose)

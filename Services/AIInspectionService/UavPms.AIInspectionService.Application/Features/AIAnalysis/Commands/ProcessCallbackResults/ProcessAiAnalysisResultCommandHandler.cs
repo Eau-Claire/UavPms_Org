@@ -210,6 +210,17 @@ public class ProcessAiAnalysisResultCommandHandler
                             ? anomaly.AnalystNotes
                             : $"AI evaluation: severity={evaluation.Severity}, risk={evaluation.RiskLevel}, score={evaluation.PriorityScore}. {evaluation.Reason}";
 
+                        await _eventPublisher.PublishAsync(new DefectDetectedEvent
+                        {
+                            InspectionId = media.MissionId,
+                            RecordId = anomaly.Id,
+                            MissionId = media.MissionId,
+                            ImageUrl = anomaly.ImageUrl ?? media.FileUrl,
+                            IsDefect = true,
+                            DefectType = category.CategoryName,
+                            DetectedAt = DateTime.UtcNow
+                        });
+
                         // 5. Check if it's an emergency alert
                         var isEmergency = evaluation.RequiresImmediateAlert ||
                             BoundingBoxCalculations.IsEmergencyClass(detection.CategoryCode);
@@ -232,17 +243,6 @@ public class ProcessAiAnalysisResultCommandHandler
                             
                             await _emergencyAlertRepo.AddAsync(alert);
                             createdAlerts++;
-                            
-                            await _eventPublisher.PublishAsync(new DefectDetectedEvent
-                            {
-                                InspectionId = media.MissionId,
-                                RecordId = anomaly.Id,
-                                MissionId = media.MissionId,
-                                ImageUrl = anomaly.ImageUrl ?? media.FileUrl,
-                                IsDefect = true,
-                                DefectType = $"{category.CategoryName} ({evaluation.Severity})",
-                                DetectedAt = DateTime.UtcNow
-                            });
                             
                             // 6. Send Notification to Mission Manager
                             if (media.Mission != null)

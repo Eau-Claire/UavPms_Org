@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Moq;
 using UavPms.Shared.Contracts.Events;
+using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Missions.Commands.CreateMission;
 using UavPms.OperationsService.Domain.Contracts;
 using UavPms.OperationsService.Domain.Entities;
@@ -66,5 +67,25 @@ public class CreateMissionCommandHandlerTests
         _missionRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Mission>()), Times.Once);
         _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         _eventPublisherMock.Verify(x => x.PublishAsync(It.IsAny<MissionCreatedEvent>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldThrowNotFound_WhenDroneCodeDoesNotExist()
+    {
+        var assignedUserId = Guid.NewGuid();
+        var droneCode = "UAV-999";
+
+        _userRepositoryMock.Setup(x => x.GetByIdAsync(assignedUserId, true))
+            .ReturnsAsync(new User { Id = assignedUserId, Email = "inspector@test.com" });
+        _uavRepositoryMock.Setup(x => x.GetByUavCodeAsync(droneCode))
+            .ReturnsAsync((Uav?)null);
+
+        var command = new CreateMissionCommand("Inspection A", "Route abc", assignedUserId, droneCode, "Pending", "Description");
+
+        await _handler.Invoking(x => x.Handle(command, CancellationToken.None))
+            .Should().ThrowAsync<NotFoundException>();
+
+        _uavRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Uav>()), Times.Never);
+        _missionRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Mission>()), Times.Never);
     }
 }
