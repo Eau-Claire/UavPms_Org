@@ -13,6 +13,7 @@ using UavPms.AIInspectionService.Application;
 using UavPms.AIInspectionService.Infrastructure;
 using UavPms.AIInspectionService.Infrastructure.Persistence;
 using UavPms.AIInspectionService.Infrastructure.Messaging;
+using Prometheus;
 
 using UavPms.AIInspectionService.API.Middlewares;
 
@@ -110,6 +111,8 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+app.UseHttpMetrics();
+
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
 
@@ -163,4 +166,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { service = "ai-inspection", status = "healthy" }));
 app.MapControllers();
+
+app.MapMetrics();
+
 app.Run();
