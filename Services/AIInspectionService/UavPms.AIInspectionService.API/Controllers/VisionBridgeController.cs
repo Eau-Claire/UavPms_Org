@@ -1,12 +1,10 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using Asp.Versioning;
 using MediatR;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.AIInspectionService.Application.Features.VisionBridge.Commands;
 using UavPms.AIInspectionService.Application.Features.VisionBridge.DTOs;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.AIInspectionService.API.Controllers;
 
@@ -104,6 +102,7 @@ public class VisionBridgeController : ControllerBase
     }
 
     [HttpGet("health")]
+    [Authorize(Roles = UserRoles.AdminOnly)]
     public IActionResult HealthCheck()
     {
         return Ok(new

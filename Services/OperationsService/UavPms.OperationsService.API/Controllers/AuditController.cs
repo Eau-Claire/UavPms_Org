@@ -1,12 +1,9 @@
-using System;
-using System.Threading.Tasks;
 using Asp.Versioning;
-using Hangfire;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using UavPms.OperationsService.Application.Features.AuditLogs.Queries;
 using UavPms.OperationsService.Application.Features.AuditLogs.Queries.GetAuditLogs;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
@@ -24,7 +21,7 @@ public class AuditController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = "SystemAdmin, Manager")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> GetAuditLogs(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,

@@ -2,23 +2,20 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Asp.Versioning;
 using MediatR;
-using System;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using UavPms.OperationsService.API.Controllers;
 using UavPms.OperationsService.Application.Features.Towers.Commands.CreateTower;
 using UavPms.OperationsService.Application.Features.Towers.Commands.UpdateTower;
 using UavPms.OperationsService.Application.Features.Towers.Commands.DeleteTower;
 using UavPms.OperationsService.Application.Features.Towers.Commands.ImportTowers;
 using UavPms.OperationsService.Application.Features.Towers.Queries.GetTowers;
 using UavPms.OperationsService.Application.Features.Towers.Queries.GetTowerById;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/towers")]
 [ApiVersion("1.0")]
-[Authorize]
+[Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
 public class TowerController : ControllerBase
 {
     private readonly ISender _mediator;
@@ -45,7 +42,7 @@ public class TowerController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Create([FromBody] CreateTowerRequest request)
     {
         var command = new CreateTowerCommand(
@@ -59,7 +56,7 @@ public class TowerController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTowerRequest request)
     {
         var command = new UpdateTowerCommand(
@@ -74,7 +71,7 @@ public class TowerController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var command = new DeleteTowerCommand(id);
@@ -83,7 +80,7 @@ public class TowerController : ControllerBase
     }
 
     [HttpPost("import")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Import(IFormFile file)
     {
         if (file == null || file.Length == 0)

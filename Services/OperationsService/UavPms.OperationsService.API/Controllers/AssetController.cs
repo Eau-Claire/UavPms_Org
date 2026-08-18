@@ -10,13 +10,14 @@ using UavPms.OperationsService.Application.Features.Assets.Commands.UpdateAsset;
 using UavPms.OperationsService.Application.Features.Assets.Commands.DeleteAsset;
 using UavPms.OperationsService.Application.Features.Assets.Queries.GetAssets;
 using UavPms.OperationsService.Application.Features.Assets.Queries.GetAssetById;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/assets")]
 [ApiVersion("1.0")]
-[Authorize]
+[Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
 public class AssetController : ControllerBase
 {
     private readonly ISender _mediator;
@@ -48,7 +49,7 @@ public class AssetController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Create([FromBody] CreateAssetRequest request)
     {
         var command = new CreateAssetCommand(request.TowerId, request.AssetType, request.AssetCode);
@@ -57,7 +58,7 @@ public class AssetController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateAssetRequest request)
     {
         var command = new UpdateAssetCommand(
@@ -74,7 +75,7 @@ public class AssetController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var command = new DeleteAssetCommand(id);

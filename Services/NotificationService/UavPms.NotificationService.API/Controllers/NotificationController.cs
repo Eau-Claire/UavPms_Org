@@ -1,14 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Threading.Tasks;
 using Asp.Versioning;
 using MediatR;
-using UavPms.NotificationService.Domain.Contracts;
 using UavPms.NotificationService.Application.Features.Notifications.Queries.GetNotifications;
 using UavPms.NotificationService.Application.Features.Notifications.Queries.GetNotificationById;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.CreateNotification;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.DeleteNotification;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.MarkNotificationAsRead;
+using UavPms.Shared.Contracts.Constants;
 
 using Microsoft.AspNetCore.Authorization;
 
@@ -28,6 +26,7 @@ public class NotificationController : ControllerBase
     }
 
     [HttpGet("history")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetHistory([FromQuery] string userId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(userId))
@@ -46,6 +45,7 @@ public class NotificationController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
         var query = new GetNotificationByIdQuery(id);
@@ -54,6 +54,7 @@ public class NotificationController : ControllerBase
     }
 
     [HttpPut("{id:guid}/read")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> MarkAsRead(Guid id, CancellationToken cancellationToken = default)
     {
         var command = new MarkNotificationAsReadCommand(id);
@@ -78,6 +79,7 @@ public class NotificationController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> DeleteNotification(Guid id, CancellationToken cancellationToken = default)
     {
         var command = new DeleteNotificationCommand(id);

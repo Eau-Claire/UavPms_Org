@@ -137,6 +137,12 @@
   - Kiểm tra và đảm bảo các endpoint: `GET /summary`, `GET /recent-defects`, `GET /defects-statistics`, `GET /mission-status`, `GET /inspections`, và `GET /alerts` từ chối người dùng chưa xác thực (401 Unauthorized) hoặc không đủ quyền (403 Forbidden).
 - [X] 24c. **Giới hạn kích thước trang (Pagination Upper-Bound Validation)**:
   - Ràng buộc tham số `pageSize <= 100` tại các endpoint của `MonitorController` (`recent-defects` và `inspections`) để tránh cạn kiệt tài nguyên (DoS).
+- [ ] 24d. **Chuẩn hóa Phân quyền RBAC toàn bộ API Endpoints theo Authorization Matrix**:
+  - Áp dụng phân quyền vai trò (SystemAdmin, Manager, Inspector, Analyst, MaintenanceTechnician) trên toàn bộ endpoints của 4 Microservices (`IdentityService`, `OperationsService`, `AIInspectionService`, `NotificationService`).
+  - Định nghĩa tập trung `UserRoles.cs` trong `UavPms.Shared.Contracts` thay cho hardcode chuỗi role trong Controller.
+  - Kiểm tra quyền sở hữu tài nguyên (Inspector assigned mission, User owned notification) trả về HTTP 403 Forbidden.
+  - Tách bạch các endpoint dành cho thiết bị / internal services (`/devices/heartbeat`, `/vision/detections`, `/notifications/*` internal).
+  - Cấu hình Swagger Security Scheme hiển thị khóa xác thực Bearer token cho toàn bộ các dịch vụ.
 
 ### Phase 3.2: Quản trị Người dùng & Tự động ghi nhận Audit Log
 - [X] 25. **CRUD API quản lý người dùng (Users)**: Chỉ tài khoản có vai trò `SystemAdmin` mới được phép tạo mới, cập nhật thông tin, thay đổi vai trò (Role) hoặc đình chỉ (suspend) tài khoản khác.
@@ -298,19 +304,480 @@
 - [x] 70. **Lan truyền `CancellationToken`**: Bổ sung tham số `CancellationToken cancellationToken = default` xuyên suốt `IFileStorageService` và các Handlers.
 
 ### Phase 11.2: Refactoring AIInspectionService
-- [ ] 71. **Strongly-Typed Options Pattern (`PythonAIOptions`, `RabbitMQOptions`)**: Đóng gói cấu hình kết nối AI với `ValidateOnStart()`.
-- [ ] 72. **Pure Utility (`BoundingBoxCalculations`)**: Trích xuất hàm static tính toán chỉ số IOU, diện tích hộp giới hạn và tỉ lệ khung hình.
-- [ ] 73. **Rich Domain Model & Enums (`AnomalyStatus`, `EmergencyAlertPriority`, `MediaValidationStatus`)**: Đóng gói các trạng thái sự cố và quy trình thẩm định lỗi AI (`Anomaly.Confirm()`, `Anomaly.Reject()`).
-- [ ] 74. **Lan truyền `CancellationToken`**: Bổ sung `CancellationToken` cho `IAIAnalysisService`, HTTP Client kết nối Python AI và các Handlers.
+- [x] 71. **Strongly-Typed Options Pattern (`PythonAIOptions`, `RabbitMQOptions`)**: Đóng gói cấu hình kết nối AI với `ValidateOnStart()`.
+- [x] 72. **Pure Utility (`BoundingBoxCalculations`)**: Trích xuất hàm static tính toán chỉ số IOU, diện tích hộp giới hạn và tỉ lệ khung hình.
+- [x] 73. **Rich Domain Model & Enums (`AnomalyStatus`, `EmergencyAlertPriority`, `MediaValidationStatus`)**: Đóng gói các trạng thái sự cố và quy trình thẩm định lỗi AI (`Anomaly.Confirm()`, `Anomaly.Reject()`).
+- [x] 74. **Lan truyền `CancellationToken`**: Bổ sung `CancellationToken` cho `IAIAnalysisService`, HTTP Client kết nối Python AI và các Handlers.
 
 ### Phase 11.3: Refactoring NotificationService
-- [ ] 75. **Strongly-Typed Options Pattern (`SendGridOptions`, `SupabaseOptions`, `RabbitMQOptions`)**: Đóng gói cấu hình gửi email/thông báo với DataAnnotations Validation.
-- [ ] 76. **Pure Utility (`NotificationFormatter`)**: Trích xuất hàm định dạng tiêu đề, nội dung và thay thế template biến thông báo.
-- [ ] 77. **Rich Domain Model & Enums (`NotificationType`)**: Chuyển đổi thuộc tính `Type` sang Enum và đóng gói hành vi `Notification.MarkAsRead()`.
-- [ ] 78. **Lan truyền `CancellationToken`**: Bổ sung `CancellationToken` cho `IEmailService`, `IRealtimeNotificationService` và các Handlers.
+- [x] 75. **Strongly-Typed Options Pattern (`SendGridOptions`, `SupabaseOptions`, `RabbitMQOptions`)**: Đóng gói cấu hình gửi email/thông báo với DataAnnotations Validation.
+- [x] 76. **Pure Utility (`NotificationFormatter`)**: Trích xuất hàm định dạng tiêu đề, nội dung và thay thế template biến thông báo.
+- [x] 77. **Rich Domain Model & Enums (`NotificationType`)**: Chuyển đổi thuộc tính `Type` sang Enum và đóng gói hành vi `Notification.MarkAsRead()`.
+- [x] 78. **Lan truyền `CancellationToken`**: Bổ sung `CancellationToken` cho `IEmailService`, `IRealtimeNotificationService` và các Handlers.
 
 ### Phase 11.4: Refactoring InspectionEvaluationService
-- [ ] 79. **Strongly-Typed Options Pattern (`HealthCalculationOptions`)**: Đóng gói cấu hình trọng số công thức tính điểm sức khỏe 50-20-20-10.
-- [ ] 80. **Pure Utility (`HealthScoreCalculations`)**: Trích xuất hàm tính điểm sức khỏe (0-100) và gán nhãn mức độ rủi ro (`Low`, `Medium`, `High`, `Critical`).
-- [ ] 81. **Rich Domain Model & Enums (`RiskLevel`)**: Cập nhật Enum `RiskLevel` và đóng gói phương thức `Asset.UpdateHealthScore(...)`.
-- [ ] 82. **Lan truyền `CancellationToken`**: Bổ sung `CancellationToken` cho `IAssetHealthService` và các Handlers.
+- [x] 79. **Strongly-Typed Options Pattern (`EvaluationThresholdOptions`)**: Đóng gói cấu hình ngưỡng điểm severity và rủi ro với DataAnnotations Validation.
+- [x] 80. **Pure Utility Engine (`DetectionEvaluationEngine`)**: Trích xuất engine tính toán mức độ nghiêm trọng, điểm ưu tiên và rủi ro.
+- [x] 81. **Rich Domain Model & Enums (`EvaluationSeverity`, `EvaluationRiskLevel`)**: Cập nhật các Enums mức độ rủi ro và nghiêm trọng được gõ kiểu mạnh.
+- [x] 82. **Lan truyền `CancellationToken`**: Bổ sung `CancellationToken` cho gRPC services và Handlers.
+
+---
+
+## EPIC 12: KIỂM THỬ TOÀN DIỆN HỆ THỐNG (Comprehensive Test Plan & Execution)
+
+*Mục tiêu: Xây dựng bộ Test Plan bài bản, chi tiết, bao phủ 100% nghiệp vụ cốt lõi của hệ thống UAV-PMS Backend trên cả 5 Microservices (.NET 9), API Gateway (Ocelot), gRPC internal, RabbitMQ Event Bus, SignalR Realtime và giao diện người dùng Frontend. Đảm bảo tính chính xác, bảo mật, hiệu năng và khả năng chịu tải trước khi chuyển sang Production.*
+
+*Tham chiếu: `api_spec.md` (Đặc tả API), `service-architecture.md` (Kiến trúc Microservices), `database_schema.md` (ERD & Từ điển dữ liệu).*
+
+*Công cụ sử dụng: xUnit + FluentAssertions + Moq (Unit Test), WebApplicationFactory (Integration Test), Postman/Newman (API Contract Test), JMeter/k6 (Performance & Load Test), Playwright (UI E2E Test).*
+
+---
+
+### Phase 12.0: Dashboard Tổng hợp Tiến độ Kiểm thử (Test Progress Dashboard)
+
+- [ ] 83. **Thiết lập Dashboard theo dõi tiến độ Test Plan**:
+  - Tổng hợp số lượng Test Case toàn hệ thống theo trạng thái: `Passed` / `Failed` / `Blocked` / `Untested` / `Skipped`.
+  - Phân nhóm theo Module/Service: IdentityService, OperationsService, AIInspectionService, InspectionEvaluationService, NotificationService, ApiGateway, Frontend.
+  - Phân nhóm theo loại Test: Unit Test, Integration Test, API Contract Test, Security Test, Performance Test, E2E Test.
+- [ ] 84. **Thiết lập cấu trúc thư mục Test Artifacts**:
+  - `docs/test-plan/00_Dashboard/` — Tổng hợp kết quả, biểu đồ coverage.
+  - `docs/test-plan/01_Test_Strategy/` — Chiến lược, phạm vi, công cụ, tiêu chí đạt/rớt.
+  - `docs/test-plan/02_API_Backend_Test/` — Ma trận Test Cases chi tiết cho từng Microservice.
+  - `docs/test-plan/03_UI_Frontend_Test/` — Test Cases giao diện và trải nghiệm người dùng.
+  - `docs/test-plan/04_Performance_Load_Test/` — Kịch bản đo lường hiệu năng, chịu tải, Stress Test.
+  - `docs/test-plan/05_E2E_Integration_Test/` — Test Cases luồng nghiệp vụ liên dịch vụ (Cross-service).
+  - `docs/test-plan/06_Test_Data_Matrix/` — Quản lý dữ liệu test, token, tài khoản, cấu hình môi trường.
+- [ ] 85. **Tích hợp Code Coverage Report tự động**:
+  - Cấu hình `coverlet.collector` cho tất cả 5 dự án `.Tests`.
+  - Viết script `scripts/run-tests-with-coverage.sh` thu thập coverage Cobertura/LCOV sau mỗi lần chạy `dotnet test`.
+  - Tích hợp `ReportGenerator` để sinh báo cáo HTML trực quan (`docs/test-plan/00_Dashboard/coverage-report/index.html`).
+  - Thiết lập ngưỡng Code Coverage tối thiểu: >= 85% cho Application layer, >= 90% cho Domain layer.
+
+---
+
+### Phase 12.1: Chiến lược & Phạm vi Kiểm thử (Test Strategy & Scope Definition)
+
+- [ ] 86. **Định nghĩa phạm vi kiểm thử (Test Scope)**:
+  - **Trong phạm vi (In Scope)**: 5 Microservices .NET 9 (IdentityService, OperationsService, AIInspectionService, InspectionEvaluationService, NotificationService), ApiGateway Ocelot, RabbitMQ Event Bus, gRPC internal, SignalR Hub, PostgreSQL + PostGIS, Redis Cache, Frontend Web Application.
+  - **Ngoài phạm vi (Out of Scope)**: FastAPI Python AI Service (kiểm thử riêng bởi nhóm AI/ML), Mobile Application (nếu có), hạ tầng DevOps/Kubernetes.
+- [ ] 87. **Phân loại các cấp độ kiểm thử (Test Levels)**:
+  - **Level 1 — Unit Tests**: Kiểm tra logic nghiệp vụ cô lập (Command Handlers, Query Handlers, Domain Entities, Pure Utilities, Validators). Mock tất cả dependencies bên ngoài (Repository, EventPublisher, FileStorage, Redis, HttpClient).
+  - **Level 2 — Component / Integration Tests**: Kiểm tra tương tác giữa các lớp trong cùng một Microservice bằng `WebApplicationFactory<Program>` với In-Memory Database hoặc Testcontainers PostgreSQL. Kiểm tra HTTP Status Codes, Request/Response Contract, FluentValidation pipeline, Global Exception Handler (`ProblemDetails` RFC 7807).
+  - **Level 3 — API Contract Tests**: Kiểm tra hợp đồng API đầu vào/đầu ra bằng Postman Collection + Newman CLI. Đảm bảo Response JSON schema khớp với đặc tả trong `api_spec.md`.
+  - **Level 4 — End-to-End Integration Tests**: Kiểm tra luồng nghiệp vụ liên dịch vụ xuyên suốt (Cross-service Workflows) qua API Gateway, RabbitMQ, gRPC.
+  - **Level 5 — Performance & Load Tests**: Đo lường thời gian phản hồi (Response Time), thông lượng (Throughput), khả năng chịu tải (Concurrency), và ngưỡng chịu đựng (Stress Breaking Point) bằng JMeter hoặc k6.
+  - **Level 6 — UI/UX Tests**: Kiểm tra giao diện, luồng tương tác người dùng, Responsive Layout, Cross-browser Compatibility bằng Playwright.
+- [ ] 88. **Định nghĩa tiêu chí Đạt / Không Đạt (Entry & Exit Criteria)**:
+  - **Entry Criteria**: Code đã được build thành công (`dotnet build` không lỗi), Database Migration đã chạy xong, Docker Compose các services đều healthy.
+  - **Exit Criteria (Pass)**: >= 95% Test Cases ở trạng thái `Passed`, 0 lỗi `Critical` / `Blocker` còn tồn đọng, Code Coverage >= 85% trên Application layer.
+  - **Exit Criteria (Fail)**: Bất kỳ Test Case `Critical` nào Failed mà chưa được fix, hoặc Code Coverage < 70%.
+- [ ] 89. **Ma trận phân quyền kiểm thử RBAC (Authorization Test Matrix)**:
+  - Lập bảng ma trận 5 Vai trò (`SystemAdmin`, `Manager`, `Inspector`, `Analyst`, `Technician`) x Tất cả Endpoints trong `api_spec.md`.
+  - Mỗi ô xác định kết quả kỳ vọng: `200 OK`, `201 Created`, `204 No Content`, `401 Unauthorized`, `403 Forbidden`.
+  - Bao gồm cả trường hợp Anonymous (không token) và Token hết hạn.
+
+---
+
+### Phase 12.2: Kiểm thử API Backend chi tiết theo từng Microservice (API Backend Test Cases)
+
+#### Phase 12.2.1: IdentityService — Xác thực, Phân quyền & Quản trị Người dùng
+
+- [ ] 90. **Test Suite: `LoginCommand` (`POST /api/v1/auth/login`)**:
+  - Đăng nhập thành công với Email hợp lệ + Mật khẩu đúng → HTTP 200, trả về `accessToken`, `refreshToken`, `user` object chứa `roles`.
+  - Đăng nhập thất bại: Email sai, Mật khẩu sai, Email rỗng/null, Mật khẩu rỗng/null → HTTP 400.
+  - Đăng nhập với User bị đình chỉ (`Status == Suspended`) → HTTP 400, thông báo tài khoản bị khóa.
+  - Đăng nhập với User chưa kích hoạt (`Status == Pending` / `Inactive`) → HTTP 400.
+  - **[Security]** Chống Timing Attack: Thời gian phản hồi khi Email không tồn tại phải xấp xỉ bằng khi Email tồn tại (chênh lệch < 50ms trung bình trên 100 request).
+  - Kiểm tra JWT Token chứa đầy đủ Claims: `UserId`, `Email`, `Roles`, `exp`, `iss`, `aud`.
+- [ ] 91. **Test Suite: `RefreshTokenCommand` (`POST /api/v1/auth/refresh-token`)**:
+  - Refresh thành công với cặp `accessToken` + `refreshToken` hợp lệ → Cấp cặp token mới, Refresh Token cũ bị thu hồi (`RevokedAt != null`).
+  - Refresh thất bại: Refresh Token hết hạn (`ExpiresAt < now`) → HTTP 401.
+  - Refresh thất bại: Refresh Token đã bị thu hồi trước đó → HTTP 401.
+  - **[Security] Refresh Token Reuse Detection (Token Theft)**: Khi gửi Refresh Token đã bị thu hồi → Hệ thống tự động thu hồi CASCADE tất cả Refresh Token active của User đó (chặn toàn bộ phiên đăng nhập trên mọi thiết bị).
+  - Kiểm tra bản ghi mới trong bảng `RefreshTokens` có `DeviceInfo` đúng.
+- [ ] 92. **Test Suite: OTP Workflows (`POST /api/v1/auth/otp/send`, `POST /api/v1/auth/otp/verify`)**:
+  - Gửi OTP thành công → Lưu OTP hash vào Redis với TTL, trả về HTTP 200.
+  - Gửi OTP khi chưa hết Cooldown → HTTP 429 Too Many Requests hoặc HTTP 400 với thông báo chờ.
+  - Verify OTP đúng mã → Trả về kết quả tương ứng theo Strategy (`LoginOtpStrategy` → token, `ForgotPasswordOtpStrategy` → step-up token, `StepUpOtpStrategy` → xác nhận nâng cấp quyền).
+  - Verify OTP sai mã → Tăng bộ đếm lần thử sai, HTTP 400.
+  - Verify OTP nhập sai quá giới hạn cho phép (ví dụ 5 lần) → Lockout tạm thời, HTTP 400.
+  - Verify OTP hết hạn (TTL Redis đã xóa) → HTTP 400.
+  - **[Security]** Step-Up Token Ownership: So sánh `UserId` trong Step-Up token với `UserId` trong `HttpContext.User` → Từ chối nếu không trùng khớp (HTTP 403).
+- [ ] 93. **Test Suite: `ResetPasswordCommand` (`POST /api/v1/auth/reset-password`)**:
+  - Reset mật khẩu thành công với Step-Up Token hợp lệ → Cập nhật `PasswordHash` mới trong DB, thu hồi tất cả Refresh Token cũ.
+  - Reset thất bại: Step-Up Token không hợp lệ hoặc hết hạn → HTTP 401.
+  - Reset thất bại: Mật khẩu mới không đạt yêu cầu validation (quá ngắn, thiếu ký tự đặc biệt...) → HTTP 400 với `ProblemDetails`.
+- [ ] 94. **Test Suite: User Management (`CRUD /api/v1/users`)**:
+  - `POST /users` — Tạo User mới thành công (SystemAdmin) → HTTP 201, tự động gán Role, PasswordHash được mã hóa BCrypt.
+  - `POST /users` — Tạo User với Email đã tồn tại → HTTP 400 (trùng lặp Email).
+  - `POST /users` — Tạo User với Role không tồn tại → HTTP 400.
+  - `GET /users` — Phân trang danh sách User (kiểm tra `pageIndex`, `pageSize`, `totalCount`).
+  - `GET /users/{id}` — Trả về thông tin chi tiết User kèm Roles.
+  - `GET /users/{id}` — ID không tồn tại → HTTP 404.
+  - `PUT /users/{id}` — Cập nhật thông tin User thành công (FullName, Phone, Status, Roles).
+  - `PUT /users/{id}/suspend` — Đình chỉ tài khoản → Chuyển Enum `UserStatus` sang `Suspended`, vô hiệu hóa tất cả Refresh Token active.
+  - `GET /users/assignable` — Chỉ trả về User có Role `Inspector` và `Status == Active`, không chứa thông tin nhạy cảm (PasswordHash).
+  - **[RBAC]** Mỗi endpoint chỉ cho phép Role `SystemAdmin` truy cập; Inspector/Analyst/Technician gọi → HTTP 403.
+- [ ] 95. **Test Suite: `GetMyProfileQuery` (`GET /api/v1/auth/me`)**:
+  - Trả về thông tin User hiện tại từ JWT Token → HTTP 200 với `id`, `email`, `fullName`, `roles`.
+  - Token hết hạn hoặc không hợp lệ → HTTP 401.
+- [ ] 96. **Test Suite: `GetAuditLogsQuery` (`GET /api/v1/audit-logs`)**:
+  - Trả về danh sách lịch sử thay đổi phân trang → HTTP 200.
+  - Kiểm tra nội dung AuditLog: `table_name`, `record_id`, `action_type` (Added/Modified/Deleted), `old_values`, `new_values`, `ip_address`, `user_agent`.
+  - **[RBAC]** Chỉ `SystemAdmin` và `Manager` được phép truy cập; Inspector/Analyst/Technician → HTTP 403.
+- [ ] 97. **Test Suite: Infrastructure Services (BCrypt, JWT, FileStorage, Pure Utilities)**:
+  - `BCryptPasswordHasher`: Hash trả về chuỗi khác plain text, Verify đúng/sai mật khẩu, Verify với hash null/rỗng/bất hợp lệ.
+  - `JwtProvider`: Sinh token chứa đủ Claims (UserId, Email, Roles, Exp), Token hết hạn không giải mã được.
+  - `LocalFileStorageService`: Lưu file thành công trả về URL, từ chối extension không an toàn (`.php`, `.exe`, `.sh`), sanitize ký tự đặc biệt trong tên file (`#`, `&`, `=`), chống Path Traversal (`../../etc/passwd`).
+  - `TokenHasher`: SHA256 hash deterministic cho cùng input.
+  - `RedisKeyBuilder`: Format key đúng pattern namespace.
+  - `OtpCalculations`: Tính toán cooldown và lockout threshold chính xác.
+
+#### Phase 12.2.2: OperationsService — Tài sản Lưới điện, GIS & Chuyến bay
+
+- [ ] 98. **Test Suite: CRUD Regions (`/api/v1/regions`)**:
+  - Tạo Region mới thành công → HTTP 201, trả về `id`, `regionName`.
+  - Lấy danh sách Regions phân trang → HTTP 200, kiểm tra `totalCount`, `items`.
+  - Lấy Region theo ID → HTTP 200. ID không tồn tại → HTTP 404.
+  - Cập nhật Region → HTTP 200/204. Region không tồn tại hoặc đã xóa mềm → HTTP 404.
+  - Xóa mềm Region (Soft Delete) → `IsDeleted = true`, `DeletedAt != null`. Global Query Filter tự động ẩn khỏi kết quả truy vấn.
+- [ ] 99. **Test Suite: CRUD Substations (`/api/v1/substations`)**:
+  - Tạo Substation liên kết với Region tồn tại → HTTP 201.
+  - Tạo Substation với `RegionAssetId` không tồn tại → HTTP 404.
+  - Cập nhật Substation: đổi Region cha, đổi tên, đổi `voltage_level`.
+  - Xóa mềm Substation.
+  - Lấy danh sách Substations phân trang, lọc theo `RegionAssetId`.
+- [ ] 100. **Test Suite: CRUD TransmissionLines (`/api/v1/lines`)**:
+  - Tạo TransmissionLine liên kết Substation → HTTP 201.
+  - Tạo với Substation không tồn tại → HTTP 404.
+  - Cập nhật: đổi tên, đổi cờ `is_critical_edge`.
+  - Xóa mềm TransmissionLine.
+  - Lấy danh sách phân trang.
+- [ ] 101. **Test Suite: Towers & PostGIS (`/api/v1/towers`)**:
+  - `POST /towers` — Tạo Tower với toạ độ `latitude`, `longitude` hợp lệ → Tự động chuyển đổi thành PostGIS `Point(lng, lat)` SRID 4326, lưu vào cột `geom`.
+  - Tạo Tower với `LineAssetId` không tồn tại → HTTP 404.
+  - Tạo Tower với `towerCode` đã tồn tại → HTTP 400 (Unique Constraint Violation).
+  - **[GIS Boundary]** Tạo Tower với Latitude ngoài khoảng `[-90, 90]` hoặc Longitude ngoài `[-180, 180]` → Kiểm tra validation.
+  - `POST /towers/import` — Import file Excel hợp lệ (45 cột điện) → Trả về `importedCount: 45`, tự động tạo Assets mặc định (`createdAssetsCount`).
+  - `POST /towers/import` — Import file Excel rỗng (0 dòng dữ liệu) → Xử lý graceful, trả về `importedCount: 0`.
+  - `POST /towers/import` — Import file sai format (không phải Excel, cột thiếu) → HTTP 400.
+  - `POST /towers/import` — Import file chứa toạ độ GPS rác / giá trị null → Bỏ qua dòng lỗi, tiếp tục import các dòng hợp lệ.
+  - `GET /towers/in-bbox?minLat=...&minLng=...&maxLat=...&maxLng=...` — Trả về chỉ các Tower nằm trong vùng Bounding Box.
+  - `GET /towers/in-bbox` với Bounding Box rỗng (không chứa Tower nào) → Trả về mảng rỗng.
+  - `GET /towers/in-bbox` với Bounding Box bao trọn toàn bộ → Trả về tất cả Towers.
+  - Xóa mềm Tower, lấy Tower theo ID.
+- [ ] 102. **Test Suite: Assets (`/api/v1/assets`)**:
+  - Tạo Asset gắn với Tower → HTTP 201.
+  - Tạo Asset với `TowerId` không tồn tại → HTTP 404.
+  - Tạo Asset với `asset_code` đã tồn tại → HTTP 400 (Unique).
+  - `GET /assets/{id}` — Trả về chi tiết Asset kèm `currentHealthScore`, `riskLevel`, danh sách `activeAnomalies` (Eager Loading).
+  - Lấy danh sách Assets phân trang.
+- [ ] 103. **Test Suite: Missions (`/api/v1/missions`)**:
+  - `POST /missions` — Tạo chuyến bay mới, gán Inspector, chỉ định UAV → HTTP 201, tự động phát sự kiện `MissionCreatedEvent` qua RabbitMQ.
+  - Tạo Mission với `inspectorId` không tồn tại hoặc không phải Inspector → HTTP 400.
+  - Tạo Mission với `missionCode` trùng → HTTP 400 (Unique).
+  - `PUT /missions/{id}/status` — Chuyển trạng thái `Pending → InProgress → Completed` → HTTP 204.
+  - **[State Transition]** Chuyển trạng thái không hợp lệ: `Completed → Pending`, `Cancelled → InProgress` → HTTP 400 với thông báo trạng thái không hợp lệ.
+  - `GET /missions/my` — Inspector truy xuất danh sách chuyến bay được phân công cho chính mình → Chỉ trả về missions có `inspectorId == currentUserId`.
+  - **[RBAC]** `POST /missions` chỉ cho phép `Manager`; Inspector gọi → HTTP 403.
+- [ ] 104. **Test Suite: Upload Inspection Media (`POST /missions/{id}/media`)**:
+  - Tải lên ảnh hợp lệ (`.jpg`, `.png`) → Lưu file qua `IFileStorageService`, tạo bản ghi `InspectionMedia`, phát sự kiện `MediaUploadedEvent` → HTTP 200.
+  - Tải lên video hợp lệ (`.mp4`, `.webm`) → Phân loại `MediaType = Video`.
+  - Tải lên file không hợp lệ (`.php`, `.exe`, `.bat`) → Từ chối qua `FileSanitizer` → HTTP 400.
+  - Tải lên với `MissionId` không tồn tại → HTTP 404.
+  - Tải lên với `AssetId` không tồn tại (nếu cung cấp) → HTTP 404.
+  - **[Security]** Tên file chứa Path Traversal (`../../etc/passwd.jpg`) → Sanitize thành tên an toàn.
+  - **[Security]** Tên file chứa ký tự đặc biệt (`test#1&2=3.jpg`) → Sanitize thành tên URL-safe.
+- [ ] 105. **Test Suite: Upload Flight Log (`POST /missions/{id}/flight-log`)**:
+  - Tải lên nhật ký bay hợp lệ (GPS track JSONB, `minBatteryRecorded`, `maxAltitudeM`, `flightDurationSeconds`, `connectionStatus`) → HTTP 200.
+  - Tải lên với `MissionId` không tồn tại → HTTP 404.
+  - Tải lên với dữ liệu GPS track rỗng hoặc malformed JSON → HTTP 400.
+- [ ] 106. **Test Suite: Monitor & Dashboard Endpoints (`/api/v1/monitor`)**:
+  - `GET /monitor/summary` — Trả về tổng hợp thống kê hệ thống.
+  - `GET /monitor/recent-defects?pageSize=10` — Trả về lỗi gần đây phân trang.
+  - `GET /monitor/defects-statistics` — Trả về thống kê sự cố.
+  - `GET /monitor/mission-status` — Trả về trạng thái chuyến bay.
+  - `GET /monitor/inspections?pageSize=20` — Trả về danh sách kiểm tra.
+  - `GET /monitor/alerts` — Trả về danh sách cảnh báo.
+  - **[Security]** `pageSize > 100` → Trả về HTTP 400 (Pagination Upper-Bound Validation chống DoS).
+  - **[RBAC]** Mỗi endpoint áp dụng `[Authorize]` — Anonymous → HTTP 401, Role không phù hợp → HTTP 403.
+- [ ] 107. **Test Suite: EF Core Audit Interceptor**:
+  - Khi thêm mới entity (`Added`) → Tự động sinh bản ghi `AuditLog` với `action_type = Added`, `new_values` chứa JSON các trường mới.
+  - Khi cập nhật entity (`Modified`) → `AuditLog` ghi nhận `old_values` và `new_values` khác nhau.
+  - Khi xóa mềm entity (`Modified IsDeleted = true`) → `AuditLog` ghi nhận thay đổi `IsDeleted`.
+  - **[GIS]** Khi entity có trường `geom` (Geometry) → Serialize thành WKT (Well-Known Text) thay vì binary trong `AuditLog`.
+  - Kiểm tra `ip_address` và `user_agent` được ghi nhận từ `HttpContext`.
+
+#### Phase 12.2.3: AIInspectionService — Tích hợp AI, Phân tích Ảnh & Thẩm định Lỗi
+
+- [ ] 108. **Test Suite: `AnalyzeMissionMediaCommand` (`POST /api/v1/missions/{missionId}/ai-analysis`)**:
+  - Tải lên lô ảnh/video hỗn hợp (2 ảnh + 1 video) → Phân loại đúng `MediaType`, lưu `InspectionMedia`, tạo `AIAnalysisRequest` với `Status = Pending`, phát sự kiện `AIAnalysisRequestedEvent` cho mỗi file.
+  - Tải lên lô chứa file không hỗ trợ (`.txt`, `.docx`) xen lẫn file hợp lệ (`.jpg`) → File hợp lệ được xử lý bình thường, file không hỗ trợ bị reject. Response chứa `acceptedFiles`, `rejectedFiles`.
+  - Tải lên lô có 1 file bị lỗi lưu trữ (IOException) → File lỗi bị skip, các file còn lại tiếp tục xử lý.
+  - Mission không tồn tại → HTTP 404 (`KeyNotFoundException`).
+  - Kiểm tra `BatchId` duy nhất được sinh cho mỗi lô.
+  - Kiểm tra sự kiện `AIAnalysisStatusChangedEvent` được phát cho mỗi file thành công.
+- [ ] 109. **Test Suite: `ProcessAiAnalysisResultCommandHandler` (AI Callback Consumer)**:
+  - Nhận kết quả AI phân tích thành công (`Status = Completed`) chứa danh sách detections (bounding boxes, confidence scores, category codes) → Lưu `DetectedAnomaly` với `ValidationStatus = Pending`.
+  - Nhận kết quả với category có `is_emergency_class = true` (VD: `FIRE_01`, `CABLE_BREAK`) → Tự động tạo `EmergencyAlert` với `Priority = Critical`, phát sự kiện `DefectDetectedEvent`.
+  - Nhận kết quả với `Status = Failed` → Cập nhật `AIAnalysisRequest.Status = Failed`, không tạo anomaly.
+  - Nhận kết quả với danh sách detections rỗng → Cập nhật status, không tạo anomaly.
+- [ ] 110. **Test Suite: `GetMissionAiDetectionsQuery` (`GET /api/v1/anomalies/pending`)**:
+  - Trả về danh sách lỗi AI chờ duyệt phân trang → HTTP 200 với `totalCount`, `items[]` chứa `mediaUrl`, `assetCode`, `categoryName`, `boundingBox`, `confidenceScore`, `validationStatus`.
+  - Phân trang: `pageIndex=0, pageSize=10` → Trả về đúng 10 items (nếu đủ).
+  - Không có lỗi nào ở trạng thái `Pending` → Trả về `totalCount: 0`, `items: []`.
+  - **[RBAC]** Chỉ `Analyst` được phép truy cập; Inspector → HTTP 403.
+- [ ] 111. **Test Suite: `ReviewMissionAiDetectionCommand` (`PUT /api/v1/anomalies/{id}/validate`)**:
+  - Analyst xác nhận lỗi (`Confirmed`) → Cập nhật `ValidationStatus = Confirmed`, lưu `AnalystId`, `ValidatedAt`, `analyst_notes`. Phát sự kiện `AnomalyValidatedEvent`.
+  - Analyst bác bỏ lỗi (`Rejected`) → Cập nhật `ValidationStatus = Rejected`, lưu `analyst_notes`.
+  - Duyệt anomaly không tồn tại → HTTP 404.
+  - Duyệt anomaly đã được duyệt trước đó (`Confirmed` / `Rejected`) → HTTP 400 (đã xử lý rồi).
+  - **[RBAC]** Chỉ `Analyst` được phép duyệt; Inspector/Technician → HTTP 403.
+- [ ] 112. **Test Suite: `BoundingBoxCalculations` (Pure Utility)**:
+  - Tính IoU (Intersection over Union) giữa 2 khung hoàn toàn trùng khớp → IoU = 1.0.
+  - Tính IoU giữa 2 khung hoàn toàn không giao nhau → IoU = 0.0.
+  - Tính IoU giữa 2 khung giao nhau một phần → Giá trị trong khoảng (0, 1).
+  - Tính diện tích khung (Area) → Giá trị dương.
+  - Tính tỉ lệ khung hình (Aspect Ratio) → width / height.
+  - Trường hợp khung có kích thước 0 (width hoặc height = 0) → Xử lý không ném ngoại lệ.
+- [ ] 113. **Test Suite: Polly Resilience (HTTP Client kết nối Python AI)**:
+  - Python AI trả về HTTP 500 → Polly tự động Retry 3 lần với Exponential Backoff.
+  - Python AI không phản hồi (Timeout) → Polly Retry và cuối cùng ném `TimeoutRejectedException`.
+  - Python AI liên tục lỗi → Circuit Breaker chuyển sang trạng thái `Open`, các request tiếp theo bị chặn ngay mà không gọi thực tế.
+  - Circuit Breaker Half-Open → Thử lại 1 request, nếu thành công → chuyển về `Closed`.
+
+#### Phase 12.2.4: InspectionEvaluationService — Engine Đánh giá Mức độ Nghiêm trọng (gRPC)
+
+- [ ] 114. **Test Suite: `EvaluateDetection` (gRPC Service)**:
+  - Lỗi khẩn cấp (`IsEmergencyClass = true`) + Confidence cao (0.95) → `Severity = Critical`, `RiskLevel = ImmediateAction`, `PriorityScore >= 90`, `RequiresImmediateAlert = true`.
+  - Lỗi không khẩn cấp + Confidence thấp (0.30) → `Severity = Low`, `RiskLevel = Monitor`, `RequiresImmediateAlert = false`.
+  - Lỗi không khẩn cấp + Confidence trung bình (0.65) → `Severity = Medium`, `RiskLevel = ScheduleMaintenance`.
+  - Lỗi khẩn cấp + Confidence thấp (0.15) → Vẫn ưu tiên cao hơn lỗi thường do tính chất khẩn cấp.
+  - **[BVA Boundary]** Confidence = 0.0 → Xử lý không ném ngoại lệ, trả về `Severity = Low`.
+  - **[BVA Boundary]** Confidence = 1.0 → Trả về `PriorityScore` tối đa.
+  - **[BVA Boundary]** Confidence < 0 hoặc > 1 → Xử lý validation hoặc clamp giá trị.
+  - Ma trận 5 danh mục lỗi (`Corrosion`, `Surface Crack`, `Vegetation Encroachment`, `Missing Components`, `Insulator Damage`) x 3 mức Confidence (Low/Medium/High) → 15 test cases kiểm tra `Severity`, `RiskLevel`, `PriorityScore` chính xác.
+- [ ] 115. **Test Suite: `DetectionEvaluationEngine` (Pure Utility Engine)**:
+  - Kiểm tra tính toán `PriorityScore` dựa trên công thức trọng số (Confidence * SeverityWeight * EmergencyMultiplier).
+  - Kiểm tra phân loại `EvaluationSeverity` Enum: `Low`, `Medium`, `High`, `Critical`.
+  - Kiểm tra phân loại `EvaluationRiskLevel` Enum: `Monitor`, `ScheduleMaintenance`, `PrioritizeMaintenance`, `ImmediateAction`.
+  - Cấu hình `EvaluationThresholdOptions` thay đổi (ngưỡng tùy chỉnh) → Kết quả tính toán thay đổi tương ứng.
+
+#### Phase 12.2.5: NotificationService — Thông báo In-app, Email & Realtime
+
+- [ ] 116. **Test Suite: Notification CRUD (`/api/v1/notifications`)**:
+  - `CreateNotificationCommand` → Tạo thông báo mới với `NotificationType` Enum hợp lệ, lưu `title`, `body`, `reference_type`, `reference_id`, `sent_at`. `IsRead = false` mặc định.
+  - `GetNotificationsQuery` → Trả về danh sách thông báo của User hiện tại phân trang, sắp xếp theo `sent_at` giảm dần.
+  - `GetNotificationByIdQuery` → Trả về chi tiết 1 thông báo. ID không tồn tại → HTTP 404.
+  - `MarkNotificationAsReadCommand` → Cập nhật `IsRead = true`, `ReadAt = DateTime.UtcNow`. Notification không tồn tại → HTTP 404.
+  - `DeleteNotificationCommand` → Xóa thông báo. Notification không tồn tại → HTTP 404.
+- [ ] 117. **Test Suite: Event-Driven Notification (RabbitMQ Consumers)**:
+  - `MissionCreatedConsumer`: Khi nhận sự kiện `MissionCreatedEvent` → Tự động tạo Notification cho Inspector được phân công với `type = MissionAssigned`.
+  - `DefectDetectedConsumer`: Khi nhận sự kiện `DefectDetectedEvent` (lỗi khẩn cấp) → Tự động tạo Notification cho tất cả Analyst với `type = EmergencyAlert`.
+  - Kiểm tra nội dung thông báo được format đúng qua `NotificationFormatter` (thay thế template variables: `{missionCode}`, `{assetCode}`, `{categoryName}`...).
+- [ ] 118. **Test Suite: SignalR Hub (`/hubs/notifications`)**:
+  - Client kết nối SignalR Hub thành công với JWT Token hợp lệ.
+  - Client kết nối không có Token → Bị từ chối.
+  - Khi `EmergencyAlert` được tạo → SignalR đẩy sự kiện realtime tới tất cả Analyst đang online.
+  - Khi Mission mới được tạo → SignalR đẩy thông báo tới Inspector được phân công.
+- [ ] 119. **Test Suite: Email Service (`IEmailService`)**:
+  - Gửi email OTP qua SendGrid/SMTP thành công → Kiểm tra template email được render đúng.
+  - Gửi email thất bại (SMTP lỗi) → Xử lý graceful, log lỗi, không crash ứng dụng.
+
+#### Phase 12.2.6: ApiGateway & Cross-Cutting Concerns
+
+- [ ] 120. **Test Suite: Ocelot API Gateway Routing**:
+  - Request tới `/api/v1/auth/login` → Route đúng tới `IdentityService`.
+  - Request tới `/api/v1/regions` → Route đúng tới `OperationsService`.
+  - Request tới `/api/v1/missions/{id}/ai-analysis` → Route đúng tới `AIInspectionService` (ưu tiên trước route `/missions` chung).
+  - Request tới `/api/v1/notifications` → Route đúng tới `NotificationService`.
+  - Request tới endpoint không tồn tại → HTTP 404.
+  - Health check: `GET /health` → HTTP 200.
+- [ ] 121. **Test Suite: Global Exception Handler (`ProblemDetails` RFC 7807)**:
+  - `ValidationException` (FluentValidation) → HTTP 400 với `ProblemDetails` chứa `errors` dictionary chi tiết các trường bị lỗi.
+  - `KeyNotFoundException` / `NotFoundException` → HTTP 404 với `ProblemDetails`.
+  - `UnauthorizedAccessException` → HTTP 401 với `ProblemDetails`.
+  - `BusinessRuleException` → HTTP 400 với `ProblemDetails` chứa message nghiệp vụ.
+  - Unhandled Exception (NullReferenceException, DbException...) → HTTP 500 với `ProblemDetails` tổng quát, không leak stack trace ra response.
+- [ ] 122. **Test Suite: FluentValidation Pipeline (MediatR `ValidationBehavior`)**:
+  - Command với tất cả trường hợp lệ → Đi qua validation, xử lý Handler bình thường.
+  - Command với trường required bị thiếu → `ValidationException` với message chi tiết.
+  - Command với trường vượt max length → `ValidationException`.
+  - Command với giá trị enum không hợp lệ → `ValidationException`.
+  - Nhiều trường cùng lỗi → `ValidationException` chứa tất cả lỗi (không dừng ở lỗi đầu tiên).
+
+---
+
+### Phase 12.3: Kiểm thử Giao diện Người dùng Frontend (UI Frontend Test Cases)
+
+- [ ] 123. **Test Suite: Trang Đăng nhập (Login Page)**:
+  - Hiển thị form đăng nhập đầy đủ: input Email, input Password, nút Login.
+  - Đăng nhập thành công → Chuyển hướng tới Dashboard.
+  - Đăng nhập thất bại → Hiển thị thông báo lỗi (không hiển thị thông tin kỹ thuật).
+  - Validation client-side: Email rỗng, Password rỗng → Hiển thị thông báo yêu cầu nhập.
+  - Hiển thị/Ẩn mật khẩu (toggle visibility).
+- [ ] 124. **Test Suite: Dashboard & Bản đồ GIS**:
+  - Dashboard hiển thị đúng số liệu thống kê tổng hợp (tổng missions, tổng anomalies, tổng alerts...).
+  - Bản đồ LeafletJS render Marker Cluster cột điện đúng vị trí GPS.
+  - Zoom in/out bản đồ → Gọi API `GetAssetsInBoundingBoxQuery` với viewport mới → Cập nhật markers.
+  - Click vào cột điện → Hiển thị popup chi tiết (Tower Code, Assets, Health Score).
+  - Heatmap / Marker Cluster lỗi AI hiển thị đúng từ dữ liệu GeoJSON.
+- [ ] 125. **Test Suite: Quản lý Chuyến bay (Mission Management)**:
+  - Manager tạo chuyến bay mới → Form hiển thị danh sách Inspector khả dụng (từ API `/users/assignable`), chọn UAV, chọn tuyến dây.
+  - Danh sách chuyến bay hiển thị phân trang, lọc theo trạng thái.
+  - Inspector xem "Chuyến bay của tôi" → Chỉ hiển thị missions được phân công.
+  - Chuyển trạng thái chuyến bay → UI cập nhật badge trạng thái tương ứng.
+- [ ] 126. **Test Suite: Upload ảnh Kiểm tra & Phân tích AI**:
+  - Kéo thả / Chọn file ảnh → Preview ảnh trước khi upload.
+  - Upload thành công → Hiển thị trạng thái "Đang phân tích AI".
+  - Upload file không hợp lệ → Hiển thị thông báo lỗi phía client.
+  - Kết quả AI trả về → Hiển thị ảnh gốc với bounding box overlay, confidence score, category label.
+- [ ] 127. **Test Suite: Duyệt lỗi AI (Analyst HITL Review)**:
+  - Hiển thị danh sách lỗi chờ duyệt phân trang.
+  - Analyst click Confirm / Reject → Gửi request API → Cập nhật trạng thái trên UI.
+  - Analyst nhập ghi chú (`analyst_notes`) → Hiển thị trong lịch sử duyệt.
+  - Cảnh báo khẩn cấp → Hiển thị popup / sound alert realtime qua SignalR.
+- [ ] 128. **Test Suite: Phiếu Bảo trì (Maintenance Tickets)**:
+  - Manager tạo phiếu bảo trì → Form gán Technician, thiết lập Priority, Due Date.
+  - Technician xem phiếu được giao → Danh sách phiếu bảo trì của mình.
+  - Technician upload ảnh minh chứng sửa chữa → Preview và submit.
+  - Technician khai báo vật tư sử dụng → Form nhập component name, code, quantity.
+  - Manager nghiệm thu → Approve/Reject đóng phiếu.
+- [ ] 129. **Test Suite: Responsive Layout & Cross-Browser**:
+  - Kiểm tra giao diện trên các kích thước màn hình: Desktop (1920x1080), Tablet (768x1024), Mobile (375x667).
+  - Menu navigation responsive (Hamburger menu trên mobile).
+  - Bảng dữ liệu (data tables) responsive trên mobile → Scroll ngang hoặc card layout.
+  - Kiểm tra trên trình duyệt: Chrome, Firefox, Safari (WebKit), Edge.
+- [ ] 130. **Test Suite: Accessibility & UX**:
+  - Tất cả các form input có label đi kèm (`<label for="...">`).
+  - Nút bấm có kích thước đủ lớn cho thao tác touch (minimum 44x44px).
+  - Loading state hiển thị skeleton / spinner khi đang chờ API phản hồi.
+  - Error state hiển thị rõ ràng khi API trả lỗi.
+  - Toast notification hiển thị khi thao tác thành công (tạo, cập nhật, xóa).
+
+---
+
+### Phase 12.4: Kiểm thử Hiệu năng & Chịu tải (Performance & Load Test)
+
+- [ ] 131. **Thiết lập môi trường Performance Test**:
+  - Cấu hình JMeter Test Plan hoặc k6 script cho từng nhóm API.
+  - Chuẩn bị dữ liệu seed: >= 1.000 Users, >= 10.000 Towers, >= 50.000 Assets, >= 100.000 DetectedAnomalies.
+  - Xác định phần cứng máy chủ test (CPU, RAM, Disk I/O baseline).
+- [ ] 132. **Kịch bản Đo lường Hiệu năng Baseline (Performance Benchmark)**:
+  - `POST /auth/login` — Response Time P95 < 500ms.
+  - `GET /towers/in-bbox` (khu vực chứa 500 cột điện) — Response Time P95 < 1000ms.
+  - `GET /anomalies/pending?pageSize=50` — Response Time P95 < 800ms.
+  - `GET /assets/{id}` (Eager Loading anomalies) — Response Time P95 < 500ms.
+  - `POST /missions/{id}/media` (upload ảnh 5MB) — Response Time P95 < 3000ms.
+  - `EvaluateDetection` gRPC — Response Time P95 < 100ms.
+- [ ] 133. **Kịch bản Kiểm thử Tải đồng thời (Concurrency Load Test)**:
+  - 100 concurrent users đăng nhập đồng thời → Tất cả nhận JWT thành công, không bị deadlock database.
+  - 50 concurrent users query `GET /towers/in-bbox` → PostGIS GiST Index xử lý tốt, không timeout.
+  - 20 concurrent Inspectors upload ảnh đồng thời → File storage không conflict, message queue không mất event.
+  - 200 concurrent users query `GET /monitor/summary` → API Gateway route phân tán tải tốt.
+- [ ] 134. **Kịch bản Stress Test (Ngưỡng chịu đựng)**:
+  - Tăng dần số lượng concurrent users: 100 → 200 → 500 → 1000 → Xác định điểm gãy (Breaking Point) khi Response Time P95 > 5000ms hoặc Error Rate > 5%.
+  - Stress Test RabbitMQ: Publish 1000 events/phút → Consumer xử lý không bị accumulate message backlog.
+  - Stress Test SignalR: 100 WebSocket connections đồng thời → Hub broadcast không bị drop message.
+- [ ] 135. **Kịch bản Soak Test (Kiểm thử bền vững)**:
+  - Chạy 50 concurrent users liên tục 2 giờ → Giám sát Memory Leak, Database Connection Pool exhaustion, Thread Pool starvation.
+  - Kiểm tra GC (Garbage Collection) pressure không tăng đột biến theo thời gian.
+- [ ] 136. **Kịch bản Spike Test (Kiểm thử đột biến)**:
+  - Từ 10 users → đột ngột tăng lên 500 users trong 10 giây → Hệ thống xử lý mà không crash, sau đó tự hồi phục khi tải giảm.
+
+---
+
+### Phase 12.5: Kiểm thử Luồng nghiệp vụ liên dịch vụ End-to-End (E2E Integration Test)
+
+- [ ] 137. **E2E Flow 1: Luồng Kiểm tra & Phát hiện Lỗi AI đầy đủ (Inspection → AI → Evaluation → Alert → Notification)**:
+  1. Manager tạo chuyến bay (`POST /missions`) → `MissionCreatedEvent` được publish qua RabbitMQ.
+  2. NotificationService nhận event → Tạo thông báo cho Inspector được phân công.
+  3. Inspector chuyển trạng thái chuyến bay sang `InProgress` (`PUT /missions/{id}/status`).
+  4. Inspector upload ảnh kiểm tra (`POST /missions/{id}/media`) → `MediaUploadedEvent` published.
+  5. AIInspectionService nhận ảnh, gửi tới Python AI → Nhận callback kết quả phân tích.
+  6. AIInspectionService gọi gRPC `EvaluateDetection` tới InspectionEvaluationService → Nhận `Severity`, `RiskLevel`.
+  7. Nếu lỗi khẩn cấp → Tự động tạo `EmergencyAlert`, publish `DefectDetectedEvent`.
+  8. NotificationService nhận `DefectDetectedEvent` → Tạo notification + đẩy SignalR realtime cho Analyst.
+  9. Kiểm tra toàn bộ dữ liệu trong DB: `InspectionMedia`, `DetectedAnomaly`, `EmergencyAlert`, `Notification` đều nhất quán.
+- [ ] 138. **E2E Flow 2: Luồng Thẩm định Lỗi → Bảo trì → Khôi phục Sức khỏe Asset (HITL → Maintenance → Health Recalculation)**:
+  1. Analyst duyệt lỗi AI (`PUT /anomalies/{id}/validate` → `Confirmed`) → `AnomalyValidatedEvent` published.
+  2. Hệ thống tính lại điểm sức khỏe Asset (`AssetHealthCalculationService`) → `current_health_score` giảm, `risk_level` tăng.
+  3. Manager tạo phiếu bảo trì (`POST /maintenance/tickets`) gán cho Technician.
+  4. Technician chuyển trạng thái `InProgress`, upload ảnh minh chứng, khai báo vật tư.
+  5. Manager nghiệm thu đóng phiếu (`PUT /maintenance/tickets/{id}/close`) → Anomaly chuyển `Resolved`.
+  6. Hệ thống tính lại điểm sức khỏe Asset → `current_health_score` tăng lại, `risk_level` giảm.
+  7. Kiểm tra lịch sử `AssetHealthHistories` ghi nhận 2 bản ghi (trước bảo trì / sau bảo trì).
+- [ ] 139. **E2E Flow 3: Luồng Bảo mật Phiên đăng nhập đa thiết bị (Multi-Device Session & Token Theft Detection)**:
+  1. User đăng nhập trên Thiết bị A → Nhận token pair (AccessToken_A, RefreshToken_A).
+  2. User đăng nhập trên Thiết bị B → Nhận token pair (AccessToken_B, RefreshToken_B). RefreshToken_A vẫn valid.
+  3. User dùng RefreshToken_A để refresh → Nhận token pair mới (AccessToken_A2, RefreshToken_A2). RefreshToken_A bị thu hồi.
+  4. Attacker đánh cắp RefreshToken_A (đã bị thu hồi) và gửi request refresh.
+  5. Hệ thống phát hiện Token Reuse → **Thu hồi CASCADE tất cả session** (RefreshToken_A2, RefreshToken_B đều bị revoke).
+  6. User trên cả 2 thiết bị bị buộc đăng nhập lại.
+  7. Kiểm tra DB: Tất cả bản ghi `RefreshTokens` của User đều có `RevokedAt != null`.
+- [ ] 140. **E2E Flow 4: Luồng Leo thang Cảnh báo Khẩn cấp (Emergency Alert Escalation)**:
+  1. AI phát hiện lỗi khẩn cấp (`FIRE_01`) → `EmergencyAlert` được tạo tự động.
+  2. SignalR đẩy cảnh báo realtime tới Analyst.
+  3. Analyst xác nhận cảnh báo (`PUT /alerts/{id}/review` → `Confirmed`).
+  4. Analyst leo thang cảnh báo (`POST /alerts/{id}/escalate`) → Lưu `AlertEscalation` với `reason`, gửi notification cho Manager.
+  5. Manager nhận notification → Xem chi tiết cảnh báo và lịch sử escalation.
+- [ ] 141. **E2E Flow 5: Luồng OTP Đặt lại Mật khẩu (Forgot Password → OTP → Reset)**:
+  1. User gửi yêu cầu OTP (`POST /auth/otp/send` → `purpose: forgot_password`).
+  2. Email chứa mã OTP được gửi qua SendGrid.
+  3. User verify OTP đúng (`POST /auth/otp/verify`) → Nhận Step-Up Token.
+  4. User gửi mật khẩu mới kèm Step-Up Token (`POST /auth/reset-password`) → Mật khẩu được cập nhật.
+  5. Tất cả Refresh Token cũ bị thu hồi.
+  6. User đăng nhập lại bằng mật khẩu mới → Thành công.
+  7. User đăng nhập bằng mật khẩu cũ → Thất bại.
+
+---
+
+### Phase 12.6: Ma trận Dữ liệu Kiểm thử & Cấu hình Môi trường (Test Data Matrix & Environment Config)
+
+- [ ] 142. **Thiết lập tài khoản Test Users cho mỗi vai trò**:
+  - `admin@uavpms.test` → Role: `SystemAdmin`, Status: `Active`.
+  - `manager@uavpms.test` → Role: `Manager`, Status: `Active`.
+  - `inspector@uavpms.test` → Role: `Inspector`, Status: `Active`.
+  - `analyst@uavpms.test` → Role: `Analyst`, Status: `Active`.
+  - `technician@uavpms.test` → Role: `Technician`, Status: `Active`.
+  - `suspended@uavpms.test` → Role: `Inspector`, Status: `Suspended`.
+  - `pending@uavpms.test` → Role: `Inspector`, Status: `Pending`.
+  - `multi-role@uavpms.test` → Roles: `Manager` + `Analyst`, Status: `Active`.
+- [ ] 143. **Thiết lập JWT Tokens cho các kịch bản kiểm thử**:
+  - Token hợp lệ (chưa hết hạn) cho mỗi vai trò.
+  - Token đã hết hạn (`exp` < `DateTime.UtcNow`).
+  - Token có `signature` bị sửa đổi (tampered token).
+  - Token thiếu claim `roles` → Kiểm tra hệ thống từ chối truy cập.
+  - Token chứa role không tồn tại (`FakeRole`) → HTTP 403.
+  - Refresh Token hợp lệ, Refresh Token đã thu hồi, Refresh Token hết hạn.
+- [ ] 144. **Thiết lập Seed Data cho các thực thể nghiệp vụ**:
+  - 3 Regions mẫu (Miền Bắc, Miền Trung, Miền Nam).
+  - 5 Substations mẫu phân bố trong 3 Regions.
+  - 10 TransmissionLines mẫu liên kết Substations.
+  - 50 Towers mẫu với toạ độ GPS thực tế khu vực Hà Nội (lat: 20.9 – 21.1, lng: 105.7 – 105.9).
+  - 200 Assets mẫu gắn trên 50 Towers (4 Assets/Tower: Insulator, Cable, Cross-arm, Foundation).
+  - 5 DefectCategories: `CORROSION_01`, `CRACK_01`, `VEGETATION_01`, `MISSING_01`, `INSULATOR_01`.
+  - 3 Emergency DefectCategories: `FIRE_01`, `CABLE_BREAK_01`, `TOWER_COLLAPSE_01`.
+- [ ] 145. **Thiết lập Seed Data cho luồng AI & Bảo trì**:
+  - 10 Missions mẫu ở các trạng thái khác nhau (`Pending`, `InProgress`, `Completed`, `Cancelled`).
+  - 30 InspectionMedia mẫu liên kết với Missions và Assets.
+  - 20 DetectedAnomalies mẫu: 10 `Pending`, 5 `Confirmed`, 3 `Rejected`, 2 `Resolved`.
+  - 5 EmergencyAlerts mẫu: 2 `Active`, 2 `Confirmed`, 1 `Dismissed`.
+  - 8 MaintenanceTickets mẫu: 2 `Assigned`, 2 `InProgress`, 2 `PendingVerification`, 2 `Resolved`.
+  - 10 Notifications mẫu: 5 chưa đọc (`IsRead = false`), 5 đã đọc.
+- [ ] 146. **Cấu hình môi trường kiểm thử (Test Environment Config)**:
+  - **Local Development**: `docker-compose.test.yml` khởi tạo PostgreSQL + PostGIS, Redis, RabbitMQ riêng biệt cho test. Seed data tự động.
+  - **CI/CD Pipeline**: GitHub Actions workflow chạy `dotnet test` với Testcontainers (PostgreSQL container tạm thời). Coverage report upload artifact.
+  - **Staging Environment**: Triển khai toàn bộ 5 services + Gateway lên Docker Compose staging để chạy E2E và Performance tests.
+  - Biến môi trường test: `ASPNETCORE_ENVIRONMENT=Testing`, connection strings riêng, JWT secret key test riêng.
+- [ ] 147. **Postman Collection & Environment**:
+  - Tạo Postman Collection chứa tất cả API endpoints theo nhóm Module (Auth, Users, Regions, Towers, Missions, Anomalies, Alerts, Maintenance, Notifications).
+  - Tạo Postman Environment: `{{base_url}}`, `{{access_token}}`, `{{refresh_token}}`, `{{admin_token}}`, `{{manager_token}}`, `{{inspector_token}}`, `{{analyst_token}}`, `{{technician_token}}`.
+  - Thiết lập Pre-request Script tự động đăng nhập lấy token trước khi chạy test.
+  - Thiết lập Test Script (Postman Tests) kiểm tra HTTP status code, response schema, response time.
+  - Export Collection dạng JSON để chạy tự động bằng Newman CLI trong CI/CD.
+- [ ] 148. **Tạo script khởi tạo & dọn dẹp dữ liệu test (Test Data Lifecycle)**:
+  - Script SQL `seed-test-data.sql`: Insert toàn bộ dữ liệu mẫu vào PostgreSQL.
+  - Script SQL `cleanup-test-data.sql`: Truncate / Delete dữ liệu test sau mỗi vòng chạy.
+  - Tích hợp vào `WebApplicationFactory` (Integration Test): Tự động seed data trước mỗi test class, cleanup sau mỗi test class.
+  - Redis flush script: Xóa tất cả OTP cache và session cache trong Redis test environment.

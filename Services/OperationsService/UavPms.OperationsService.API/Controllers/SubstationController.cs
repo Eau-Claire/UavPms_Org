@@ -2,21 +2,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Asp.Versioning;
 using MediatR;
-using System;
-using System.Threading.Tasks;
-using UavPms.OperationsService.API.Controllers;
 using UavPms.OperationsService.Application.Features.Substations.Commands.CreateSubstation;
 using UavPms.OperationsService.Application.Features.Substations.Commands.UpdateSubstation;
 using UavPms.OperationsService.Application.Features.Substations.Commands.DeleteSubstation;
 using UavPms.OperationsService.Application.Features.Substations.Queries.GetSubstation;
 using UavPms.OperationsService.Application.Features.Substations.Queries.GetSubstationById;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/substations")]
 [ApiVersion("1.0")]
-[Authorize]
+[Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
 public class SubstationController : ControllerBase
 {
     private readonly ISender _mediator;
@@ -47,7 +45,7 @@ public class SubstationController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Create([FromBody] CreateSubstationRequest request)
     {
         var command = new CreateSubstationCommand(
@@ -62,7 +60,7 @@ public class SubstationController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateSubstationRequest request)
     {
         var command = new UpdateSubstationCommand(
@@ -78,7 +76,7 @@ public class SubstationController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var command = new DeleteSubstationCommand(id);

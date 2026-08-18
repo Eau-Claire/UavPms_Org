@@ -8,6 +8,7 @@ using UavPms.OperationsService.Application.Features.Missions.Commands.UpdateMiss
 using UavPms.OperationsService.Application.Features.Missions.Queries.GetMissionDetails;
 using UavPms.OperationsService.Application.Features.Missions.Queries.GetMyMissions;
 using UavPms.OperationsService.Application.Features.Missions.Queries.ListMissions;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
@@ -25,7 +26,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "SystemAdmin, Manager")]
+    [Authorize(Roles = UserRoles.InspectorOnly)]
     public async Task<IActionResult> Create([FromBody] CreateMissionCommand command, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(command, cancellationToken);
@@ -33,7 +34,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "SystemAdmin, Manager")]
+    [Authorize(Roles = UserRoles.ManagerAndInspector)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateMissionRequest request, CancellationToken cancellationToken = default)
     {
         var command = new UpdateMissionCommand(
@@ -49,7 +50,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "SystemAdmin, Manager")]
+    [Authorize(Roles = UserRoles.ManagerAndInspector)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken = default)
     {
         await _mediator.Send(new DeleteMissionCommand(id), cancellationToken);
@@ -57,7 +58,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = "SystemAdmin, Manager")]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     public async Task<IActionResult> List(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
@@ -83,7 +84,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = "SystemAdmin, Manager")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetMissionDetailsQuery(id), cancellationToken);
@@ -91,7 +92,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("my")]
-    [Authorize(Roles = "Inspector")]
+    [Authorize(Roles = UserRoles.InspectorOnly)]
     public async Task<IActionResult> GetMyMissions(CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetMyMissionsQuery(), cancellationToken);
