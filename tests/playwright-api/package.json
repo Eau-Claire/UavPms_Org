@@ -1,0 +1,31 @@
+{
+  "name": "playwright-api",
+  "version": "1.0.0",
+  "description": "Playwright API tests for UAV PMS endpoints",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:auth": "npx playwright test specs/01-auth.spec.js",
+    "test:users": "npx playwright test specs/02-users.spec.js",
+    "test:regions": "npx playwright test specs/03-regions.spec.js",
+    "test:substations": "npx playwright test specs/04-substations.spec.js",
+    "test:lines": "npx playwright test specs/05-lines.spec.js",
+    "test:towers": "npx playwright test specs/06-towers.spec.js",
+    "test:assets": "npx playwright test specs/07-assets.spec.js",
+    "test:missions": "npx playwright test specs/08-missions.spec.js",
+    "test:drones": "npx playwright test specs/09-drones-devices.spec.js",
+    "test:inspections": "npx playwright test specs/10-inspections.spec.js",
+    "test:monitor": "npx playwright test specs/11-monitor-audit.spec.js",
+    "test:ai": "npx playwright test specs/12-ai-inspection.spec.js",
+    "test:notifications": "npx playwright test specs/13-notifications.spec.js",
+    "test:health": "npx playwright test specs/14-health-swagger.spec.js",
+    "report": "npx playwright show-report"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.49.1"
+  }
+}
