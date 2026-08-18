@@ -31,12 +31,12 @@ public class MockAIAnalysisConsumer : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
 
-    private const string ExchangeName = "identity-exchange";
-    private const string DeadLetterExchangeName = "ai.analysis.dlx";
-    private const string ImageQueueName = "ai.analysis.server.image.requested";
-    private const string VideoQueueName = "ai.analysis.server.video.requested";
-    private const string ImageRoutingKey = "identity.event.aianalysisrequestedevent.server.image";
-    private const string VideoRoutingKey = "identity.event.aianalysisrequestedevent.server.video";
+    private const string ExchangeName = AIAnalysisRequestTopology.ExchangeName;
+    private const string DeadLetterExchangeName = AIAnalysisRequestTopology.DeadLetterExchangeName;
+    private const string ImageQueueName = AIAnalysisRequestTopology.ServerImageQueueName;
+    private const string VideoQueueName = AIAnalysisRequestTopology.ServerVideoQueueName;
+    private const string ImageRoutingKey = AIAnalysisRequestTopology.ServerImageRoutingKey;
+    private const string VideoRoutingKey = AIAnalysisRequestTopology.ServerVideoRoutingKey;
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
 
     public MockAIAnalysisConsumer(

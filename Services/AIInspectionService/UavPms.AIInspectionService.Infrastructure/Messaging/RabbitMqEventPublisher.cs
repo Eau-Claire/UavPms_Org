@@ -25,28 +25,12 @@ public class RabbitMqEventPublisher : IEventPublisher
         var baseRoutingKey = $"identity.event.{eventName.ToLowerInvariant()}";
         if (@event is AIAnalysisRequestedEvent aiAnalysisRequestedEvent)
         {
-            return $"{baseRoutingKey}.{ResolveAiRuntime(aiAnalysisRequestedEvent.PreferredModel)}.{ResolveMediaType(aiAnalysisRequestedEvent.MediaType)}";
+            return AIAnalysisRequestTopology.GetRoutingKey(
+                aiAnalysisRequestedEvent.PreferredModel,
+                aiAnalysisRequestedEvent.MediaType);
         }
 
         return baseRoutingKey;
-    }
-
-    private static string ResolveAiRuntime(string? preferredModel)
-    {
-        if (string.Equals(preferredModel, "YOLO11", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(preferredModel, "EDGE", StringComparison.OrdinalIgnoreCase))
-        {
-            return "edge";
-        }
-
-        return "server";
-    }
-
-    private static string ResolveMediaType(string? mediaType)
-    {
-        return string.Equals(mediaType, "Video", StringComparison.OrdinalIgnoreCase)
-            ? "video"
-            : "image";
     }
 
     public async Task PublishAsync<T>(T @event) where T : class
@@ -56,7 +40,7 @@ public class RabbitMqEventPublisher : IEventPublisher
             using var connection = await _rabbitMqConnection.CreateConnectionAsync();
             using var channel = await connection.CreateChannelAsync();
 
-            var exchangeName = "identity-exchange";
+            var exchangeName = AIAnalysisRequestTopology.ExchangeName;
             await channel.ExchangeDeclareAsync(
                 exchange: exchangeName,
                 type: ExchangeType.Topic,
