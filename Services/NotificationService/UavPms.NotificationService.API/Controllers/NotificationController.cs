@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 using MediatR;
@@ -29,20 +30,23 @@ public class NotificationController : ControllerBase
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetHistory([FromQuery] string userId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrEmpty(userId))
-        {
-            return BadRequest(new ApiResponse(false, "UserId is required."));
-        }
-
-        if (!Guid.TryParse(userId, out var userGuid))
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
         {
             return BadRequest(new ApiResponse(false, "Invalid UserId format."));
+        }
+
+        // Kiểm tra người dùng chỉ được xem thông báo của chính mình
+        var currentUserIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(currentUserIdStr, out var currentUserId) && currentUserId != userGuid)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new ApiResponse(false, "Forbidden: You can only access your own notifications."));
         }
 
         var query = new GetNotificationsQuery(userGuid);
         var result = await _mediator.Send(query, cancellationToken);
         return Ok(new ApiResponse(true, "Notifications retrieved successfully", result));
     }
+
 
     [HttpGet("{id:guid}")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
