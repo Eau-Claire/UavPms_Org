@@ -48,6 +48,10 @@ public class ProcessAiAnalysisResultCommandHandlerTests
         _eventPublisherMock = new Mock<IEventPublisher>();
         _loggerMock = new Mock<ILogger<ProcessAiAnalysisResultCommandHandler>>();
 
+        _aiRequestRepoMock
+            .Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Returns((Guid id, bool track, CancellationToken _) => _aiRequestRepoMock.Object.GetByIdAsync(id, track));
+
         _inspectionEvaluationClientMock
             .Setup(c => c.EvaluateAsync(It.IsAny<DetectionEvaluationRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DetectionEvaluationRequest request, CancellationToken _) =>

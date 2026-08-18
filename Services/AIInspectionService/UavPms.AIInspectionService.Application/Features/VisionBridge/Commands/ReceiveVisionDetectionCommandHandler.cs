@@ -70,7 +70,7 @@ public class ReceiveVisionDetectionCommandHandler
 
         if (uav == null && Guid.TryParse(detection.DroneId, out var uavGuid))
         {
-            uav = await _uavRepository.GetByIdAsync(uavGuid);
+            uav = await _uavRepository.GetByIdAsync(uavGuid, track: true, cancellationToken);
         }
 
         if (uav == null)
@@ -189,7 +189,7 @@ public class ReceiveVisionDetectionCommandHandler
             var usersToNotify = new List<User>();
             foreach (var pId in participantIds)
             {
-                var user = await _userRepository.GetByIdAsync(pId);
+                var user = await _userRepository.GetByIdAsync(pId, track: true, cancellationToken);
                 if (user != null)
                 {
                     usersToNotify.Add(user);

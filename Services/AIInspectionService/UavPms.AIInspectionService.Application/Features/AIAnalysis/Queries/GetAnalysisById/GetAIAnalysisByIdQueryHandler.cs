@@ -24,7 +24,7 @@ public class GetAIAnalysisByIdQueryHandler
         GetAIAnalysisByIdQuery request,
         CancellationToken cancellationToken)
     {
-        var entity = await _repository.GetByIdAsync(request.Id, track: false);
+        var entity = await _repository.GetByIdAsync(request.Id, track: false, cancellationToken);
         if (entity == null)
         {
             throw new KeyNotFoundException($"AI analysis request with ID '{request.Id}' was not found.");

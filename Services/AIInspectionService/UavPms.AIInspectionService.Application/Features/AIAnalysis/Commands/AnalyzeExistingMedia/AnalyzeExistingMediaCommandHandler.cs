@@ -50,14 +50,14 @@ public class AnalyzeExistingMediaCommandHandler
         var currentUserId = _currentUser.UserId;
 
         // 1. Kiểm tra Mission tồn tại
-        var mission = await _missionRepository.GetByIdAsync(request.MissionId, track: false);
+        var mission = await _missionRepository.GetByIdAsync(request.MissionId, track: false, cancellationToken);
         if (mission == null)
         {
             throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
         }
 
         // 2. Kiểm tra InspectionMedia tồn tại
-        var media = await _mediaRepository.GetByIdAsync(request.MediaId, track: false);
+        var media = await _mediaRepository.GetByIdAsync(request.MediaId, track: false, cancellationToken);
         if (media == null)
         {
             throw new KeyNotFoundException($"InspectionMedia with ID '{request.MediaId}' was not found.");
