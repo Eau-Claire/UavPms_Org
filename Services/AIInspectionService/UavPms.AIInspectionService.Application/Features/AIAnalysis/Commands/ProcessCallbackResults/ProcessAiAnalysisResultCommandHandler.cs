@@ -58,7 +58,7 @@ public class ProcessAiAnalysisResultCommandHandler
             request.RequestId, request.Status);
 
         // 1. Check if AIAnalysisRequest exists
-        var aiRequest = await _aiRequestRepo.GetByIdAsync(request.RequestId, track: true);
+        var aiRequest = await _aiRequestRepo.GetByIdAsync(request.RequestId, track: true, cancellationToken);
         if (aiRequest == null)
         {
             _logger.LogWarning("AIAnalysisRequest not found: RequestId={RequestId}", request.RequestId);

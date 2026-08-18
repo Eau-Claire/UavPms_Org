@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Prometheus;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,6 +10,17 @@ using UavPms.AIInspectionService.Infrastructure.Persistence;
 
 namespace UavPms.AIInspectionService.Infrastructure.Repositories;
 
+internal static class RepositoryMetrics
+{
+    internal static readonly Histogram QueryDuration = Metrics.CreateHistogram(
+        "repository_query_duration_seconds",
+        "Duration of repository database queries.",
+        new HistogramConfiguration
+        {
+            LabelNames = ["entity", "operation", "tracking"]
+        });
+}
+
 public class GenericRepository<T> : IGenericRepository<T> where T : class
 {
     protected readonly ApplicationDbContext _context;
@@ -18,16 +30,28 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
         _context = context;
     }
 
-    public async Task<T?> GetByIdAsync(Guid id, bool track = true)
+    public Task<T?> GetByIdAsync(Guid id, bool track = true)
     {
+        return GetByIdAsync(id, track, CancellationToken.None);
+    }
+
+    public async Task<T?> GetByIdAsync(
+        Guid id,
+        bool track,
+        CancellationToken cancellationToken)
+    {
+        using var timer = RepositoryMetrics.QueryDuration
+            .WithLabels(typeof(T).Name, "get_by_id", track ? "true" : "false")
+            .NewTimer();
+
         if (track)
         {
-            return await _context.Set<T>().FindAsync(id);
+            return await _context.Set<T>().FindAsync([id], cancellationToken);
         }
         
         return await _context.Set<T>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(e => EF.Property<Guid>(e, "Id") == id);
+            .FirstOrDefaultAsync(e => EF.Property<Guid>(e, "Id") == id, cancellationToken);
     }
 
     public async Task<IReadOnlyList<T>> GetAllAsync(bool track = false)

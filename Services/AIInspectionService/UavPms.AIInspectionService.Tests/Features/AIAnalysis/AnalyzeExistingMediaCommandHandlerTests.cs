@@ -38,6 +38,13 @@ public class AnalyzeExistingMediaCommandHandlerTests
         _currentUserMock = new Mock<ICurrentUserServices>();
         _loggerMock = new Mock<ILogger<AnalyzeExistingMediaCommandHandler>>();
 
+        _missionRepoMock
+            .Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Returns((Guid id, bool track, CancellationToken _) => _missionRepoMock.Object.GetByIdAsync(id, track));
+        _mediaRepoMock
+            .Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Returns((Guid id, bool track, CancellationToken _) => _mediaRepoMock.Object.GetByIdAsync(id, track));
+
         _handler = new AnalyzeExistingMediaCommandHandler(
             _missionRepoMock.Object,
             _mediaRepoMock.Object,

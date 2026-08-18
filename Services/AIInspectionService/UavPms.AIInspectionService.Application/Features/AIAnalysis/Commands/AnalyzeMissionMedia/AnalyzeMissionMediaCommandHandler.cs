@@ -58,7 +58,7 @@ public class AnalyzeMissionMediaCommandHandler
         CancellationToken cancellationToken)
     {
         var currentUserId = _currentUser.UserId;
-        var mission = await _missionRepository.GetByIdAsync(request.MissionId, track: false);
+        var mission = await _missionRepository.GetByIdAsync(request.MissionId, track: false, cancellationToken);
         if (mission == null)
         {
             throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
