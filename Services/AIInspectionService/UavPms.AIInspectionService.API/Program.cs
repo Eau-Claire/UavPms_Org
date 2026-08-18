@@ -95,6 +95,7 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]) &&
 
 if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
 {
+    builder.Services.AddHostedService<AIAnalysisRequestTopologyInitializer>();
     builder.Services.AddHostedService<AIAnalysisResultConsumer>();
 }
 

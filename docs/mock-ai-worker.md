@@ -46,6 +46,23 @@ Each configured worker owns a separate RabbitMQ connection and channel with a pr
 
 Production workers should use the same model: deploy image and video consumers independently, bind each deployment only to its matching routing key, and scale replicas per queue depth.
 
+The AI Inspection service declares the complete durable request topology on startup and
+redeclares it after a RabbitMQ reconnect. The legacy generic queues remain available for
+publishers that intentionally use runtime-only routing keys, but current .NET AI requests
+publish a media-specific key and therefore enter exactly one media-specific queue:
+
+```text
+identity.event.aianalysisrequestedevent.server       -> ai.analysis.server.requested
+identity.event.aianalysisrequestedevent.server.image -> ai.analysis.server.image.requested
+identity.event.aianalysisrequestedevent.server.video -> ai.analysis.server.video.requested
+identity.event.aianalysisrequestedevent.edge         -> ai.analysis.edge.requested
+identity.event.aianalysisrequestedevent.edge.image   -> ai.analysis.edge.image.requested
+identity.event.aianalysisrequestedevent.edge.video   -> ai.analysis.edge.video.requested
+```
+
+All bindings use exact topic keys (no `*` or `#` wildcard), so a media-specific publish does
+not also enter its generic runtime queue.
+
 For each `AIAnalysisRequestedEvent`, it calls the normal `ProcessAiAnalysisResultCommand` path and creates one deterministic detection with a bounding box.
 
 This means the normal APIs work without a GPU model:
