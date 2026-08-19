@@ -1,14 +1,11 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage;
 using UavPms.OperationsService.Application.Features.Inspections.Queries.GetReportById;
 using UavPms.OperationsService.Application.Features.Inspections.Queries.GetByMission;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
@@ -29,6 +26,7 @@ public class InspectionController : ControllerBase
     /// Upload ảnh kiểm tra chuyến bay
     /// </summary>
     [HttpPost("upload")]
+    [Authorize(Roles = UserRoles.InspectorOnly)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadImage(
         [FromForm] Guid missionId,
@@ -58,6 +56,7 @@ public class InspectionController : ControllerBase
     /// Lấy báo cáo kiểm tra theo ID
     /// </summary>
     [HttpGet("report/{id:guid}")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     public async Task<IActionResult> GetReportById(Guid id, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetInspectionReportByIdQuery(id), cancellationToken);
@@ -68,6 +67,7 @@ public class InspectionController : ControllerBase
     /// Lấy lịch sử kiểm tra theo mã nhiệm vụ
     /// </summary>
     [HttpGet("mission/{missionId:guid}")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     public async Task<IActionResult> GetByMission(Guid missionId, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetInspectionsByMissionQuery(missionId), cancellationToken);

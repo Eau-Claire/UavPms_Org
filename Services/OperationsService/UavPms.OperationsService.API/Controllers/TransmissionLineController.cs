@@ -2,21 +2,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Asp.Versioning;
 using MediatR;
-using System;
-using System.Threading.Tasks;
-using UavPms.OperationsService.API.Controllers;
 using UavPms.OperationsService.Application.Features.TransmissionLines.Commands.CreateTransmissionLine;
 using UavPms.OperationsService.Application.Features.TransmissionLines.Commands.UpdateTransmissionLine;
 using UavPms.OperationsService.Application.Features.TransmissionLines.Commands.DeleteTransmissionLine;
 using UavPms.OperationsService.Application.Features.TransmissionLines.Queries.GetTransmissionLines;
 using UavPms.OperationsService.Application.Features.TransmissionLines.Queries.GetTransmissionLinesById;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/lines")]
 [ApiVersion("1.0")]
-[Authorize]
+[Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
 public class TransmissionLineController : ControllerBase
 {
     private readonly ISender _mediator;
@@ -47,7 +45,7 @@ public class TransmissionLineController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Create([FromBody] CreateTransmissionLineRequest request)
     {
         var command = new CreateTransmissionLineCommand(
@@ -61,7 +59,7 @@ public class TransmissionLineController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTransmissionLineRequest request)
     {
         var command = new UpdateTransmissionLineCommand(
@@ -76,7 +74,7 @@ public class TransmissionLineController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var command = new DeleteTransmissionLineCommand(id);

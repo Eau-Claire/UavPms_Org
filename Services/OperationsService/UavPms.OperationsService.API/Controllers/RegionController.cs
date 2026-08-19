@@ -2,21 +2,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Asp.Versioning;
 using MediatR;
-using System;
-using System.Threading.Tasks;
-using UavPms.OperationsService.API.Controllers;
 using UavPms.OperationsService.Application.Features.Regions.Commands.CreateRegion;
 using UavPms.OperationsService.Application.Features.Regions.Commands.UpdateRegion;
 using UavPms.OperationsService.Application.Features.Regions.Commands.DeleteRegion;
 using UavPms.OperationsService.Application.Features.Regions.Queries.GetRegions;
 using UavPms.OperationsService.Application.Features.Regions.Queries.GetRegionById;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/regions")]
 [ApiVersion("1.0")]
-[Authorize]
+[Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
 public class RegionController : ControllerBase
 {
     private readonly ISender _mediator;
@@ -43,7 +41,7 @@ public class RegionController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Create([FromBody] CreateRegionRequest request)
     {
         var command = new CreateRegionCommand(request.RegionName);
@@ -52,7 +50,7 @@ public class RegionController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateRegionRequest request)
     {
         var command = new UpdateRegionCommand(id, request.RegionName);
@@ -61,7 +59,7 @@ public class RegionController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Manager,SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var command = new DeleteRegionCommand(id);

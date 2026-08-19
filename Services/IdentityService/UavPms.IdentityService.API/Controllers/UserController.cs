@@ -1,12 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System;
 using System.Security.Claims;
-using System.Threading.Tasks;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 using UavPms.IdentityService.API.Filters;
-using UavPms.IdentityService.Domain.Contracts;
 using MediatR;
 using UavPms.IdentityService.Application.Features.Users.Queries.GetMyProfile;
 using UavPms.IdentityService.Application.Features.Users.Queries.GetAssignableUsers;
@@ -16,6 +13,7 @@ using UavPms.IdentityService.Application.Features.Users.Commands.SuspendUser;
 using UavPms.IdentityService.Application.Features.Users.Commands.UpdateUser;
 using UavPms.IdentityService.Application.Features.Users.Queries.GetUserById;
 using UavPms.IdentityService.Application.Features.Users.Queries.GetUsers;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.IdentityService.API.Controllers;
 
@@ -46,7 +44,7 @@ public class UserController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = "SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminOnly)]
     public async Task<IActionResult> GetUsers(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
@@ -67,7 +65,7 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("assignable")]
-    [Authorize(Roles = "SystemAdmin,Manager")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> GetAssignableUsers()
     {
         var result = await _mediator.Send(new GetAssignableUsersQuery());
@@ -75,7 +73,7 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = "SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminOnly)]
     public async Task<IActionResult> GetUserById(Guid id)
     {
         try
@@ -90,7 +88,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminOnly)]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserCommand command)
     {
         try
@@ -105,7 +103,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminOnly)]
     public async Task<IActionResult> UpdateUser(Guid id, [FromBody] UpdateUserRequestDto request)
     {
         try
@@ -121,7 +119,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPost("{id:guid}/suspend")]
-    [Authorize(Roles = "SystemAdmin")]
+    [Authorize(Roles = UserRoles.AdminOnly)]
     public async Task<IActionResult> SuspendUser(Guid id)
     {
         try
@@ -136,6 +134,7 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("me")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetMyProfile()
     {
         var userIdString =  User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -150,6 +149,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPost("change-password")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     [RequireStepUp("ChangePassword")] // Requires Step-Up Token with purpose "ChangePassword"
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
