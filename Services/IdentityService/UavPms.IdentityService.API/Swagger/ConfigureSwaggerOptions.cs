@@ -19,7 +19,10 @@ public class ConfigureSwaggerOptions : IConfigureOptions<SwaggerGenOptions>
     {
         foreach (var description in _provider.ApiVersionDescriptions)
         {
-            options.SwaggerDoc(description.GroupName, CreateInfoForApiVersion(description));
+            if (!options.SwaggerGeneratorOptions.SwaggerDocs.ContainsKey(description.GroupName))
+            {
+                options.SwaggerDoc(description.GroupName, CreateInfoForApiVersion(description));
+            }
         }
         
         // Định nghĩa Schema bảo mật Bearer Token cho Swagger
