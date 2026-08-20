@@ -1,14 +1,13 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Threading.Tasks;
 using Asp.Versioning;
 using MediatR;
-using UavPms.NotificationService.Domain.Contracts;
 using UavPms.NotificationService.Application.Features.Notifications.Queries.GetNotifications;
 using UavPms.NotificationService.Application.Features.Notifications.Queries.GetNotificationById;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.CreateNotification;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.DeleteNotification;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.MarkNotificationAsRead;
+using UavPms.Shared.Contracts.Constants;
 
 using Microsoft.AspNetCore.Authorization;
 
@@ -28,16 +27,19 @@ public class NotificationController : ControllerBase
     }
 
     [HttpGet("history")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetHistory([FromQuery] string userId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrEmpty(userId))
-        {
-            return BadRequest(new ApiResponse(false, "UserId is required."));
-        }
-
-        if (!Guid.TryParse(userId, out var userGuid))
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
         {
             return BadRequest(new ApiResponse(false, "Invalid UserId format."));
+        }
+
+        // Kiểm tra người dùng chỉ được xem thông báo của chính mình
+        var currentUserIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(currentUserIdStr, out var currentUserId) && currentUserId != userGuid)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new ApiResponse(false, "Forbidden: You can only access your own notifications."));
         }
 
         var query = new GetNotificationsQuery(userGuid);
@@ -45,7 +47,9 @@ public class NotificationController : ControllerBase
         return Ok(new ApiResponse(true, "Notifications retrieved successfully", result));
     }
 
+
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
         var query = new GetNotificationByIdQuery(id);
@@ -54,6 +58,7 @@ public class NotificationController : ControllerBase
     }
 
     [HttpPut("{id:guid}/read")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> MarkAsRead(Guid id, CancellationToken cancellationToken = default)
     {
         var command = new MarkNotificationAsReadCommand(id);
@@ -78,6 +83,7 @@ public class NotificationController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> DeleteNotification(Guid id, CancellationToken cancellationToken = default)
     {
         var command = new DeleteNotificationCommand(id);

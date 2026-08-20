@@ -1,8 +1,10 @@
 using System.Threading.Tasks;
 using Asp.Versioning;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.OperationsService.Application.Features.Devices.Commands;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
@@ -19,6 +21,7 @@ public class DevicesController : ControllerBase
     }
 
     [HttpPost("register")]
+    [Authorize(Roles = UserRoles.AdminOnly)]
     public async Task<IActionResult> RegisterDevice([FromBody] RegisterDeviceCommand command)
     {
         var result = await _mediator.Send(command);

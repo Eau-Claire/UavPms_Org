@@ -1,12 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.UploadForAnalysis;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
@@ -15,6 +9,7 @@ using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.Review
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetAnalysisById;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using UavPms.AIInspectionService.Domain.Enums;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.AIInspectionService.API.Controllers;
 
@@ -25,7 +20,7 @@ namespace UavPms.AIInspectionService.API.Controllers;
 [ApiController]
 [Route("api/v{version:apiVersion}/ai-analysis")]
 [ApiVersion("1.0")]
-[Authorize(Roles = "Analyst,Supervisor,SystemAdmin")]
+[Authorize(Roles = UserRoles.AdminManagerAnalyst)]
 public class AIAnalysisController : ControllerBase
 {
     private const long MaxMultipartRequestBytes = 50L * 1024 * 1024;
