@@ -9,6 +9,9 @@ x-service-environment: &service-environment
   Jwt__Issuer: ${JWT_ISSUER}
   Jwt__Audience: ${JWT_AUDIENCE}
   Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES}
+  Brevo__ApiKey: ${BREVO_API_KEY}
+  Brevo__FromEmail: ${BREVO_FROM_EMAIL}
+  Brevo__FromName: ${BREVO_FROM_NAME:-UavPms System}
   SendGrid__ApiKey: ${SENDGRID_API_KEY}
   SendGrid__FromEmail: ${SENDGRID_FROM_EMAIL}
   SendGrid__FromName: ${SENDGRID_FROM_NAME}

@@ -90,9 +90,13 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserServices, CurrentUserServices>();
 
-        // Đăng ký các Dịch vụ OTP, Email (SendGrid) và Event Publisher
+        // Register OTP and Brevo transactional email services.
         services.AddMemoryCache();
-        services.AddScoped<IEmailService, EmailService>();
+        services.AddHttpClient<IEmailService, EmailService>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.brevo.com/");
+            client.Timeout = TimeSpan.FromSeconds(15);
+        });
 
         // Register Redis ConnectionMultiplexer as Singleton
         var redisConnectionString = configuration["Redis:ConnectionString"];
