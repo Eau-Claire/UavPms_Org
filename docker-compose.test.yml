@@ -1,0 +1,31 @@
+services:
+  api-test:
+    image: uavpms-api-test:latest
+    container_name: uav-api-test
+    build:
+      context: .
+      dockerfile: api-test/Dockerfile
+    ports:
+      - "${API_TEST_PORT:-8081}:8081"
+    environment:
+      TARGET_API: ${TARGET_API:-http://gateway:8080}
+      TESTER_PORT: 8081
+      TEST_TIMEOUT: ${TEST_TIMEOUT:-30}
+      BACKEND_HEALTH_PATH: ${BACKEND_HEALTH_PATH:-/health}
+      BACKEND_BUILD_ID: ${BACKEND_BUILD_ID:-local}
+      AUTO_RUN_ON_START: ${AUTO_RUN_ON_START:-true}
+      TEST_ROLE: ${TEST_ROLE:-default}
+      TEST_USERNAME: ${TEST_USERNAME:-}
+      TEST_PASSWORD: ${TEST_PASSWORD:-}
+      TEST_TOKEN: ${TEST_TOKEN:-}
+      DEVICE_TRUST_TOKEN: ${DEVICE_TRUST_TOKEN:-}
+    volumes:
+      - ./api-test/data:/app/data:ro
+      - api-test-reports:/app/reports
+    depends_on:
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  api-test-reports:

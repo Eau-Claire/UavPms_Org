@@ -1,0 +1,15 @@
+{
+  "listParams": {
+    "page": 1,
+    "pageSize": 5
+  },
+  "fakeId": "00000000-0000-0000-0000-000000000000",
+  "assetType": "Insulator",
+  "status": "Active",
+  "invalidCreatePayload": {},
+  "updatePayload": {
+    "towerId": "00000000-0000-0000-0000-000000000000",
+    "assetType": "Insulator",
+    "assetCode": "AST-REGRESSION-001"
+  }
+}

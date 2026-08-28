@@ -1,0 +1,68 @@
+{
+  "default": {
+    "email": "replace-with-systemadmin@example.test",
+    "username": "regression_systemadmin",
+    "password": "replace-with-test-password",
+    "token": "",
+    "deviceTrustToken": "replace-with-systemadmin-device-token",
+    "roles": ["SystemAdmin"],
+    "fullName": "Regression System Admin",
+    "phone": "+84900000002",
+    "description": "Default SystemAdmin account for broad API regression tests."
+  },
+  "systemAdmin": {
+    "email": "replace-with-systemadmin@example.test",
+    "username": "regression_systemadmin",
+    "password": "replace-with-test-password",
+    "token": "",
+    "deviceTrustToken": "replace-with-systemadmin-device-token",
+    "roles": ["SystemAdmin"],
+    "fullName": "Regression System Admin",
+    "phone": "+84900000002",
+    "description": "SystemAdmin account for role-restricted endpoints."
+  },
+  "manager": {
+    "email": "replace-with-manager@example.test",
+    "username": "regression_manager",
+    "password": "replace-with-test-password",
+    "token": "",
+    "deviceTrustToken": "replace-with-manager-device-token",
+    "roles": ["Manager"],
+    "fullName": "Regression Manager",
+    "phone": "+84900000001",
+    "description": "Manager account for mission and asset management endpoints."
+  },
+  "inspector": {
+    "email": "replace-with-inspector@example.test",
+    "username": "regression_inspector",
+    "password": "replace-with-test-password",
+    "token": "",
+    "deviceTrustToken": "replace-with-inspector-device-token",
+    "roles": ["Inspector"],
+    "fullName": "Regression Inspector",
+    "phone": "+84900000003",
+    "description": "Inspector account for mission and inspection workflows."
+  },
+  "analyst": {
+    "email": "replace-with-analyst@example.test",
+    "username": "regression_analyst",
+    "password": "replace-with-test-password",
+    "token": "",
+    "deviceTrustToken": "replace-with-analyst-device-token",
+    "roles": ["Analyst"],
+    "fullName": "Regression Analyst",
+    "phone": "+84900000004",
+    "description": "Analyst account for monitor and AI review workflows."
+  },
+  "technician": {
+    "email": "replace-with-technician@example.test",
+    "username": "regression_technician",
+    "password": "replace-with-test-password",
+    "token": "",
+    "deviceTrustToken": "replace-with-technician-device-token",
+    "roles": ["Technician"],
+    "fullName": "Regression Technician",
+    "phone": "+84900000005",
+    "description": "Technician account for maintenance workflows."
+  }
+}
