@@ -1,14 +1,14 @@
 {
   "default": {
-    "email": "replace-with-manager@example.test",
-    "username": "regression_manager",
+    "email": "replace-with-systemadmin@example.test",
+    "username": "regression_systemadmin",
     "password": "replace-with-test-password",
     "token": "",
-    "deviceTrustToken": "replace-with-manager-device-token",
-    "roles": ["Manager"],
-    "fullName": "Regression Manager",
-    "phone": "+84900000001",
-    "description": "Default manager account for API regression tests."
+    "deviceTrustToken": "replace-with-systemadmin-device-token",
+    "roles": ["SystemAdmin"],
+    "fullName": "Regression System Admin",
+    "phone": "+84900000002",
+    "description": "Default SystemAdmin account for broad API regression tests."
   },
   "systemAdmin": {
     "email": "replace-with-systemadmin@example.test",
@@ -20,6 +20,17 @@
     "fullName": "Regression System Admin",
     "phone": "+84900000002",
     "description": "SystemAdmin account for role-restricted endpoints."
+  },
+  "manager": {
+    "email": "replace-with-manager@example.test",
+    "username": "regression_manager",
+    "password": "replace-with-test-password",
+    "token": "",
+    "deviceTrustToken": "replace-with-manager-device-token",
+    "roles": ["Manager"],
+    "fullName": "Regression Manager",
+    "phone": "+84900000001",
+    "description": "Manager account for mission and asset management endpoints."
   },
   "inspector": {
     "email": "replace-with-inspector@example.test",

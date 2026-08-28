@@ -150,6 +150,9 @@ class RegressionRunner:
                         )
                     )
 
+        if (failed or errors) and not failures:
+            failures = _failures_from_pytest_summary(output)
+
         status = "PASS" if exit_code == 0 else "FAIL"
         return TestRun(
             id=run_id,
@@ -183,3 +186,22 @@ def _endpoint_from_text(text: str) -> str | None:
 def _summary_from_output(output: str) -> str:
     lines = [line.strip() for line in output.splitlines() if line.strip()]
     return "\n".join(lines[-20:])
+
+
+def _failures_from_pytest_summary(output: str) -> list[TestFailure]:
+    failures: list[TestFailure] = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith(("FAILED ", "ERROR ")):
+            continue
+
+        kind, _, rest = stripped.partition(" ")
+        test_name, _, message = rest.partition(" - ")
+        failures.append(
+            TestFailure(
+                name=test_name,
+                message=(message or kind).strip()[:2000],
+                endpoint=_endpoint_from_text(message or test_name),
+            )
+        )
+    return failures
