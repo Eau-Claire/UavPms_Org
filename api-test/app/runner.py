@@ -137,7 +137,9 @@ class RegressionRunner:
                 skipped = int(suite.attrib.get("skipped", 0))
                 passed = max(total - failed - errors - skipped, 0)
                 for case in suite.iter("testcase"):
-                    problem = case.find("failure") or case.find("error")
+                    problem = case.find("failure")
+                    if problem is None:
+                        problem = case.find("error")
                     if problem is None:
                         continue
                     name = f"{case.attrib.get('classname', '')}.{case.attrib.get('name', '')}".strip(".")
