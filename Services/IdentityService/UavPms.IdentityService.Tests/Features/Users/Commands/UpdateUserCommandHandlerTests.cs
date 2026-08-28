@@ -43,17 +43,17 @@ public class UpdateUserCommandHandlerTests
     {
         var userId = Guid.NewGuid();
         var existingUser = new User {Id = userId, Email = "old@email.com", UserRoles = new List<UserRole>() };
-        var command = new UpdateUserCommand(userId, "existingEmail", "Name", "123", "Active", new List<string>{ "Manager" });
+        var command = new UpdateUserCommand(userId, " ExistingEmail@Test.com ", "Name", "123", "Active", new List<string>{ "Manager" });
         
         _userRepositoryMock.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(existingUser);
-        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync(command.Email)).ReturnsAsync((User?)null);
+        _userRepositoryMock.Setup(r => r.GetByEmailWithRolesAsync("existingemail@test.com")).ReturnsAsync((User?)null);
         _roleRepositoryMock.Setup(r => r.FindAsync(It.IsAny<Expression<Func<Role, bool>>>(), false))
             .ReturnsAsync(new List<Role>{ new Role {Id = 2, RoleName = "Manager" } });
         
         var result = await  _handler.Handle(command, CancellationToken.None);
         
         result.Should().BeTrue();
-        existingUser.Email.Should().Be("existingEmail");
+        existingUser.Email.Should().Be("existingemail@test.com");
         _userRepositoryMock.Verify(r => r.UpdateAsync(existingUser), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }

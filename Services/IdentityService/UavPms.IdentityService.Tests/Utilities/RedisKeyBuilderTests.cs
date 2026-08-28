@@ -14,11 +14,33 @@ public class RedisKeyBuilderTests
         key.Should().Be("otp:login:user@test.com");
     }
 
+    [Theory]
+    [InlineData(" User@Test.com ", "otp:login:user@test.com")]
+    [InlineData("USER@TEST.COM", "otp:login:user@test.com")]
+    [InlineData("user@test.com", "otp:login:user@test.com")]
+    public void OtpKey_ShouldNormalizeEmail(string email, string expectedKey)
+    {
+        var key = RedisKeyBuilder.OtpKey(OtpPurpose.Login, email);
+
+        key.Should().Be(expectedKey);
+    }
+
     [Fact]
     public void AttemptsKey_ShouldFormatCorrectly()
     {
         var key = RedisKeyBuilder.AttemptsKey(OtpPurpose.Login, "user@test.com");
         key.Should().Be("otp:login:user@test.com:attempts");
+    }
+
+    [Theory]
+    [InlineData(" User@Test.com ", "otp:login:user@test.com:attempts")]
+    [InlineData("USER@TEST.COM", "otp:login:user@test.com:attempts")]
+    [InlineData("user@test.com", "otp:login:user@test.com:attempts")]
+    public void AttemptsKey_ShouldNormalizeEmail(string email, string expectedKey)
+    {
+        var key = RedisKeyBuilder.AttemptsKey(OtpPurpose.Login, email);
+
+        key.Should().Be(expectedKey);
     }
 
     [Fact]
