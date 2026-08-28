@@ -32,21 +32,40 @@ def client(base_url: str) -> httpx.Client:
 
 
 @pytest.fixture(scope="session")
-def role_data() -> dict[str, Any]:
-    roles = load_json("roles.json")
+def roles_data() -> dict[str, Any]:
+    return load_json("roles.json")
+
+
+@pytest.fixture(scope="session")
+def role_data(roles_data: dict[str, Any]) -> dict[str, Any]:
     auth = load_json("auth.json")
     role_name = os.getenv("TEST_ROLE") or auth.get("defaultRole") or "default"
+    return select_role_data(roles_data, role_name)
+
+
+def select_role_data(roles: dict[str, Any], role_name: str) -> dict[str, Any]:
     selected = roles.get(role_name, roles.get("default", {})).copy()
     selected["role"] = role_name
-    selected["email"] = os.getenv("TEST_USERNAME") or selected.get("email", "")
-    selected["password"] = os.getenv("TEST_PASSWORD") or selected.get("password", "")
-    selected["token"] = os.getenv("TEST_TOKEN") or selected.get("token", "")
-    selected["deviceTrustToken"] = os.getenv("DEVICE_TRUST_TOKEN") or selected.get("deviceTrustToken", "")
+    selected["email"] = selected.get("email", "")
+    selected["password"] = selected.get("password", "")
+    selected["token"] = selected.get("token", "")
+    selected["deviceTrustToken"] = selected.get("deviceTrustToken", "")
     return selected
 
 
 @pytest.fixture(scope="session")
-def auth_token(client: httpx.Client, role_data: dict[str, Any]) -> str:
+def token_for_role(client: httpx.Client, roles_data: dict[str, Any]):
+    cache: dict[str, str] = {}
+
+    def resolve(role_name: str) -> str:
+        if role_name not in cache:
+            cache[role_name] = login_for_role(client, select_role_data(roles_data, role_name))
+        return cache[role_name]
+
+    return resolve
+
+
+def login_for_role(client: httpx.Client, role_data: dict[str, Any]) -> str:
     if role_data.get("token"):
         return role_data["token"]
 
@@ -73,9 +92,22 @@ def auth_token(client: httpx.Client, role_data: dict[str, Any]) -> str:
     return token
 
 
+@pytest.fixture(scope="session")
+def auth_token(client: httpx.Client, role_data: dict[str, Any]) -> str:
+    return login_for_role(client, role_data)
+
+
 @pytest.fixture()
 def auth_headers(auth_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {auth_token}"}
+
+
+@pytest.fixture()
+def role_headers(token_for_role):
+    def headers(role_name: str) -> dict[str, str]:
+        return {"Authorization": f"Bearer {token_for_role(role_name)}"}
+
+    return headers
 
 
 @pytest.fixture(scope="session")
