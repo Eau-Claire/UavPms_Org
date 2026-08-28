@@ -85,7 +85,9 @@ def login_for_role(client: httpx.Client, role_data: dict[str, Any]) -> str:
     if role_data.get("deviceTrustToken"):
         headers["X-Device-Trust-Token"] = role_data["deviceTrustToken"]
 
+    client.cookies.clear()
     response = client.post("/api/v1/auth/login", json={"email": email, "password": password}, headers=headers)
+    client.cookies.clear()
     assert response.status_code == 200, f"POST /api/v1/auth/login returned {response.status_code}: {response.text}"
     body = response.json()
     token = (
