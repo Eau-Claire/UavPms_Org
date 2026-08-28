@@ -27,19 +27,20 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, bool>
     
     public async Task<bool> Handle(UpdateUserCommand request, CancellationToken cancellationToken)
     {
+        var normalizedEmail = NormalizeEmail(request.Email);
         var user = await _userRepository.GetByIdWithRolesAsync(request.Id);
         if (user == null)
         {
             throw new KeyNotFoundException("User not found");
         }
         
-        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email);
+        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(normalizedEmail);
         if (existingEmail != null && existingEmail.Id != user.Id)
         {
             throw new ArgumentException("Email is already in use");
         }
         
-        user.Email = request.Email;
+        user.Email = normalizedEmail;
         user.FullName = request.FullName;
         user.Phone = request.Phone;
         user.Status = Enum.TryParse<UavPms.IdentityService.Domain.Enums.UserStatus>(request.Status, true, out var parsedStatus) ? parsedStatus : UavPms.IdentityService.Domain.Enums.UserStatus.Active;
@@ -58,4 +59,7 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, bool>
         
         return true;
     }
+
+    private static string NormalizeEmail(string email)
+        => email.Trim().ToLowerInvariant();
 }

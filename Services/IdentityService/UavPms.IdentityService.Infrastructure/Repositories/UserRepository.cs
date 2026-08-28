@@ -14,10 +14,17 @@ public class UserRepository : GenericRepository<User>, IUserRepository
 
     public async Task<User?> GetByEmailWithRolesAsync(string email)
     {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return null;
+        }
+
+        var normalizedEmail = email.Trim().ToLower();
+
         return await _context.Users
             .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.Email == email);
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
     }
 
     public async Task<List<User>> GetUsersByRoleAsync(string roleName)
