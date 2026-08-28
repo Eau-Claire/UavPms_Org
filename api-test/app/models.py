@@ -10,6 +10,7 @@ class TestFailure(BaseModel):
     name: str
     message: str = ""
     endpoint: str | None = None
+    location: str | None = None
 
 
 class TestRun(BaseModel):

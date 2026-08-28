@@ -143,12 +143,13 @@ class RegressionRunner:
                     if problem is None:
                         continue
                     name = f"{case.attrib.get('classname', '')}.{case.attrib.get('name', '')}".strip(".")
-                    message = problem.attrib.get("message") or (problem.text or "").strip()
+                    message = _clean_problem_message(problem.attrib.get("message"), problem.text)
                     failures.append(
                         TestFailure(
                             name=name,
                             message=message[:2000],
                             endpoint=_endpoint_from_text(name + " " + message),
+                            location=_location_from_text(message),
                         )
                     )
 
@@ -185,6 +186,27 @@ def _endpoint_from_text(text: str) -> str | None:
     return None
 
 
+def _location_from_text(text: str) -> str | None:
+    match = re.search(r"([A-Za-z0-9_./\\-]+\.py):(\d+)", text)
+    if match:
+        return f"{match.group(1)}:{match.group(2)}"
+    return None
+
+
+def _clean_problem_message(message: str | None, details: str | None) -> str:
+    parts = [part.strip() for part in (message, details) if part and part.strip()]
+    if not parts:
+        return ""
+
+    if len(parts) == 1:
+        return parts[0]
+
+    if parts[1].startswith(parts[0]):
+        return parts[1]
+
+    return "\n".join(parts)
+
+
 def _summary_from_output(output: str) -> str:
     lines = [line.strip() for line in output.splitlines() if line.strip()]
     return "\n".join(lines[-20:])
@@ -204,6 +226,7 @@ def _failures_from_pytest_summary(output: str) -> list[TestFailure]:
                 name=test_name,
                 message=(message or kind).strip()[:2000],
                 endpoint=_endpoint_from_text(message or test_name),
+                location=_location_from_text(message or test_name),
             )
         )
     return failures
