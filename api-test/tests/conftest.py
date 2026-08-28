@@ -32,6 +32,13 @@ def client(base_url: str) -> httpx.Client:
 
 
 @pytest.fixture(scope="session")
+def auth_client() -> httpx.Client:
+    auth_url = os.getenv("AUTH_API") or os.getenv("TARGET_API", "http://gateway:8080")
+    with httpx.Client(base_url=auth_url.rstrip("/"), timeout=float(os.getenv("TEST_TIMEOUT", "30"))) as http:
+        yield http
+
+
+@pytest.fixture(scope="session")
 def roles_data() -> dict[str, Any]:
     return load_json("roles.json")
 
@@ -54,12 +61,12 @@ def select_role_data(roles: dict[str, Any], role_name: str) -> dict[str, Any]:
 
 
 @pytest.fixture(scope="session")
-def token_for_role(client: httpx.Client, roles_data: dict[str, Any]):
+def token_for_role(auth_client: httpx.Client, roles_data: dict[str, Any]):
     cache: dict[str, str] = {}
 
     def resolve(role_name: str) -> str:
         if role_name not in cache:
-            cache[role_name] = login_for_role(client, select_role_data(roles_data, role_name))
+            cache[role_name] = login_for_role(auth_client, select_role_data(roles_data, role_name))
         return cache[role_name]
 
     return resolve
@@ -93,8 +100,8 @@ def login_for_role(client: httpx.Client, role_data: dict[str, Any]) -> str:
 
 
 @pytest.fixture(scope="session")
-def auth_token(client: httpx.Client, role_data: dict[str, Any]) -> str:
-    return login_for_role(client, role_data)
+def auth_token(auth_client: httpx.Client, role_data: dict[str, Any]) -> str:
+    return login_for_role(auth_client, role_data)
 
 
 @pytest.fixture()
