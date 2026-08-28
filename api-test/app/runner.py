@@ -12,7 +12,7 @@ from pathlib import Path
 
 import httpx
 
-from app.models import TestFailure, TestRun
+from app.models import TestCase, TestFailure, TestRun
 from app.storage import ResultStore
 
 
@@ -126,6 +126,7 @@ class RegressionRunner:
         ended = datetime.now(timezone.utc)
         total = passed = failed = skipped = errors = 0
         failures: list[TestFailure] = []
+        cases: list[TestCase] = []
 
         if junit_path.exists():
             root = ET.parse(junit_path).getroot()
@@ -137,13 +138,37 @@ class RegressionRunner:
                 skipped = int(suite.attrib.get("skipped", 0))
                 passed = max(total - failed - errors - skipped, 0)
                 for case in suite.iter("testcase"):
+                    name = f"{case.attrib.get('classname', '')}.{case.attrib.get('name', '')}".strip(".")
+                    duration = _float_or_none(case.attrib.get("time"))
                     problem = case.find("failure")
+                    status = "PASS"
                     if problem is None:
                         problem = case.find("error")
+                        if problem is not None:
+                            status = "ERROR"
+                    else:
+                        status = "FAIL"
+                    skipped_problem = case.find("skipped")
+                    if problem is None and skipped_problem is not None:
+                        status = "SKIP"
+                        problem = skipped_problem
+                    message = ""
+                    if problem is not None:
+                        message = _clean_problem_message(problem.attrib.get("message"), problem.text)
+                    cases.append(
+                        TestCase(
+                            name=name,
+                            status=status,
+                            duration_seconds=duration,
+                            message=message[:2000],
+                            endpoint=_endpoint_from_text(name + " " + message),
+                            location=_location_from_text(message),
+                        )
+                    )
                     if problem is None:
                         continue
-                    name = f"{case.attrib.get('classname', '')}.{case.attrib.get('name', '')}".strip(".")
-                    message = _clean_problem_message(problem.attrib.get("message"), problem.text)
+                    if status == "SKIP":
+                        continue
                     failures.append(
                         TestFailure(
                             name=name,
@@ -169,6 +194,7 @@ class RegressionRunner:
             skipped=skipped,
             errors=errors,
             failures=failures,
+            cases=cases,
             target_api=os.getenv("TARGET_API", "http://gateway:8080"),
             backend_build_id=os.getenv("BACKEND_BUILD_ID"),
             report_path=str(junit_path),
@@ -184,6 +210,15 @@ def _endpoint_from_text(text: str) -> str | None:
     if match:
         return f"{match.group(1)} {match.group(2)}"
     return None
+
+
+def _float_or_none(value: str | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def _location_from_text(text: str) -> str | None:

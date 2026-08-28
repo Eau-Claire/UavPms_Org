@@ -106,13 +106,18 @@ async def dashboard() -> str:
     .muted { color: var(--muted); }
     .section { display: none; }
     .section.active { display: block; }
-    .failure-list { display: grid; gap: 10px; }
-    .failure { border: 1px solid #f0b8b1; border-left: 4px solid var(--red); background: #fff7f6; border-radius: 8px; padding: 12px; }
-    .failure-title { font-weight: 800; margin-bottom: 8px; overflow-wrap: anywhere; }
-    .failure-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-    .failure-chip { display: inline-block; color: #7a271a; background: #fee4e2; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 700; }
-    .failure-chip.location { color: #344054; background: #eef4ff; }
-    .failure-message { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; line-height: 1.45; color: #3b1b16; overflow-wrap: anywhere; }
+    .case-list { display: grid; gap: 10px; }
+    .case { border: 1px solid var(--line); border-left: 4px solid #98a2b3; background: #fff; border-radius: 8px; padding: 12px; }
+    .case.case-pass { border-left-color: var(--green); background: #f6fef9; }
+    .case.case-fail, .case.case-error { border-color: #f0b8b1; border-left-color: var(--red); background: #fff7f6; }
+    .case.case-skip { border-left-color: #98a2b3; background: #f9fafb; }
+    .case-title { font-weight: 800; margin-bottom: 8px; overflow-wrap: anywhere; }
+    .case-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .case-chip { display: inline-block; color: #344054; background: #eef4ff; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 700; }
+    .case-chip.endpoint { color: #7a271a; background: #fee4e2; }
+    .case-chip.pass { color: var(--green); background: #dcfae6; }
+    .case-chip.fail, .case-chip.error { color: var(--red); background: #fee4e2; }
+    .case-message { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; line-height: 1.45; color: #3b1b16; overflow-wrap: anywhere; }
     .empty { color: var(--muted); padding: 18px; border: 1px dashed var(--line); border-radius: 8px; background: #fbfcff; }
     table { width: 100%; border-collapse: collapse; background: white; }
     th, td { padding: 11px 10px; border-bottom: 1px solid #e6edf6; text-align: left; vertical-align: top; }
@@ -146,14 +151,21 @@ async def dashboard() -> str:
   <section id="current" class="section active">
     <div class="toolbar">
       <div class="filters">
-        <select id="failure-status">
-          <option value="all">All failures</option>
+        <select id="case-status">
+          <option value="all">All results</option>
+          <option value="PASS">Passed</option>
+          <option value="FAIL">Failed</option>
+          <option value="ERROR">Errors</option>
+          <option value="SKIP">Skipped</option>
+        </select>
+        <select id="case-module">
+          <option value="all">All modules</option>
           <option value="asset">Asset</option>
           <option value="mission">Mission</option>
           <option value="inspection">Inspection</option>
           <option value="auth">Auth</option>
         </select>
-        <input id="failure-search" type="search" placeholder="Search failure text">
+        <input id="case-search" type="search" placeholder="Search test, endpoint, message">
       </div>
       <span id="run-state" class="muted">Idle</span>
     </div>
@@ -172,8 +184,8 @@ async def dashboard() -> str:
     </section>
 
     <section class="card" style="margin-top: 16px;">
-      <h2>Failed Tests</h2>
-      <div id="failures" class="failure-list"><div class="empty">No failures yet.</div></div>
+      <h2>Test Cases</h2>
+      <div id="cases" class="case-list"><div class="empty">No test cases yet.</div></div>
     </section>
   </section>
 
@@ -198,7 +210,7 @@ async def dashboard() -> str:
     </section>
     <section class="card" style="margin-top: 16px;">
       <h2>Run Details</h2>
-      <div id="history-details" class="empty">Select a run to inspect its failures.</div>
+      <div id="history-details" class="empty">Select a run to inspect its test cases.</div>
     </section>
   </section>
 </main>
@@ -216,7 +228,7 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
-['failure-status', 'failure-search'].forEach(id => document.getElementById(id).addEventListener('input', renderFailures));
+['case-status', 'case-module', 'case-search'].forEach(id => document.getElementById(id).addEventListener('input', renderCases));
 ['history-status', 'history-search'].forEach(id => document.getElementById(id).addEventListener('input', renderHistory));
 
 async function refresh() {
@@ -238,34 +250,45 @@ async function refresh() {
   document.getElementById('duration').textContent = latest.duration_seconds ? `${latest.duration_seconds.toFixed(1)}s` : '-';
   document.getElementById('run-id').textContent = latest.id || '-';
   document.getElementById('last-run').textContent = latest.started_at ? formatTime(latest.started_at) : '-';
-  renderFailures();
+  renderCases();
   renderHistory();
 }
 
-function renderFailures(run = latestRun) {
-  const el = document.getElementById('failures');
-  if (!run || !run.failures?.length) {
-    el.innerHTML = '<div class="empty">No failures yet.</div>';
+function renderCases(run = latestRun) {
+  const el = document.getElementById('cases');
+  const source = run?.cases?.length ? run.cases : failuresAsCases(run);
+  if (!source.length) {
+    el.innerHTML = '<div class="empty">No test cases yet.</div>';
     return;
   }
-  const kind = document.getElementById('failure-status').value;
-  const query = document.getElementById('failure-search').value.toLowerCase();
-  const failures = run.failures.filter(f => {
+  const status = document.getElementById('case-status').value;
+  const module = document.getElementById('case-module').value;
+  const query = document.getElementById('case-search').value.toLowerCase();
+  const cases = source.filter(f => {
     const text = `${f.name || ''} ${f.endpoint || ''} ${f.message || ''}`.toLowerCase();
-    return (kind === 'all' || text.includes(kind)) && (!query || text.includes(query));
+    return (status === 'all' || f.status === status)
+      && (module === 'all' || text.includes(module))
+      && (!query || text.includes(query));
   });
-  el.innerHTML = failures.length ? failures.map(failureCard).join('') : '<div class="empty">No failures match the current filters.</div>';
+  el.innerHTML = cases.length ? cases.map(caseCard).join('') : '<div class="empty">No test cases match the current filters.</div>';
 }
 
-function failureCard(f) {
-  const endpoint = f.endpoint ? `<span class="failure-chip">${escapeHtml(f.endpoint)}</span>` : '';
-  const location = f.location ? `<span class="failure-chip location">${escapeHtml(f.location)}</span>` : '';
-  const meta = endpoint || location ? `<div class="failure-meta">${endpoint}${location}</div>` : '';
-  return `<article class="failure">
-    <div class="failure-title">${escapeHtml(f.name || 'Unknown test')}</div>
+function caseCard(f) {
+  const status = f.status || 'FAIL';
+  const endpoint = f.endpoint ? `<span class="case-chip endpoint">${escapeHtml(f.endpoint)}</span>` : '';
+  const location = f.location ? `<span class="case-chip">${escapeHtml(f.location)}</span>` : '';
+  const duration = Number.isFinite(f.duration_seconds) ? `<span class="case-chip">${f.duration_seconds.toFixed(2)}s</span>` : '';
+  const meta = `<div class="case-meta"><span class="case-chip ${status.toLowerCase()}">${status}</span>${endpoint}${location}${duration}</div>`;
+  const message = f.message ? `<div class="case-message">${escapeHtml(cleanMessage(f.message))}</div>` : '';
+  return `<article class="case case-${status.toLowerCase()}">
+    <div class="case-title">${escapeHtml(f.name || 'Unknown test')}</div>
     ${meta}
-    <div class="failure-message">${escapeHtml(cleanMessage(f.message || 'No details captured.'))}</div>
+    ${message}
   </article>`;
+}
+
+function failuresAsCases(run) {
+  return (run?.failures || []).map(f => ({...f, status: 'FAIL'}));
 }
 
 function renderHistory() {
@@ -300,7 +323,7 @@ function showRun(id) {
       <div><div class="label">Duration</div><div class="value">${run.duration_seconds ? run.duration_seconds.toFixed(1) + 's' : '-'}</div></div>
       <div><div class="label">Run ID</div><div class="muted">${run.id}</div></div>
     </div>
-    <div class="failure-list">${run.failures?.length ? run.failures.map(failureCard).join('') : '<div class="empty">This run has no captured failure details.</div>'}</div>
+    <div class="case-list">${(run.cases?.length ? run.cases : failuresAsCases(run)).map(caseCard).join('') || '<div class="empty">This run has no captured test case details.</div>'}</div>
   `;
 }
 
