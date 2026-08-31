@@ -19,7 +19,7 @@ public class InspectionMediaRepository : GenericRepository<InspectionMedia>, IIn
     {
         return await _context.InspectionMedia
             .Include(m => m.Mission)
-            .Include(m => m.Asset)
+            .Include(m => m.Tower)
             .Include(m => m.DetectedAnomalies)
                 .ThenInclude(a => a.Category)
             .FirstOrDefaultAsync(m => m.Id == id);
@@ -29,7 +29,7 @@ public class InspectionMediaRepository : GenericRepository<InspectionMedia>, IIn
     {
         return await _context.InspectionMedia
             .Include(m => m.Mission)
-            .Include(m => m.Asset)
+            .Include(m => m.Tower)
             .Include(m => m.DetectedAnomalies)
                 .ThenInclude(a => a.Category)
             .Where(m => m.MissionId == missionId)
