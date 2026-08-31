@@ -95,6 +95,7 @@ Then call `/api/v1/auth/otp/verify` with that OTP. Use this only on local/test R
 ## Environment Variables
 
 - `TARGET_API`: backend gateway URL. Default in Docker: `http://gateway:8080`.
+- `AUTH_API`: auth/identity service URL used only for login. Default in Docker: `http://identityservice:8080`.
 - `TESTER_PORT`: FastAPI dashboard port inside the container. Default: `8081`.
 - `API_TEST_PORT`: host port in Compose. Default: `8081`.
 - `TEST_TIMEOUT`: HTTP request timeout and backend startup wait window. Default: `30`.

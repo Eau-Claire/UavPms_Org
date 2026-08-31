@@ -9,6 +9,7 @@ services:
       - "${API_TEST_PORT:-8081}:8081"
     environment:
       TARGET_API: ${TARGET_API:-http://gateway:8080}
+      AUTH_API: ${AUTH_API:-http://identityservice:8080}
       TESTER_PORT: 8081
       TEST_TIMEOUT: ${TEST_TIMEOUT:-30}
       BACKEND_HEALTH_PATH: ${BACKEND_HEALTH_PATH:-/health}
