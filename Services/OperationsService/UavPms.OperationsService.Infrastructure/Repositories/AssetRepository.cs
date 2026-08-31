@@ -30,7 +30,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
         return await _context.Assets
             .FromSqlInterpolated($@"
                 SELECT a.* 
-                FROM ""Assets"" a 
+                FROM ""AssetComponents"" a
                 JOIN ""Towers"" t ON a.""TowerId"" = t.""Id"" 
                 WHERE a.""IsDeleted"" = false 
                   AND t.""IsDeleted"" = false 
@@ -129,6 +129,43 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
         return await _context.Assets
             .Include(a => a.Tower)
             .FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
+    }
+
+    public async Task<IReadOnlyList<Asset>> GetAssetsByIdsAsync(
+        IReadOnlyCollection<Guid> assetIds,
+        CancellationToken cancellationToken)
+    {
+        if (assetIds.Count == 0)
+        {
+            return Array.Empty<Asset>();
+        }
+
+        return await _context.Assets
+            .Include(a => a.Tower)
+            .Where(a => assetIds.Contains(a.Id) && !a.IsDeleted)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<SpatialAssetMatch>> GetAssetsIntersectingAsync(
+        Polygon polygon,
+        CancellationToken cancellationToken)
+    {
+        return await _context.Assets
+            .Where(a => !a.IsDeleted
+                        && (a.Status == "Active" || a.Status == "Operational")
+                        && a.Tower != null
+                        && a.Tower.Geom != null
+                        && a.Tower.Geom.Intersects(polygon))
+            .Select(a => new SpatialAssetMatch
+            {
+                Id = a.Id,
+                AssetCode = a.AssetCode,
+                Name = a.AssetType,
+                Latitude = a.Tower!.Geom!.Coordinate.Y,
+                Longitude = a.Tower.Geom.Coordinate.X,
+                Status = a.Status
+            })
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyDictionary<Guid, int>> GetConfirmedDefectCountsAsync(

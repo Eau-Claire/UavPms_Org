@@ -3,14 +3,18 @@ using Microsoft.AspNetCore.Authorization;
 using Asp.Versioning;
 using MediatR;
 using System;
+using NetTopologySuite;
+using NetTopologySuite.Geometries;
 using System.Threading.Tasks;
 using UavPms.OperationsService.API.Controllers;
 using UavPms.OperationsService.Application.Features.Assets.Commands.CreateAsset;
 using UavPms.OperationsService.Application.Features.Assets.Commands.UpdateAsset;
 using UavPms.OperationsService.Application.Features.Assets.Commands.DeleteAsset;
+using UavPms.OperationsService.Application.Features.Assets.DTOs;
 using UavPms.OperationsService.Application.Features.Assets.Queries.GetAssets;
 using UavPms.OperationsService.Application.Features.Assets.Queries.GetAssetById;
 using UavPms.OperationsService.Application.Features.Assets.Queries.GetAssetHealthSummary;
+using UavPms.OperationsService.Application.Features.Assets.Queries.SpatialAssets;
 using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
@@ -19,7 +23,7 @@ namespace UavPms.OperationsService.API.Controllers;
 [Route("api/v{version:apiVersion}/assets")]
 [ApiVersion("1.0")]
 [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
-public class AssetController : ControllerBase
+public partial class AssetController : ControllerBase
 {
     private readonly ISender _mediator;
 
@@ -65,6 +69,18 @@ public class AssetController : ControllerBase
     {
         var result = await _mediator.Send(new GetAssetHealthSummaryQuery());
         return Ok(new ApiResponse(true, "Asset health summary retrieved successfully.", result));
+    }
+
+    [HttpPost("spatial-query")]
+    public async Task<IActionResult> SpatialQuery([FromBody] SpatialQueryRequest request)
+    {
+        if (!TryCreatePolygon(request.Geometry, out var polygon, out var error))
+        {
+            return BadRequest(new ApiResponse(false, error));
+        }
+
+        var result = await _mediator.Send(new SpatialAssetQuery(polygon!));
+        return Ok(new ApiResponse(true, "Spatial assets retrieved successfully.", result));
     }
 
     [HttpGet("{id:guid}")]
@@ -129,3 +145,52 @@ public record UpdateAssetRequest(
     double CurrentHealthScore,
     string RiskLevel
 );
+
+public record SpatialQueryRequest(GeoJsonGeometry? Geometry);
+
+public record GeoJsonGeometry(string Type, double[][][] Coordinates);
+
+public partial class AssetController
+{
+    private static bool TryCreatePolygon(GeoJsonGeometry? geometry, out Polygon? polygon, out string error)
+    {
+        polygon = null;
+        error = "INVALID_GEOMETRY";
+
+        if (geometry is null || !string.Equals(geometry.Type, "Polygon", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (geometry.Coordinates.Length == 0 || geometry.Coordinates[0].Length < 4)
+        {
+            return false;
+        }
+
+        var shell = geometry.Coordinates[0]
+            .Select(point => point.Length >= 2 ? new Coordinate(point[0], point[1]) : null)
+            .ToArray();
+
+        if (shell.Any(point => point is null))
+        {
+            return false;
+        }
+
+        var coordinates = shell.Select(point => point!).ToList();
+        if (!coordinates[0].Equals2D(coordinates[^1]))
+        {
+            coordinates.Add(new Coordinate(coordinates[0]));
+        }
+
+        var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+        polygon = geometryFactory.CreatePolygon(coordinates.ToArray());
+        if (!polygon.IsValid || polygon.IsEmpty)
+        {
+            polygon = null;
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+}

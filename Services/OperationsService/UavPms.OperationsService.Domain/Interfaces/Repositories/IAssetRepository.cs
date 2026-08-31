@@ -24,6 +24,12 @@ public interface IAssetRepository : IGenericRepository<Asset>
     Task<IReadOnlyDictionary<Guid, int>> GetConfirmedDefectCountsAsync(
         IReadOnlyCollection<Guid> assetIds,
         CancellationToken cancellationToken);
+    Task<IReadOnlyList<Asset>> GetAssetsByIdsAsync(
+        IReadOnlyCollection<Guid> assetIds,
+        CancellationToken cancellationToken);
+    Task<IReadOnlyList<SpatialAssetMatch>> GetAssetsIntersectingAsync(
+        NetTopologySuite.Geometries.Polygon polygon,
+        CancellationToken cancellationToken);
     Task<AssetHealthSummary> GetAssetHealthSummaryAsync(CancellationToken cancellationToken);
     Task<Asset?> GetAssetWithDetailsAsync(Guid id);
 }
@@ -45,3 +51,14 @@ public sealed record AssetHealthSummaryItem(
     string RiskLevel,
     int DefectCount,
     string? TowerCode);
+
+public sealed class SpatialAssetMatch
+{
+    public Guid Id { get; set; }
+    public string AssetCode { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public double? DistanceMeters { get; set; }
+}

@@ -26,6 +26,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Uav> Uavs => Set<Uav>();
     public DbSet<Mission> Missions => Set<Mission>();
     public DbSet<MissionTargetLine> MissionTargetLines => Set<MissionTargetLine>();
+    public DbSet<MissionTarget> MissionTargets => Set<MissionTarget>();
     public DbSet<MissionFlightLog> MissionFlightLogs => Set<MissionFlightLog>();
     public DbSet<InspectionMedia> InspectionMedia => Set<InspectionMedia>();
     public DbSet<DefectCategory> DefectCategories => Set<DefectCategory>();

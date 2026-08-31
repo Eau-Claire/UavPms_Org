@@ -217,6 +217,26 @@ public class MissionTargetLineConfiguration : IEntityTypeConfiguration<MissionTa
     }
 }
 
+public class MissionTargetConfiguration : IEntityTypeConfiguration<MissionTarget>
+{
+    public void Configure(EntityTypeBuilder<MissionTarget> builder)
+    {
+        builder.ToTable("MissionTargets");
+        builder.HasKey(e => e.Id);
+        builder.HasIndex(e => new { e.MissionId, e.AssetId }).IsUnique();
+
+        builder.HasOne(e => e.Mission)
+            .WithMany(m => m.MissionTargets)
+            .HasForeignKey(e => e.MissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.Asset)
+            .WithMany(a => a.MissionTargets)
+            .HasForeignKey(e => e.AssetId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public class MissionFlightLogConfiguration : IEntityTypeConfiguration<MissionFlightLog>
 {
     public void Configure(EntityTypeBuilder<MissionFlightLog> builder)

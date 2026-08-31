@@ -26,7 +26,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = UserRoles.InspectorOnly)]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Create([FromBody] CreateMissionCommand command, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(command, cancellationToken);

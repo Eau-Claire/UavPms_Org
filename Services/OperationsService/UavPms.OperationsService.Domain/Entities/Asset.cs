@@ -16,6 +16,7 @@ public class Asset : BaseEntity
 
     public virtual Tower? Tower { get; set; }
     public virtual ICollection<AssetHealthHistory> HealthHistories { get; set; } = new List<AssetHealthHistory>();
+    public virtual ICollection<MissionTarget> MissionTargets { get; set; } = new List<MissionTarget>();
     public virtual ICollection<InspectionMedia> InspectionMedias { get; set; } = new List<InspectionMedia>();
     public virtual ICollection<DetectedAnomaly> DetectedAnomalies { get; set; } = new List<DetectedAnomaly>();
     public virtual ICollection<EmergencyAlert> EmergencyAlerts { get; set; } = new List<EmergencyAlert>();
