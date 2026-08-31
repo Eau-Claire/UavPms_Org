@@ -11,13 +11,13 @@ public class ImportTowerCommandHandler : IRequestHandler<ImportTowersCommand, Im
 {
     private readonly ITowerRepository _towerRepository;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IAssetRepository _assetRepository;
+    private readonly IAssetComponentRepository _assetRepository;
     private readonly ITransmissionLineRepository _transmissionLineRepository;
 
     public ImportTowerCommandHandler(
         ITowerRepository towerRepository,
         IUnitOfWork unitOfWork,
-        IAssetRepository assetRepository,
+        IAssetComponentRepository assetRepository,
         ITransmissionLineRepository transmissionLineRepository)
     {
         _towerRepository = towerRepository;
@@ -78,7 +78,7 @@ public class ImportTowerCommandHandler : IRequestHandler<ImportTowersCommand, Im
                     Id = Guid.NewGuid(),
                     LineAssetId = lineId,
                     TowerCode = towerCode,
-                    Geom = geom,
+                    Geom = (Point)geom,
                     CreatedAt = DateTime.UtcNow,
                 };
 
@@ -97,15 +97,13 @@ public class ImportTowerCommandHandler : IRequestHandler<ImportTowersCommand, Im
 
                 for (int i = 0; i < 4; i++)
                 {
-                    var asset = new Asset
+                    var asset = new AssetComponent
                     {
                         Id = Guid.NewGuid(),
                         TowerId = tower.Id,
-                        AssetType = assetTypes[i],
-                        AssetCode = $"{prefixes[i]}-{towerCode}-01",
+                        ComponentType = assetTypes[i],
+                        ComponentCode = $"{prefixes[i]}-{towerCode}-01",
                         Status = "Operational",
-                        CurrentHealthScore = 100.0,
-                        RiskLevel = "Low Risk",
                         CreatedAt = DateTime.UtcNow,
                     };
 

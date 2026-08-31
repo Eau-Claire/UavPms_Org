@@ -12,7 +12,7 @@ public class UploadInspectionImageCommandValidator : AbstractValidator<UploadIns
     {
         RuleFor(x => x.MissionId).NotEmpty().WithMessage("Mission ID is required.");
         
-        RuleFor(x => x.AssetId).NotEmpty().WithMessage("Asset ID is required.");
+        RuleFor(x => x.TowerId).NotEmpty().WithMessage("Tower ID is required.");
         
         RuleFor(x => x.FileStream).NotEmpty().WithMessage("File stream is required.");
 

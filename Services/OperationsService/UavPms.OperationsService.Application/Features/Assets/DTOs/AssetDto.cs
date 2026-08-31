@@ -1,12 +1,18 @@
-namespace UavPms.OperationsService.Application.Features.Assets.DTOs;
+namespace UavPms.OperationsService.Application.Features.AssetComponents.DTOs;
 
-public record AssetDto(
+public record AssetComponentDto(
     Guid Id,
     Guid TowerId,
-    string AssetType,
-    string AssetCode,
+    string ComponentType,
+    string ComponentCode,
     string Status,
     double CurrentHealthScore,
     string RiskLevel,
-    DateTime? LastInspectedAt
+    DateTime? LastInspectedAt,
+    int DefectCount,
+    string? TowerCode,
+    Guid? LineId,
+    string? LineName,
+    Guid? RegionId,
+    string? RegionName
 );

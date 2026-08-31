@@ -16,6 +16,19 @@ public class TowerRepository : GenericRepository<Tower>, ITowerRepository
     {
     }
 
+    public async Task<IReadOnlyList<Tower>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        return await _context.Towers.Where(t => ids.Contains(t.Id)).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, Guid>> GetRegionIdsByTowerIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        return await _context.Towers.AsNoTracking()
+            .Where(t => ids.Contains(t.Id))
+            .Select(t => new { t.Id, RegionId = t.TransmissionLine!.Substation!.RegionAssetId })
+            .ToDictionaryAsync(x => x.Id, x => x.RegionId, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Tower>> GetTowersInBoundingBoxAsync(double minLat, double minLng, double maxLat, double maxLng)
     {
         var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);

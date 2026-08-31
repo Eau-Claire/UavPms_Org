@@ -38,14 +38,15 @@ public class UpdateTransmissionLineCommandHandler : IRequestHandler<UpdateTransm
             throw new NotFoundException("Substation", request.SubstationAssetId);
         }
 
-        Geometry? geom = null;
+        LineString? geom = null;
         if (!string.IsNullOrEmpty(request.GeomWkt))
         {
             var wktReader = new WKTReader(new NtsGeometryServices(new PrecisionModel(), 4326));
 
             try
             {
-                geom = wktReader.Read(request.GeomWkt);
+                geom = wktReader.Read(request.GeomWkt) as LineString
+                    ?? throw new ArgumentException("GeomWkt must be a LineString.");
             }
             catch (Exception e)
             {

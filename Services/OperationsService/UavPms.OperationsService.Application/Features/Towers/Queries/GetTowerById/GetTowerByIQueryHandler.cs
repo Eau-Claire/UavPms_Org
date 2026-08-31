@@ -27,8 +27,8 @@ public class GetTowerByIQueryHandler : IRequestHandler<GetTowerByIdQuery, TowerD
             tower.Id,
             tower.LineAssetId,
             tower.TowerCode,
-            tower.Geom != null ? tower.Geom.Coordinate.Y : 0.0,
-            tower.Geom != null ? tower.Geom.Coordinate.X : 0.0
+            tower.Geom != null ? tower.Geom.Y : 0.0,
+            tower.Geom != null ? tower.Geom.X : 0.0
         );
     }
 }

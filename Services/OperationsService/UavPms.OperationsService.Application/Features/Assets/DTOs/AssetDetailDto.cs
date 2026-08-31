@@ -1,11 +1,11 @@
-namespace UavPms.OperationsService.Application.Features.Assets.DTOs;
+namespace UavPms.OperationsService.Application.Features.AssetComponents.DTOs;
 
-public record AssetDetailDto(
+public record AssetComponentDetailDto(
     Guid Id,
     Guid TowerId,
     string TowerCode,
-    string AssetType,
-    string AssetCode,
+    string ComponentType,
+    string ComponentCode,
     string Status,
     double CurrentHealthScore,
     string RiskLevel,

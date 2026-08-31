@@ -8,5 +8,5 @@ public record ImportTowersCommand(Stream FileStream) : IRequest<ImportTowersResp
 public record ImportTowersResponse(
     bool Success,
     int ImportedCount,
-    int CreateAssetsCount
+    int CreateAssetComponentsCount
 );

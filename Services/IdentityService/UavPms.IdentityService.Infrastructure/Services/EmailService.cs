@@ -1,6 +1,8 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using SendGrid;
 using SendGrid.Helpers.Mail;
 using UavPms.IdentityService.Domain.Interfaces.Services;
@@ -10,18 +12,37 @@ namespace UavPms.IdentityService.Infrastructure.Services;
 public class EmailService : IEmailService
 {
     private readonly string? _apiKey;
+    private readonly string? _brevoApiKey;
     private readonly string _fromEmail;
     private readonly string _fromName;
+    private readonly IHostEnvironment _environment;
+    private readonly ILogger<EmailService> _logger;
 
-    public EmailService(IConfiguration configuration)
+    public EmailService(
+        IConfiguration configuration,
+        IHostEnvironment environment,
+        ILogger<EmailService> logger)
     {
         _apiKey = configuration["SendGrid:ApiKey"];
+        _brevoApiKey = configuration["Brevo:ApiKey"];
         _fromEmail = configuration["SendGrid:FromEmail"] ?? "no-reply@uavpms.com";
         _fromName = configuration["SendGrid:FromName"] ?? "UavPms System";
+        _environment = environment;
+        _logger = logger;
     }
 
     public async Task SendOtpEmailAsync(string email, string code, DateTime expiryTime)
     {
+        if (ShouldUseDevEmailFallback())
+        {
+            _logger.LogWarning(
+                "[DEV OTP] Email: {Email} | Code: {Code} | ExpiresAt: {ExpiresAt:yyyy-MM-dd HH:mm:ss} UTC",
+                email,
+                code,
+                expiryTime);
+            return;
+        }
+
         var from = new EmailAddress(_fromEmail, _fromName);
         var to = new EmailAddress(email);
         var subject = "Your OTP Verification Code";
@@ -37,6 +58,16 @@ public class EmailService : IEmailService
 
     public async Task SendPasswordResetEmailAsync(string email, string token, DateTime expiryTime)
     {
+        if (ShouldUseDevEmailFallback())
+        {
+            _logger.LogWarning(
+                "[DEV PASSWORD RESET] Email: {Email} | Token: {Token} | ExpiresAt: {ExpiresAt:yyyy-MM-dd HH:mm:ss} UTC",
+                email,
+                token,
+                expiryTime);
+            return;
+        }
+
         var from = new EmailAddress(_fromEmail, _fromName);
         var to = new EmailAddress(email);
         var subject = "Password Reset Request";
@@ -71,4 +102,13 @@ public class EmailService : IEmailService
 
         return new SendGridClient(_apiKey);
     }
+
+    private bool ShouldUseDevEmailFallback()
+        => _environment.IsDevelopment()
+           && (IsMockOrMissing(_apiKey) || IsMockOrMissing(_brevoApiKey));
+
+    private static bool IsMockOrMissing(string? value)
+        => string.IsNullOrWhiteSpace(value)
+           || value.Contains("mock", StringComparison.OrdinalIgnoreCase)
+           || value.Contains("YOUR_", StringComparison.OrdinalIgnoreCase);
 }

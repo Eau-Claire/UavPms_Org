@@ -7,7 +7,9 @@ public class InspectionReportDto
 {
     public Guid Id { get; set; }
     public Guid MissionId { get; set; }
-    public Guid? AssetId { get; set; }
+    public Guid TowerId { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
     public string MediaType { get; set; } = string.Empty;
     public string FileUrl { get; set; } = string.Empty;
     public string AiSource { get; set; } = string.Empty;
@@ -22,7 +24,8 @@ public class DetectedAnomalyDto
 {
     public Guid Id { get; set; }
     public Guid MediaId { get; set; }
-    public Guid? AssetId { get; set; }
+    public Guid TowerId { get; set; }
+    public Guid? ComponentId { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public string DefectType { get; set; } = string.Empty;
     public double ConfidenceScore { get; set; }

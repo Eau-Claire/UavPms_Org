@@ -10,14 +10,10 @@ public class CreateMissionCommandValidator  : AbstractValidator<CreateMissionCom
             .NotEmpty().WithMessage("Title is required")
             .MaximumLength(256).WithMessage("Title cannot exceed 256 characters");
 
-        RuleFor(command => command.RouteData)
-            .NotEmpty().WithMessage("RouteData is required");
-
-        RuleFor(command => command.AssignedToUserId)
-            .NotEmpty().WithMessage("AssignedToUserId is required");
-
-        RuleFor(command => command.DroneCode)
-            .NotEmpty().WithMessage("DroneCode is required");
+        RuleFor(command => command.InspectorId).NotEmpty();
+        RuleFor(command => command.RegionId).NotEmpty();
+        RuleFor(command => command.UavId).NotEmpty();
+        RuleFor(command => command.TargetTowerIds).NotNull();
         
         RuleFor(command => command.Status)
             .Must(status => string.IsNullOrEmpty(status) ||

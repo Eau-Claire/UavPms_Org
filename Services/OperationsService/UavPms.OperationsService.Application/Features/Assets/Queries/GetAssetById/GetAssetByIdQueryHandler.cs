@@ -3,27 +3,27 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using UavPms.OperationsService.Application.Features.Assets.DTOs;
+using UavPms.OperationsService.Application.Features.AssetComponents.DTOs;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Application.Common.Exceptions;
 
-namespace UavPms.OperationsService.Application.Features.Assets.Queries.GetAssetById;
+namespace UavPms.OperationsService.Application.Features.AssetComponents.Queries.GetAssetComponentById;
 
-public class GetAssetByIdQueryHandler : IRequestHandler<GetAssetByIdQuery, AssetDetailDto>
+public class GetAssetComponentByIdQueryHandler : IRequestHandler<GetAssetComponentByIdQuery, AssetComponentDetailDto>
 {
-    private readonly IAssetRepository _assetRepository;
+    private readonly IAssetComponentRepository _assetRepository;
 
-    public GetAssetByIdQueryHandler(IAssetRepository assetRepository)
+    public GetAssetComponentByIdQueryHandler(IAssetComponentRepository assetRepository)
     {
         _assetRepository = assetRepository;
     }
 
-    public async Task<AssetDetailDto> Handle(GetAssetByIdQuery request, CancellationToken cancellationToken)
+    public async Task<AssetComponentDetailDto> Handle(GetAssetComponentByIdQuery request, CancellationToken cancellationToken)
     {
         var asset = await _assetRepository.GetAssetWithDetailsAsync(request.Id);
         if (asset == null || asset.IsDeleted)
         {
-            throw new NotFoundException("Asset", request.Id);
+            throw new NotFoundException("AssetComponent", request.Id);
         }
 
         // Lọc các DetectedAnomalies ở trạng thái hoạt động (Confirmed và chưa được resolved)
@@ -38,12 +38,12 @@ public class GetAssetByIdQueryHandler : IRequestHandler<GetAssetByIdQuery, Asset
             ))
             .ToList();
 
-        return new AssetDetailDto(
+        return new AssetComponentDetailDto(
             asset.Id,
             asset.TowerId,
             asset.Tower?.TowerCode ?? "Unknown",
-            asset.AssetType,
-            asset.AssetCode,
+            asset.ComponentType,
+            asset.ComponentCode,
             asset.Status,
             asset.CurrentHealthScore,
             asset.RiskLevel,

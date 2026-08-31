@@ -1,6 +1,6 @@
 using System;
 using MediatR;
 
-namespace UavPms.OperationsService.Application.Features.Assets.Commands.DeleteAsset;
+namespace UavPms.OperationsService.Application.Features.AssetComponents.Commands.DeleteAssetComponent;
 
-public record DeleteAssetCommand(Guid Id) : IRequest;
+public record DeleteAssetComponentCommand(Guid Id) : IRequest;

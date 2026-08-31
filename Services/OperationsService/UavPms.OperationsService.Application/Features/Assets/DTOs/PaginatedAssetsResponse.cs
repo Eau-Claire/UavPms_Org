@@ -1,8 +1,8 @@
 using UavPms.OperationsService.Application.Common.DTOs;
 
-namespace UavPms.OperationsService.Application.Features.Assets.DTOs;
+namespace UavPms.OperationsService.Application.Features.AssetComponents.DTOs;
 
-public record PaginatedAssetsResponse(
-    List<AssetDto> Items,
+public record PaginatedAssetComponentsResponse(
+    List<AssetComponentDto> Items,
     PaginationMetaData Pagination
 );

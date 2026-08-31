@@ -1,11 +1,11 @@
 using System;
 using MediatR;
-using UavPms.OperationsService.Application.Features.Assets.DTOs;
+using UavPms.OperationsService.Application.Features.AssetComponents.DTOs;
 
-namespace UavPms.OperationsService.Application.Features.Assets.Commands.CreateAsset;
+namespace UavPms.OperationsService.Application.Features.AssetComponents.Commands.CreateAssetComponent;
 
-public record CreateAssetCommand(
+public record CreateAssetComponentCommand(
     Guid TowerId,
-    string AssetType,
-    string AssetCode
-) : IRequest<AssetDto>;
+    string ComponentType,
+    string ComponentCode
+) : IRequest<AssetComponentDto>;

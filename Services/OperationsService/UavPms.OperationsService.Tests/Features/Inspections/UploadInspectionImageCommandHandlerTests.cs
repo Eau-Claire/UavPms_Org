@@ -18,7 +18,7 @@ namespace UavPms.OperationsService.Tests.Features.Inspections;
 public class UploadInspectionImageCommandHandlerTests
 {
     private readonly Mock<IGenericRepository<Mission>> _missionRepositoryMock;
-    private readonly Mock<IGenericRepository<Asset>> _assetRepositoryMock;
+    private readonly Mock<IGenericRepository<Tower>> _assetRepositoryMock;
     private readonly Mock<IGenericRepository<InspectionMedia>> _mediaRepositoryMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IFileStorageService> _fileStorageServiceMock;
@@ -30,7 +30,7 @@ public class UploadInspectionImageCommandHandlerTests
     public UploadInspectionImageCommandHandlerTests()
     {
         _missionRepositoryMock = new Mock<IGenericRepository<Mission>>();
-        _assetRepositoryMock = new Mock<IGenericRepository<Asset>>();
+        _assetRepositoryMock = new Mock<IGenericRepository<Tower>>();
         _mediaRepositoryMock = new Mock<IGenericRepository<InspectionMedia>>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _fileStorageServiceMock = new Mock<IFileStorageService>();
@@ -58,7 +58,7 @@ public class UploadInspectionImageCommandHandlerTests
         var command = new UploadInspectionImageCommand
         {
             MissionId = missionId,
-            AssetId = Guid.NewGuid(),
+            TowerId = Guid.NewGuid(),
             CapturedAt = DateTime.UtcNow,
             FileStream = new MemoryStream(),
             FileName = "test.jpg",
@@ -90,7 +90,7 @@ public class UploadInspectionImageCommandHandlerTests
         var command = new UploadInspectionImageCommand
         {
             MissionId = missionId,
-            AssetId = assetId,
+            TowerId = assetId,
             CapturedAt = DateTime.UtcNow,
             FileStream = new MemoryStream(),
             FileName = "test.jpg",
@@ -103,14 +103,14 @@ public class UploadInspectionImageCommandHandlerTests
             .ReturnsAsync(mission);
 
         _assetRepositoryMock.Setup(r => r.GetByIdAsync(assetId, false))
-            .ReturnsAsync((Asset?)null);
+            .ReturnsAsync((Tower?)null);
 
         // Act
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
 
         // Assert
         await act.Should().ThrowAsync<KeyNotFoundException>()
-            .WithMessage($"Asset with ID '{assetId}' was not found.");
+            .WithMessage($"Tower with ID '{assetId}' was not found.");
 
         _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
@@ -133,12 +133,12 @@ public class UploadInspectionImageCommandHandlerTests
             InspectorId = inspectorId
         };
 
-        var asset = new Asset { Id = assetId };
+        var asset = new Tower { Id = assetId };
 
         var command = new UploadInspectionImageCommand
         {
             MissionId = missionId,
-            AssetId = assetId,
+            TowerId = assetId,
             CapturedAt = DateTime.UtcNow,
             FileStream = new MemoryStream(),
             FileName = "test.jpg",
@@ -183,13 +183,13 @@ public class UploadInspectionImageCommandHandlerTests
             InspectorId = inspectorId
         };
 
-        var asset = new Asset { Id = assetId };
+        var asset = new Tower { Id = assetId };
         var capturedAt = DateTime.UtcNow;
 
         var command = new UploadInspectionImageCommand
         {
             MissionId = missionId,
-            AssetId = assetId,
+            TowerId = assetId,
             CapturedAt = capturedAt,
             FileStream = new MemoryStream(),
             FileName = fileName,
@@ -220,7 +220,7 @@ public class UploadInspectionImageCommandHandlerTests
         
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.Is<InspectionMedia>(m =>
              m.MissionId == missionId &&
-             m.AssetId == assetId &&
+             m.TowerId == assetId &&
              m.FileUrl == fileUrl &&
              m.MediaType == "Image" &&
              m.ValidationStatus == "Pending" &&

@@ -21,7 +21,7 @@ public class UploadInspectionImageCommandValidatorTests
         var command = new UploadInspectionImageCommand
         {
             MissionId = Guid.Empty,
-            AssetId = Guid.NewGuid(),
+            TowerId = Guid.NewGuid(),
             FileName = "test.jpg",
             FileStream = new MemoryStream(new byte[] { 1, 2, 3 }),
             ContentType = "image/jpeg"
@@ -39,7 +39,7 @@ public class UploadInspectionImageCommandValidatorTests
         var command = new UploadInspectionImageCommand
         {
             MissionId = Guid.NewGuid(),
-            AssetId = Guid.Empty,
+            TowerId = Guid.Empty,
             FileName = "test.jpg",
             FileStream = new MemoryStream(new byte[] { 1, 2, 3 }),
             ContentType = "image/jpeg"
@@ -48,7 +48,7 @@ public class UploadInspectionImageCommandValidatorTests
         var result = _validator.Validate(command);
 
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "AssetId");
+        result.Errors.Should().Contain(e => e.PropertyName == "TowerId");
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public class UploadInspectionImageCommandValidatorTests
         var command = new UploadInspectionImageCommand
         {
             MissionId = Guid.NewGuid(),
-            AssetId = Guid.NewGuid(),
+            TowerId = Guid.NewGuid(),
             FileName = "test.jpg",
             FileStream = null!,
             ContentType = "image/jpeg"
@@ -75,7 +75,7 @@ public class UploadInspectionImageCommandValidatorTests
         var command = new UploadInspectionImageCommand
         {
             MissionId = Guid.NewGuid(),
-            AssetId = Guid.NewGuid(),
+            TowerId = Guid.NewGuid(),
             FileName = "document.pdf",
             FileStream = new MemoryStream(new byte[] { 1, 2, 3 }),
             ContentType = "application/pdf"
@@ -93,7 +93,7 @@ public class UploadInspectionImageCommandValidatorTests
         var command = new UploadInspectionImageCommand
         {
             MissionId = Guid.NewGuid(),
-            AssetId = Guid.NewGuid(),
+            TowerId = Guid.NewGuid(),
             FileName = "test.jpg",
             FileStream = new MemoryStream(new byte[] { 1, 2, 3 }),
             ContentType = "image/jpeg"

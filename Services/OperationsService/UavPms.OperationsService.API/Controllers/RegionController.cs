@@ -10,6 +10,7 @@ using UavPms.OperationsService.Application.Features.Regions.Commands.UpdateRegio
 using UavPms.OperationsService.Application.Features.Regions.Commands.DeleteRegion;
 using UavPms.OperationsService.Application.Features.Regions.Queries.GetRegions;
 using UavPms.OperationsService.Application.Features.Regions.Queries.GetRegionById;
+using UavPms.OperationsService.Application.Features.Regions.UserAssignments;
 
 namespace UavPms.OperationsService.API.Controllers;
 
@@ -67,6 +68,30 @@ public class RegionController : ControllerBase
         var command = new DeleteRegionCommand(id);
         await _mediator.Send(command);
         return Ok(new ApiResponse(true, "Xóa vùng miền thành công."));
+    }
+
+    [HttpPost("{regionId:guid}/users/{userId:guid}")]
+    [Authorize(Roles = "SystemAdmin")]
+    public async Task<IActionResult> AssignUser(Guid regionId, Guid userId, CancellationToken cancellationToken)
+    {
+        await _mediator.Send(new AssignUserToRegionCommand(userId, regionId), cancellationToken);
+        return Ok(new ApiResponse(true, "User assigned to Region successfully."));
+    }
+
+    [HttpDelete("{regionId:guid}/users/{userId:guid}")]
+    [Authorize(Roles = "SystemAdmin")]
+    public async Task<IActionResult> RemoveUser(Guid regionId, Guid userId, CancellationToken cancellationToken)
+    {
+        await _mediator.Send(new RemoveUserFromRegionCommand(userId, regionId), cancellationToken);
+        return Ok(new ApiResponse(true, "User removed from Region successfully."));
+    }
+
+    [HttpGet("users/{userId:guid}")]
+    [Authorize(Roles = "SystemAdmin")]
+    public async Task<IActionResult> GetUserRegions(Guid userId, CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(new GetUserRegionsQuery(userId), cancellationToken);
+        return Ok(new ApiResponse(true, "User Regions retrieved successfully.", result));
     }
 }
 

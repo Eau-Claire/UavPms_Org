@@ -2,11 +2,6 @@ using System;
 
 namespace UavPms.OperationsService.Domain.Contracts;
 
-/// <summary>
-/// Event published khi người dùng yêu cầu phân tích AI ad-hoc.
-/// Consumer sẽ gọi AI service và cập nhật kết quả.
-/// Mỗi file (ảnh/video) publish 1 event riêng.
-/// </summary>
 public class AIAnalysisRequestedEvent
 {
     public Guid RequestId { get; set; }
@@ -18,6 +13,6 @@ public class AIAnalysisRequestedEvent
     public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
     public Guid? MediaId { get; set; }
     public Guid? MissionId { get; set; }
-    public Guid? AssetId { get; set; }
+    public Guid? ComponentId { get; set; }
     public string? PreferredModel { get; set; }
 }

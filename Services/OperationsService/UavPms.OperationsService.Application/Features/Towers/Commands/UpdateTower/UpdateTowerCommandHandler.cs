@@ -1,7 +1,6 @@
 using MediatR;
-using NetTopologySuite;
-using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Application.Common.Exceptions;
+using UavPms.OperationsService.Application.Common.Utilities;
 using UavPms.OperationsService.Application.Features.Towers.DTOs;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 
@@ -37,13 +36,11 @@ public class UpdateTowerCommandHandler : IRequestHandler<UpdateTowerCommand, Tow
             throw new NotFoundException("Line", request.LineAssetId);
         }
 
-        Geometry? geom = null;
-        var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
-        geom = geometryFactory.CreatePoint(new Coordinate(request.Longitude, request.Latitude));
+        var location = SpatialGeometryFactory.CreatePoint(request.Longitude, request.Latitude);
 
         tower.LineAssetId = request.LineAssetId;
         tower.TowerCode = request.TowerCode;
-        tower.Geom = geom;
+        tower.Geom = location;
         tower.UpdatedAt = DateTime.UtcNow;
         
         await _towerRepository.UpdateAsync(tower);

@@ -7,17 +7,15 @@ namespace UavPms.OperationsService.Domain.Entities;
 public class DetectedAnomaly : BaseEntity
 {
     public Guid MediaId { get; set; }
-    public Guid? AssetId { get; set; }
+    public Guid TowerId { get; set; }
+    public Guid? ComponentId { get; set; }
     public int CategoryId { get; set; }
     public Guid? AnalystId { get; set; }
     public string BoundingBox { get; set; } = string.Empty; // Will be mapped to jsonb
     public string? AiDetectionId { get; set; }
     public int? FrameIndex { get; set; }
     public double? Timestamp { get; set; }
-    public string? ImageUrl { get; set; }
     public string? CropUrl { get; set; }
-    public string? Gps { get; set; } // Will be mapped to jsonb
-    public string? TowerId { get; set; }
     public double? VideoDuration { get; set; }
     public double? VideoFps { get; set; }
     public int? VideoWidth { get; set; }
@@ -29,7 +27,8 @@ public class DetectedAnomaly : BaseEntity
     public DateTime? ValidatedAt { get; set; }
 
     public virtual InspectionMedia? Media { get; set; }
-    public virtual Asset? Asset { get; set; }
+    public virtual Tower? Tower { get; set; }
+    public virtual AssetComponent? Component { get; set; }
     public virtual DefectCategory? Category { get; set; }
     public virtual User? Analyst { get; set; }
 

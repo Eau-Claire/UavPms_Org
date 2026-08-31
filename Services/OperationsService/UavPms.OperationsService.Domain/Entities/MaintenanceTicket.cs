@@ -9,9 +9,10 @@ public class MaintenanceTicket : BaseEntity
 {
     public string TicketCode { get; set; } = string.Empty;
     public Guid AnomalyId { get; set; }
-    public Guid AssetId { get; set; }
+    public Guid TowerId { get; set; }
+    public Guid? ComponentId { get; set; }
     public Guid ManagerId { get; set; }
-    public Guid TechnicianId { get; set; }
+    public Guid? TechnicianId { get; set; }
     public TicketStatus Status { get; set; } = TicketStatus.Open;
     public TicketPriority Priority { get; set; } = TicketPriority.Medium;
     public string Description { get; set; } = string.Empty;
@@ -21,7 +22,8 @@ public class MaintenanceTicket : BaseEntity
     public DateTime? ResolvedAt { get; set; }
 
     public virtual DetectedAnomaly? Anomaly { get; set; }
-    public virtual Asset? Asset { get; set; }
+    public virtual Tower? Tower { get; set; }
+    public virtual AssetComponent? Component { get; set; }
     public virtual User? Manager { get; set; }
     public virtual User? Technician { get; set; }
 

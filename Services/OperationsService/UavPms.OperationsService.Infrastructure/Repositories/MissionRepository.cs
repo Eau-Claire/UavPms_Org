@@ -18,13 +18,18 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         string? search,
         string? status,
         string? sortBy = "createdAt",
-        bool sortDescending = true)
+        bool sortDescending = true,
+        IReadOnlyCollection<Guid>? regionIds = null)
     {
         var query = _context.Missions
-            .Include(m => m.AssignedToUser)
+            .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
+            .Include(m => m.MissionTargets)
             .AsQueryable();
+
+        if (regionIds != null)
+            query = query.Where(m => regionIds.Contains(m.RegionId));
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -77,10 +82,11 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     public async Task<IReadOnlyList<Mission>> GetMissionsByAssignedUserAsync(Guid userId)
     {
         return await _context.Missions
-            .Include(m => m.AssignedToUser)
+            .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
-            .Where(m => m.AssignedToUserId == userId)
+            .Include(m => m.MissionTargets)
+            .Where(m => m.InspectorId == userId)
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync();
     }
@@ -88,9 +94,10 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     public async Task<Mission?> GetMissionDetailsByIdAsync(Guid id)
     {
         return await _context.Missions
-            .Include(m => m.AssignedToUser)
+            .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
+            .Include(m => m.MissionTargets)
             .FirstOrDefaultAsync(m => m.Id == id);
     }
 }

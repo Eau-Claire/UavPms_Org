@@ -2,21 +2,21 @@ using MediatR;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using UavPms.OperationsService.Application.Features.Assets.DTOs;
+using UavPms.OperationsService.Application.Features.AssetComponents.DTOs;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Application.Common.Exceptions;
 
-namespace UavPms.OperationsService.Application.Features.Assets.Commands.CreateAsset;
+namespace UavPms.OperationsService.Application.Features.AssetComponents.Commands.CreateAssetComponent;
 
-public class CreateAssetCommandHandler : IRequestHandler<CreateAssetCommand, AssetDto>
+public class CreateAssetComponentCommandHandler : IRequestHandler<CreateAssetComponentCommand, AssetComponentDto>
 {
-    private readonly IAssetRepository _assetRepository;
+    private readonly IAssetComponentRepository _assetRepository;
     private readonly ITowerRepository _towerRepository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public CreateAssetCommandHandler(
-        IAssetRepository assetRepository, 
+    public CreateAssetComponentCommandHandler(
+        IAssetComponentRepository assetRepository,
         ITowerRepository towerRepository, 
         IUnitOfWork unitOfWork)
     {
@@ -25,7 +25,7 @@ public class CreateAssetCommandHandler : IRequestHandler<CreateAssetCommand, Ass
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<AssetDto> Handle(CreateAssetCommand request, CancellationToken cancellationToken)
+    public async Task<AssetComponentDto> Handle(CreateAssetComponentCommand request, CancellationToken cancellationToken)
     {
         var tower = await _towerRepository.GetByIdAsync(request.TowerId);
         if (tower == null || tower.IsDeleted)
@@ -33,14 +33,14 @@ public class CreateAssetCommandHandler : IRequestHandler<CreateAssetCommand, Ass
             throw new NotFoundException("Tower", request.TowerId);
         }
 
-        var asset = new Asset
+        var asset = new AssetComponent
         {
             Id = Guid.NewGuid(),
             TowerId = request.TowerId,
-            AssetType = request.AssetType,
-            AssetCode = request.AssetCode,
+            ComponentType = request.ComponentType,
+            ComponentCode = request.ComponentCode,
             Status = "Operational",
-            CurrentHealthScore = 100.0,
+            CurrentHealthScore = 100,
             RiskLevel = "Low Risk",
             CreatedAt = DateTime.UtcNow
         };
@@ -48,15 +48,21 @@ public class CreateAssetCommandHandler : IRequestHandler<CreateAssetCommand, Ass
         await _assetRepository.AddAsync(asset);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new AssetDto(
+        return new AssetComponentDto(
             asset.Id,
             asset.TowerId,
-            asset.AssetType,
-            asset.AssetCode,
+            asset.ComponentType,
+            asset.ComponentCode,
             asset.Status,
             asset.CurrentHealthScore,
             asset.RiskLevel,
-            asset.LastInspectedAt
+            asset.LastInspectedAt,
+            0,
+            tower.TowerCode,
+            tower.LineAssetId,
+            tower.TransmissionLine?.LineName,
+            tower.TransmissionLine?.Substation?.RegionAssetId,
+            tower.TransmissionLine?.Substation?.Region?.RegionName
         );
     }
 }

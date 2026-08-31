@@ -1,15 +1,13 @@
 using System;
 using MediatR;
-using UavPms.OperationsService.Application.Features.Assets.DTOs;
+using UavPms.OperationsService.Application.Features.AssetComponents.DTOs;
 
-namespace UavPms.OperationsService.Application.Features.Assets.Commands.UpdateAsset;
+namespace UavPms.OperationsService.Application.Features.AssetComponents.Commands.UpdateAssetComponent;
 
-public record UpdateAssetCommand(
+public record UpdateAssetComponentCommand(
     Guid Id,
     Guid TowerId,
-    string AssetType,
-    string AssetCode,
-    string Status,
-    double CurrentHealthScore,
-    string RiskLevel
-) : IRequest<AssetDto>;
+    string ComponentType,
+    string ComponentCode,
+    string Status
+) : IRequest<AssetComponentDto>;

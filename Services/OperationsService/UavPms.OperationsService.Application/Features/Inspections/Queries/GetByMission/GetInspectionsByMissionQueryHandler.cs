@@ -28,7 +28,9 @@ public class GetInspectionsByMissionQueryHandler
         {
             Id = media.Id,
             MissionId = media.MissionId,
-            AssetId = media.AssetId,
+            TowerId = media.TowerId,
+            Latitude = media.CaptureLocation?.Y,
+            Longitude = media.CaptureLocation?.X,
             MediaType = media.MediaType,
             FileUrl = media.FileUrl,
             AiSource = media.AiSource,
@@ -39,7 +41,8 @@ public class GetInspectionsByMissionQueryHandler
             {
                 Id = a.Id,
                 MediaId = a.MediaId,
-                AssetId = a.AssetId,
+                TowerId = a.TowerId,
+                ComponentId = a.ComponentId,
                 CategoryName = a.Category?.CategoryName ?? string.Empty,
                 DefectType = a.Category?.CategoryCode ?? string.Empty,
                 ConfidenceScore = a.ConfidenceScore,

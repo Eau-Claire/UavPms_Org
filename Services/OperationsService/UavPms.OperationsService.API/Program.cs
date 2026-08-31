@@ -87,7 +87,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend", policy =>
     {
         var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? new[] { "http://localhost:3000", "http://localhost:5173", "http://localhost:5194", "https://seppms.vercel.app", "https://uavpms.ddns.net" };
+            ?? Array.Empty<string>();
 
         policy.WithOrigins(allowedOrigins).AllowAnyMethod().AllowAnyHeader().AllowCredentials();
     });
@@ -103,6 +103,10 @@ if (app.Configuration.GetValue<bool>("RunMigrations"))
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     dbContext.Database.Migrate();
+    if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("SeedDemoAssets"))
+    {
+        await AssetHealthDemoSeeder.SeedAsync(dbContext);
+    }
 }
 else
 {
@@ -144,7 +148,7 @@ catch
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(imagePath),
-    RequestPath = "/images"
+    RequestPath = fileOptions.RequestPath
 });
 
 app.UseAuthentication();

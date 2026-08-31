@@ -29,8 +29,8 @@ public class GetMyMissionsQueryHandlerTests
 
         var mockMissions = new List<Mission>
         {
-            new() { Id = Guid.NewGuid(), Title = "Mission 1", AssignedToUserId = currentUserId, Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Pending },
-            new() { Id = Guid.NewGuid(), Title = "Mission 2", AssignedToUserId = currentUserId, Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Executing }
+            new() { Id = Guid.NewGuid(), Title = "Mission 1", InspectorId = currentUserId, Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Pending },
+            new() { Id = Guid.NewGuid(), Title = "Mission 2", InspectorId = currentUserId, Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Executing }
         };
 
         _missionRepoMock.Setup(x => x.GetMissionsByAssignedUserAsync(currentUserId))

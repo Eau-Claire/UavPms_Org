@@ -25,14 +25,14 @@ public class TowerCommandHandlerTests
 {
     private readonly Mock<ITowerRepository> _towerRepositoryMock;
     private readonly Mock<ITransmissionLineRepository> _transmissionLineRepositoryMock;
-    private readonly Mock<IAssetRepository> _assetRepositoryMock;
+    private readonly Mock<IAssetComponentRepository> _assetRepositoryMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
 
     public TowerCommandHandlerTests()
     {
         _towerRepositoryMock = new Mock<ITowerRepository>();
         _transmissionLineRepositoryMock = new Mock<ITransmissionLineRepository>();
-        _assetRepositoryMock = new Mock<IAssetRepository>();
+        _assetRepositoryMock = new Mock<IAssetComponentRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
     }
 
@@ -145,10 +145,10 @@ public class TowerCommandHandlerTests
 
     #endregion
 
-    #region ImportTowerCommandHandler Tests (Batch Import & Auto Asset Creation)
+    #region ImportTowerCommandHandler Tests (Batch Import & Auto AssetComponent Creation)
 
     [Fact]
-    public async Task ImportTower_ShouldParseExcelAndCreateTowersAndAutoCreateAssets()
+    public async Task ImportTower_ShouldParseExcelAndCreateTowersAndAutoCreateAssetComponents()
     {
         // Arrange
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
@@ -198,10 +198,10 @@ public class TowerCommandHandlerTests
         result.Should().NotBeNull();
         result.Success.Should().BeTrue();
         result.ImportedCount.Should().Be(2); // 2 towers imported
-        result.CreateAssetsCount.Should().Be(8); // 4 assets per tower * 2 towers = 8 assets
+        result.CreateAssetComponentsCount.Should().Be(8); // 4 assets per tower * 2 towers = 8 assets
 
         _towerRepositoryMock.Verify(t => t.AddAsync(It.IsAny<Tower>()), Times.Exactly(2));
-        _assetRepositoryMock.Verify(a => a.AddAsync(It.IsAny<Asset>()), Times.Exactly(8));
+        _assetRepositoryMock.Verify(a => a.AddAsync(It.IsAny<AssetComponent>()), Times.Exactly(8));
         _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }

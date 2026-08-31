@@ -37,7 +37,7 @@ public class UpdateSubstationCommandHandler : IRequestHandler<UpdateSubstationCo
             throw new NotFoundException("Region", request.RegionAssetId);
         }
 
-        Geometry? geom = null;
+        Point? geom = null;
         if (request.Latitude.HasValue && request.Longitude.HasValue)
         {
             var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);

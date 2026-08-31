@@ -31,18 +31,21 @@ public class GetInspectionReportByIdQueryHandler
         {
             Id = media.Id,
             MissionId = media.MissionId,
-            AssetId = media.AssetId,
+            TowerId = media.TowerId,
+            Latitude = media.CaptureLocation?.Y,
+            Longitude = media.CaptureLocation?.X,
             MediaType = media.MediaType,
             FileUrl = media.FileUrl,
             AiSource = media.AiSource,
             ValidationStatus = media.ValidationStatus,
             CapturedAt = media.CapturedAt,
             CreatedAt = media.CreatedAt,
-            DetectedAnomalies = media.DetectedAnomalies.Select(a => new DetectedAnomalyDto
+            DetectedAnomalies = (media.DetectedAnomalies ?? new List<DetectedAnomaly>()).Select(a => new DetectedAnomalyDto
             {
                 Id = a.Id,
                 MediaId = a.MediaId,
-                AssetId = a.AssetId,
+                TowerId = a.TowerId,
+                ComponentId = a.ComponentId,
                 CategoryName = a.Category?.CategoryName ?? string.Empty,
                 DefectType = a.Category?.CategoryCode ?? string.Empty,
                 ConfidenceScore = a.ConfidenceScore,

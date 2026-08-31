@@ -2,20 +2,20 @@ using MediatR;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using UavPms.OperationsService.Application.Features.Assets.DTOs;
+using UavPms.OperationsService.Application.Features.AssetComponents.DTOs;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Application.Common.Exceptions;
 
-namespace UavPms.OperationsService.Application.Features.Assets.Commands.UpdateAsset;
+namespace UavPms.OperationsService.Application.Features.AssetComponents.Commands.UpdateAssetComponent;
 
-public class UpdateAssetCommandHandler : IRequestHandler<UpdateAssetCommand, AssetDto>
+public class UpdateAssetComponentCommandHandler : IRequestHandler<UpdateAssetComponentCommand, AssetComponentDto>
 {
-    private readonly IAssetRepository _assetRepository;
+    private readonly IAssetComponentRepository _assetRepository;
     private readonly ITowerRepository _towerRepository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public UpdateAssetCommandHandler(
-        IAssetRepository assetRepository, 
+    public UpdateAssetComponentCommandHandler(
+        IAssetComponentRepository assetRepository,
         ITowerRepository towerRepository, 
         IUnitOfWork unitOfWork)
     {
@@ -24,12 +24,12 @@ public class UpdateAssetCommandHandler : IRequestHandler<UpdateAssetCommand, Ass
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<AssetDto> Handle(UpdateAssetCommand request, CancellationToken cancellationToken)
+    public async Task<AssetComponentDto> Handle(UpdateAssetComponentCommand request, CancellationToken cancellationToken)
     {
         var asset = await _assetRepository.GetByIdAsync(request.Id);
         if (asset == null || asset.IsDeleted)
         {
-            throw new NotFoundException("Asset", request.Id);
+            throw new NotFoundException("AssetComponent", request.Id);
         }
 
         var tower = await _towerRepository.GetByIdAsync(request.TowerId);
@@ -39,25 +39,29 @@ public class UpdateAssetCommandHandler : IRequestHandler<UpdateAssetCommand, Ass
         }
 
         asset.TowerId = request.TowerId;
-        asset.AssetType = request.AssetType;
-        asset.AssetCode = request.AssetCode;
+        asset.ComponentType = request.ComponentType;
+        asset.ComponentCode = request.ComponentCode;
         asset.Status = request.Status;
-        asset.CurrentHealthScore = request.CurrentHealthScore;
-        asset.RiskLevel = request.RiskLevel;
         asset.UpdatedAt = DateTime.UtcNow;
 
         await _assetRepository.UpdateAsync(asset);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new AssetDto(
+        return new AssetComponentDto(
             asset.Id,
             asset.TowerId,
-            asset.AssetType,
-            asset.AssetCode,
+            asset.ComponentType,
+            asset.ComponentCode,
             asset.Status,
             asset.CurrentHealthScore,
             asset.RiskLevel,
-            asset.LastInspectedAt
+            asset.LastInspectedAt,
+            asset.DetectedAnomalies.Count(d => d.ValidationStatus == "Confirmed"),
+            tower.TowerCode,
+            tower.LineAssetId,
+            tower.TransmissionLine?.LineName,
+            tower.TransmissionLine?.Substation?.RegionAssetId,
+            tower.TransmissionLine?.Substation?.Region?.RegionName
         );
     }
 }

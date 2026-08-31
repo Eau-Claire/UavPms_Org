@@ -17,7 +17,8 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
             .Include(a => a.Media)
             .Include(a => a.Category)
             .Include(a => a.Analyst)
-            .Include(a => a.Asset)
+            .Include(a => a.Tower)
+            .Include(a => a.Component)
             .FirstOrDefaultAsync(a => a.Id == id);
     }
 
@@ -27,7 +28,8 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
             .Include(a => a.Media)
             .Include(a => a.Category)
             .Include(a => a.Analyst)
-            .Include(a => a.Asset)
+            .Include(a => a.Tower)
+            .Include(a => a.Component)
             .ToListAsync();
     }
 
@@ -37,19 +39,21 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
             .Include(a => a.Media)
             .Include(a => a.Category)
             .Include(a => a.Analyst)
-            .Include(a => a.Asset)
+            .Include(a => a.Tower)
+            .Include(a => a.Component)
             .Where(a => a.ValidationStatus == "Pending")
             .ToListAsync();
     }
 
-    public async Task<IReadOnlyList<DetectedAnomaly>> GetByAssetIdWithDetailsAsync(Guid assetId)
+    public async Task<IReadOnlyList<DetectedAnomaly>> GetByComponentIdWithDetailsAsync(Guid componentId)
     {
         return await _context.DetectedAnomalies
             .Include(a => a.Media)
             .Include(a => a.Category)
             .Include(a => a.Analyst)
-            .Include(a => a.Asset)
-            .Where(a => a.AssetId == assetId)
+            .Include(a => a.Tower)
+            .Include(a => a.Component)
+            .Where(a => a.ComponentId == componentId)
             .ToListAsync();
     }
 }

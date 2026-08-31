@@ -5,71 +5,71 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
 using UavPms.OperationsService.Application.Common.Exceptions;
-using UavPms.OperationsService.Application.Features.Assets.Commands.CreateAsset;
-using UavPms.OperationsService.Application.Features.Assets.Commands.DeleteAsset;
-using UavPms.OperationsService.Application.Features.Assets.Commands.UpdateAsset;
-using UavPms.OperationsService.Application.Features.Assets.Queries.GetAssetById;
-using UavPms.OperationsService.Application.Features.Assets.Queries.GetAssets;
+using UavPms.OperationsService.Application.Features.AssetComponents.Commands.CreateAssetComponent;
+using UavPms.OperationsService.Application.Features.AssetComponents.Commands.DeleteAssetComponent;
+using UavPms.OperationsService.Application.Features.AssetComponents.Commands.UpdateAssetComponent;
+using UavPms.OperationsService.Application.Features.AssetComponents.Queries.GetAssetComponentById;
+using UavPms.OperationsService.Application.Features.AssetComponents.Queries.GetAssetComponents;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using Xunit;
 
-namespace UavPms.OperationsService.Tests.Features.Assets;
+namespace UavPms.OperationsService.Tests.Features.AssetComponents;
 
 public class AssetCommandHandlerTests
 {
-    private readonly Mock<IAssetRepository> _assetRepositoryMock;
+    private readonly Mock<IAssetComponentRepository> _assetRepositoryMock;
     private readonly Mock<ITowerRepository> _towerRepositoryMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
 
     public AssetCommandHandlerTests()
     {
-        _assetRepositoryMock = new Mock<IAssetRepository>();
+        _assetRepositoryMock = new Mock<IAssetComponentRepository>();
         _towerRepositoryMock = new Mock<ITowerRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
     }
 
-    #region CreateAssetCommandHandler Tests
+    #region CreateAssetComponentCommandHandler Tests
 
     [Fact]
-    public async Task CreateAsset_ShouldCreateAsset_WhenTowerExists()
+    public async Task CreateAssetComponent_ShouldCreateAssetComponent_WhenTowerExists()
     {
         // Arrange
         var towerId = Guid.NewGuid();
         var tower = new Tower { Id = towerId, TowerCode = "T-01", IsDeleted = false };
         _towerRepositoryMock.Setup(t => t.GetByIdAsync(towerId, true)).ReturnsAsync(tower);
 
-        var handler = new CreateAssetCommandHandler(
+        var handler = new CreateAssetComponentCommandHandler(
             _assetRepositoryMock.Object,
             _towerRepositoryMock.Object,
             _unitOfWorkMock.Object);
 
-        var command = new CreateAssetCommand(towerId, "Insulator", "INS-T01-01");
+        var command = new CreateAssetComponentCommand(towerId, "Insulator", "INS-T01-01");
 
         // Act
         var result = await handler.Handle(command, CancellationToken.None);
 
         // Assert
         result.Should().NotBeNull();
-        result.AssetCode.Should().Be("INS-T01-01");
-        result.AssetType.Should().Be("Insulator");
-        _assetRepositoryMock.Verify(a => a.AddAsync(It.Is<Asset>(x => x.AssetCode == "INS-T01-01")), Times.Once);
+        result.ComponentCode.Should().Be("INS-T01-01");
+        result.ComponentType.Should().Be("Insulator");
+        _assetRepositoryMock.Verify(a => a.AddAsync(It.Is<AssetComponent>(x => x.ComponentCode == "INS-T01-01")), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task CreateAsset_ShouldThrowNotFoundException_WhenTowerDoesNotExist()
+    public async Task CreateAssetComponent_ShouldThrowNotFoundException_WhenTowerDoesNotExist()
     {
         // Arrange
         var towerId = Guid.NewGuid();
         _towerRepositoryMock.Setup(t => t.GetByIdAsync(towerId, true)).ReturnsAsync((Tower?)null);
 
-        var handler = new CreateAssetCommandHandler(
+        var handler = new CreateAssetComponentCommandHandler(
             _assetRepositoryMock.Object,
             _towerRepositoryMock.Object,
             _unitOfWorkMock.Object);
 
-        var command = new CreateAssetCommand(towerId, "Cable", "CBL-T01-01");
+        var command = new CreateAssetComponentCommand(towerId, "Cable", "CBL-T01-01");
 
         // Act
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
@@ -80,50 +80,50 @@ public class AssetCommandHandlerTests
 
     #endregion
 
-    #region UpdateAssetCommandHandler Tests
+    #region UpdateAssetComponentCommandHandler Tests
 
     [Fact]
-    public async Task UpdateAsset_ShouldUpdateAsset_WhenAssetAndTowerExist()
+    public async Task UpdateAssetComponent_ShouldUpdateAssetComponent_WhenAssetAndTowerExist()
     {
         // Arrange
         var assetId = Guid.NewGuid();
         var towerId = Guid.NewGuid();
-        var existingAsset = new Asset { Id = assetId, TowerId = towerId, AssetCode = "OLD-CODE", IsDeleted = false };
+        var existingAsset = new AssetComponent { Id = assetId, TowerId = towerId, ComponentCode = "OLD-CODE", IsDeleted = false };
         var tower = new Tower { Id = towerId, TowerCode = "T-01", IsDeleted = false };
 
         _assetRepositoryMock.Setup(a => a.GetByIdAsync(assetId, true)).ReturnsAsync(existingAsset);
         _towerRepositoryMock.Setup(t => t.GetByIdAsync(towerId, true)).ReturnsAsync(tower);
 
-        var handler = new UpdateAssetCommandHandler(
+        var handler = new UpdateAssetComponentCommandHandler(
             _assetRepositoryMock.Object,
             _towerRepositoryMock.Object,
             _unitOfWorkMock.Object);
 
-        var command = new UpdateAssetCommand(assetId, towerId, "Insulator", "NEW-CODE", "Operational", 95.0, "Low Risk");
+        var command = new UpdateAssetComponentCommand(assetId, towerId, "Insulator", "NEW-CODE", "Operational");
 
         // Act
         var result = await handler.Handle(command, CancellationToken.None);
 
         // Assert
         result.Should().NotBeNull();
-        result.AssetCode.Should().Be("NEW-CODE");
+        result.ComponentCode.Should().Be("NEW-CODE");
         _assetRepositoryMock.Verify(a => a.UpdateAsync(existingAsset), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task UpdateAsset_ShouldThrowNotFoundException_WhenAssetDoesNotExist()
+    public async Task UpdateAssetComponent_ShouldThrowNotFoundException_WhenAssetDoesNotExist()
     {
         // Arrange
         var assetId = Guid.NewGuid();
-        _assetRepositoryMock.Setup(a => a.GetByIdAsync(assetId, true)).ReturnsAsync((Asset?)null);
+        _assetRepositoryMock.Setup(a => a.GetByIdAsync(assetId, true)).ReturnsAsync((AssetComponent?)null);
 
-        var handler = new UpdateAssetCommandHandler(
+        var handler = new UpdateAssetComponentCommandHandler(
             _assetRepositoryMock.Object,
             _towerRepositoryMock.Object,
             _unitOfWorkMock.Object);
 
-        var command = new UpdateAssetCommand(assetId, Guid.NewGuid(), "Cable", "CBL-01", "Operational", 100.0, "Low Risk");
+        var command = new UpdateAssetComponentCommand(assetId, Guid.NewGuid(), "Cable", "CBL-01", "Operational");
 
         // Act
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
@@ -134,18 +134,18 @@ public class AssetCommandHandlerTests
 
     #endregion
 
-    #region DeleteAssetCommandHandler Tests
+    #region DeleteAssetComponentCommandHandler Tests
 
     [Fact]
-    public async Task DeleteAsset_ShouldDeleteAsset_WhenExists()
+    public async Task DeleteAssetComponent_ShouldDeleteAssetComponent_WhenExists()
     {
         // Arrange
         var assetId = Guid.NewGuid();
-        var asset = new Asset { Id = assetId, AssetCode = "ASSET-DELETE", IsDeleted = false };
+        var asset = new AssetComponent { Id = assetId, ComponentCode = "ASSET-DELETE", IsDeleted = false };
         _assetRepositoryMock.Setup(a => a.GetByIdAsync(assetId, true)).ReturnsAsync(asset);
 
-        var handler = new DeleteAssetCommandHandler(_assetRepositoryMock.Object, _unitOfWorkMock.Object);
-        var command = new DeleteAssetCommand(assetId);
+        var handler = new DeleteAssetComponentCommandHandler(_assetRepositoryMock.Object, _unitOfWorkMock.Object);
+        var command = new DeleteAssetComponentCommand(assetId);
 
         // Act
         await handler.Handle(command, CancellationToken.None);
@@ -160,21 +160,19 @@ public class AssetCommandHandlerTests
     #region Query Handler Tests
 
     [Fact]
-    public async Task GetAssetById_ShouldReturnAssetDetailWithActiveAnomalies_WhenExists()
+    public async Task GetAssetComponentById_ShouldReturnAssetDetailWithActiveAnomalies_WhenExists()
     {
         // Arrange
         var assetId = Guid.NewGuid();
         var towerId = Guid.NewGuid();
-        var asset = new Asset
+        var asset = new AssetComponent
         {
             Id = assetId,
             TowerId = towerId,
             Tower = new Tower { Id = towerId, TowerCode = "TOWER-01" },
-            AssetCode = "INS-01",
-            AssetType = "Insulator",
+            ComponentCode = "INS-01",
+            ComponentType = "Insulator",
             Status = "Operational",
-            CurrentHealthScore = 88.5,
-            RiskLevel = "Medium Risk",
             IsDeleted = false,
             DetectedAnomalies = new List<DetectedAnomaly>
             {
@@ -197,8 +195,8 @@ public class AssetCommandHandlerTests
 
         _assetRepositoryMock.Setup(a => a.GetAssetWithDetailsAsync(assetId)).ReturnsAsync(asset);
 
-        var handler = new GetAssetByIdQueryHandler(_assetRepositoryMock.Object);
-        var query = new GetAssetByIdQuery(assetId);
+        var handler = new GetAssetComponentByIdQueryHandler(_assetRepositoryMock.Object);
+        var query = new GetAssetComponentByIdQuery(assetId);
 
         // Act
         var result = await handler.Handle(query, CancellationToken.None);
@@ -206,25 +204,37 @@ public class AssetCommandHandlerTests
         // Assert
         result.Should().NotBeNull();
         result.Id.Should().Be(assetId);
-        result.AssetCode.Should().Be("INS-01");
+        result.ComponentCode.Should().Be("INS-01");
         result.ActiveAnomalies.Should().HaveCount(1);
         result.ActiveAnomalies[0].CategoryName.Should().Be("Cracked Insulator");
     }
 
     [Fact]
-    public async Task GetAssets_ShouldReturnPaginatedList_WhenCalled()
+    public async Task GetAssetComponents_ShouldReturnPaginatedList_WhenCalled()
     {
         // Arrange
-        var assets = new List<Asset>
+        var assets = new List<AssetComponent>
         {
-            new Asset { Id = Guid.NewGuid(), AssetCode = "A1" },
-            new Asset { Id = Guid.NewGuid(), AssetCode = "A2" }
+            new AssetComponent { Id = Guid.NewGuid(), ComponentCode = "A1" },
+            new AssetComponent { Id = Guid.NewGuid(), ComponentCode = "A2" }
         };
-        _assetRepositoryMock.Setup(a => a.GetAssetsPagedAsync(1, 10, null, null, null))
+        _assetRepositoryMock.Setup(a => a.GetAssetComponentsPagedAsync(
+                1,
+                10,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null))
             .ReturnsAsync((assets, 2));
 
-        var handler = new GetAssetsQueryHandler(_assetRepositoryMock.Object);
-        var query = new GetAssetsQuery(1, 10, null, null, null);
+        var handler = new GetAssetComponentsQueryHandler(_assetRepositoryMock.Object);
+        var query = new GetAssetComponentsQuery(1, 10, null, null, null);
 
         // Act
         var result = await handler.Handle(query, CancellationToken.None);

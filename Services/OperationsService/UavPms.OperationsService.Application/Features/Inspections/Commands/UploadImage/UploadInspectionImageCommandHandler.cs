@@ -7,6 +7,7 @@ using UavPms.OperationsService.Domain.Contracts;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Domain.Interfaces.Services;
+using UavPms.OperationsService.Application.Common.Utilities;
 
 namespace UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage;
 
@@ -14,7 +15,7 @@ public class UploadInspectionImageCommandHandler
     : IRequestHandler<UploadInspectionImageCommand, UploadInspectionImageResult>
 {
     private readonly IGenericRepository<Mission> _missionRepository;
-    private readonly IGenericRepository<Asset> _assetRepository;
+    private readonly IGenericRepository<Tower> _towerRepository;
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
@@ -24,7 +25,7 @@ public class UploadInspectionImageCommandHandler
 
     public UploadInspectionImageCommandHandler(
         IGenericRepository<Mission> missionRepository,
-        IGenericRepository<Asset> assetRepository,
+        IGenericRepository<Tower> towerRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
         IUnitOfWork unitOfWork,
         IFileStorageService fileStorageService,
@@ -33,7 +34,7 @@ public class UploadInspectionImageCommandHandler
         ILogger<UploadInspectionImageCommandHandler> logger)
     {
         _missionRepository = missionRepository;
-        _assetRepository = assetRepository;
+        _towerRepository = towerRepository;
         _mediaRepository = mediaRepository;
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
@@ -53,11 +54,11 @@ public class UploadInspectionImageCommandHandler
             throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
         }
 
-        // 1b. Kiểm tra Asset tồn tại
-        var asset = await _assetRepository.GetByIdAsync(request.AssetId, track: false);
-        if (asset == null)
+        // 1b. Kiểm tra AssetComponent tồn tại
+        var tower = await _towerRepository.GetByIdAsync(request.TowerId, track: false);
+        if (tower == null)
         {
-            throw new KeyNotFoundException($"Asset with ID '{request.AssetId}' was not found.");
+            throw new KeyNotFoundException($"Tower with ID '{request.TowerId}' was not found.");
         }
 
         // 2. Kiểm tra quyền: chỉ Inspector được giao mới có quyền upload
@@ -80,12 +81,15 @@ public class UploadInspectionImageCommandHandler
         {
             Id = Guid.NewGuid(),
             MissionId = request.MissionId,
-            AssetId = request.AssetId,
+            TowerId = request.TowerId,
             MediaType = mediaType,
             FileUrl = fileUrl,
             AiSource = string.Empty,
             ValidationStatus = "Pending",
             CapturedAt = request.CapturedAt,
+            CaptureLocation = request.Latitude.HasValue && request.Longitude.HasValue
+                ? SpatialGeometryFactory.CreatePoint(request.Longitude.Value, request.Latitude.Value)
+                : null,
             CreatedBy = currentUserId
         };
 

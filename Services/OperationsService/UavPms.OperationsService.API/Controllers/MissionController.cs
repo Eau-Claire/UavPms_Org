@@ -39,9 +39,9 @@ public class MissionController : ControllerBase
         var command = new UpdateMissionCommand(
             id,
             request.Title,
-            request.RouteData,
-            request.AssignedToUserId,
-            request.DroneCode,
+            request.InspectorId,
+            request.UavId,
+            request.ScheduledStartAt,
             request.Status,
             request.Description);
         var result = await _mediator.Send(command, cancellationToken);
@@ -101,8 +101,8 @@ public class MissionController : ControllerBase
 
 public record UpdateMissionRequest(
     string Title,
-    string RouteData,
-    Guid AssignedToUserId,
-    string DroneCode,
+    Guid InspectorId,
+    Guid UavId,
+    DateTime? ScheduledStartAt,
     string Status,
     string? Description);

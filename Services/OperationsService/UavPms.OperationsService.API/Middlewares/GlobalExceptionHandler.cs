@@ -9,10 +9,12 @@ namespace UavPms.OperationsService.API.Middlewares;
 public class GlobalExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<GlobalExceptionHandler> _logger;
+    private readonly IHostEnvironment _environment;
 
-    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
+    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger, IHostEnvironment environment)
     {
-        _logger = logger;   
+        _logger = logger;
+        _environment = environment;
     }
     
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
@@ -82,9 +84,17 @@ public class GlobalExceptionHandler : IExceptionHandler
         else
         {
             httpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+            var errorMessage = "An unexpected error occurred. Please try again later.";
+            
+            // Include more details in development environment
+            if (_environment.IsDevelopment())
+            {
+                errorMessage = $"{exception.GetType().Name}: {exception.Message}";
+            }
+            
             apiResponse = new ApiResponse(
                 Success: false,
-                Message: "An unexpected error occurred. Please try again later.",
+                Message: errorMessage,
                 Data: null,
                 Errors: null
             );
@@ -95,3 +105,4 @@ public class GlobalExceptionHandler : IExceptionHandler
         return true;
     }
 }
+

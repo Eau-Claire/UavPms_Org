@@ -31,7 +31,7 @@ public class GetAuditLogsQueryHandlerTests
         var mockLogs = new List<AuditLog>
         {
             new() { TableName = "Users", ActionType = "Added", RecordId = Guid.NewGuid() },
-            new() { TableName = "Assets", ActionType = "Modified", RecordId = Guid.NewGuid() }
+            new() { TableName = "AssetComponents", ActionType = "Modified", RecordId = Guid.NewGuid() }
         };
 
         _repositoryMock.Setup(r => r.GetAuditLogsPagedAsync(1, 10, null, null, null))

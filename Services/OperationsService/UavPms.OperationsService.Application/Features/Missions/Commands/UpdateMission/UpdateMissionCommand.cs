@@ -7,8 +7,8 @@ public record UpdateMissionCommand
 (
     Guid Id,
     string Title,
-    string RouteData,
-    Guid AssignedToUserId,
-    string DroneCode,
+    Guid InspectorId,
+    Guid UavId,
+    DateTime? ScheduledStartAt,
     string Status,
     string? Description) : IRequest<MissionDto>;

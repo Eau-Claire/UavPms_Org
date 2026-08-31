@@ -1,6 +1,6 @@
 using MediatR;
-using UavPms.OperationsService.Application.Features.Assets.DTOs;
+using UavPms.OperationsService.Application.Features.AssetComponents.DTOs;
 
-namespace UavPms.OperationsService.Application.Features.Assets.Queries.GetAssetById;
+namespace UavPms.OperationsService.Application.Features.AssetComponents.Queries.GetAssetComponentById;
 
-public record GetAssetByIdQuery(Guid Id) : IRequest<AssetDetailDto>;
+public record GetAssetComponentByIdQuery(Guid Id) : IRequest<AssetComponentDetailDto>;

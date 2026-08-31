@@ -91,10 +91,19 @@ public class ApplicationDbContextAuditTests : IDisposable
     [Fact]
     public async Task SaveChangesAsync_ShouldSerializeGeometryToWkt_WhenGeometryPropertyExists()
     {
+        var shell = new LinearRing(new[]
+        {
+            new Coordinate(105.84, 21.01),
+            new Coordinate(105.86, 21.01),
+            new Coordinate(105.86, 21.03),
+            new Coordinate(105.84, 21.03),
+            new Coordinate(105.84, 21.01)
+        });
+        var polygon = new Polygon(shell) { SRID = 4326 };
         var region = new Region
         {
             RegionName = "Hanoi Substation Region",
-            Geom = new Point(105.85, 21.02) { SRID = 4326 }
+            Geom = new MultiPolygon(new[] { polygon }) { SRID = 4326 }
         };
 
         _context.Regions.Add(region);
@@ -103,7 +112,7 @@ public class ApplicationDbContextAuditTests : IDisposable
         var log = await _context.AuditLogs.FirstOrDefaultAsync(l => l.TableName == "Regions");
         log.Should().NotBeNull();
         log!.ActionType.Should().Be("Added");
-        log.NewValues.Should().Contain("POINT (105.85 21.02)");
+        log.NewValues.Should().Contain("MULTIPOLYGON");
     }
 
     public void Dispose()

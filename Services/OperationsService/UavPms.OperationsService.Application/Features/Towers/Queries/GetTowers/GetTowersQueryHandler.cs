@@ -26,8 +26,8 @@ public class GetTowersQueryHandler : IRequestHandler<GetTowersQuery, PaginatedTo
             t.Id,
             t.LineAssetId,
             t.TowerCode,
-            t.Geom != null ? t.Geom.Coordinate.Y : 0.0,
-            t.Geom != null? t.Geom.Coordinate.X : 0.0
+            t.Geom != null ? t.Geom.Y : 0.0,
+            t.Geom != null ? t.Geom.X : 0.0
             )).ToList();
 
         var totalPages = (int)Math.Ceiling((double)totalCount / request.PageSize);
