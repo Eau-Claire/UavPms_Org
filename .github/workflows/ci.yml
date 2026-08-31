@@ -23,21 +23,23 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "9.0.x"
 
       - name: Restore dependencies
         run: dotnet restore UavPms.sln
 
       - name: Build solution
-        run: dotnet build UavPms.sln \
-          --configuration Release \
-          --no-restore
+        run: |
+          dotnet build UavPms.sln \
+            --configuration Release \
+            --no-restore
 
       - name: Run tests
-        run: dotnet test UavPms.sln \
-          --configuration Release \
-          --no-build \
-          --verbosity normal
+        run: |
+          dotnet test UavPms.sln \
+            --configuration Release \
+            --no-build \
+            --verbosity normal
 
   docker-build:
     name: Validate Docker Build
