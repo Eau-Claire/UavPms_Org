@@ -1,4 +1,3 @@
-using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -11,57 +10,40 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateTable(
-                name: "MissionTargets",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    MissionId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AssetId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Sequence = table.Column<int>(type: "integer", nullable: false),
-                    InspectionStatus = table.Column<string>(type: "text", nullable: false),
-                    Notes = table.Column<string>(type: "text", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    CreatedBy = table.Column<Guid>(type: "uuid", nullable: true),
-                    UpdatedBy = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_MissionTargets", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_MissionTargets_AssetComponents_AssetId",
-                        column: x => x.AssetId,
-                        principalTable: "AssetComponents",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_MissionTargets_Missions_MissionId",
-                        column: x => x.MissionId,
-                        principalTable: "Missions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
+            migrationBuilder.Sql(
+                """
+                CREATE TABLE IF NOT EXISTS public."MissionTargets" (
+                    "Id" uuid NOT NULL DEFAULT gen_random_uuid(),
+                    "MissionId" uuid NOT NULL,
+                    "TowerId" uuid NOT NULL,
+                    "Sequence" integer NOT NULL DEFAULT 0,
+                    "Status" text NOT NULL DEFAULT 'Pending',
+                    "Notes" text,
+                    CONSTRAINT "MissionTargets_pkey" PRIMARY KEY ("Id"),
+                    CONSTRAINT "FK_MissionTargets_Missions_MissionId"
+                        FOREIGN KEY ("MissionId") REFERENCES public."Missions"("Id") ON DELETE CASCADE,
+                    CONSTRAINT "FK_MissionTargets_Towers_TowerId"
+                        FOREIGN KEY ("TowerId") REFERENCES public."Towers"("Id") ON DELETE RESTRICT
+                );
+                """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_MissionTargets_AssetId",
-                table: "MissionTargets",
-                column: "AssetId");
+            migrationBuilder.Sql(
+                """
+                CREATE INDEX IF NOT EXISTS "IX_MissionTargets_TowerId"
+                    ON public."MissionTargets" ("TowerId");
+                """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_MissionTargets_MissionId_AssetId",
-                table: "MissionTargets",
-                columns: new[] { "MissionId", "AssetId" },
-                unique: true);
+            migrationBuilder.Sql(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_MissionTargets_MissionId_TowerId"
+                    ON public."MissionTargets" ("MissionId", "TowerId");
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "MissionTargets");
+            // Supabase already contains this operational table, so rollback should not drop data.
         }
     }
 }

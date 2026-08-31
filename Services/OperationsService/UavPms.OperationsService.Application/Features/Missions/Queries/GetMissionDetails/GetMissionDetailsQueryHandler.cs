@@ -27,12 +27,12 @@ public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQu
             Id = mission.Id,
             MissionCode = mission.MissionCode,
             Title = mission.Title,
-            RouteData = mission.RouteData,
-            AssignedToUserId = mission.AssignedToUserId,
-            AssignedToEmail = mission.AssignedToUser?.Email ?? string.Empty,
-            DroneCode = mission.DroneCode,
+            RouteData = string.Empty,
+            AssignedToUserId = mission.InspectorId,
+            AssignedToEmail = mission.Inspector?.Email ?? string.Empty,
+            DroneCode = mission.Uav?.UavCode ?? string.Empty,
             InspectorId = mission.InspectorId,
-            InspectorEmail = mission.Inspector?.Email ?? mission.AssignedToUser?.Email ?? string.Empty,
+            InspectorEmail = mission.Inspector?.Email ?? string.Empty,
             UavId = mission.UavId,
             ScheduledStartAt = mission.ScheduledStartAt,
             Status = mission.Status.ToString(),
@@ -43,12 +43,12 @@ public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQu
                 .OrderBy(target => target.Sequence)
                 .Select(target => new MissionTargetDto
                 {
-                    AssetId = target.AssetId,
-                    AssetCode = target.Asset?.AssetCode ?? string.Empty,
+                    TowerId = target.TowerId,
+                    TowerCode = target.Tower?.TowerCode ?? string.Empty,
                     Sequence = target.Sequence,
-                    InspectionStatus = target.InspectionStatus,
-                    Latitude = target.Asset?.Tower?.Geom?.Coordinate.Y,
-                    Longitude = target.Asset?.Tower?.Geom?.Coordinate.X
+                    InspectionStatus = target.Status,
+                    Latitude = target.Tower?.Geom?.Coordinate.Y,
+                    Longitude = target.Tower?.Geom?.Coordinate.X
                 })
                 .ToList(),
             CreatedAt = mission.CreatedAt,
