@@ -121,8 +121,10 @@ public class AssetConfiguration : IEntityTypeConfiguration<Asset>
 {
     public void Configure(EntityTypeBuilder<Asset> builder)
     {
-        builder.ToTable("Assets");
+        builder.ToTable("AssetComponents");
         builder.HasKey(e => e.Id);
+        builder.Property(e => e.AssetType).HasColumnName("ComponentType");
+        builder.Property(e => e.AssetCode).HasColumnName("ComponentCode");
         builder.HasIndex(e => e.AssetCode).IsUnique();
 
         builder.HasOne(e => e.Tower)
@@ -268,6 +270,7 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
         builder.HasKey(e => e.Id);
         builder.Property(e => e.BoundingBox).HasColumnType("jsonb");
         builder.Property(e => e.Gps).HasColumnType("jsonb");
+        builder.Property(e => e.AssetId).HasColumnName("ComponentId");
         builder.Property(e => e.AiDetectionId).HasMaxLength(128);
         builder.Property(e => e.ImageUrl).HasMaxLength(2048);
         builder.Property(e => e.CropUrl).HasMaxLength(2048);

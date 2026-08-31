@@ -8,5 +8,11 @@ public record AssetDto(
     string Status,
     double CurrentHealthScore,
     string RiskLevel,
-    DateTime? LastInspectedAt
+    DateTime? LastInspectedAt,
+    int DefectCount,
+    string? TowerCode,
+    Guid? LineId,
+    string? LineName,
+    Guid? RegionId,
+    string? RegionName
 );

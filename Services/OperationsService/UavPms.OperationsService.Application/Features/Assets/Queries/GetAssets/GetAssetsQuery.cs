@@ -9,5 +9,12 @@ public record GetAssetsQuery(
     int PageSize = 10,
     Guid? TowerCode = null,
     string? AssetType = null,
-    string? Status = null
+    string? Status = null,
+    IReadOnlyList<string>? RiskLevels = null,
+    double? MinHealthScore = null,
+    double? MaxHealthScore = null,
+    Guid? RegionId = null,
+    Guid? LineId = null,
+    string? SortBy = null,
+    string? SortOrder = null
 ) : IRequest<PaginatedAssetsResponse>;

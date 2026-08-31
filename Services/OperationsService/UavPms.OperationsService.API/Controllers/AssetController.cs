@@ -10,6 +10,7 @@ using UavPms.OperationsService.Application.Features.Assets.Commands.UpdateAsset;
 using UavPms.OperationsService.Application.Features.Assets.Commands.DeleteAsset;
 using UavPms.OperationsService.Application.Features.Assets.Queries.GetAssets;
 using UavPms.OperationsService.Application.Features.Assets.Queries.GetAssetById;
+using UavPms.OperationsService.Application.Features.Assets.Queries.GetAssetHealthSummary;
 using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
@@ -33,11 +34,37 @@ public class AssetController : ControllerBase
         [FromQuery] int pageSize = 10, 
         [FromQuery] Guid? towerId = null, 
         [FromQuery] string? assetType = null, 
-        [FromQuery] string? status = null)
+        [FromQuery] string? status = null,
+        [FromQuery] string[]? riskLevel = null,
+        [FromQuery] double? minHealthScore = null,
+        [FromQuery] double? maxHealthScore = null,
+        [FromQuery] Guid? regionId = null,
+        [FromQuery] Guid? lineId = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] string? sortOrder = null)
     {
-        var query = new GetAssetsQuery(page, pageSize, towerId, assetType, status);
+        var query = new GetAssetsQuery(
+            page,
+            pageSize,
+            towerId,
+            assetType,
+            status,
+            riskLevel,
+            minHealthScore,
+            maxHealthScore,
+            regionId,
+            lineId,
+            sortBy,
+            sortOrder);
         var result = await _mediator.Send(query);
         return Ok(new ApiResponse(true, "Lấy danh sách thiết bị thành công.", result));
+    }
+
+    [HttpGet("health-summary")]
+    public async Task<IActionResult> GetHealthSummary()
+    {
+        var result = await _mediator.Send(new GetAssetHealthSummaryQuery());
+        return Ok(new ApiResponse(true, "Asset health summary retrieved successfully.", result));
     }
 
     [HttpGet("{id:guid}")]

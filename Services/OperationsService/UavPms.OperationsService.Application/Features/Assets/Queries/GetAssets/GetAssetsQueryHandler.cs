@@ -20,7 +20,18 @@ public class GetAssetsQueryHandler : IRequestHandler<GetAssetsQuery, PaginatedAs
             request.PageSize,
             request.TowerCode,
             request.AssetType,
-            request.Status);
+            request.Status,
+            request.RiskLevels,
+            request.MinHealthScore,
+            request.MaxHealthScore,
+            request.RegionId,
+            request.LineId,
+            request.SortBy,
+            request.SortOrder);
+
+        var defectCounts = await _assetRepository.GetConfirmedDefectCountsAsync(
+            assets.Select(a => a.Id).ToList(),
+            cancellationToken);
         
         var dtos = assets.Select(a => new AssetDto(
             a.Id,
@@ -30,7 +41,13 @@ public class GetAssetsQueryHandler : IRequestHandler<GetAssetsQuery, PaginatedAs
             a.Status,
             a.CurrentHealthScore,
             a.RiskLevel,
-            a.LastInspectedAt
+            a.LastInspectedAt,
+            defectCounts.GetValueOrDefault(a.Id),
+            a.Tower?.TowerCode,
+            a.Tower?.LineAssetId,
+            a.Tower?.TransmissionLine?.LineName,
+            a.Tower?.TransmissionLine?.Substation?.RegionAssetId,
+            a.Tower?.TransmissionLine?.Substation?.Region?.RegionName
         )).ToList();
 
         var totalPages = (int)Math.Ceiling((double)totalCount / request.PageSize);
