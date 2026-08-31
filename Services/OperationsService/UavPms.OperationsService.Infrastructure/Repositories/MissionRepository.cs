@@ -23,7 +23,6 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         var query = _context.Missions
             .Include(m => m.Inspector)
             .Include(m => m.Manager)
-            .Include(m => m.Uav)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -79,7 +78,6 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         return await _context.Missions
             .Include(m => m.Inspector)
             .Include(m => m.Manager)
-            .Include(m => m.Uav)
             .Where(m => m.InspectorId == userId)
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync();
