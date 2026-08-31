@@ -15,6 +15,13 @@ public class InspectionMediaRepository : GenericRepository<InspectionMedia>, IIn
     {
     }
 
+    public async Task<bool> ExistsAsync(Guid id)
+    {
+        return await _context.InspectionMedia
+            .AsNoTracking()
+            .AnyAsync(media => media.Id == id);
+    }
+
     public async Task<InspectionMedia?> GetByIdWithDetailsAsync(Guid id)
     {
         return await _context.InspectionMedia

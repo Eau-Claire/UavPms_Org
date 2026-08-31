@@ -7,6 +7,7 @@ namespace UavPms.OperationsService.Domain.Interfaces.Repositories;
 
 public interface IInspectionMediaRepository : IGenericRepository<InspectionMedia>
 {
+    Task<bool> ExistsAsync(Guid id);
     Task<InspectionMedia?> GetByIdWithDetailsAsync(Guid id);
     Task<IReadOnlyList<InspectionMedia>> GetByMissionIdWithDetailsAsync(Guid missionId);
 }

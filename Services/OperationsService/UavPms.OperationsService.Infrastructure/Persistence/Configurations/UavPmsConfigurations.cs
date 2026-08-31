@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Enums;
 
 namespace UavPms.OperationsService.Infrastructure.Persistence.Configurations;
 
@@ -172,7 +173,9 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.HasIndex(e => e.MissionCode).IsUnique();
         
         builder.Property(e => e.Title).HasMaxLength(256).IsRequired();
-        builder.Property(e => e.Status).HasConversion<string>();
+        builder.Property(e => e.Status).HasConversion(
+            status => status.ToString(),
+            value => ParseMissionStatus(value));
         builder.Ignore(e => e.RouteData);
         builder.Ignore(e => e.AssignedToUserId);
         builder.Ignore(e => e.DroneCode);
@@ -191,6 +194,24 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
             .WithMany(u => u.Missions)
             .HasForeignKey(e => e.UavId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static MissionStatus ParseMissionStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return MissionStatus.Pending;
+        }
+
+        var normalized = value.Trim().Replace(" ", string.Empty);
+        if (normalized.Equals("Assigned", StringComparison.OrdinalIgnoreCase))
+        {
+            return MissionStatus.Pending;
+        }
+
+        return Enum.TryParse<MissionStatus>(normalized, true, out var status)
+            ? status
+            : MissionStatus.Pending;
     }
 }
 
