@@ -36,7 +36,7 @@ public class GetMyMissionsQueryHandler : IRequestHandler<GetMyMissionsQuery, Lis
             RouteData = string.Empty,
             AssignedToUserId = mission.InspectorId,
             AssignedToEmail = mission.Inspector?.Email ?? string.Empty,
-            DroneCode = mission.Uav?.UavCode ?? string.Empty,
+            DroneCode = string.Empty,
             InspectorId = mission.InspectorId,
             InspectorEmail = mission.Inspector?.Email ?? string.Empty,
             UavId = mission.UavId,
