@@ -255,15 +255,17 @@ public class InspectionMediaConfiguration : IEntityTypeConfiguration<InspectionM
     {
         builder.ToTable("InspectionMedia");
         builder.HasKey(e => e.Id);
+        builder.Ignore(e => e.AssetId);
+        builder.Ignore(e => e.Asset);
 
         builder.HasOne(e => e.Mission)
             .WithMany(m => m.InspectionMedias)
             .HasForeignKey(e => e.MissionId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne(e => e.Asset)
-            .WithMany(a => a.InspectionMedias)
-            .HasForeignKey(e => e.AssetId)
+        builder.HasOne(e => e.Tower)
+            .WithMany()
+            .HasForeignKey(e => e.TowerId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
@@ -291,8 +293,6 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
         builder.Property(e => e.AiDetectionId).HasMaxLength(128);
         builder.Property(e => e.ImageUrl).HasMaxLength(2048);
         builder.Property(e => e.CropUrl).HasMaxLength(2048);
-        builder.Property(e => e.TowerId).HasMaxLength(128);
-
         builder.HasOne(e => e.Media)
             .WithMany(m => m.DetectedAnomalies)
             .HasForeignKey(e => e.MediaId)
