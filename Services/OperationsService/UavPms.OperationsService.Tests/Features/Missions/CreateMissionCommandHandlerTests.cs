@@ -57,9 +57,17 @@ public class CreateMissionCommandHandlerTests
         var droneCode = "XXXX";
         var mockUav = new Uav { Id = Guid.NewGuid(), UavCode = droneCode };
         var targetAssetId = Guid.NewGuid();
+        var targetTowerId = Guid.NewGuid();
         var targetAssets = new List<Asset>
         {
-            new() { Id = targetAssetId, AssetCode = "INS-TOW01-01", Status = "Active" }
+            new()
+            {
+                Id = targetAssetId,
+                TowerId = targetTowerId,
+                Tower = new Tower { Id = targetTowerId, TowerCode = "TOW-N1-01" },
+                AssetCode = "INS-TOW01-01",
+                Status = "Active"
+            }
         };
         
         _userRepositoryMock.Setup(x => x.GetByIdWithRolesAsync(assignedUserId))
@@ -93,7 +101,10 @@ public class CreateMissionCommandHandlerTests
         result.AssignedToEmail.Should().Be("inspector@test.com");
         
         _missionRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Mission>()), Times.Once);
-        result.Targets.Should().ContainSingle(target => target.AssetId == targetAssetId && target.Sequence == 1);
+        result.Targets.Should().ContainSingle(target =>
+            target.AssetId == targetAssetId &&
+            target.TowerId == targetTowerId &&
+            target.Sequence == 1);
 
         _unitOfWorkMock.Verify(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
         _eventPublisherMock.Verify(x => x.PublishAsync(It.IsAny<MissionCreatedEvent>()), Times.Once);

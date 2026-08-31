@@ -24,8 +24,10 @@ public class MissionDto
 
 public class MissionTargetDto
 {
-    public Guid AssetId { get; set; }
-    public string AssetCode { get; set; } = string.Empty;
+    public Guid TowerId { get; set; }
+    public string TowerCode { get; set; } = string.Empty;
+    public Guid? AssetId { get; set; }
+    public string? AssetCode { get; set; }
     public int Sequence { get; set; }
     public string InspectionStatus { get; set; } = string.Empty;
     public double? Latitude { get; set; }

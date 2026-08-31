@@ -93,6 +93,18 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             throw new BusinessRuleException("ASSET_NOT_AVAILABLE");
         }
 
+        if (targetAssets.Any(asset => asset.TowerId == Guid.Empty))
+        {
+            throw new BusinessRuleException("ASSET_TOWER_REQUIRED");
+        }
+
+        var targetAssetsById = targetAssets.ToDictionary(asset => asset.Id);
+        var orderedTargetAssets = targetAssetIds.Select(assetId => targetAssetsById[assetId]).ToList();
+        if (orderedTargetAssets.Select(asset => asset.TowerId).Distinct().Count() != orderedTargetAssets.Count)
+        {
+            throw new BusinessRuleException("Duplicate target towers are not allowed.");
+        }
+
         var missionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmss}";
 
         var mission = new Mission
@@ -112,14 +124,13 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             CreatedAt = DateTime.UtcNow,
         };
 
-        mission.MissionTargets = targetAssetIds.Select((assetId, index) => new MissionTarget
+        mission.MissionTargets = orderedTargetAssets.Select((asset, index) => new MissionTarget
         {
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
-            AssetId = assetId,
+            TowerId = asset.TowerId,
             Sequence = index + 1,
-            InspectionStatus = "Pending",
-            CreatedAt = DateTime.UtcNow
+            Status = "Pending"
         }).ToList();
         
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -139,10 +150,10 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             MissionId = mission.Id,
             MissionCode = mission.MissionCode,
             Title = mission.Title,
-            RouteData = mission.RouteData,
-            AssignedToUserId = mission.AssignedToUserId,
+            RouteData = string.Empty,
+            AssignedToUserId = mission.InspectorId,
             ManagerId = mission.ManagerId,
-            DroneCode = mission.DroneCode,
+            DroneCode = uav.UavCode,
             Status = mission.Status.ToString(),
             Description = mission.Description,
             CreatedAt = mission.CreatedAt,
@@ -155,10 +166,10 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             Id = mission.Id,
             MissionCode = mission.MissionCode,
             Title = mission.Title,
-            RouteData = mission.RouteData,
-            AssignedToUserId = mission.AssignedToUserId,
+            RouteData = string.Empty,
+            AssignedToUserId = mission.InspectorId,
             AssignedToEmail = assignedUser.Email,
-            DroneCode = mission.DroneCode,
+            DroneCode = uav.UavCode,
             Status = mission.Status.ToString(),
             Description = mission.Description,
             ManagerId = mission.ManagerId,
@@ -169,13 +180,15 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             UavId = uav.Id,
             Targets = mission.MissionTargets.OrderBy(x => x.Sequence).Select(target =>
             {
-                var asset = targetAssets.First(a => a.Id == target.AssetId);
+                var asset = orderedTargetAssets.First(a => a.TowerId == target.TowerId);
                 return new MissionTargetDto
                 {
-                    AssetId = target.AssetId,
+                    TowerId = target.TowerId,
+                    TowerCode = asset.Tower?.TowerCode ?? string.Empty,
+                    AssetId = asset.Id,
                     AssetCode = asset.AssetCode,
                     Sequence = target.Sequence,
-                    InspectionStatus = target.InspectionStatus,
+                    InspectionStatus = target.Status,
                     Latitude = asset.Tower?.Geom?.Coordinate.Y,
                     Longitude = asset.Tower?.Geom?.Coordinate.X
                 };
