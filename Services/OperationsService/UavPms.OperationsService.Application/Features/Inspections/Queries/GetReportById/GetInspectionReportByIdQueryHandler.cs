@@ -21,6 +21,11 @@ public class GetInspectionReportByIdQueryHandler
         GetInspectionReportByIdQuery request,
         CancellationToken cancellationToken)
     {
+        if (!await _inspectionMediaRepository.ExistsAsync(request.Id))
+        {
+            throw new NotFoundException("InspectionMedia", request.Id);
+        }
+
         var media = await _inspectionMediaRepository.GetByIdWithDetailsAsync(request.Id);
         if (media == null)
         {
