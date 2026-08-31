@@ -5,8 +5,12 @@ namespace UavPms.OperationsService.Application.Features.Missions.Commands.Create
 
 public record CreateMissionCommand(
     string Title,
-    string RouteData,
+    string? RouteData,
     Guid AssignedToUserId,
-    string DroneCode,
+    string? DroneCode,
     string? Status,
-    string? Description) : IRequest<MissionDto>;
+    string? Description,
+    DateTime? ScheduledStartAt = null,
+    Guid? InspectorId = null,
+    Guid? UavId = null,
+    IReadOnlyList<Guid>? TargetAssetIds = null) : IRequest<MissionDto>;

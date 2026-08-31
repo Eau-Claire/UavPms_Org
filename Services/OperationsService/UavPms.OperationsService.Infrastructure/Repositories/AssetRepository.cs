@@ -30,7 +30,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
         return await _context.Assets
             .FromSqlInterpolated($@"
                 SELECT a.* 
-                FROM ""Assets"" a 
+                FROM ""AssetComponents"" a
                 JOIN ""Towers"" t ON a.""TowerId"" = t.""Id"" 
                 WHERE a.""IsDeleted"" = false 
                   AND t.""IsDeleted"" = false 
@@ -39,9 +39,27 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
             .ToListAsync();
     }
 
-    public async Task<(IReadOnlyList<Asset> Items, int TotalCount)> GetAssetsPagedAsync(int page, int pageSize, Guid? towerId, string? assetType, string? status)
+    public async Task<(IReadOnlyList<Asset> Items, int TotalCount)> GetAssetsPagedAsync(
+        int page,
+        int pageSize,
+        Guid? towerId,
+        string? assetType,
+        string? status,
+        IReadOnlyList<string>? riskLevels = null,
+        double? minHealthScore = null,
+        double? maxHealthScore = null,
+        Guid? regionId = null,
+        Guid? lineId = null,
+        string? sortBy = null,
+        string? sortOrder = null)
     {
-        var query = _context.Assets.Where(a => !a.IsDeleted);
+        var query = _context.Assets
+            .Where(a => !a.IsDeleted)
+            .Include(a => a.Tower)
+                .ThenInclude(t => t!.TransmissionLine)
+                    .ThenInclude(l => l!.Substation)
+                        .ThenInclude(s => s!.Region)
+            .AsQueryable();
 
         if (towerId.HasValue)
         {
@@ -58,10 +76,47 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
             query = query.Where(a => a.Status == status);
         }
 
+        if (riskLevels is { Count: > 0 })
+        {
+            var normalizedRiskLevels = riskLevels
+                .Where(riskLevel => !string.IsNullOrWhiteSpace(riskLevel))
+                .Select(riskLevel => riskLevel.Trim().ToLower())
+                .ToList();
+
+            if (normalizedRiskLevels.Count > 0)
+            {
+                query = query.Where(a => normalizedRiskLevels.Contains(a.RiskLevel.ToLower()));
+            }
+        }
+
+        if (minHealthScore.HasValue)
+        {
+            query = query.Where(a => a.CurrentHealthScore >= minHealthScore.Value);
+        }
+
+        if (maxHealthScore.HasValue)
+        {
+            query = query.Where(a => a.CurrentHealthScore <= maxHealthScore.Value);
+        }
+
+        if (lineId.HasValue)
+        {
+            query = query.Where(a => a.Tower != null && a.Tower.LineAssetId == lineId.Value);
+        }
+
+        if (regionId.HasValue)
+        {
+            query = query.Where(a =>
+                a.Tower != null &&
+                a.Tower.TransmissionLine != null &&
+                a.Tower.TransmissionLine.Substation != null &&
+                a.Tower.TransmissionLine.Substation.RegionAssetId == regionId.Value);
+        }
+
         int totalCount = await query.CountAsync();
         
         var items = await query
-            .OrderBy(a => a.AssetCode)
+            .ApplyAssetSort(sortBy, sortOrder)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
@@ -73,8 +128,143 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
     {
         return await _context.Assets
             .Include(a => a.Tower)
-            .Include(a => a.DetectedAnomalies)
-                .ThenInclude(da => da.Category)
             .FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
+    }
+
+    public async Task<IReadOnlyList<Asset>> GetAssetsByIdsAsync(
+        IReadOnlyCollection<Guid> assetIds,
+        CancellationToken cancellationToken)
+    {
+        if (assetIds.Count == 0)
+        {
+            return Array.Empty<Asset>();
+        }
+
+        return await _context.Assets
+            .Include(a => a.Tower)
+            .Where(a => assetIds.Contains(a.Id) && !a.IsDeleted)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<SpatialAssetMatch>> GetAssetsIntersectingAsync(
+        Polygon polygon,
+        CancellationToken cancellationToken)
+    {
+        return await _context.Assets
+            .Where(a => !a.IsDeleted
+                        && (a.Status == "Active" || a.Status == "Operational")
+                        && a.Tower != null
+                        && a.Tower.Geom != null
+                        && a.Tower.Geom.Intersects(polygon))
+            .Select(a => new SpatialAssetMatch
+            {
+                Id = a.Id,
+                AssetCode = a.AssetCode,
+                Name = a.AssetType,
+                Latitude = a.Tower!.Geom!.Coordinate.Y,
+                Longitude = a.Tower.Geom.Coordinate.X,
+                Status = a.Status
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, int>> GetConfirmedDefectCountsAsync(
+        IReadOnlyCollection<Guid> assetIds,
+        CancellationToken cancellationToken)
+    {
+        if (assetIds.Count == 0)
+        {
+            return new Dictionary<Guid, int>();
+        }
+
+        return await _context.DetectedAnomalies
+            .Where(d => d.AssetId.HasValue
+                        && assetIds.Contains(d.AssetId.Value)
+                        && d.ValidationStatus == "Confirmed")
+            .GroupBy(d => d.AssetId!.Value)
+            .Select(g => new { AssetId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.AssetId, g => g.Count, cancellationToken);
+    }
+
+    public async Task<AssetHealthSummary> GetAssetHealthSummaryAsync(CancellationToken cancellationToken)
+    {
+        var assets = await _context.Assets
+            .Where(a => !a.IsDeleted)
+            .Include(a => a.Tower)
+            .ToListAsync(cancellationToken);
+
+        var defectCounts = await GetConfirmedDefectCountsAsync(
+            assets.Select(a => a.Id).ToList(),
+            cancellationToken);
+
+        var totalAssets = assets.Count;
+        var averageHealthScore = totalAssets == 0
+            ? 0
+            : Math.Round(assets.Average(a => a.CurrentHealthScore), 2);
+
+        var criticalAssets = assets
+            .Where(a => IsRiskLevel(a.RiskLevel, "Critical Risk"))
+            .OrderBy(a => a.CurrentHealthScore)
+            .ThenBy(a => a.AssetCode)
+            .Take(10)
+            .Select(a => new AssetHealthSummaryItem(
+                a.Id,
+                a.AssetCode,
+                a.AssetType,
+                a.CurrentHealthScore,
+                a.RiskLevel,
+                defectCounts.GetValueOrDefault(a.Id),
+                a.Tower?.TowerCode))
+            .ToList();
+
+        return new AssetHealthSummary(
+            totalAssets,
+            averageHealthScore,
+            assets.Count(a => IsRiskLevel(a.RiskLevel, "Critical Risk")),
+            assets.Count(a => IsRiskLevel(a.RiskLevel, "High Risk")),
+            assets.Count(a => IsRiskLevel(a.RiskLevel, "Medium Risk")),
+            assets.Count(a => IsRiskLevel(a.RiskLevel, "Low Risk")),
+            criticalAssets);
+    }
+
+    private static bool IsRiskLevel(string value, string expected)
+        => string.Equals(value?.Trim(), expected, StringComparison.OrdinalIgnoreCase);
+}
+
+internal static class AssetSortingExtensions
+{
+    public static IQueryable<Asset> ApplyAssetSort(
+        this IQueryable<Asset> query,
+        string? sortBy,
+        string? sortOrder)
+    {
+        var descending = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+
+        return sortBy?.Trim().ToLowerInvariant() switch
+        {
+            "healthscore" => descending
+                ? query.OrderByDescending(a => a.CurrentHealthScore).ThenBy(a => a.AssetCode)
+                : query.OrderBy(a => a.CurrentHealthScore).ThenBy(a => a.AssetCode),
+            "risklevel" => query.OrderBy(a =>
+                    a.RiskLevel == "Critical Risk" ? 0 :
+                    a.RiskLevel == "High Risk" ? 1 :
+                    a.RiskLevel == "Medium Risk" ? 2 :
+                    a.RiskLevel == "Low Risk" ? 3 : 4)
+                .ThenBy(a => a.CurrentHealthScore)
+                .ThenBy(a => a.AssetCode),
+            "lastinspectedat" => descending
+                ? query.OrderByDescending(a => a.LastInspectedAt).ThenBy(a => a.AssetCode)
+                : query.OrderBy(a => a.LastInspectedAt).ThenBy(a => a.AssetCode),
+            "assetcode" => descending
+                ? query.OrderByDescending(a => a.AssetCode)
+                : query.OrderBy(a => a.AssetCode),
+            _ => query.OrderBy(a =>
+                    a.RiskLevel == "Critical Risk" ? 0 :
+                    a.RiskLevel == "High Risk" ? 1 :
+                    a.RiskLevel == "Medium Risk" ? 2 :
+                    a.RiskLevel == "Low Risk" ? 3 : 4)
+                .ThenBy(a => a.CurrentHealthScore)
+                .ThenBy(a => a.AssetCode)
+        };
     }
 }

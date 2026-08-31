@@ -56,7 +56,13 @@ public class CreateAssetCommandHandler : IRequestHandler<CreateAssetCommand, Ass
             asset.Status,
             asset.CurrentHealthScore,
             asset.RiskLevel,
-            asset.LastInspectedAt
+            asset.LastInspectedAt,
+            0,
+            tower.TowerCode,
+            tower.LineAssetId,
+            tower.TransmissionLine?.LineName,
+            tower.TransmissionLine?.Substation?.RegionAssetId,
+            tower.TransmissionLine?.Substation?.Region?.RegionName
         );
     }
 }

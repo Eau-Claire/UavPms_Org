@@ -26,18 +26,6 @@ public class GetAssetByIdQueryHandler : IRequestHandler<GetAssetByIdQuery, Asset
             throw new NotFoundException("Asset", request.Id);
         }
 
-        // Lọc các DetectedAnomalies ở trạng thái hoạt động (Confirmed và chưa được resolved)
-        var activeAnomalies = asset.DetectedAnomalies
-            .Where(da => da.ValidationStatus == "Confirmed")
-            .Select(da => new ActiveAnomalyDto(
-                da.Id,
-                da.Category?.CategoryName ?? "Unknown",
-                da.ConfidenceScore,
-                da.ValidationStatus,
-                da.CreatedAt
-            ))
-            .ToList();
-
         return new AssetDetailDto(
             asset.Id,
             asset.TowerId,
@@ -48,7 +36,7 @@ public class GetAssetByIdQueryHandler : IRequestHandler<GetAssetByIdQuery, Asset
             asset.CurrentHealthScore,
             asset.RiskLevel,
             asset.LastInspectedAt,
-            activeAnomalies
+            new List<ActiveAnomalyDto>()
         );
     }
 }

@@ -121,8 +121,10 @@ public class AssetConfiguration : IEntityTypeConfiguration<Asset>
 {
     public void Configure(EntityTypeBuilder<Asset> builder)
     {
-        builder.ToTable("Assets");
+        builder.ToTable("AssetComponents");
         builder.HasKey(e => e.Id);
+        builder.Property(e => e.AssetType).HasColumnName("ComponentType");
+        builder.Property(e => e.AssetCode).HasColumnName("ComponentCode");
         builder.HasIndex(e => e.AssetCode).IsUnique();
 
         builder.HasOne(e => e.Tower)
@@ -170,9 +172,11 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.HasIndex(e => e.MissionCode).IsUnique();
         
         builder.Property(e => e.Title).HasMaxLength(256).IsRequired();
-        builder.Property(e => e.RouteData).HasColumnType("text").IsRequired();
-        builder.Property(e => e.DroneCode).HasMaxLength(100).IsRequired();
         builder.Property(e => e.Status).HasConversion<string>();
+        builder.Ignore(e => e.RouteData);
+        builder.Ignore(e => e.AssignedToUserId);
+        builder.Ignore(e => e.DroneCode);
+        builder.Ignore(e => e.AssignedToUser);
 
         builder.HasOne(e => e.Manager)
             .WithMany()
@@ -183,12 +187,6 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
             .WithMany()
             .HasForeignKey(e => e.InspectorId)
             .OnDelete(DeleteBehavior.Restrict);
-        
-        builder.HasOne(e => e.AssignedToUser)
-            .WithMany()
-            .HasForeignKey(e => e.AssignedToUserId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasOne(e => e.Uav)
             .WithMany(u => u.Missions)
             .HasForeignKey(e => e.UavId)
@@ -211,6 +209,27 @@ public class MissionTargetLineConfiguration : IEntityTypeConfiguration<MissionTa
         builder.HasOne(e => e.TransmissionLine)
             .WithMany(l => l.MissionTargetLines)
             .HasForeignKey(e => e.LineAssetId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class MissionTargetConfiguration : IEntityTypeConfiguration<MissionTarget>
+{
+    public void Configure(EntityTypeBuilder<MissionTarget> builder)
+    {
+        builder.ToTable("MissionTargets");
+        builder.HasKey(e => e.Id);
+        builder.HasIndex(e => new { e.MissionId, e.TowerId }).IsUnique();
+        builder.Property(e => e.Status).HasColumnName("Status");
+
+        builder.HasOne(e => e.Mission)
+            .WithMany(m => m.MissionTargets)
+            .HasForeignKey(e => e.MissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.Tower)
+            .WithMany(t => t.MissionTargets)
+            .HasForeignKey(e => e.TowerId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
@@ -268,6 +287,7 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
         builder.HasKey(e => e.Id);
         builder.Property(e => e.BoundingBox).HasColumnType("jsonb");
         builder.Property(e => e.Gps).HasColumnType("jsonb");
+        builder.Property(e => e.AssetId).HasColumnName("ComponentId");
         builder.Property(e => e.AiDetectionId).HasMaxLength(128);
         builder.Property(e => e.ImageUrl).HasMaxLength(2048);
         builder.Property(e => e.CropUrl).HasMaxLength(2048);

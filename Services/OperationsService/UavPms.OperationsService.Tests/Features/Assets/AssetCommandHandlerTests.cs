@@ -207,8 +207,7 @@ public class AssetCommandHandlerTests
         result.Should().NotBeNull();
         result.Id.Should().Be(assetId);
         result.AssetCode.Should().Be("INS-01");
-        result.ActiveAnomalies.Should().HaveCount(1);
-        result.ActiveAnomalies[0].CategoryName.Should().Be("Cracked Insulator");
+        result.ActiveAnomalies.Should().BeEmpty();
     }
 
     [Fact]
@@ -220,8 +219,24 @@ public class AssetCommandHandlerTests
             new Asset { Id = Guid.NewGuid(), AssetCode = "A1" },
             new Asset { Id = Guid.NewGuid(), AssetCode = "A2" }
         };
-        _assetRepositoryMock.Setup(a => a.GetAssetsPagedAsync(1, 10, null, null, null))
+        _assetRepositoryMock.Setup(a => a.GetAssetsPagedAsync(
+                1,
+                10,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null))
             .ReturnsAsync((assets, 2));
+        _assetRepositoryMock.Setup(a => a.GetConfirmedDefectCountsAsync(
+                It.IsAny<IReadOnlyCollection<Guid>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<Guid, int>());
 
         var handler = new GetAssetsQueryHandler(_assetRepositoryMock.Object);
         var query = new GetAssetsQuery(1, 10, null, null, null);

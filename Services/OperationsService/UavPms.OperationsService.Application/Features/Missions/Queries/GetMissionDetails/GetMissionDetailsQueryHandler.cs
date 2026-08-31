@@ -27,14 +27,30 @@ public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQu
             Id = mission.Id,
             MissionCode = mission.MissionCode,
             Title = mission.Title,
-            RouteData = mission.RouteData,
-            AssignedToUserId = mission.AssignedToUserId,
-            AssignedToEmail = mission.AssignedToUser?.Email ?? string.Empty,
-            DroneCode = mission.DroneCode,
+            RouteData = string.Empty,
+            AssignedToUserId = mission.InspectorId,
+            AssignedToEmail = mission.Inspector?.Email ?? string.Empty,
+            DroneCode = mission.Uav?.UavCode ?? string.Empty,
+            InspectorId = mission.InspectorId,
+            InspectorEmail = mission.Inspector?.Email ?? string.Empty,
+            UavId = mission.UavId,
+            ScheduledStartAt = mission.ScheduledStartAt,
             Status = mission.Status.ToString(),
             Description = mission.Description,
             ManagerId = mission.ManagerId,
             ManagerEmail = mission.Manager?.Email ?? string.Empty,
+            Targets = mission.MissionTargets
+                .OrderBy(target => target.Sequence)
+                .Select(target => new MissionTargetDto
+                {
+                    TowerId = target.TowerId,
+                    TowerCode = target.Tower?.TowerCode ?? string.Empty,
+                    Sequence = target.Sequence,
+                    InspectionStatus = target.Status,
+                    Latitude = target.Tower?.Geom?.Coordinate.Y,
+                    Longitude = target.Tower?.Geom?.Coordinate.X
+                })
+                .ToList(),
             CreatedAt = mission.CreatedAt,
             UpdatedAt = mission.UpdatedAt
         };
