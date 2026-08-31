@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using UavPms.IdentityService.Application.Common.Utilities;
 using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 
@@ -33,13 +34,14 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, bool>
             throw new KeyNotFoundException("User not found");
         }
         
-        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email);
+        var normalizedEmail = EmailNormalizer.Normalize(request.Email);
+        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(normalizedEmail);
         if (existingEmail != null && existingEmail.Id != user.Id)
         {
             throw new ArgumentException("Email is already in use");
         }
         
-        user.Email = request.Email;
+        user.Email = normalizedEmail;
         user.FullName = request.FullName;
         user.Phone = request.Phone;
         user.Status = Enum.TryParse<UavPms.IdentityService.Domain.Enums.UserStatus>(request.Status, true, out var parsedStatus) ? parsedStatus : UavPms.IdentityService.Domain.Enums.UserStatus.Active;

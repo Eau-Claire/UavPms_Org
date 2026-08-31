@@ -22,6 +22,16 @@ public class RedisKeyBuilderTests
     }
 
     [Fact]
+    public void OtpKeys_ShouldNormalizeEmailCasingAndWhitespace()
+    {
+        RedisKeyBuilder.OtpKey(OtpPurpose.Login, "  User@Test.COM  ")
+            .Should().Be("otp:login:user@test.com");
+
+        RedisKeyBuilder.AttemptsKey(OtpPurpose.ForgotPassword, "  User@Test.COM  ")
+            .Should().Be("otp:forgotpassword:user@test.com:attempts");
+    }
+
+    [Fact]
     public void VerificationTokenKey_ShouldFormatCorrectly()
     {
         var key = RedisKeyBuilder.VerificationTokenKey("hash123");

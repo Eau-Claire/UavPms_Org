@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using UavPms.IdentityService.Application.Common.Utilities;
 using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
@@ -32,7 +33,8 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
 
     public async Task<Guid> Handle(CreateUserCommand request, CancellationToken cancellationToken)
     {
-        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(request.Email);
+        var normalizedEmail = EmailNormalizer.Normalize(request.Email);
+        var existingEmail = await _userRepository.GetByEmailWithRolesAsync(normalizedEmail);
         if (existingEmail != null)
         {
             throw new ArgumentException("Email already exists.");
@@ -43,7 +45,7 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Email = request.Email,
+            Email = normalizedEmail,
             PasswordHash = _passwordHasher.Hash(request.Password),
             FullName = request.FullName,
             Phone = request.Phone,

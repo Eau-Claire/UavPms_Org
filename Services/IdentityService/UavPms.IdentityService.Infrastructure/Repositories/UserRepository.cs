@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Infrastructure.Persistence;
+using UavPms.IdentityService.Infrastructure.Utilities;
 
 namespace UavPms.IdentityService.Infrastructure.Repositories;
 
@@ -14,10 +15,16 @@ public class UserRepository : GenericRepository<User>, IUserRepository
 
     public async Task<User?> GetByEmailWithRolesAsync(string email)
     {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return null;
+        }
+
+        var normalizedEmail = EmailNormalizer.Normalize(email);
         return await _context.Users
             .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.Email == email);
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
     }
 
     public async Task<List<User>> GetUsersByRoleAsync(string roleName)

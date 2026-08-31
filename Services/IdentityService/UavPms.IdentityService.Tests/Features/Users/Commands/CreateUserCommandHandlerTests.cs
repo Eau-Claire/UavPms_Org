@@ -34,7 +34,7 @@ public class CreateUserCommandHandlerTests
         var command = new CreateUserCommand("existingemail@gmail.com", "pass", "Name", "123",
             new List<string>());
         _userRepositoryMock.Setup(u =>
-            u.GetByEmailWithRolesAsync(command.Email))
+            u.GetByEmailWithRolesAsync("existingemail@gmail.com"))
             .ReturnsAsync(new User());
         
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
@@ -46,10 +46,10 @@ public class CreateUserCommandHandlerTests
     [Fact]
     public async Task Handle_ShouldCreateUser_WhenDataIsValid()
     {
-        var command = new CreateUserCommand("existingemail@gmail.com", "pass", "Name", "123",
+        var command = new CreateUserCommand(" ExistingEmail@GMAIL.COM ", "pass", "Name", "123",
             new List<string>());
         _userRepositoryMock.Setup(u =>
-            u.GetByEmailWithRolesAsync(command.Email))
+            u.GetByEmailWithRolesAsync("existingemail@gmail.com"))
             .ReturnsAsync((User?)null);
         
         var mockRole = new Role {Id = 1, RoleName = "Manager"};
@@ -63,7 +63,7 @@ public class CreateUserCommandHandlerTests
 
         result.Should().NotBeEmpty();
         _userRepositoryMock.Verify(r =>
-            r.AddAsync(It.IsAny<User>()), Times.Once);
+            r.AddAsync(It.Is<User>(u => u.Email == "existingemail@gmail.com")), Times.Once);
         _unitOfWorkMock.Verify(u =>
             u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
