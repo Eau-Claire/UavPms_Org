@@ -17,31 +17,64 @@ jobs:
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
+
     if: github.event.workflow_run.conclusion == 'success'
+
+    environment:
+      name: production
+      url: https://uavpms.ddns.net/swagger/index.html
 
     steps:
       - name: Deploy with SSH
         uses: appleboy/ssh-action@v1.2.0
+
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_COMMIT: ${{ github.event.workflow_run.head_sha }}
           GATEWAY_HEALTH_URL: ${{ secrets.GATEWAY_HEALTH_URL }}
+
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
+
           envs: DEPLOY_PATH,DEPLOY_COMMIT,GATEWAY_HEALTH_URL
+
           script_stop: true
+
           script: |
+            set -e
+
             cd "$DEPLOY_PATH"
+
+            echo "Fetching latest repository state..."
             git fetch origin main
+
+            echo "Checking out main..."
             git checkout main
+
+            echo "Deploying commit: $DEPLOY_COMMIT"
             git reset --hard "$DEPLOY_COMMIT"
+
+            echo "Building containers..."
             docker compose build
+
+            echo "Starting containers..."
             docker compose up -d --remove-orphans
+
+            echo "Cleaning unused Docker images..."
             docker image prune -f
 
             if [ -n "$GATEWAY_HEALTH_URL" ]; then
-              curl --fail --silent --show-error --retry 10 --retry-delay 5 "$GATEWAY_HEALTH_URL"
+              echo "Running health check..."
+              curl \
+                --fail \
+                --silent \
+                --show-error \
+                --retry 10 \
+                --retry-delay 5 \
+                "$GATEWAY_HEALTH_URL"
+
+              echo "Health check passed."
             fi
