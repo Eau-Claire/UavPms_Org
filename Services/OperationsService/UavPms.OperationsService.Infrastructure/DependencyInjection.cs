@@ -8,6 +8,7 @@ using UavPms.OperationsService.Infrastructure.Repositories;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.OperationsService.Application.Common.Options;
+using UavPms.OperationsService.Application.Features.Gis.Infrastructure;
 
 namespace UavPms.OperationsService.Infrastructure;
 
@@ -83,6 +84,7 @@ public static class DependencyInjection
         // Đăng ký các Repositories đặc thù 
         services.AddScoped<ITowerRepository, TowerRepository>();
         services.AddScoped<IAssetRepository, AssetRepository>();
+        services.AddScoped<IGisRepository, GisRepository>();
         services.AddScoped<IAnomalyRepository, AnomalyRepository>();
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
         services.AddScoped<IMissionRepository, MissionRepository>();

@@ -43,12 +43,18 @@ public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQu
                 .OrderBy(target => target.Sequence)
                 .Select(target => new MissionTargetDto
                 {
-                    TowerId = target.TowerId,
-                    TowerCode = target.Tower?.TowerCode ?? string.Empty,
+                    TowerId = target.Asset?.TowerId ?? Guid.Empty,
+                    TowerCode = target.Asset?.Tower?.TowerCode ?? string.Empty,
+                    AssetId = target.AssetId,
+                    AssetCode = target.Asset?.AssetCode,
+                    AssetType = target.Asset?.AssetType,
                     Sequence = target.Sequence,
-                    InspectionStatus = target.Status,
-                    Latitude = target.Tower?.Geom?.Coordinate.Y,
-                    Longitude = target.Tower?.Geom?.Coordinate.X
+                    InspectionStatus = target.InspectionStatus.ToString(),
+                    Latitude = target.Asset?.Location?.Y,
+                    Longitude = target.Asset?.Location?.X,
+                    PowerLineId = target.Asset?.PowerLineId,
+                    PowerLineCode = target.Asset?.PowerLine?.Code,
+                    PowerLineName = target.Asset?.PowerLine?.LineName
                 })
                 .ToList(),
             CreatedAt = mission.CreatedAt,

@@ -29,6 +29,9 @@ public interface IAssetRepository : IGenericRepository<Asset>
         CancellationToken cancellationToken);
     Task<IReadOnlyList<SpatialAssetMatch>> GetAssetsIntersectingAsync(
         NetTopologySuite.Geometries.Polygon polygon,
+        Guid? managementUnitId,
+        Guid? powerLineId,
+        string? assetType,
         CancellationToken cancellationToken);
     Task<AssetHealthSummary> GetAssetHealthSummaryAsync(CancellationToken cancellationToken);
     Task<Asset?> GetAssetWithDetailsAsync(Guid id);
@@ -60,5 +63,6 @@ public sealed class SpatialAssetMatch
     public double Latitude { get; set; }
     public double Longitude { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string AssetType { get; set; } = string.Empty;
     public double? DistanceMeters { get; set; }
 }

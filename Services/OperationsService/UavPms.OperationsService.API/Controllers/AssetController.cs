@@ -79,7 +79,7 @@ public partial class AssetController : ControllerBase
             return BadRequest(new ApiResponse(false, error));
         }
 
-        var result = await _mediator.Send(new SpatialAssetQuery(polygon!));
+        var result = await _mediator.Send(new SpatialAssetQuery(polygon!, request.Filters?.ManagementUnitId, request.Filters?.PowerLineId, request.Filters?.AssetType));
         return Ok(new ApiResponse(true, "Spatial assets retrieved successfully.", result));
     }
 
@@ -146,7 +146,8 @@ public record UpdateAssetRequest(
     string RiskLevel
 );
 
-public record SpatialQueryRequest(GeoJsonGeometry? Geometry);
+public record SpatialQueryRequest(GeoJsonGeometry? Geometry, SpatialQueryFilters? Filters = null);
+public record SpatialQueryFilters(Guid? ManagementUnitId, Guid? PowerLineId, string? AssetType);
 
 public record GeoJsonGeometry(string Type, double[][][] Coordinates);
 
@@ -177,10 +178,9 @@ public partial class AssetController
         }
 
         var coordinates = shell.Select(point => point!).ToList();
-        if (!coordinates[0].Equals2D(coordinates[^1]))
-        {
-            coordinates.Add(new Coordinate(coordinates[0]));
-        }
+        if (!coordinates[0].Equals2D(coordinates[^1])) return false;
+
+        if (coordinates.Any(c => c.X is < -180 or > 180 || c.Y is < -90 or > 90)) return false;
 
         var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
         polygon = geometryFactory.CreatePolygon(coordinates.ToArray());

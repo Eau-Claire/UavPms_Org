@@ -142,27 +142,37 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
 
         return await _context.Assets
             .Include(a => a.Tower)
+            .Include(a => a.PowerLine)
             .Where(a => assetIds.Contains(a.Id) && !a.IsDeleted)
             .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<SpatialAssetMatch>> GetAssetsIntersectingAsync(
         Polygon polygon,
+        Guid? managementUnitId,
+        Guid? powerLineId,
+        string? assetType,
         CancellationToken cancellationToken)
     {
-        return await _context.Assets
+        var query = _context.Assets
             .Where(a => !a.IsDeleted
                         && (a.Status == "Active" || a.Status == "Operational")
-                        && a.Tower != null
-                        && a.Tower.Geom != null
-                        && a.Tower.Geom.Intersects(polygon))
+                        && a.Location != null
+                        // Boundary points are selectable, hence Intersects rather than Within.
+                        && a.Location.Intersects(polygon));
+        if (managementUnitId.HasValue) query = query.Where(a => a.ManagementUnitId == managementUnitId);
+        if (powerLineId.HasValue) query = query.Where(a => a.PowerLineId == powerLineId);
+        if (!string.IsNullOrWhiteSpace(assetType)) query = query.Where(a => a.AssetType == assetType);
+
+        return await query
             .Select(a => new SpatialAssetMatch
             {
                 Id = a.Id,
                 AssetCode = a.AssetCode,
                 Name = a.AssetType,
-                Latitude = a.Tower!.Geom!.Coordinate.Y,
-                Longitude = a.Tower.Geom.Coordinate.X,
+                AssetType = a.AssetType,
+                Latitude = a.Location!.Y,
+                Longitude = a.Location.X,
                 Status = a.Status
             })
             .ToListAsync(cancellationToken);

@@ -93,17 +93,8 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             throw new BusinessRuleException("ASSET_NOT_AVAILABLE");
         }
 
-        if (targetAssets.Any(asset => asset.TowerId == Guid.Empty))
-        {
-            throw new BusinessRuleException("ASSET_TOWER_REQUIRED");
-        }
-
         var targetAssetsById = targetAssets.ToDictionary(asset => asset.Id);
         var orderedTargetAssets = targetAssetIds.Select(assetId => targetAssetsById[assetId]).ToList();
-        if (orderedTargetAssets.Select(asset => asset.TowerId).Distinct().Count() != orderedTargetAssets.Count)
-        {
-            throw new BusinessRuleException("Duplicate target towers are not allowed.");
-        }
 
         var missionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmss}";
 
@@ -128,9 +119,9 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
         {
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
-            TowerId = asset.TowerId,
+            AssetId = asset.Id,
             Sequence = index + 1,
-            Status = "Pending"
+            InspectionStatus = MissionTargetInspectionStatus.Pending
         }).ToList();
         
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -180,17 +171,21 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             UavId = uav.Id,
             Targets = mission.MissionTargets.OrderBy(x => x.Sequence).Select(target =>
             {
-                var asset = orderedTargetAssets.First(a => a.TowerId == target.TowerId);
+                var asset = orderedTargetAssets.First(a => a.Id == target.AssetId);
                 return new MissionTargetDto
                 {
-                    TowerId = target.TowerId,
+                    TowerId = asset.TowerId,
                     TowerCode = asset.Tower?.TowerCode ?? string.Empty,
                     AssetId = asset.Id,
                     AssetCode = asset.AssetCode,
                     Sequence = target.Sequence,
-                    InspectionStatus = target.Status,
-                    Latitude = asset.Tower?.Geom?.Coordinate.Y,
-                    Longitude = asset.Tower?.Geom?.Coordinate.X
+                    AssetType = asset.AssetType,
+                    InspectionStatus = target.InspectionStatus.ToString(),
+                    Latitude = asset.Location?.Y,
+                    Longitude = asset.Location?.X,
+                    PowerLineId = asset.PowerLineId,
+                    PowerLineCode = asset.PowerLine?.Code,
+                    PowerLineName = asset.PowerLine?.LineName
                 };
             }).ToList(),
             CreatedAt = mission.CreatedAt,

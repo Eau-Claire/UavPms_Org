@@ -28,8 +28,12 @@ public class MissionTargetDto
     public string TowerCode { get; set; } = string.Empty;
     public Guid? AssetId { get; set; }
     public string? AssetCode { get; set; }
+    public string? AssetType { get; set; }
     public int Sequence { get; set; }
     public string InspectionStatus { get; set; } = string.Empty;
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+    public Guid? PowerLineId { get; set; }
+    public string? PowerLineCode { get; set; }
+    public string? PowerLineName { get; set; }
 }

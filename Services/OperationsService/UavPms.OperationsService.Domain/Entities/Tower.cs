@@ -11,5 +11,4 @@ public class Tower : BaseEntity
 
     public virtual TransmissionLine? TransmissionLine { get; set; }
     public virtual ICollection<Asset> Assets { get; set; } = new List<Asset>();
-    public virtual ICollection<MissionTarget> MissionTargets { get; set; } = new List<MissionTarget>();
 }
