@@ -27,8 +27,19 @@ public class MissionController : ControllerBase
 
     [HttpPost]
     [Authorize(Roles = UserRoles.AdminAndManager)]
-    public async Task<IActionResult> Create([FromBody] CreateMissionCommand command, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Create([FromBody] CreateMissionRequest request, CancellationToken cancellationToken = default)
     {
+        var command = new CreateMissionCommand(
+            request.Title ?? request.Name ?? string.Empty,
+            request.RouteData,
+            request.AssignedToUserId ?? request.InspectorId ?? Guid.Empty,
+            request.DroneCode,
+            request.Status,
+            request.Description,
+            request.ScheduledStartAt ?? request.ScheduledAt,
+            request.InspectorId,
+            request.UavId ?? request.DroneId,
+            request.TargetAssetIds);
         var result = await _mediator.Send(command, cancellationToken);
         return Ok(new ApiResponse(true, "Mission created successfully", result));
     }
@@ -99,6 +110,21 @@ public class MissionController : ControllerBase
         return Ok(new ApiResponse(true, "Missions retrieved successfully", result));
     }
 }
+
+public record CreateMissionRequest(
+    string? Title,
+    string? Name,
+    string? RouteData,
+    Guid? AssignedToUserId,
+    string? DroneCode,
+    string? Status,
+    string? Description,
+    DateTime? ScheduledStartAt,
+    DateTime? ScheduledAt,
+    Guid? InspectorId,
+    Guid? UavId,
+    Guid? DroneId,
+    IReadOnlyList<Guid>? TargetAssetIds);
 
 public record UpdateMissionRequest(
     string Title,

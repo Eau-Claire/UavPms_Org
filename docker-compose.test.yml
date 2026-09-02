@@ -20,6 +20,9 @@ services:
       TEST_PASSWORD: ${TEST_PASSWORD:-}
       TEST_TOKEN: ${TEST_TOKEN:-}
       DEVICE_TRUST_TOKEN: ${DEVICE_TRUST_TOKEN:-}
+      # Used by deterministic API fixtures to seed and verify PostGIS/MissionTarget data.
+      DB_CONNECTION: ${DB_CONNECTION:-}
+      ALLOW_API_TEST_DB_SEED: ${ALLOW_API_TEST_DB_SEED:-false}
     volumes:
       - ./api-test/data:/app/data:ro
       - api-test-reports:/app/reports

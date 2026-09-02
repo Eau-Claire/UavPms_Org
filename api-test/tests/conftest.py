@@ -135,3 +135,112 @@ def assert_json_response(response: httpx.Response) -> dict[str, Any]:
     body = response.json()
     assert isinstance(body, dict), f"Expected JSON object, got {type(body).__name__}"
     return body
+
+
+def _psycopg_kwargs(connection_string: str) -> dict[str, Any]:
+    aliases = {"host": "host", "port": "port", "database": "dbname", "username": "user", "user id": "user", "password": "password"}
+    values: dict[str, Any] = {}
+    for part in connection_string.split(";"):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        mapped = aliases.get(key.strip().lower())
+        if mapped:
+            values[mapped] = value.strip()
+    return values
+
+
+@pytest.fixture(scope="session")
+def db_connection():
+    connection_string = os.getenv("DB_CONNECTION", "")
+    if not connection_string:
+        pytest.skip("DB_CONNECTION is required for deterministic GIS API tests")
+    if os.getenv("ALLOW_API_TEST_DB_SEED", "").lower() != "true":
+        pytest.skip("Set ALLOW_API_TEST_DB_SEED=true only for a disposable test database")
+    import psycopg
+
+    connection = psycopg.connect(**_psycopg_kwargs(connection_string), autocommit=True)
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+
+@pytest.fixture(scope="session")
+def gis_seed(db_connection, roles_data: dict[str, Any]) -> dict[str, str]:
+    ids = {
+        "region": "71000000-0000-0000-0000-000000000001",
+        "substation": "71000000-0000-0000-0000-000000000002",
+        "line": "71000000-0000-0000-0000-000000000003",
+        "tower": "71000000-0000-0000-0000-000000000004",
+        "active_asset_1": "71000000-0000-0000-0000-000000000011",
+        "active_asset_2": "71000000-0000-0000-0000-000000000012",
+        "inactive_asset": "71000000-0000-0000-0000-000000000013",
+        "outside_asset": "71000000-0000-0000-0000-000000000014",
+        "uav": "71000000-0000-0000-0000-000000000020",
+    }
+    inspector_email = roles_data.get("inspector", {}).get("email", "")
+    if not inspector_email or inspector_email.startswith("replace-with-"):
+        pytest.skip("Configure the inspector account in api-test/data/roles.json")
+
+    with db_connection.cursor() as cursor:
+        cursor.execute('SELECT "Id" FROM "Users" WHERE lower("Email") = lower(%s) AND NOT "IsDeleted"', (inspector_email,))
+        inspector = cursor.fetchone()
+        if inspector is None:
+            pytest.skip(f"Inspector seed user does not exist: {inspector_email}")
+        ids["inspector"] = str(inspector[0])
+        cursor.execute(
+            """
+            INSERT INTO "Regions" ("Id","RegionName","Code","Type","Geom","CreatedAt","IsDeleted")
+            VALUES (%s,'GIS API Test Region','GIS-TEST-REGION','District',ST_GeomFromText('POLYGON((106.79 10.83,106.82 10.83,106.82 10.86,106.79 10.86,106.79 10.83))',4326),now(),false)
+            ON CONFLICT ("Id") DO UPDATE SET "Geom"=EXCLUDED."Geom","IsDeleted"=false
+            """, (ids["region"],))
+        cursor.execute(
+            """
+            INSERT INTO "Substations" ("Id","RegionAssetId","SubstationName","VoltageLevel","Geom","CreatedAt","IsDeleted")
+            VALUES (%s,%s,'GIS API Test Substation','110kV',ST_SetSRID(ST_Point(106.8,10.84),4326),now(),false)
+            ON CONFLICT ("Id") DO UPDATE SET "IsDeleted"=false
+            """, (ids["substation"], ids["region"]))
+        cursor.execute(
+            """
+            INSERT INTO "TransmissionLines" ("Id","SubstationAssetId","LineName","Code","VoltageLevel","Status","IsCriticalEdge","Geom","CreatedAt","IsDeleted")
+            VALUES (%s,%s,'GIS API Test Line','GIS-TEST-LINE','110kV','Active',false,ST_GeomFromText('LINESTRING(106.80 10.84,106.81 10.85)',4326),now(),false)
+            ON CONFLICT ("Id") DO UPDATE SET "Status"='Active',"IsDeleted"=false
+            """, (ids["line"], ids["substation"]))
+        cursor.execute(
+            """
+            INSERT INTO "Towers" ("Id","LineAssetId","TowerCode","Geom","CreatedAt","IsDeleted")
+            VALUES (%s,%s,'GIS-TEST-TOWER',ST_SetSRID(ST_Point(106.805,10.845),4326),now(),false)
+            ON CONFLICT ("Id") DO UPDATE SET "IsDeleted"=false
+            """,
+            (ids["tower"], ids["line"]),
+        )
+        assets = [
+            (ids["active_asset_1"], "GIS-ASSET-A", "Active", 106.804, 10.844),
+            (ids["active_asset_2"], "GIS-ASSET-B", "Operational", 106.808, 10.848),
+            (ids["inactive_asset"], "GIS-ASSET-INACTIVE", "Inactive", 106.806, 10.846),
+            (ids["outside_asset"], "GIS-ASSET-OUTSIDE", "Active", 107.0, 11.0),
+        ]
+        for asset_id, code, status, longitude, latitude in assets:
+            cursor.execute(
+                """
+                INSERT INTO "AssetComponents" ("Id","TowerId","ComponentType","ComponentCode","Status","CurrentHealthScore","RiskLevel","PowerLineId","Location","CreatedAt","IsDeleted")
+                VALUES (%s,%s,'Insulator',%s,%s,100,'Low Risk',%s,ST_SetSRID(ST_Point(%s,%s),4326),now(),false)
+                ON CONFLICT ("Id") DO UPDATE SET "Status"=EXCLUDED."Status","Location"=EXCLUDED."Location","PowerLineId"=EXCLUDED."PowerLineId","IsDeleted"=false
+                """,
+                (asset_id, ids["tower"], code, status, ids["line"], longitude, latitude),
+            )
+        cursor.execute(
+            """
+            INSERT INTO "UAVs" ("Id","UavCode","Model","Status","BatteryLevel","CreatedAt","IsDeleted")
+            VALUES (%s,'GIS-TEST-UAV','API Test','Idle',100,now(),false)
+            ON CONFLICT ("Id") DO UPDATE SET "Status"='Idle',"BatteryLevel"=100,"IsDeleted"=false
+            """,
+            (ids["uav"],),
+        )
+
+    yield ids
+
+    with db_connection.cursor() as cursor:
+        cursor.execute('DELETE FROM "MissionTargets" WHERE "MissionId" IN (SELECT "Id" FROM "Missions" WHERE "Title" LIKE \'GIS API Test %%\')')
+        cursor.execute('DELETE FROM "Missions" WHERE "Title" LIKE \'GIS API Test %%\'')

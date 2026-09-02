@@ -155,6 +155,19 @@ $env:TARGET_API="http://localhost:5194"
 pytest tests -q
 ```
 
+GIS and mission-target API tests require the same non-production PostgreSQL/PostGIS database used by the backend. They seed fixed UUIDs and coordinates, then remove missions created with the `GIS API Test` prefix.
+
+```powershell
+cd api-test
+$env:TARGET_API="http://localhost:5194"
+$env:AUTH_API="http://localhost:5194"
+$env:DB_CONNECTION="Host=localhost;Port=5432;Database=uavpms_test;Username=postgres;Password=postgres"
+$env:ALLOW_API_TEST_DB_SEED="true"
+pytest tests/test_asset.py tests/test_mission.py -q
+```
+
+When using Compose, `docker-compose.test.yml` forwards `DB_CONNECTION` and `ALLOW_API_TEST_DB_SEED` to the API test container. The seed fixture remains skipped unless the opt-in flag is exactly `true`. The connection must point to a migrated disposable test database with PostGIS enabled; never run the deterministic seed fixtures against production.
+
 ## Test Data
 
 - `auth.json`: default role and negative auth payloads.

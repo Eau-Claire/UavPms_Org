@@ -5,9 +5,13 @@ public record SpatialAssetQueryResponse(
     IReadOnlyList<SpatialAssetDto> Assets);
 
 public record SpatialAssetDto(
-    Guid Id,
+    Guid AssetId,
     string AssetCode,
     string Name,
     double Latitude,
     double Longitude,
-    string Status);
+    string Status)
+{
+    // Preserve the original response property while the GIS client migrates to assetId.
+    public Guid Id => AssetId;
+}
