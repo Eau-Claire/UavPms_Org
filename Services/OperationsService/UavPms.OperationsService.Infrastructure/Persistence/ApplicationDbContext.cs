@@ -20,6 +20,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<Region> Regions => Set<Region>();
     public DbSet<Substation> Substations => Set<Substation>();
     public DbSet<TransmissionLine> TransmissionLines => Set<TransmissionLine>();
+    public DbSet<ManagementUnit> ManagementUnits => Set<ManagementUnit>();
+    public DbSet<UavPms.OperationsService.Domain.Entities.LineSegment> LineSegments => Set<UavPms.OperationsService.Domain.Entities.LineSegment>();
     public DbSet<Tower> Towers => Set<Tower>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<AssetHealthHistory> AssetHealthHistories => Set<AssetHealthHistory>();

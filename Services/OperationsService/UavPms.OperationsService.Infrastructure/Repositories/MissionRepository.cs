@@ -92,7 +92,11 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
             .Include(m => m.Manager)
             .Include(m => m.Uav)
             .Include(m => m.MissionTargets)
-                .ThenInclude(t => t.Tower)
+                .ThenInclude(t => t.Asset)
+                    .ThenInclude(a => a!.PowerLine)
+            .Include(m => m.MissionTargets)
+                .ThenInclude(t => t.Asset)
+                    .ThenInclude(a => a!.Tower)
             .FirstOrDefaultAsync(m => m.Id == id);
     }
 }

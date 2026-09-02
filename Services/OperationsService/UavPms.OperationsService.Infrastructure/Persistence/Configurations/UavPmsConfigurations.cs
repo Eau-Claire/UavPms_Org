@@ -63,8 +63,10 @@ public class RegionConfiguration : IEntityTypeConfiguration<Region>
     {
         builder.ToTable("Regions");
         builder.HasKey(e => e.Id);
-        builder.Property(e => e.Geom).HasColumnType("geometry");
+        builder.Property(e => e.Geom).HasColumnType("geometry(Geometry,4326)");
         builder.HasIndex(e => e.Geom).HasMethod("gist");
+        builder.HasIndex(e => e.Code).IsUnique();
+        builder.HasOne(e => e.Parent).WithMany(e => e.Children).HasForeignKey(e => e.ParentId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -90,9 +92,12 @@ public class TransmissionLineConfiguration : IEntityTypeConfiguration<Transmissi
     {
         builder.ToTable("TransmissionLines");
         builder.HasKey(e => e.Id);
-        builder.Property(e => e.Geom).HasColumnType("geometry");
+        builder.Property(e => e.Geom).HasColumnType("geometry(Geometry,4326)");
         builder.HasIndex(e => e.Geom).HasMethod("gist");
         builder.HasIndex(e => e.LineName).IsUnique();
+        builder.HasIndex(e => e.Code).IsUnique();
+        builder.HasIndex(e => e.ManagementUnitId);
+        builder.HasOne(e => e.ManagementUnit).WithMany(e => e.PowerLines).HasForeignKey(e => e.ManagementUnitId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Substation)
             .WithMany(s => s.TransmissionLines)
@@ -127,11 +132,17 @@ public class AssetConfiguration : IEntityTypeConfiguration<Asset>
         builder.Property(e => e.AssetType).HasColumnName("ComponentType");
         builder.Property(e => e.AssetCode).HasColumnName("ComponentCode");
         builder.HasIndex(e => e.AssetCode).IsUnique();
+        builder.Property(e => e.Location).HasColumnType("geometry(Point,4326)");
+        builder.HasIndex(e => e.Location).HasMethod("gist");
+        builder.HasIndex(e => e.PowerLineId);
+        builder.HasIndex(e => e.ManagementUnitId);
 
         builder.HasOne(e => e.Tower)
             .WithMany(t => t.Assets)
             .HasForeignKey(e => e.TowerId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.PowerLine).WithMany(e => e.Assets).HasForeignKey(e => e.PowerLineId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.ManagementUnit).WithMany(e => e.Assets).HasForeignKey(e => e.ManagementUnitId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -240,18 +251,44 @@ public class MissionTargetConfiguration : IEntityTypeConfiguration<MissionTarget
     {
         builder.ToTable("MissionTargets");
         builder.HasKey(e => e.Id);
-        builder.HasIndex(e => new { e.MissionId, e.TowerId }).IsUnique();
-        builder.Property(e => e.Status).HasColumnName("Status");
+        builder.HasIndex(e => new { e.MissionId, e.AssetId }).IsUnique();
+        builder.Property(e => e.InspectionStatus).HasConversion<string>();
 
         builder.HasOne(e => e.Mission)
             .WithMany(m => m.MissionTargets)
             .HasForeignKey(e => e.MissionId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(e => e.Tower)
+        builder.HasOne(e => e.Asset)
             .WithMany(t => t.MissionTargets)
-            .HasForeignKey(e => e.TowerId)
+            .HasForeignKey(e => e.AssetId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class ManagementUnitConfiguration : IEntityTypeConfiguration<ManagementUnit>
+{
+    public void Configure(EntityTypeBuilder<ManagementUnit> builder)
+    {
+        builder.ToTable("ManagementUnits");
+        builder.HasKey(e => e.Id);
+        builder.HasIndex(e => e.Code).IsUnique();
+        builder.HasOne(e => e.Parent).WithMany(e => e.Children).HasForeignKey(e => e.ParentId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class LineSegmentConfiguration : IEntityTypeConfiguration<LineSegment>
+{
+    public void Configure(EntityTypeBuilder<LineSegment> builder)
+    {
+        builder.ToTable("LineSegments");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Geometry).HasColumnType("geometry(Geometry,4326)");
+        builder.HasIndex(e => e.Geometry).HasMethod("gist");
+        builder.HasIndex(e => e.PowerLineId);
+        builder.HasOne(e => e.PowerLine).WithMany(e => e.LineSegments).HasForeignKey(e => e.PowerLineId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(e => e.FromAsset).WithMany().HasForeignKey(e => e.FromAssetId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.ToAsset).WithMany().HasForeignKey(e => e.ToAssetId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -547,5 +584,3 @@ public class AIAnalysisRequestConfiguration : IEntityTypeConfiguration<AIAnalysi
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
-
-

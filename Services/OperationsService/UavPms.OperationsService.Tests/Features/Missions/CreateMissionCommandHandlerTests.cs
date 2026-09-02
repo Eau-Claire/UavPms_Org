@@ -111,6 +111,52 @@ public class CreateMissionCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ShouldRejectMissionWithoutTargets()
+    {
+        var command = new CreateMissionCommand("Mission", null, Guid.NewGuid(), "UAV-1", null, null);
+        await _handler.Invoking(x => x.Handle(command, CancellationToken.None))
+            .Should().ThrowAsync<BusinessRuleException>().WithMessage("MISSION_TARGET_REQUIRED");
+    }
+
+    [Fact]
+    public async Task Handle_ShouldRejectDuplicateTargets()
+    {
+        var id = Guid.NewGuid();
+        var command = new CreateMissionCommand("Mission", null, Guid.NewGuid(), "UAV-1", null, null, TargetAssetIds: new[] { id, id });
+        await _handler.Invoking(x => x.Handle(command, CancellationToken.None))
+            .Should().ThrowAsync<BusinessRuleException>();
+    }
+
+    [Fact]
+    public async Task Handle_ShouldRejectMissingAsset()
+    {
+        var (command, user, uav) = ValidDependencies();
+        _userRepositoryMock.Setup(x => x.GetByIdWithRolesAsync(command.AssignedToUserId)).ReturnsAsync(user);
+        _uavRepositoryMock.Setup(x => x.GetByUavCodeAsync(command.DroneCode!)).ReturnsAsync(uav);
+        _assetRepositoryMock.Setup(x => x.GetAssetsByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<Asset>());
+        await _handler.Invoking(x => x.Handle(command, CancellationToken.None)).Should().ThrowAsync<NotFoundException>();
+    }
+
+    [Fact]
+    public async Task Handle_ShouldRejectInactiveAsset()
+    {
+        var (command, user, uav) = ValidDependencies();
+        _userRepositoryMock.Setup(x => x.GetByIdWithRolesAsync(command.AssignedToUserId)).ReturnsAsync(user);
+        _uavRepositoryMock.Setup(x => x.GetByUavCodeAsync(command.DroneCode!)).ReturnsAsync(uav);
+        _assetRepositoryMock.Setup(x => x.GetAssetsByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { new Asset { Id = command.TargetAssetIds![0], Status = "Inactive" } });
+        await _handler.Invoking(x => x.Handle(command, CancellationToken.None)).Should().ThrowAsync<BusinessRuleException>().WithMessage("ASSET_NOT_AVAILABLE");
+    }
+
+    private static (CreateMissionCommand Command, User User, Uav Uav) ValidDependencies()
+    {
+        var inspectorId = Guid.NewGuid();
+        var user = new User { Id = inspectorId, UserRoles = new[] { new UserRole { Role = new Role { RoleName = "Inspector" } } } };
+        var uav = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-1" };
+        return (new CreateMissionCommand("Mission", null, inspectorId, uav.UavCode, null, null, TargetAssetIds: new[] { Guid.NewGuid() }), user, uav);
+    }
+
+    [Fact]
     public async Task Handle_ShouldThrowNotFound_WhenDroneCodeDoesNotExist()
     {
         var assignedUserId = Guid.NewGuid();
