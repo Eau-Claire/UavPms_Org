@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UavPms.Shared.Contracts.Events;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
@@ -25,6 +26,7 @@ public class ProcessAiAnalysisResultCommandHandler
     private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
     private readonly ILogger<ProcessAiAnalysisResultCommandHandler> _logger;
 
+    [ActivatorUtilitiesConstructor]
     public ProcessAiAnalysisResultCommandHandler(
         IGenericRepository<AIAnalysisRequest> aiRequestRepo,
         IInspectionMediaRepository mediaRepo,
