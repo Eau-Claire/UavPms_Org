@@ -103,4 +103,7 @@ jobs:
             echo "========== OPERATIONS LOGS =========="
             docker compose logs --tail=300 operationsservice 2>&1 || true
 
+            echo "========== NOTIFICATION LOGS =========="
+            docker compose logs --tail=300 notificationservice 2>&1 || true
+
             exit 0

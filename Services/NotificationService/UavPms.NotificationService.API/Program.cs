@@ -210,9 +210,17 @@ if (!string.IsNullOrWhiteSpace(normalizedHangfireConnection))
 
 if (!string.IsNullOrWhiteSpace(normalizedHangfireConnection))
 {
-    RecurringJob.AddOrUpdate<CleanupJob>("auto-cleanup-job", job => job.Execute(), Cron.Weekly);
-    RecurringJob.AddOrUpdate<DailySummaryJob>("daily-summary-job", job => job.Execute(), Cron.Daily);
-    RecurringJob.AddOrUpdate<PushNotificationsJob>("push-notifications-sync", job => job.Execute(), Cron.Minutely);
+    try
+    {
+        RecurringJob.AddOrUpdate<CleanupJob>("auto-cleanup-job", job => job.Execute(), Cron.Weekly);
+        RecurringJob.AddOrUpdate<DailySummaryJob>("daily-summary-job", job => job.Execute(), Cron.Daily);
+        RecurringJob.AddOrUpdate<PushNotificationsJob>("push-notifications-sync", job => job.Execute(), Cron.Minutely);
+    }
+    catch (Exception exception)
+    {
+        app.Logger.LogError(exception,
+            "Hangfire recurring-job registration failed. The API will remain available while Hangfire retries storage access.");
+    }
 }
 
 app.UseHttpsRedirection();
