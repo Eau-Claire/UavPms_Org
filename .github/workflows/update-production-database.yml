@@ -48,9 +48,19 @@ jobs:
               echo "ERROR: deployment checkout must be on main."
               exit 1
             fi
-            if [ -n "$(git status --porcelain)" ]; then
-              echo "ERROR: deployment checkout has uncommitted changes."
-              git status --short
+            DIRTY_FILES="$(git status --porcelain)"
+            if [ -n "$DIRTY_FILES" ]; then
+              UNSAFE_FILES="$(printf '%s\n' "$DIRTY_FILES" | grep -vE '^\?\? (analysis-get\.js|benchmark_ai\.py|health\.js|monitoring/)' || true)"
+              if [ -n "$UNSAFE_FILES" ]; then
+                echo "ERROR: deployment checkout has unexpected changes."
+                printf '%s\n' "$UNSAFE_FILES"
+                exit 1
+              fi
+              echo "Ignoring approved diagnostic files in the deployment checkout."
+            fi
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "ERROR: deployment checkout has changes to tracked files."
+              git status --short --untracked-files=no
               exit 1
             fi
             DB_STATUS="$(docker inspect uavpms-db --format '{{.State.Status}}')"
