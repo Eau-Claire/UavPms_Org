@@ -16,6 +16,8 @@ The application currently shares one PostgreSQL database among Operations, AI In
 
 `TowerHealthHistories` and `session` are legacy candidates only. Do not drop either until its owner is verified, a backup is taken, and dependent external services are checked. `TowerHealthHistories` currently has a foreign key to `Towers`.
 
+OperationsService is the sole EF migration owner. AI Inspection, Identity, and Notification now ignore `RunMigrations` and log a warning if it is set, preventing multiple services from racing to alter the shared schema.
+
 ## Confirmed schema drift
 
 Production has schema changes that are not recorded by the OperationsService EF migration history. Two confirmed compatibility gaps are:

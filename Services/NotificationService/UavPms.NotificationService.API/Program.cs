@@ -6,7 +6,6 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
@@ -177,13 +176,7 @@ app.UseExceptionHandler();
 
 if (app.Configuration.GetValue<bool>("RunMigrations"))
 {
-    using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    dbContext.Database.Migrate();
-}
-else
-{
-    Log.Information("Database migration and seeding skipped. Set RunMigrations=true to enable it for a dedicated migration run.");
+    Log.Warning("RunMigrations is ignored by NotificationService. OperationsService is the only migration owner for the shared database.");
 }
 
 if (!string.IsNullOrWhiteSpace(normalizedHangfireConnection))

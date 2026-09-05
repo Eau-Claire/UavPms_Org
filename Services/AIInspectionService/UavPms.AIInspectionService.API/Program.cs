@@ -3,7 +3,6 @@ using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -121,13 +120,7 @@ app.UseExceptionHandler();
 
 if (app.Configuration.GetValue<bool>("RunMigrations"))
 {
-    using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    dbContext.Database.Migrate();
-}
-else
-{
-    Log.Information("Database migration and seeding skipped. Set RunMigrations=true to enable it for a dedicated migration run.");
+    Log.Warning("RunMigrations is ignored by AIInspectionService. OperationsService is the only migration owner for the shared database.");
 }
 
 // Keep service-level OpenAPI available behind the gateway in Docker as well.
