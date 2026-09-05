@@ -34,6 +34,12 @@ jobs:
             echo "========== ASSETS API DIAGNOSTICS =========="
             DB_STATUS="$(docker inspect uavpms-db --format '{{.State.Status}}')"
             if [ "$DB_STATUS" != "running" ]; then echo "ERROR: uavpms-db is not running."; exit 1; fi
+            echo "========== ALL APPLICATION TABLES =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT c.relname AS table_name, pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size, c.reltuples::bigint AS estimated_rows FROM pg_class AS c JOIN pg_namespace AS n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY c.relname;"
+            echo "========== APPLICATION FOREIGN KEYS =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT conrelid::regclass AS source_table, conname AS constraint_name, confrelid::regclass AS target_table FROM pg_constraint WHERE contype = 'f' AND connamespace = 'public'::regnamespace ORDER BY 1, 2;"
+            echo "========== EF MIGRATION HISTORY =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId";'
             echo "========== REQUIRED TABLES =========="
             docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('AssetComponents', 'Towers', 'TransmissionLines', 'Substations', 'Regions', 'DetectedAnomalies') ORDER BY table_name;"
             echo "========== REQUIRED COLUMNS =========="
