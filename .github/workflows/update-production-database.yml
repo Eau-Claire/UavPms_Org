@@ -69,6 +69,13 @@ jobs:
               echo "ERROR: uavpms-db is not running."
               exit 1
             fi
+            ASSET_COMPONENTS_EXISTS="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'AssetComponents');")"
+            GIS_MIGRATION_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20260902033000_AddGisAssetSelection');")"
+            if [ "$ASSET_COMPONENTS_EXISTS" = "t" ] && [ "$GIS_MIGRATION_APPLIED" != "t" ]; then
+              echo "ERROR: AssetComponents exists but the GIS migration is absent from history."
+              echo "Run 'Repair Production AssetComponents Schema' before planning a reconciliation migration."
+              exit 1
+            fi
             echo "Applying pending OperationsService migrations..."
             RUN_MIGRATIONS=true docker compose up -d --build --force-recreate operationsservice
             echo "Waiting for OperationsService startup..."

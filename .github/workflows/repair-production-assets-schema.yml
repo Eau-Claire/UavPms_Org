@@ -1,0 +1,53 @@
+name: Repair Production AssetComponents Schema
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type REPAIR_ASSET_COMPONENTS_SCHEMA to add only missing AssetComponents GIS columns and indexes.
+        required: true
+        type: string
+
+concurrency:
+  group: production-asset-components-schema-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Repair AssetComponents schema
+    if: ${{ inputs.confirmation == 'REPAIR_ASSET_COMPONENTS_SCHEMA' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+
+    steps:
+      - name: Repair AssetComponents over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "========== ASSET SCHEMA REPAIR PREFLIGHT =========="
+            DB_STATUS="$(docker inspect uavpms-db --format '{{.State.Status}}')"
+            if [ "$DB_STATUS" != "running" ]; then echo "ERROR: uavpms-db is not running."; exit 1; fi
+            ASSET_COMPONENTS_TABLE="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT to_regclass('public.\"AssetComponents\"');")"
+            if [ "$ASSET_COMPONENTS_TABLE" != '"AssetComponents"' ]; then echo "ERROR: public.AssetComponents does not exist; refusing to create a table."; exit 1; fi
+            echo "Adding missing AssetComponents GIS columns..."
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'ALTER TABLE public."AssetComponents" ADD COLUMN IF NOT EXISTS "PowerLineId" uuid NULL;'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'ALTER TABLE public."AssetComponents" ADD COLUMN IF NOT EXISTS "ManagementUnitId" uuid NULL;'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'ALTER TABLE public."AssetComponents" ADD COLUMN IF NOT EXISTS "Location" geometry(Point,4326) NULL;'
+            echo "Backfilling AssetComponents GIS values from Towers..."
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "UPDATE public.\"AssetComponents\" AS a SET \"PowerLineId\" = COALESCE(a.\"PowerLineId\", t.\"LineAssetId\"), \"Location\" = COALESCE(a.\"Location\", CASE WHEN GeometryType(t.\"Geom\") = 'POINT' THEN ST_SetSRID(ST_Point(ST_X(t.\"Geom\"), ST_Y(t.\"Geom\")), 4326) END) FROM public.\"Towers\" AS t WHERE a.\"TowerId\" = t.\"Id\" AND (a.\"PowerLineId\" IS NULL OR a.\"Location\" IS NULL);"
+            echo "Ensuring AssetComponents GIS indexes..."
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'CREATE INDEX IF NOT EXISTS "IX_AssetComponents_PowerLineId" ON public."AssetComponents" ("PowerLineId");'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'CREATE INDEX IF NOT EXISTS "IX_AssetComponents_ManagementUnitId" ON public."AssetComponents" ("ManagementUnitId");'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'CREATE INDEX IF NOT EXISTS "IX_AssetComponents_Location" ON public."AssetComponents" USING gist ("Location");'
+            echo "========== ASSET SCHEMA VERIFICATION =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT column_name, data_type, udt_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'AssetComponents' AND column_name IN ('PowerLineId', 'ManagementUnitId', 'Location') ORDER BY column_name;"
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'AssetComponents' AND indexname IN ('IX_AssetComponents_PowerLineId', 'IX_AssetComponents_ManagementUnitId', 'IX_AssetComponents_Location') ORDER BY indexname;"
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'SELECT "Id", "PowerLineId", "ManagementUnitId", "Location" FROM public."AssetComponents" ORDER BY "Id" LIMIT 1;'
+            echo "AssetComponents schema repair completed successfully."
