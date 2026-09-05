@@ -54,6 +54,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
         string? sortOrder = null)
     {
         var query = _context.Assets
+            .AsNoTracking()
             .Where(a => !a.IsDeleted)
             .Include(a => a.Tower)
                 .ThenInclude(t => t!.TransmissionLine)
@@ -85,7 +86,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
 
             if (normalizedRiskLevels.Count > 0)
             {
-                query = query.Where(a => normalizedRiskLevels.Contains(a.RiskLevel.ToLower()));
+                query = query.Where(a => a.RiskLevel != null && normalizedRiskLevels.Contains(a.RiskLevel.ToLower()));
             }
         }
 
@@ -127,6 +128,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
     public async Task<Asset?> GetAssetWithDetailsAsync(Guid id)
     {
         return await _context.Assets
+            .AsNoTracking()
             .Include(a => a.Tower)
             .FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
     }
@@ -199,6 +201,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
     public async Task<AssetHealthSummary> GetAssetHealthSummaryAsync(CancellationToken cancellationToken)
     {
         var assets = await _context.Assets
+            .AsNoTracking()
             .Where(a => !a.IsDeleted)
             .Include(a => a.Tower)
             .ToListAsync(cancellationToken);
@@ -255,13 +258,21 @@ internal static class AssetSortingExtensions
             "healthscore" => descending
                 ? query.OrderByDescending(a => a.CurrentHealthScore).ThenBy(a => a.AssetCode)
                 : query.OrderBy(a => a.CurrentHealthScore).ThenBy(a => a.AssetCode),
-            "risklevel" => query.OrderBy(a =>
-                    a.RiskLevel == "Critical Risk" ? 0 :
-                    a.RiskLevel == "High Risk" ? 1 :
-                    a.RiskLevel == "Medium Risk" ? 2 :
-                    a.RiskLevel == "Low Risk" ? 3 : 4)
-                .ThenBy(a => a.CurrentHealthScore)
-                .ThenBy(a => a.AssetCode),
+            "risklevel" => descending
+                ? query.OrderByDescending(a =>
+                        a.RiskLevel == "Critical Risk" ? 0 :
+                        a.RiskLevel == "High Risk" ? 1 :
+                        a.RiskLevel == "Medium Risk" ? 2 :
+                        a.RiskLevel == "Low Risk" ? 3 : 4)
+                    .ThenByDescending(a => a.CurrentHealthScore)
+                    .ThenBy(a => a.AssetCode)
+                : query.OrderBy(a =>
+                        a.RiskLevel == "Critical Risk" ? 0 :
+                        a.RiskLevel == "High Risk" ? 1 :
+                        a.RiskLevel == "Medium Risk" ? 2 :
+                        a.RiskLevel == "Low Risk" ? 3 : 4)
+                    .ThenBy(a => a.CurrentHealthScore)
+                    .ThenBy(a => a.AssetCode),
             "lastinspectedat" => descending
                 ? query.OrderByDescending(a => a.LastInspectedAt).ThenBy(a => a.AssetCode)
                 : query.OrderBy(a => a.LastInspectedAt).ThenBy(a => a.AssetCode),
