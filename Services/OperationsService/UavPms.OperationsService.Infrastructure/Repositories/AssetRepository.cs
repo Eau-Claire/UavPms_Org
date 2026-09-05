@@ -200,26 +200,46 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
 
     public async Task<AssetHealthSummary> GetAssetHealthSummaryAsync(CancellationToken cancellationToken)
     {
-        var assets = await _context.Assets
+        var assets = _context.Assets
             .AsNoTracking()
-            .Where(a => !a.IsDeleted)
-            .Include(a => a.Tower)
-            .ToListAsync(cancellationToken);
+            .Where(a => !a.IsDeleted);
 
-        var defectCounts = await GetConfirmedDefectCountsAsync(
-            assets.Select(a => a.Id).ToList(),
-            cancellationToken);
+        var totalAssets = await assets.CountAsync(cancellationToken);
+        if (totalAssets == 0)
+        {
+            return new AssetHealthSummary(0, 0, 0, 0, 0, 0, Array.Empty<AssetHealthSummaryItem>());
+        }
 
-        var totalAssets = assets.Count;
-        var averageHealthScore = totalAssets == 0
-            ? 0
-            : Math.Round(assets.Average(a => a.CurrentHealthScore), 2);
+        var averageHealthScore = Math.Round(
+            await assets.AverageAsync(a => a.CurrentHealthScore, cancellationToken),
+            2);
 
-        var criticalAssets = assets
-            .Where(a => IsRiskLevel(a.RiskLevel, "Critical Risk"))
+        var criticalRiskCount = await assets.CountAsync(a => a.RiskLevel == "Critical Risk", cancellationToken);
+        var highRiskCount = await assets.CountAsync(a => a.RiskLevel == "High Risk", cancellationToken);
+        var mediumRiskCount = await assets.CountAsync(a => a.RiskLevel == "Medium Risk", cancellationToken);
+        var lowRiskCount = await assets.CountAsync(a => a.RiskLevel == "Low Risk", cancellationToken);
+
+        var criticalAssets = await assets
+            .Where(a => a.RiskLevel == "Critical Risk")
             .OrderBy(a => a.CurrentHealthScore)
             .ThenBy(a => a.AssetCode)
             .Take(10)
+            .Select(a => new
+            {
+                a.Id,
+                a.AssetCode,
+                a.AssetType,
+                a.CurrentHealthScore,
+                a.RiskLevel,
+                TowerCode = a.Tower == null ? null : a.Tower.TowerCode
+            })
+            .ToListAsync(cancellationToken);
+
+        var defectCounts = await GetConfirmedDefectCountsAsync(
+            criticalAssets.Select(a => a.Id).ToList(),
+            cancellationToken);
+
+        var criticalAssetItems = criticalAssets
             .Select(a => new AssetHealthSummaryItem(
                 a.Id,
                 a.AssetCode,
@@ -227,21 +247,19 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
                 a.CurrentHealthScore,
                 a.RiskLevel,
                 defectCounts.GetValueOrDefault(a.Id),
-                a.Tower?.TowerCode))
+                a.TowerCode))
             .ToList();
 
         return new AssetHealthSummary(
             totalAssets,
             averageHealthScore,
-            assets.Count(a => IsRiskLevel(a.RiskLevel, "Critical Risk")),
-            assets.Count(a => IsRiskLevel(a.RiskLevel, "High Risk")),
-            assets.Count(a => IsRiskLevel(a.RiskLevel, "Medium Risk")),
-            assets.Count(a => IsRiskLevel(a.RiskLevel, "Low Risk")),
-            criticalAssets);
+            criticalRiskCount,
+            highRiskCount,
+            mediumRiskCount,
+            lowRiskCount,
+            criticalAssetItems);
     }
 
-    private static bool IsRiskLevel(string value, string expected)
-        => string.Equals(value?.Trim(), expected, StringComparison.OrdinalIgnoreCase);
 }
 
 internal static class AssetSortingExtensions
