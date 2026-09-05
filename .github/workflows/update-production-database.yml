@@ -42,9 +42,23 @@ jobs:
             fi
             cd "$DEPLOY_PATH"
             echo "Using deployment path: $DEPLOY_PATH"
-            test "$(git branch --show-current)" = "main"
-            test -z "$(git status --porcelain)"
-            docker inspect uavpms-db --format '{{.State.Status}}' | grep -qx running
+            CURRENT_BRANCH="$(git branch --show-current)"
+            echo "Current branch: $CURRENT_BRANCH"
+            if [ "$CURRENT_BRANCH" != "main" ]; then
+              echo "ERROR: deployment checkout must be on main."
+              exit 1
+            fi
+            if [ -n "$(git status --porcelain)" ]; then
+              echo "ERROR: deployment checkout has uncommitted changes."
+              git status --short
+              exit 1
+            fi
+            DB_STATUS="$(docker inspect uavpms-db --format '{{.State.Status}}')"
+            echo "Database container status: $DB_STATUS"
+            if [ "$DB_STATUS" != "running" ]; then
+              echo "ERROR: uavpms-db is not running."
+              exit 1
+            fi
             echo "Applying pending OperationsService migrations..."
             RUN_MIGRATIONS=true docker compose up -d --build --force-recreate operationsservice
             echo "Waiting for OperationsService startup..."
