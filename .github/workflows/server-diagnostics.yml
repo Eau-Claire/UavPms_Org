@@ -33,11 +33,14 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
           envs: DEPLOY_PATH,GATEWAY_HEALTH_URL,DIAGNOSTIC_SERVICE
-          script_stop: true
+          script_stop: false
           script: |
-            set -u
-
-            cd "$DEPLOY_PATH"
+            DEPLOY_DIR="${DEPLOY_PATH:-}"
+            if [ -n "$DEPLOY_DIR" ]; then
+              cd "$DEPLOY_DIR" 2>&1 || true
+            else
+              echo "DEPLOY_PATH is not configured."
+            fi
 
             echo "========== GIT =========="
             git status --short 2>&1 || true
@@ -63,8 +66,9 @@ jobs:
               2>&1 || true
 
             echo "========== HEALTH =========="
-            if [ -n "$GATEWAY_HEALTH_URL" ]; then
-              curl -fsS -i "$GATEWAY_HEALTH_URL" 2>&1 || true
+            HEALTH_URL="${GATEWAY_HEALTH_URL:-}"
+            if [ -n "$HEALTH_URL" ]; then
+              curl -fsS -i "$HEALTH_URL" 2>&1 || true
             else
               echo "GATEWAY_HEALTH_URL is not configured."
             fi
@@ -76,14 +80,15 @@ jobs:
             free -h 2>&1 || true
 
             echo "========== LOGS =========="
-            if [ -z "$DIAGNOSTIC_SERVICE" ]; then
+            SERVICE="${DIAGNOSTIC_SERVICE:-}"
+            if [ -z "$SERVICE" ]; then
               docker compose logs --tail=200 2>&1 || true
             else
               COMPOSE_SERVICES="$(docker compose config --services 2>&1 || true)"
-              if printf '%s\n' "$COMPOSE_SERVICES" | grep -F -x -- "$DIAGNOSTIC_SERVICE" >/dev/null 2>&1; then
-                docker compose logs --tail=300 "$DIAGNOSTIC_SERVICE" 2>&1 || true
+              if printf '%s\n' "$COMPOSE_SERVICES" | grep -F -x -- "$SERVICE" >/dev/null 2>&1; then
+                docker compose logs --tail=300 "$SERVICE" 2>&1 || true
               else
-                echo "Invalid service requested: $DIAGNOSTIC_SERVICE"
+                echo "Invalid service requested: $SERVICE"
                 echo "Allowed services:"
                 printf '%s\n' "$COMPOSE_SERVICES"
               fi
