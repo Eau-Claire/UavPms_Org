@@ -122,8 +122,10 @@ public class AssetConfiguration : IEntityTypeConfiguration<Asset>
 {
     public void Configure(EntityTypeBuilder<Asset> builder)
     {
-        builder.ToTable("Assets");
+        builder.ToTable("AssetComponents");
         builder.HasKey(e => e.Id);
+        builder.Property(e => e.AssetType).HasColumnName("ComponentType");
+        builder.Property(e => e.AssetCode).HasColumnName("ComponentCode");
         builder.HasIndex(e => e.AssetCode).IsUnique();
 
         builder.HasOne(e => e.Tower)

@@ -30,7 +30,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
         return await _context.Assets
             .FromSqlInterpolated($@"
                 SELECT a.* 
-                FROM ""Assets"" a 
+                FROM ""AssetComponents"" a
                 JOIN ""Towers"" t ON a.""TowerId"" = t.""Id"" 
                 WHERE a.""IsDeleted"" = false 
                   AND t.""IsDeleted"" = false 
