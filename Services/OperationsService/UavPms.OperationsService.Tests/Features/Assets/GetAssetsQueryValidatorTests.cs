@@ -33,4 +33,22 @@ public sealed class GetAssetsQueryValidatorTests
 
         result.IsValid.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("unknown", "asc")]
+    [InlineData("healthScore", "sideways")]
+    public void Validate_RejectsUnsupportedSortParameters(string sortBy, string sortOrder)
+    {
+        var result = _validator.Validate(new GetAssetsQuery(SortBy: sortBy, SortOrder: sortOrder));
+
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_AcceptsSupportedSortParameters()
+    {
+        var result = _validator.Validate(new GetAssetsQuery(SortBy: "healthScore", SortOrder: "DESC"));
+
+        result.IsValid.Should().BeTrue();
+    }
 }

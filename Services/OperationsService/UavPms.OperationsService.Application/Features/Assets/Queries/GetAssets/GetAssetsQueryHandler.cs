@@ -18,7 +18,7 @@ public class GetAssetsQueryHandler : IRequestHandler<GetAssetsQuery, PaginatedAs
         var (assets, totalCount) = await _assetRepository.GetAssetsPagedAsync(
             request.Page,
             request.PageSize,
-            request.TowerCode,
+            request.TowerId,
             request.AssetType,
             request.Status,
             request.RiskLevels,

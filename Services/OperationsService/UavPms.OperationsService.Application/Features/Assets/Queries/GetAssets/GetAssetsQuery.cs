@@ -7,7 +7,7 @@ namespace UavPms.OperationsService.Application.Features.Assets.Queries.GetAssets
 public record GetAssetsQuery(
     int Page = 1,
     int PageSize = 10,
-    Guid? TowerCode = null,
+    Guid? TowerId = null,
     string? AssetType = null,
     string? Status = null,
     IReadOnlyList<string>? RiskLevels = null,
