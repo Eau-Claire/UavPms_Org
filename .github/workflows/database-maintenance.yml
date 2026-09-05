@@ -53,7 +53,7 @@ jobs:
               -v ON_ERROR_STOP=1 \
               -U uavpms \
               -d uavpms \
-              -tAc 'SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '\''public'\'' AND table_name = '\''OutboxMessages'\'');')"
+              -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'OutboxMessages');")"
             echo "public.OutboxMessages exists: $TABLE_EXISTS"
 
             if [ "$TABLE_EXISTS" = "t" ]; then
