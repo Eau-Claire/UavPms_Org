@@ -57,35 +57,10 @@ jobs:
             echo "public.OutboxMessages exists: $TABLE_EXISTS"
 
             echo "Ensuring OutboxMessages table..."
-            docker exec uavpms-db psql \
-              -v ON_ERROR_STOP=1 \
-              -U uavpms \
-              -d uavpms \
-              -c 'CREATE TABLE IF NOT EXISTS public."OutboxMessages" (
-                "Id" uuid NOT NULL,
-                "MessageType" varchar(256) NOT NULL,
-                "Payload" jsonb NOT NULL,
-                "OccurredAt" timestamptz NOT NULL,
-                "PublishedAt" timestamptz NULL,
-                "Attempts" integer NOT NULL,
-                "LastError" text NULL,
-                "CreatedAt" timestamptz NOT NULL,
-                "UpdatedAt" timestamptz NULL,
-                "CreatedBy" uuid NULL,
-                "UpdatedBy" uuid NULL,
-                "IsDeleted" boolean NOT NULL,
-                "DeletedAt" timestamptz NULL,
-                CONSTRAINT "PK_OutboxMessages" PRIMARY KEY ("Id")
-              );'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'CREATE TABLE IF NOT EXISTS public."OutboxMessages" ("Id" uuid NOT NULL, "MessageType" varchar(256) NOT NULL, "Payload" jsonb NOT NULL, "OccurredAt" timestamptz NOT NULL, "PublishedAt" timestamptz NULL, "Attempts" integer NOT NULL, "LastError" text NULL, "CreatedAt" timestamptz NOT NULL, "UpdatedAt" timestamptz NULL, "CreatedBy" uuid NULL, "UpdatedBy" uuid NULL, "IsDeleted" boolean NOT NULL, "DeletedAt" timestamptz NULL, CONSTRAINT "PK_OutboxMessages" PRIMARY KEY ("Id"));'
 
             echo "Ensuring OutboxMessages index..."
-            docker exec uavpms-db psql \
-              -v ON_ERROR_STOP=1 \
-              -U uavpms \
-              -d uavpms \
-              -c 'CREATE INDEX IF NOT EXISTS "IX_OutboxMessages_MessageType_OccurredAt"
-                ON public."OutboxMessages" ("MessageType", "OccurredAt")
-                WHERE "PublishedAt" IS NULL AND "IsDeleted" = false;'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'CREATE INDEX IF NOT EXISTS "IX_OutboxMessages_MessageType_OccurredAt" ON public."OutboxMessages" ("MessageType", "OccurredAt") WHERE "PublishedAt" IS NULL AND "IsDeleted" = false;'
 
             echo "========== FINAL VERIFICATION =========="
             echo "Verifying OutboxMessages..."
