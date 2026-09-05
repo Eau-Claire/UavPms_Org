@@ -99,3 +99,5 @@ jobs:
 
             echo "========== OPERATIONS LOGS =========="
             docker compose logs --tail=300 operationsservice 2>&1 || true
+
+            exit 0
