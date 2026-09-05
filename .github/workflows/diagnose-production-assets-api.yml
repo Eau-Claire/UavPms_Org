@@ -1,0 +1,45 @@
+name: Diagnose Production Assets API
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DIAGNOSE_ASSETS_API to collect read-only schema and OperationsService diagnostics.
+        required: true
+        type: string
+
+concurrency:
+  group: production-assets-api-diagnostics
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: Diagnose Assets API
+    if: ${{ inputs.confirmation == 'DIAGNOSE_ASSETS_API' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+
+    steps:
+      - name: Collect read-only diagnostics over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "========== ASSETS API DIAGNOSTICS =========="
+            DB_STATUS="$(docker inspect uavpms-db --format '{{.State.Status}}')"
+            if [ "$DB_STATUS" != "running" ]; then echo "ERROR: uavpms-db is not running."; exit 1; fi
+            echo "========== REQUIRED TABLES =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('AssetComponents', 'Towers', 'TransmissionLines', 'Substations', 'Regions', 'DetectedAnomalies') ORDER BY table_name;"
+            echo "========== REQUIRED COLUMNS =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT table_name, column_name, data_type, udt_name FROM information_schema.columns WHERE table_schema = 'public' AND ((table_name = 'AssetComponents' AND column_name IN ('Id', 'TowerId', 'ComponentType', 'ComponentCode', 'Status', 'CurrentHealthScore', 'RiskLevel', 'LastInspectedAt', 'IsDeleted', 'PowerLineId', 'ManagementUnitId', 'Location')) OR (table_name = 'Towers' AND column_name IN ('Id', 'LineAssetId', 'TowerCode', 'Geom', 'IsDeleted')) OR (table_name = 'TransmissionLines' AND column_name IN ('Id', 'SubstationAssetId', 'LineName', 'Code', 'VoltageLevel', 'ManagementUnitId', 'Status', 'IsCriticalEdge', 'Geom', 'IsDeleted')) OR (table_name = 'Substations' AND column_name IN ('Id', 'RegionAssetId', 'SubstationName', 'VoltageLevel', 'Geom', 'IsDeleted')) OR (table_name = 'Regions' AND column_name IN ('Id', 'RegionName', 'Code', 'Type', 'ParentId', 'Geom', 'IsDeleted')) OR (table_name = 'DetectedAnomalies' AND column_name IN ('AssetId', 'ValidationStatus'))) ORDER BY table_name, column_name;"
+            echo "========== OPERATIONS SERVICE STATUS =========="
+            docker inspect uav-operations-service --format 'status={{.State.Status}} running={{.State.Running}} restartCount={{.RestartCount}} image={{.Config.Image}}'
+            echo "========== OPERATIONS SERVICE RECENT ERRORS =========="
+            docker logs --tail=300 uav-operations-service 2>&1 | grep -Ei 'fail|exception|error|assetcomponents|assets' || true
+            echo "========== DIAGNOSTICS COMPLETE =========="
