@@ -45,6 +45,8 @@ The backend implementation on `refactor/backend-cleanup` aggregates all non-dele
 
 The frontend now also sends risk-level and sort choices to the paginated Assets API. Search text remains page-local until an explicit server-side search API contract is added.
 
+The Assets query validates supported sort fields and sort directions, returning a validation response for unsupported values instead of silently applying a default order.
+
 ## Validation completed
 
 - OperationsService API build: succeeded with zero warnings and zero errors.
