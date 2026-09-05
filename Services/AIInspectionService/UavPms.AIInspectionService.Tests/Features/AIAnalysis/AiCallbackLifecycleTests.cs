@@ -8,6 +8,7 @@ using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.AIInspectionService.Tests.Features.AIAnalysis;
 
@@ -72,6 +73,7 @@ public sealed class AiCallbackLifecycleTests
             _handler = new ProcessAiAnalysisResultCommandHandler(requests.Object, media.Object,
                 Mock.Of<IGenericRepository<DefectCategory>>(), Anomalies.Object, Mock.Of<IUnitOfWork>(),
                 Mock.Of<IInspectionEvaluationClient>(), Mock.Of<IEventPublisher>(),
+                Mock.Of<IGenericRepository<OutboxMessage>>(),
                 Mock.Of<ILogger<ProcessAiAnalysisResultCommandHandler>>());
         }
 

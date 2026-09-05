@@ -1,6 +1,5 @@
 using System.Text.Json;
 using MediatR;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UavPms.Shared.Contracts.Events;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
@@ -23,10 +22,9 @@ public class ProcessAiAnalysisResultCommandHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly IInspectionEvaluationClient _inspectionEvaluationClient;
     private readonly IEventPublisher _eventPublisher;
-    private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
+    private readonly IGenericRepository<OutboxMessage> _outboxRepository;
     private readonly ILogger<ProcessAiAnalysisResultCommandHandler> _logger;
 
-    [ActivatorUtilitiesConstructor]
     public ProcessAiAnalysisResultCommandHandler(
         IGenericRepository<AIAnalysisRequest> aiRequestRepo,
         IInspectionMediaRepository mediaRepo,
@@ -47,35 +45,6 @@ public class ProcessAiAnalysisResultCommandHandler
         _eventPublisher = eventPublisher;
         _outboxRepository = outboxRepository;
         _logger = logger;
-    }
-
-    public ProcessAiAnalysisResultCommandHandler(
-        IGenericRepository<AIAnalysisRequest> aiRequestRepo,
-        IInspectionMediaRepository mediaRepo,
-        IGenericRepository<DefectCategory> defectCategoryRepo,
-        IAnomalyRepository anomalyRepo,
-        IUnitOfWork unitOfWork,
-        IInspectionEvaluationClient inspectionEvaluationClient,
-        IEventPublisher eventPublisher,
-        ILogger<ProcessAiAnalysisResultCommandHandler> logger)
-        : this(aiRequestRepo, mediaRepo, defectCategoryRepo, anomalyRepo, unitOfWork,
-            inspectionEvaluationClient, eventPublisher, null!, logger) { }
-
-    [Obsolete("Emergency dependencies are ignored; Cloud AI no longer owns the Edge alert flow.")]
-    public ProcessAiAnalysisResultCommandHandler(
-        IGenericRepository<AIAnalysisRequest> aiRequestRepo,
-        IInspectionMediaRepository mediaRepo,
-        IGenericRepository<DefectCategory> defectCategoryRepo,
-        IAnomalyRepository anomalyRepo,
-        IGenericRepository<EmergencyAlert> _,
-        INotificationRepository __,
-        IUnitOfWork unitOfWork,
-        IInspectionEvaluationClient inspectionEvaluationClient,
-        IEventPublisher eventPublisher,
-        ILogger<ProcessAiAnalysisResultCommandHandler> logger)
-        : this(aiRequestRepo, mediaRepo, defectCategoryRepo, anomalyRepo, unitOfWork,
-            inspectionEvaluationClient, eventPublisher, logger)
-    {
     }
 
     public async Task<AiAnalysisCallbackResponseDto> Handle(
@@ -327,12 +296,6 @@ public class ProcessAiAnalysisResultCommandHandler
 
     private async Task QueueEventAsync(object integrationEvent, ICollection<object> fallback)
     {
-        if (_outboxRepository == null)
-        {
-            fallback.Add(integrationEvent);
-            return;
-        }
-
         await _outboxRepository.AddAsync(new OutboxMessage
         {
             Id = Guid.NewGuid(),

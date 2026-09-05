@@ -15,6 +15,7 @@ using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.AIInspectionService.Infrastructure.Persistence;
 using UavPms.AIInspectionService.Infrastructure.Repositories;
+using UavPms.Shared.Contracts.Events;
 using Xunit;
 
 namespace UavPms.AIInspectionService.Tests.Features.AIAnalysis;
@@ -93,6 +94,7 @@ public class AiInspectionPipelineTests
                     false,
                     "Unit test evaluation"))),
             Mock.Of<IEventPublisher>(),
+            Mock.Of<IGenericRepository<OutboxMessage>>(),
             Mock.Of<ILogger<ProcessAiAnalysisResultCommandHandler>>());
 
         var callbackResult = await callbackHandler.Handle(new ProcessAiAnalysisResultCommand
