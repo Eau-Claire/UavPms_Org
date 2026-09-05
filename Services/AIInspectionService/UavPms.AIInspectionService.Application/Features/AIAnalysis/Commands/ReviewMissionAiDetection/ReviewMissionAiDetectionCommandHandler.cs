@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
@@ -21,6 +22,7 @@ public class ReviewMissionAiDetectionCommandHandler
     private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
     private readonly IEventPublisher? _eventPublisher;
 
+    [ActivatorUtilitiesConstructor]
     public ReviewMissionAiDetectionCommandHandler(
         IAnomalyRepository anomalyRepository,
         IUnitOfWork unitOfWork,

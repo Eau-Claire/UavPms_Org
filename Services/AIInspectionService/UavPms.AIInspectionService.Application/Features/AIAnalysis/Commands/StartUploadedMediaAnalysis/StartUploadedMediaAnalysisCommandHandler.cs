@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
 using UavPms.AIInspectionService.Domain.Contracts;
@@ -21,6 +22,7 @@ public sealed class StartUploadedMediaAnalysisCommandHandler
     private readonly ILogger<StartUploadedMediaAnalysisCommandHandler> _logger;
     private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
 
+    [ActivatorUtilitiesConstructor]
     public StartUploadedMediaAnalysisCommandHandler(
         IGenericRepository<InspectionMedia> mediaRepository,
         IGenericRepository<AIAnalysisRequest> requestRepository,

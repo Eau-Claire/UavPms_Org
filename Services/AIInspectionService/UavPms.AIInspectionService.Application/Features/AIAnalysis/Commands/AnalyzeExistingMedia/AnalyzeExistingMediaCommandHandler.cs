@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
 using UavPms.AIInspectionService.Domain.Contracts;
@@ -27,6 +28,7 @@ public class AnalyzeExistingMediaCommandHandler
     private readonly ILogger<AnalyzeExistingMediaCommandHandler> _logger;
     private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
 
+    [ActivatorUtilitiesConstructor]
     public AnalyzeExistingMediaCommandHandler(
         IGenericRepository<Mission> missionRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
