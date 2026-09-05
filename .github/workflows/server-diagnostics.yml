@@ -36,10 +36,13 @@ jobs:
           script_stop: false
           script: |
             DEPLOY_DIR="${DEPLOY_PATH:-}"
-            if [ -n "$DEPLOY_DIR" ]; then
-              cd "$DEPLOY_DIR" 2>&1 || true
-            else
-              echo "DEPLOY_PATH is not configured."
+            if [ -z "$DEPLOY_DIR" ]; then
+              echo "ERROR: DEPLOY_PATH is not configured."
+              exit 1
+            fi
+            if ! cd "$DEPLOY_DIR"; then
+              echo "ERROR: Cannot access DEPLOY_PATH"
+              exit 1
             fi
 
             echo "========== GIT =========="
