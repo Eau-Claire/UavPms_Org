@@ -130,6 +130,9 @@ services:
       - "8080"
     environment:
       <<: *service-environment
+    networks:
+      - default
+      - uavpms-infra
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -158,6 +161,9 @@ services:
       Mqtt__TelemetryTopic: uav/+/telemetry
       Mqtt__OfflineTimeoutSeconds: ${MQTT_OFFLINE_TIMEOUT_SECONDS:-30}
       Mqtt__LiveStateTtlSeconds: ${MQTT_LIVE_STATE_TTL_SECONDS:-30}
+    networks:
+      - default
+      - uavpms-infra
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -180,6 +186,9 @@ services:
       - "8080"
     environment:
       <<: *service-environment
+    networks:
+      - default
+      - uavpms-infra
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -213,6 +222,9 @@ services:
       - "8080"
     environment:
       <<: *service-environment
+    networks:
+      - default
+      - uavpms-infra
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -221,3 +233,7 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: always
+
+networks:
+  uavpms-infra:
+    external: true
