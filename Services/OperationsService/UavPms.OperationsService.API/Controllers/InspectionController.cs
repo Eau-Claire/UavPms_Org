@@ -2,6 +2,7 @@ using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage;
 using UavPms.OperationsService.Application.Features.Inspections.Queries.GetReportById;
 using UavPms.OperationsService.Application.Features.Inspections.Queries.GetByMission;
@@ -63,8 +64,15 @@ public class InspectionController : ControllerBase
     [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     public async Task<IActionResult> GetReportById(Guid id, CancellationToken cancellationToken = default)
     {
-        var result = await _mediator.Send(new GetInspectionReportByIdQuery(id), cancellationToken);
-        return Ok(new ApiResponse(true, "Inspection report retrieved successfully.", result));
+        try
+        {
+            var result = await _mediator.Send(new GetInspectionReportByIdQuery(id), cancellationToken);
+            return Ok(new ApiResponse(true, "Inspection report retrieved successfully.", result));
+        }
+        catch (NotFoundException exception)
+        {
+            return NotFound(new ApiResponse(false, exception.Message));
+        }
     }
 
     /// <summary>

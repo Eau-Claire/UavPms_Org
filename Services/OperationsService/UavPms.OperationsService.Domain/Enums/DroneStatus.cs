@@ -6,4 +6,6 @@ public enum DroneStatus
     Flying = 1,
     Maintenance = 2,
     Offline = 3,
+    // Kept for compatibility with existing database rows and integrations.
+    Online = 4,
 }
