@@ -29,16 +29,6 @@ public class AuditController : ControllerBase
         [FromQuery] string? tableName = null,
         [FromQuery] string? actionType = null)
     {
-        if (page <= 0 || pageSize <= 0)
-        {
-            return BadRequest(new ApiResponse(false, "Page and PageSize must be positive integers."));
-        }
-
-        if (pageSize > 100)
-        {
-            return BadRequest(new ApiResponse(false, "Page size must be less than or equal 100."));
-        }
-
         var query = new GetAuditLogsQuery(page, pageSize, search, tableName, actionType);
         var result = await _mediator.Send(query);
         

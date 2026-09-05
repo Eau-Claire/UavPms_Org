@@ -36,8 +36,8 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Success: false,
                 Message: "One or more validation errors occurred.",
                 Data: null,
-                Errors: errors
-                , ErrorCode: "INVALID_FILE"
+                Errors: errors,
+                ErrorCode: "VALIDATION_ERROR"
             );
         }
         else if (exception is UnauthorizedAccessException unauthorizedAccessException)
