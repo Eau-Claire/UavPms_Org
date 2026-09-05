@@ -17,7 +17,7 @@ public class DetectedAnomaly : BaseEntity
     public string? ImageUrl { get; set; }
     public string? CropUrl { get; set; }
     public string? Gps { get; set; } // Will be mapped to jsonb
-    public Guid? TowerId { get; set; }
+    public string? TowerId { get; set; }
     public double? VideoDuration { get; set; }
     public double? VideoFps { get; set; }
     public int? VideoWidth { get; set; }

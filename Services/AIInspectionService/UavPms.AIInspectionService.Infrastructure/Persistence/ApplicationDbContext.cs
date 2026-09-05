@@ -7,6 +7,7 @@ using NetTopologySuite.Geometries;
 using UavPms.AIInspectionService.Domain.Common;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.AIInspectionService.Infrastructure.Persistence;
 
@@ -40,6 +41,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
     public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,

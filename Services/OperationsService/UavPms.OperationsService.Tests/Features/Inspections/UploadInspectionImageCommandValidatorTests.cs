@@ -95,12 +95,50 @@ public class UploadInspectionImageCommandValidatorTests
             MissionId = Guid.NewGuid(),
             AssetId = Guid.NewGuid(),
             FileName = "test.jpg",
-            FileStream = new MemoryStream(new byte[] { 1, 2, 3 }),
-            ContentType = "image/jpeg"
+            FileStream = ValidJpeg(),
+            ContentType = "image/jpeg",
+            CapturedAt = DateTime.UtcNow
         };
 
         var result = _validator.Validate(command);
 
         result.IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public void Validate_ShouldRejectSpoofedMediaSignature()
+    {
+        var command = new UploadInspectionImageCommand
+        {
+            MissionId = Guid.NewGuid(),
+            AssetId = Guid.NewGuid(),
+            FileName = "spoofed.jpg",
+            FileStream = new MemoryStream("not-an-image"u8.ToArray()),
+            ContentType = "image/jpeg",
+            CapturedAt = DateTime.UtcNow
+        };
+
+        _validator.Validate(command).Errors.Should()
+            .Contain(error => error.ErrorMessage.Contains("signature"));
+    }
+
+    [Theory]
+    [InlineData(-91, 0)]
+    [InlineData(91, 0)]
+    [InlineData(0, -181)]
+    [InlineData(0, 181)]
+    public void Validate_ShouldRejectInvalidGps(double latitude, double longitude)
+    {
+        var command = new UploadInspectionImageCommand
+        {
+            MissionId = Guid.NewGuid(), AssetId = Guid.NewGuid(), FileName = "test.jpg",
+            FileStream = ValidJpeg(), ContentType = "image/jpeg", CapturedAt = DateTime.UtcNow,
+            Latitude = latitude, Longitude = longitude
+        };
+
+        _validator.Validate(command).IsValid.Should().BeFalse();
+    }
+
+    private static MemoryStream ValidJpeg() =>
+        new(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0, 0, 0xFF, 0xD9 });
 }

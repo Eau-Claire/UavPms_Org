@@ -32,6 +32,8 @@ public class InspectionController : ControllerBase
         [FromForm] Guid missionId,
         [FromForm] Guid assetId,
         [FromForm] DateTime capturedAt,
+        [FromForm] double? latitude,
+        [FromForm] double? longitude,
         IFormFile file,
         CancellationToken cancellationToken = default)
     {
@@ -42,6 +44,8 @@ public class InspectionController : ControllerBase
             MissionId = missionId,
             AssetId = assetId,
             CapturedAt = capturedAt,
+            Latitude = latitude,
+            Longitude = longitude,
             FileStream = stream,
             FileName = file?.FileName ?? string.Empty,
             ContentType = file?.ContentType ?? string.Empty,

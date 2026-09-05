@@ -1,9 +1,13 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using UavPms.OperationsService.Infrastructure.Persistence;
 
 #nullable disable
 
 namespace UavPms.OperationsService.Infrastructure.Migrations;
 
+[DbContext(typeof(ApplicationDbContext))]
+[Migration("20260902033000_AddGisAssetSelection")]
 public partial class AddGisAssetSelection : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
@@ -26,7 +30,22 @@ public partial class AddGisAssetSelection : Migration
             CREATE UNIQUE INDEX "IX_ManagementUnits_Code" ON "ManagementUnits" ("Code");
             CREATE INDEX "IX_ManagementUnits_ParentId" ON "ManagementUnits" ("ParentId");
 
+            ALTER TABLE "Assets" RENAME TO "AssetComponents";
+            ALTER TABLE "AssetComponents" RENAME COLUMN "AssetType" TO "ComponentType";
+            ALTER TABLE "AssetComponents" RENAME COLUMN "AssetCode" TO "ComponentCode";
+            ALTER TABLE "AssetComponents" RENAME CONSTRAINT "PK_Assets" TO "PK_AssetComponents";
+            ALTER TABLE "AssetComponents" RENAME CONSTRAINT "FK_Assets_Towers_TowerId" TO "FK_AssetComponents_Towers_TowerId";
+            ALTER INDEX "IX_Assets_AssetCode" RENAME TO "IX_AssetComponents_ComponentCode";
+            ALTER INDEX "IX_Assets_TowerId" RENAME TO "IX_AssetComponents_TowerId";
+            ALTER TABLE "AssetHealthHistories" RENAME CONSTRAINT "FK_AssetHealthHistories_Assets_AssetId" TO "FK_AssetHealthHistories_AssetComponents_AssetId";
+            ALTER TABLE "IncidentReports" RENAME CONSTRAINT "FK_IncidentReports_Assets_AssetId" TO "FK_IncidentReports_AssetComponents_AssetId";
+            ALTER TABLE "InspectionMedia" RENAME CONSTRAINT "FK_InspectionMedia_Assets_AssetId" TO "FK_InspectionMedia_AssetComponents_AssetId";
+            ALTER TABLE "DetectedAnomalies" RENAME CONSTRAINT "FK_DetectedAnomalies_Assets_AssetId" TO "FK_DetectedAnomalies_AssetComponents_AssetId";
+            ALTER TABLE "EmergencyAlerts" RENAME CONSTRAINT "FK_EmergencyAlerts_Assets_AssetId" TO "FK_EmergencyAlerts_AssetComponents_AssetId";
+            ALTER TABLE "MaintenanceTickets" RENAME CONSTRAINT "FK_MaintenanceTickets_Assets_AssetId" TO "FK_MaintenanceTickets_AssetComponents_AssetId";
+
             ALTER TABLE "TransmissionLines" ADD COLUMN "Code" text NOT NULL DEFAULT '';
+            ALTER TABLE "TransmissionLines" ALTER COLUMN "Geom" TYPE geometry(Geometry,4326) USING ST_SetSRID("Geom",4326);
             ALTER TABLE "TransmissionLines" ADD COLUMN "VoltageLevel" text NOT NULL DEFAULT '';
             ALTER TABLE "TransmissionLines" ADD COLUMN "ManagementUnitId" uuid NULL REFERENCES "ManagementUnits"("Id") ON DELETE RESTRICT;
             ALTER TABLE "TransmissionLines" ADD COLUMN "Status" text NOT NULL DEFAULT 'Active';
@@ -73,6 +92,10 @@ public partial class AddGisAssetSelection : Migration
             ALTER TABLE "MissionTargets" ADD CONSTRAINT "FK_MissionTargets_AssetComponents_AssetId" FOREIGN KEY ("AssetId") REFERENCES "AssetComponents"("Id") ON DELETE RESTRICT;
             CREATE INDEX "IX_MissionTargets_AssetId" ON "MissionTargets" ("AssetId");
             CREATE UNIQUE INDEX "IX_MissionTargets_MissionId_AssetId" ON "MissionTargets" ("MissionId", "AssetId");
+
+            ALTER TABLE "InspectionMedia" ADD COLUMN "TowerId" uuid NULL REFERENCES "Towers"("Id") ON DELETE RESTRICT;
+            ALTER TABLE "InspectionMedia" ADD COLUMN "CaptureLocation" geometry NULL;
+            CREATE INDEX "IX_InspectionMedia_TowerId" ON "InspectionMedia" ("TowerId");
             """);
     }
 

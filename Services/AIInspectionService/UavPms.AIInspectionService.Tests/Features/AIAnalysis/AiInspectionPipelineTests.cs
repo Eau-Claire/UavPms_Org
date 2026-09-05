@@ -65,10 +65,11 @@ public class AiInspectionPipelineTests
             UploadedBy = Guid.NewGuid(),
             MediaId = mediaId,
             MissionId = missionId,
+            AssetId = assetId,
             FileUrl = "https://storage.local/missions/mis-ai-001/video.mp4",
             MediaType = "Video",
             AnalysisType = AnalysisType.DefectDetection,
-            Status = AIAnalysisStatus.Pending
+            Status = AIAnalysisStatus.Processing
         });
 
         await context.SaveChangesAsync();
@@ -77,18 +78,11 @@ public class AiInspectionPipelineTests
         var mediaRepo = new InspectionMediaRepository(context);
         var defectCategoryRepo = new GenericRepository<DefectCategory>(context);
         var anomalyRepo = new AnomalyRepository(context);
-        var emergencyAlertRepo = new GenericRepository<EmergencyAlert>(context);
-        var notificationRepo = new Mock<INotificationRepository>();
-        notificationRepo.Setup(r => r.AddAsync(It.IsAny<Notification>()))
-            .ReturnsAsync((Notification notification) => notification);
-
         var callbackHandler = new ProcessAiAnalysisResultCommandHandler(
             aiRequestRepo,
             mediaRepo,
             defectCategoryRepo,
             anomalyRepo,
-            emergencyAlertRepo,
-            notificationRepo.Object,
             new UnitOfWork(context),
             Mock.Of<IInspectionEvaluationClient>(c => c.EvaluateAsync(
                 It.IsAny<DetectionEvaluationRequest>(),
@@ -105,6 +99,8 @@ public class AiInspectionPipelineTests
         {
             RequestId = requestId,
             MediaId = mediaId,
+            MissionId = missionId,
+            AssetId = assetId,
             Status = "Completed",
             ModelName = "RF-DETR",
             ModelVersion = "v1.0",
@@ -145,7 +141,10 @@ public class AiInspectionPipelineTests
 
         callbackResult.SavedDetections.Should().Be(1);
 
-        var queryHandler = new GetMissionAiDetectionsQueryHandler(mediaRepo);
+        var queryHandler = new GetMissionAiDetectionsQueryHandler(
+            mediaRepo,
+            new GenericRepository<Mission>(context),
+            Mock.Of<ICurrentUserServices>());
         var mediaResults = await queryHandler.Handle(
             new GetMissionAiDetectionsQuery(missionId),
             CancellationToken.None);

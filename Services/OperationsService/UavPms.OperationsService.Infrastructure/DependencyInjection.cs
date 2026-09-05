@@ -65,6 +65,7 @@ public static class DependencyInjection
         {
             services.AddSingleton<RabbitMqConnection>();
             services.AddScoped<IEventPublisher, RabbitMqEventPublisher>();
+            services.AddHostedService<OutboxDispatcher>();
         }
         else
         {

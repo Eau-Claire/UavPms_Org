@@ -19,11 +19,10 @@ public class ProcessAiAnalysisResultCommandHandler
     private readonly IInspectionMediaRepository _mediaRepo;
     private readonly IGenericRepository<DefectCategory> _defectCategoryRepo;
     private readonly IAnomalyRepository _anomalyRepo;
-    private readonly IGenericRepository<EmergencyAlert> _emergencyAlertRepo;
-    private readonly INotificationRepository _notificationRepo;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IInspectionEvaluationClient _inspectionEvaluationClient;
     private readonly IEventPublisher _eventPublisher;
+    private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
     private readonly ILogger<ProcessAiAnalysisResultCommandHandler> _logger;
 
     public ProcessAiAnalysisResultCommandHandler(
@@ -31,23 +30,50 @@ public class ProcessAiAnalysisResultCommandHandler
         IInspectionMediaRepository mediaRepo,
         IGenericRepository<DefectCategory> defectCategoryRepo,
         IAnomalyRepository anomalyRepo,
-        IGenericRepository<EmergencyAlert> emergencyAlertRepo,
-        INotificationRepository notificationRepo,
         IUnitOfWork unitOfWork,
         IInspectionEvaluationClient inspectionEvaluationClient,
         IEventPublisher eventPublisher,
+        IGenericRepository<OutboxMessage> outboxRepository,
         ILogger<ProcessAiAnalysisResultCommandHandler> logger)
     {
         _aiRequestRepo = aiRequestRepo;
         _mediaRepo = mediaRepo;
         _defectCategoryRepo = defectCategoryRepo;
         _anomalyRepo = anomalyRepo;
-        _emergencyAlertRepo = emergencyAlertRepo;
-        _notificationRepo = notificationRepo;
         _unitOfWork = unitOfWork;
         _inspectionEvaluationClient = inspectionEvaluationClient;
         _eventPublisher = eventPublisher;
+        _outboxRepository = outboxRepository;
         _logger = logger;
+    }
+
+    public ProcessAiAnalysisResultCommandHandler(
+        IGenericRepository<AIAnalysisRequest> aiRequestRepo,
+        IInspectionMediaRepository mediaRepo,
+        IGenericRepository<DefectCategory> defectCategoryRepo,
+        IAnomalyRepository anomalyRepo,
+        IUnitOfWork unitOfWork,
+        IInspectionEvaluationClient inspectionEvaluationClient,
+        IEventPublisher eventPublisher,
+        ILogger<ProcessAiAnalysisResultCommandHandler> logger)
+        : this(aiRequestRepo, mediaRepo, defectCategoryRepo, anomalyRepo, unitOfWork,
+            inspectionEvaluationClient, eventPublisher, null!, logger) { }
+
+    [Obsolete("Emergency dependencies are ignored; Cloud AI no longer owns the Edge alert flow.")]
+    public ProcessAiAnalysisResultCommandHandler(
+        IGenericRepository<AIAnalysisRequest> aiRequestRepo,
+        IInspectionMediaRepository mediaRepo,
+        IGenericRepository<DefectCategory> defectCategoryRepo,
+        IAnomalyRepository anomalyRepo,
+        IGenericRepository<EmergencyAlert> _,
+        INotificationRepository __,
+        IUnitOfWork unitOfWork,
+        IInspectionEvaluationClient inspectionEvaluationClient,
+        IEventPublisher eventPublisher,
+        ILogger<ProcessAiAnalysisResultCommandHandler> logger)
+        : this(aiRequestRepo, mediaRepo, defectCategoryRepo, anomalyRepo, unitOfWork,
+            inspectionEvaluationClient, eventPublisher, logger)
+    {
     }
 
     public async Task<AiAnalysisCallbackResponseDto> Handle(
@@ -80,45 +106,39 @@ public class ProcessAiAnalysisResultCommandHandler
             };
         }
 
-        // 2. Resolve InspectionMedia from callback MediaId, or fallback to the persisted AIAnalysisRequest link.
-        var resolvedMediaId = request.MediaId.HasValue && request.MediaId.Value != Guid.Empty
-            ? request.MediaId
-            : aiRequest.MediaId;
+        if (aiRequest.MediaId != request.MediaId || aiRequest.MissionId != request.MissionId ||
+            aiRequest.AssetId != request.AssetId)
+            throw new BusinessRuleException("AI callback identifiers do not match the stored analysis request.");
 
-        InspectionMedia? media = null;
-        if (resolvedMediaId != null && resolvedMediaId.Value != Guid.Empty)
-        {
-            media = await _mediaRepo.GetByIdWithDetailsAsync(resolvedMediaId.Value);
-            if (media == null)
-            {
-                _logger.LogWarning(
-                    "InspectionMedia not found while processing AI result: RequestId={RequestId}, MediaId={MediaId}",
-                    request.RequestId, resolvedMediaId);
-                throw new NotFoundException(nameof(InspectionMedia), resolvedMediaId.Value);
-            }
-        }
-        else if (!string.IsNullOrWhiteSpace(aiRequest.FileUrl))
-        {
-            var matchingMedia = await _mediaRepo.FindAsync(m => m.FileUrl == aiRequest.FileUrl, track: false);
-            var mediaByFileUrl = matchingMedia.FirstOrDefault();
-            if (mediaByFileUrl != null)
-            {
-                media = await _mediaRepo.GetByIdWithDetailsAsync(mediaByFileUrl.Id);
-                if (media != null)
-                {
-                    aiRequest.MediaId = media.Id;
-                    aiRequest.MissionId = media.MissionId;
+        var media = await _mediaRepo.GetByIdWithDetailsAsync(request.MediaId!.Value)
+            ?? throw new NotFoundException(nameof(InspectionMedia), request.MediaId.Value);
+        if (!media.AssetId.HasValue || media.AssetId == Guid.Empty || media.AssetId != request.AssetId ||
+            media.MissionId != request.MissionId)
+            throw new BusinessRuleException("AI callback identifiers do not match the stored inspection media.");
 
-                    _logger.LogInformation(
-                        "Resolved AI result media by file URL fallback: RequestId={RequestId}, MediaId={MediaId}",
-                        request.RequestId, media.Id);
-                }
+        if ("Processing".Equals(request.Status, StringComparison.OrdinalIgnoreCase))
+        {
+            if (aiRequest.Status == AIAnalysisStatus.Pending)
+            {
+                aiRequest.Status = AIAnalysisStatus.Processing;
+                aiRequest.UpdatedAt = DateTime.UtcNow;
+                await _aiRequestRepo.UpdateAsync(aiRequest);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
+            return new AiAnalysisCallbackResponseDto
+            {
+                RequestId = aiRequest.Id,
+                Status = aiRequest.Status.ToString(),
+                ProcessedAt = DateTime.UtcNow
+            };
         }
+
+        if (aiRequest.Status != AIAnalysisStatus.Processing)
+            throw new BusinessRuleException("AI analysis must enter Processing before reaching a terminal state.");
 
         var savedDetections = 0;
         var createdAlerts = 0;
-        var notificationsToPush = new List<Notification>();
+        var eventsToPublish = new List<object>();
 
         // Save Changes
         try
@@ -164,7 +184,7 @@ public class ProcessAiAnalysisResultCommandHandler
                         {
                             Id = Guid.NewGuid(),
                             MediaId = media.Id,
-                            AssetId = detection.AssetId ?? media.AssetId,
+                            AssetId = media.AssetId.Value,
                             CategoryId = category.Id,
                             BoundingBox = bboxJson,
                             AiDetectionId = string.IsNullOrWhiteSpace(detection.Id) ? null : detection.Id.Trim(),
@@ -210,64 +230,6 @@ public class ProcessAiAnalysisResultCommandHandler
                             ? anomaly.AnalystNotes
                             : $"AI evaluation: severity={evaluation.Severity}, risk={evaluation.RiskLevel}, score={evaluation.PriorityScore}. {evaluation.Reason}";
 
-                        await _eventPublisher.PublishAsync(new DefectDetectedEvent
-                        {
-                            InspectionId = media.MissionId,
-                            RecordId = anomaly.Id,
-                            MissionId = media.MissionId,
-                            ImageUrl = anomaly.ImageUrl ?? media.FileUrl,
-                            IsDefect = true,
-                            DefectType = category.CategoryName,
-                            DetectedAt = DateTime.UtcNow
-                        });
-
-                        // 5. Check if it's an emergency alert
-                        var isEmergency = evaluation.RequiresImmediateAlert ||
-                            BoundingBoxCalculations.IsEmergencyClass(detection.CategoryCode);
-
-                        if (isEmergency)
-                        {
-                            var latencySeconds = (int)Math.Max(0, (DateTime.UtcNow - request.CompletedAt).TotalSeconds);
-
-                            var alert = new EmergencyAlert
-                            {
-                                Id = Guid.NewGuid(),
-                                AnomalyId = anomaly.Id,
-                                AssetId = media.AssetId,
-                                MissionId = media.MissionId,
-                                Status = "Open",
-                                Priority = "Critical",
-                                TriggeredAt = DateTime.UtcNow,
-                                DeliveryLatencySeconds = latencySeconds
-                            };
-                            
-                            await _emergencyAlertRepo.AddAsync(alert);
-                            createdAlerts++;
-                            
-                            // 6. Send Notification to Mission Manager
-                            if (media.Mission != null)
-                            {
-                                var managerId = media.Mission.ManagerId;
-                                if (managerId != Guid.Empty)
-                                {
-                                    var notification = new Notification
-                                    {
-                                        Id = Guid.NewGuid(),
-                                        UserId = managerId,
-                                        Type = "CriticalAlert",
-                                        ReferenceType = "EmergencyAlert",
-                                        ReferenceId = alert.Id,
-                                        Title = "⚠️ Cảnh báo khẩn cấp: Phát hiện sự cố nghiêm trọng",
-                                        Body = $"Phát hiện khuyết tật khẩn cấp '{category.CategoryName}' ({detection.CategoryCode}) với độ tin cậy {detection.Confidence:P1} tại thiết bị.",
-                                        IsRead = false,
-                                        SentAt = DateTime.UtcNow
-                                    };
-
-                                    await _notificationRepo.AddAsync(notification);
-                                    notificationsToPush.Add(notification);
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -318,37 +280,9 @@ public class ProcessAiAnalysisResultCommandHandler
                 await _aiRequestRepo.UpdateAsync(aiRequest);
             }
 
-            // Save Changes
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed while processing AI analysis result.");
-            throw;
-        }
-
-
-
-        foreach (var notification in notificationsToPush)
-        {
-            await _eventPublisher.PublishAsync(new NotificationPushEvent
+            if (aiRequest!.UploadedBy != Guid.Empty)
             {
-                UserId = notification.UserId,
-                NotificationId = notification.Id,
-                Type = notification.Type,
-                Title = notification.Title,
-                Body = notification.Body,
-                ReferenceType = notification.ReferenceType,
-                ReferenceId = notification.ReferenceId,
-                IsRead = notification.IsRead,
-                SentAt = notification.SentAt
-            });
-        }
-
-        if (aiRequest != null && aiRequest.UploadedBy != Guid.Empty)
-        {
-            await _eventPublisher.PublishAsync(
-                new UavPms.Shared.Contracts.Events.AIAnalysisStatusChangedEvent
+                await QueueEventAsync(new AIAnalysisStatusChangedEvent
                 {
                     UserId = aiRequest.UploadedBy,
                     RequestId = aiRequest.Id,
@@ -363,8 +297,18 @@ public class ProcessAiAnalysisResultCommandHandler
                     ErrorMessage = request.ErrorMessage,
                     CreatedAt = aiRequest.CreatedAt,
                     CompletedAt = aiRequest.CompletedAt
-                });
+                }, eventsToPublish);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed while processing AI analysis result.");
+            throw;
+        }
+        foreach (var integrationEvent in eventsToPublish)
+            await PublishFallbackAsync(integrationEvent);
 
         _logger.LogInformation("Successfully processed AI analysis result. RequestId={RequestId}, Status={Status}", 
             request.RequestId, aiRequest?.Status.ToString() ?? "Completed");
@@ -378,4 +322,29 @@ public class ProcessAiAnalysisResultCommandHandler
             ProcessedAt = DateTime.UtcNow
         };
     }
+
+    private async Task QueueEventAsync(object integrationEvent, ICollection<object> fallback)
+    {
+        if (_outboxRepository == null)
+        {
+            fallback.Add(integrationEvent);
+            return;
+        }
+
+        await _outboxRepository.AddAsync(new OutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            MessageType = integrationEvent.GetType().Name,
+            Payload = JsonSerializer.Serialize(integrationEvent, integrationEvent.GetType()),
+            OccurredAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow
+        });
+    }
+
+    private Task PublishFallbackAsync(object integrationEvent) => integrationEvent switch
+    {
+        DefectDetectedEvent defect => _eventPublisher.PublishAsync(defect),
+        AIAnalysisStatusChangedEvent status => _eventPublisher.PublishAsync(status),
+        _ => throw new InvalidOperationException($"Unsupported integration event {integrationEvent.GetType().Name}.")
+    };
 }

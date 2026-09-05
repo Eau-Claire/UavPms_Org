@@ -6,8 +6,10 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
+using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage;
 using UavPms.OperationsService.Domain.Contracts;
+using UavPms.Shared.Contracts.Events;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Domain.Interfaces.Services;
@@ -20,6 +22,7 @@ public class UploadInspectionImageCommandHandlerTests
     private readonly Mock<IGenericRepository<Mission>> _missionRepositoryMock;
     private readonly Mock<IGenericRepository<Asset>> _assetRepositoryMock;
     private readonly Mock<IGenericRepository<InspectionMedia>> _mediaRepositoryMock;
+    private readonly Mock<IGenericRepository<MissionTarget>> _missionTargetRepositoryMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IFileStorageService> _fileStorageServiceMock;
     private readonly Mock<IEventPublisher> _eventPublisherMock;
@@ -32,6 +35,7 @@ public class UploadInspectionImageCommandHandlerTests
         _missionRepositoryMock = new Mock<IGenericRepository<Mission>>();
         _assetRepositoryMock = new Mock<IGenericRepository<Asset>>();
         _mediaRepositoryMock = new Mock<IGenericRepository<InspectionMedia>>();
+        _missionTargetRepositoryMock = new Mock<IGenericRepository<MissionTarget>>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _fileStorageServiceMock = new Mock<IFileStorageService>();
         _eventPublisherMock = new Mock<IEventPublisher>();
@@ -42,6 +46,7 @@ public class UploadInspectionImageCommandHandlerTests
             _missionRepositoryMock.Object,
             _assetRepositoryMock.Object,
             _mediaRepositoryMock.Object,
+            _missionTargetRepositoryMock.Object,
             _unitOfWorkMock.Object,
             _fileStorageServiceMock.Object,
             _eventPublisherMock.Object,
@@ -78,7 +83,7 @@ public class UploadInspectionImageCommandHandlerTests
         _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-        _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<ImageUploadedEvent>()), Times.Never);
+        _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<InspectionMediaUploadedEvent>()), Times.Never);
     }
 
     [Fact]
@@ -115,7 +120,7 @@ public class UploadInspectionImageCommandHandlerTests
         _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-        _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<ImageUploadedEvent>()), Times.Never);
+        _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<InspectionMediaUploadedEvent>()), Times.Never);
     }
 
     [Fact]
@@ -157,13 +162,13 @@ public class UploadInspectionImageCommandHandlerTests
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
 
         // Assert
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+        await act.Should().ThrowAsync<ForbiddenException>()
             .WithMessage("You are not assigned to this mission.");
 
         _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-        _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<ImageUploadedEvent>()), Times.Never);
+        _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<InspectionMediaUploadedEvent>()), Times.Never);
     }
 
     [Fact]
@@ -204,6 +209,9 @@ public class UploadInspectionImageCommandHandlerTests
 
         _currentUserServicesMock.Setup(s => s.UserId).Returns(inspectorId);
 
+        _missionTargetRepositoryMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<MissionTarget, bool>>>(), false))
+            .ReturnsAsync(new List<MissionTarget> { new() { MissionId = missionId, AssetId = assetId } });
+
         _fileStorageServiceMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), fileName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(fileUrl);
 
@@ -230,11 +238,37 @@ public class UploadInspectionImageCommandHandlerTests
 
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
 
-        _eventPublisherMock.Verify(p => p.PublishAsync(It.Is<ImageUploadedEvent>(e =>
+        _eventPublisherMock.Verify(p => p.PublishAsync(It.Is<InspectionMediaUploadedEvent>(e =>
             e.MissionId == missionId &&
+            e.AssetId == assetId &&
             e.FileUrl == fileUrl &&
             e.MediaType == "Image" &&
             e.UploadedBy == inspectorId
         )), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldRejectAssetOutsideMissionScope()
+    {
+        var missionId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
+        var inspectorId = Guid.NewGuid();
+        _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false))
+            .ReturnsAsync(new Mission { Id = missionId, InspectorId = inspectorId });
+        _assetRepositoryMock.Setup(r => r.GetByIdAsync(assetId, false))
+            .ReturnsAsync(new Asset { Id = assetId });
+        _currentUserServicesMock.SetupGet(x => x.UserId).Returns(inspectorId);
+        _missionTargetRepositoryMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<MissionTarget, bool>>>(), false))
+            .ReturnsAsync(Array.Empty<MissionTarget>());
+
+        var act = () => _handler.Handle(new UploadInspectionImageCommand
+        {
+            MissionId = missionId, AssetId = assetId, CapturedAt = DateTime.UtcNow,
+            FileName = "test.jpg", ContentType = "image/jpeg", FileStream = new MemoryStream([0xFF, 0xD8, 0xFF, 0xD9])
+        }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<UavPms.OperationsService.Application.Common.Exceptions.BusinessRuleException>()
+            .WithMessage("*mission inspection scope*");
+        _mediaRepositoryMock.Verify(x => x.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
     }
 }

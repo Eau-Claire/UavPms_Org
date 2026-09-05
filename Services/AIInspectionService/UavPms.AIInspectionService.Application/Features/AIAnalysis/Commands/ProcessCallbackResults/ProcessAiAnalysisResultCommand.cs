@@ -51,6 +51,8 @@ public class ProcessAiAnalysisResultCommand : IRequest<AiAnalysisCallbackRespons
 {
     public Guid RequestId { get; set; }
     public Guid? MediaId { get; set; }
+    public Guid? MissionId { get; set; }
+    public Guid? AssetId { get; set; }
     public string Status { get; set; } = string.Empty; // "Completed" or "Failed"
     public string? ModelName { get; set; }
     public string? ModelVersion { get; set; }

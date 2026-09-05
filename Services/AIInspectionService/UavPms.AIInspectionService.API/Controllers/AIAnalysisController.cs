@@ -2,8 +2,6 @@ using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.UploadForAnalysis;
-using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.AnalyzeMissionMedia;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.AnalyzeExistingMedia;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetAnalysisById;
@@ -14,20 +12,14 @@ using UavPms.Shared.Contracts.Constants;
 namespace UavPms.AIInspectionService.API.Controllers;
 
 /// <summary>
-/// API cho phân tích AI ad-hoc — không liên kết với mission cụ thể.
-/// Hỗ trợ upload nhiều ảnh và/hoặc video trong cùng 1 request.
+/// Queries, existing-media reanalysis, and analyst review for AI inspection.
 /// </summary>
 [ApiController]
 [Route("api/v{version:apiVersion}/ai-analysis")]
 [ApiVersion("1.0")]
-[Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+[Authorize]
 public class AIAnalysisController : ControllerBase
 {
-    private const long MaxMultipartRequestBytes = 50L * 1024 * 1024;
-    private const int MaxFileCount = 20;
-    private const long MaxImageSizeBytes = 20L * 1024 * 1024;
-    private const long MaxVideoSizeBytes = 50L * 1024 * 1024;
-
     private readonly ISender _mediator;
 
     public AIAnalysisController(ISender mediator)
@@ -36,134 +28,10 @@ public class AIAnalysisController : ControllerBase
     }
 
     /// <summary>
-    /// Upload 1 hoặc nhiều ảnh/video để AI phân tích ad-hoc (không cần liên kết mission).
-    /// </summary>
-    /// <param name="files">Danh sách file (JPEG, PNG, WebP, TIFF, MP4, AVI, MOV)</param>
-    /// <param name="analysisType">Loại phân tích AI (optional, default: General)</param>
-    /// <param name="notes">Ghi chú (optional)</param>
-    [HttpPost("upload")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(MaxMultipartRequestBytes)]
-    [RequestFormLimits(MultipartBodyLengthLimit = MaxMultipartRequestBytes)]
-    public async Task<IActionResult> Upload(
-        List<IFormFile> files,
-        [FromForm] AnalysisType analysisType = AnalysisType.General,
-        [FromForm] string? notes = null, 
-        CancellationToken cancellationToken = default)
-    {
-        // Validate file presence
-        if (files == null || files.Count == 0)
-        {
-            return BadRequest(new ApiResponse(false, "At least one image or video file is required."));
-        }
-
-        // Allowed MIME types: images + videos
-        var allowedTypes = new[]
-        {
-            "image/jpeg", "image/png", "image/webp", "image/tiff",
-            "video/mp4", "video/x-msvideo", "video/quicktime", "video/webm"
-        };
-
-        // Allowed file extensions (defense-in-depth alongside MIME type check)
-        var allowedExtensions = new[]
-        {
-            ".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif",
-            ".mp4", ".avi", ".mov", ".webm"
-        };
-
-        // Max file count to prevent abuse
-        if (files.Count > MaxFileCount)
-        {
-            return BadRequest(new ApiResponse(false, $"Maximum {MaxFileCount} files per request."));
-        }
-
-        var totalBytes = files.Sum(file => file.Length);
-        if (totalBytes > MaxMultipartRequestBytes)
-        {
-            return BadRequest(new ApiResponse(false, "The combined upload size must not exceed 50MB."));
-        }
-
-        // Validate từng file trước khi xử lý
-        var errors = new List<string>();
-        for (int i = 0; i < files.Count; i++)
-        {
-            var file = files[i];
-            // Use only the filename portion (strip directory paths from user input)
-            var safeFileName = Path.GetFileName(file.FileName);
-
-            if (file.Length == 0)
-            {
-                errors.Add($"File [{i}] '{safeFileName}': file is empty.");
-                continue;
-            }
-
-            var contentType = file.ContentType.ToLower();
-            if (Array.IndexOf(allowedTypes, contentType) < 0)
-            {
-                errors.Add($"File [{i}] '{safeFileName}': unsupported type '{contentType}'. Allowed: JPEG, PNG, WebP, TIFF, MP4, AVI, MOV, WebM.");
-                continue;
-            }
-
-            // Validate file extension matches Content-Type ( extension spoofing)
-            var extension = Path.GetExtension(safeFileName).ToLowerInvariant();
-            if (string.IsNullOrEmpty(extension) || Array.IndexOf(allowedExtensions, extension) < 0)
-            {
-                errors.Add($"File [{i}] '{safeFileName}': file extension '{extension}' is not allowed.");
-                continue;
-            }
-
-            var isVideo = contentType.StartsWith("video/");
-            var maxSize = isVideo ? MaxVideoSizeBytes : MaxImageSizeBytes;
-            if (file.Length > maxSize)
-            {
-                var limitMb = maxSize / (1024 * 1024);
-                errors.Add($"File [{i}] '{safeFileName}': exceeds {limitMb}MB limit ({file.Length / (1024 * 1024)}MB).");
-            }
-        }
-
-        if (errors.Count > 0)
-        {
-            return BadRequest(new ApiResponse(false, "Validation failed for one or more files.", Errors: errors));
-        }
-
-        // Tạo danh sách FileUploadItem
-        var fileItems = new List<FileUploadItem>();
-        foreach (var file in files)
-        {
-            fileItems.Add(new FileUploadItem
-            {
-                FileStream = file.OpenReadStream(),
-                FileName = file.FileName,
-                ContentType = file.ContentType
-            });
-        }
-
-        var command = new UploadForAIAnalysisCommand
-        {
-            Files = fileItems,
-            AnalysisType = analysisType,
-            Notes = notes
-        };
-
-        var results = await _mediator.Send(command, cancellationToken);
-
-        // Dispose tất cả stream sau khi xử lý xong
-        foreach (var item in fileItems)
-        {
-            await item.FileStream.DisposeAsync();
-        }
-
-        var message = results.Count == 1
-            ? "File uploaded for AI analysis successfully."
-            : $"{results.Count} files uploaded for AI analysis successfully.";
-
-        return Ok(new ApiResponse(true, message, results));
-    }
-
-    /// <summary>
     /// Lấy kết quả phân tích AI theo ID.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = UserRoles.ManagerAndInspector + "," + UserRoles.Analyst)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetAIAnalysisByIdQuery(id), cancellationToken);
@@ -171,94 +39,10 @@ public class AIAnalysisController : ControllerBase
     }
 
     /// <summary>
-    /// Upload one or more images/videos for AI analysis linked with a mission.
-    /// </summary>
-    /// <param name="missionId">Mission ID.</param>
-    /// <param name="files">Image and/or video files to analyze.</param>
-    /// <param name="analysisType">AI analysis type.</param>
-    /// <param name="preferredModel">Preferred AI model or SERVER for server-side selection.</param>
-    /// <param name="notes">Optional notes for the batch.</param>
-    [HttpPost("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(MaxMultipartRequestBytes)]
-    [RequestFormLimits(MultipartBodyLengthLimit = MaxMultipartRequestBytes)]
-    public async Task<IActionResult> AnalyzeMissionMedia(
-        Guid missionId,
-        [FromForm] IFormFileCollection files,
-        [FromForm] AnalysisType analysisType = AnalysisType.General,
-        [FromForm] string preferredModel = "SERVER",
-        [FromForm] string? notes = null,
-        CancellationToken cancellationToken = default)
-    {
-        if (files == null || files.Count == 0)
-        {
-            return BadRequest(new ApiResponse(false, "Files are required."));
-        }
-
-        if (files.Count > MaxFileCount)
-        {
-            return BadRequest(new ApiResponse(false, $"Maximum {MaxFileCount} files per request."));
-        }
-
-        var totalBytes = files.Sum(file => file.Length);
-        if (totalBytes > MaxMultipartRequestBytes)
-        {
-            return BadRequest(new ApiResponse(false, "The combined upload size must not exceed 50MB."));
-        }
-
-        foreach (var file in files)
-        {
-            var contentType = file.ContentType?.Trim().ToLowerInvariant() ?? string.Empty;
-            var maxSize = contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
-                ? MaxVideoSizeBytes
-                : MaxImageSizeBytes;
-
-            if (file.Length > maxSize)
-            {
-                return BadRequest(new ApiResponse(false, $"File '{Path.GetFileName(file.FileName)}' exceeds its {maxSize / (1024 * 1024)}MB limit."));
-            }
-        }
-
-        var fileData = new List<FileDataDto>();
-        foreach (var file in files)
-        {
-            fileData.Add(new FileDataDto
-            {
-                Stream = file.OpenReadStream(),
-                FileName = Path.GetFileName(file.FileName),
-                ContentType = file.ContentType
-            });
-        }
-
-        try
-        {
-            var command = new AnalyzeMissionMediaCommand
-            {
-                MissionId = missionId,
-                Files = fileData,
-                AnalysisType = analysisType,
-                PreferredModel = preferredModel,
-                Notes = notes
-            };
-
-            var result = await _mediator.Send(command, cancellationToken);
-
-            return Ok(new ApiResponse(true, "AI analysis batch created and queued for processing.", result));
-        }
-        finally
-        {
-            foreach (var item in fileData)
-            {
-                await item.Stream.DisposeAsync();
-            }
-        }
-    }
-
-
-    /// <summary>
     /// List mission media that have AI detections, including bounding boxes for FE overlays.
     /// </summary>
     [HttpGet("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/detections")]
+    [Authorize(Roles = UserRoles.ManagerAndInspector + "," + UserRoles.Analyst)]
     public async Task<IActionResult> GetMissionAiDetections(Guid missionId, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetMissionAiDetectionsQuery(missionId), cancellationToken);
@@ -270,6 +54,7 @@ public class AIAnalysisController : ControllerBase
     /// Accept or reject one AI detection and optionally save analyst notes for that bounding box.
     /// </summary>
     [HttpPut("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/detections/{detectionId:guid}/review")]
+    [Authorize(Roles = UserRoles.Analyst)]
     public async Task<IActionResult> ReviewMissionAiDetection(
         Guid missionId,
         Guid detectionId,
@@ -291,6 +76,7 @@ public class AIAnalysisController : ControllerBase
     /// Phân tích AI sử dụng file InspectionMedia đã tồn tại trong mission.
     /// </summary>
     [HttpPost("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/from-media/{mediaId:guid}")]
+    [Authorize(Roles = UserRoles.Manager + "," + UserRoles.Analyst)]
     public async Task<IActionResult> AnalyzeExistingMedia(
         Guid missionId,
         Guid mediaId,

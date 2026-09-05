@@ -21,6 +21,9 @@ public class AIAnalysisRequest : BaseEntity
 
     /// <summary>ID mission nếu request được tạo trong ngữ cảnh mission</summary>
     public Guid? MissionId { get; set; }
+    public Guid? AssetId { get; set; }
+    public Guid? SourceEventId { get; set; }
+    public string ModelName { get; set; } = "SERVER";
 
     /// <summary>URL file đã lưu trên object storage</summary>
     public string FileUrl { get; set; } = string.Empty;
@@ -47,4 +50,5 @@ public class AIAnalysisRequest : BaseEntity
     public virtual User? Uploader { get; set; }
     public virtual InspectionMedia? Media { get; set; }
     public virtual Mission? Mission { get; set; }
+    public virtual Asset? Asset { get; set; }
 }

@@ -10,6 +10,10 @@ public class AIAnalysisDetailResult
 {
     public Guid Id { get; set; }
     public Guid UploadedBy { get; set; }
+    public Guid? MediaId { get; set; }
+    public Guid? MissionId { get; set; }
+    public Guid? AssetId { get; set; }
+    public string ModelName { get; set; } = string.Empty;
     public string FileUrl { get; set; } = string.Empty;
     public string MediaType { get; set; } = string.Empty;
     public AnalysisType AnalysisType { get; set; }

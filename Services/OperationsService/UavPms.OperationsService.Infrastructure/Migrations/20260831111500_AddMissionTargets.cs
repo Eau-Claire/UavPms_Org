@@ -1,10 +1,14 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using UavPms.OperationsService.Infrastructure.Persistence;
 
 #nullable disable
 
 namespace UavPms.OperationsService.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20260831111500_AddMissionTargets")]
     public partial class AddMissionTargets : Migration
     {
         /// <inheritdoc />

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using System.Net;
 using UavPms.AIInspectionService.API.Controllers;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using Microsoft.EntityFrameworkCore;
 
 namespace UavPms.AIInspectionService.API.Middlewares;
 
@@ -37,6 +38,7 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Message: "One or more validation errors occurred.",
                 Data: null,
                 Errors: errors
+                , ErrorCode: "INVALID_AI_RESPONSE"
             );
         }
         else if (exception is UnauthorizedAccessException unauthorizedAccessException)
@@ -47,7 +49,13 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Message: unauthorizedAccessException.Message,
                 Data: null,
                 Errors: null
+                , ErrorCode: "UNAUTHORIZED"
             );
+        }
+        else if (exception is ForbiddenException forbiddenException)
+        {
+            httpContext.Response.StatusCode = (int)HttpStatusCode.Forbidden;
+            apiResponse = new ApiResponse(false, forbiddenException.Message, ErrorCode: "FORBIDDEN");
         }
         else if (exception is NotFoundException notFoundException)
         {
@@ -57,6 +65,7 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Message: notFoundException.Message,
                 Data: null,
                 Errors: null
+                , ErrorCode: "NOT_FOUND"
             );
         }
         else if (exception is KeyNotFoundException keyNotFoundException)
@@ -67,6 +76,7 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Message: keyNotFoundException.Message,
                 Data: null,
                 Errors: null
+                , ErrorCode: "NOT_FOUND"
             );
         }
         else if (exception is BusinessRuleException businessRuleException)
@@ -77,7 +87,14 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Message: businessRuleException.Message,
                 Data: null,
                 Errors: null
+                , ErrorCode: "INVALID_AI_RESPONSE"
             );
+        }
+        else if (exception is DbUpdateException dbUpdateException &&
+                 dbUpdateException.InnerException?.Message.Contains("IX_AIAnalysisRequests_ActiveLogicalAnalysis", StringComparison.Ordinal) == true)
+        {
+            httpContext.Response.StatusCode = (int)HttpStatusCode.Conflict;
+            apiResponse = new ApiResponse(false, "An equivalent AI analysis request is already active.", ErrorCode: "DUPLICATE_REQUEST");
         }
         else
         {
@@ -87,6 +104,7 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Message: "An unexpected error occurred. Please try again later.",
                 Data: null,
                 Errors: null
+                , ErrorCode: "INTERNAL_ERROR"
             );
         }
 

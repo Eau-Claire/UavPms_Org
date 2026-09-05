@@ -21,6 +21,13 @@ public class AIAnalysisRequest : BaseEntity
 
     /// <summary>ID mission nếu request được tạo trong ngữ cảnh mission</summary>
     public Guid? MissionId { get; set; }
+    public Guid? AssetId { get; set; }
+
+    /// <summary>Integration event that originated the normal analysis request.</summary>
+    public Guid? SourceEventId { get; set; }
+
+    /// <summary>Selected AI runtime/model. Used with media and analysis type for idempotency.</summary>
+    public string ModelName { get; set; } = "SERVER";
 
     /// <summary>URL file đã lưu trên object storage</summary>
     public string FileUrl { get; set; } = string.Empty;
@@ -47,4 +54,5 @@ public class AIAnalysisRequest : BaseEntity
     public virtual User? Uploader { get; set; }
     public virtual InspectionMedia? Media { get; set; }
     public virtual Mission? Mission { get; set; }
+    public virtual Asset? Asset { get; set; }
 }

@@ -97,6 +97,8 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
 {
     builder.Services.AddHostedService<AIAnalysisRequestTopologyInitializer>();
     builder.Services.AddHostedService<AIAnalysisResultConsumer>();
+    builder.Services.AddHostedService<InspectionMediaUploadedConsumer>();
+    builder.Services.AddHostedService<OutboxDispatcher>();
 }
 
 builder.Services.AddCors(options =>

@@ -5,17 +5,18 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
-using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.UploadForAnalysis;
 using UavPms.AIInspectionService.Domain.Contracts;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Events;
+using System.Text.Json;
 
 namespace UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.AnalyzeExistingMedia;
 
 public class AnalyzeExistingMediaCommandHandler
-    : IRequestHandler<AnalyzeExistingMediaCommand, AIAnalysisUploadResult>
+    : IRequestHandler<AnalyzeExistingMediaCommand, AIAnalysisReanalysisResult>
 {
     private readonly IGenericRepository<Mission> _missionRepository;
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
@@ -24,6 +25,27 @@ public class AnalyzeExistingMediaCommandHandler
     private readonly IEventPublisher _eventPublisher;
     private readonly ICurrentUserServices _currentUser;
     private readonly ILogger<AnalyzeExistingMediaCommandHandler> _logger;
+    private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
+
+    public AnalyzeExistingMediaCommandHandler(
+        IGenericRepository<Mission> missionRepository,
+        IGenericRepository<InspectionMedia> mediaRepository,
+        IGenericRepository<AIAnalysisRequest> aiRequestRepository,
+        IUnitOfWork unitOfWork,
+        IEventPublisher eventPublisher,
+        ICurrentUserServices currentUser,
+        IGenericRepository<OutboxMessage> outboxRepository,
+        ILogger<AnalyzeExistingMediaCommandHandler> logger)
+    {
+        _missionRepository = missionRepository;
+        _mediaRepository = mediaRepository;
+        _aiRequestRepository = aiRequestRepository;
+        _unitOfWork = unitOfWork;
+        _eventPublisher = eventPublisher;
+        _currentUser = currentUser;
+        _outboxRepository = outboxRepository;
+        _logger = logger;
+    }
 
     public AnalyzeExistingMediaCommandHandler(
         IGenericRepository<Mission> missionRepository,
@@ -33,17 +55,10 @@ public class AnalyzeExistingMediaCommandHandler
         IEventPublisher eventPublisher,
         ICurrentUserServices currentUser,
         ILogger<AnalyzeExistingMediaCommandHandler> logger)
-    {
-        _missionRepository = missionRepository;
-        _mediaRepository = mediaRepository;
-        _aiRequestRepository = aiRequestRepository;
-        _unitOfWork = unitOfWork;
-        _eventPublisher = eventPublisher;
-        _currentUser = currentUser;
-        _logger = logger;
-    }
+        : this(missionRepository, mediaRepository, aiRequestRepository, unitOfWork, eventPublisher,
+            currentUser, null!, logger) { }
 
-    public async Task<AIAnalysisUploadResult> Handle(
+    public async Task<AIAnalysisReanalysisResult> Handle(
         AnalyzeExistingMediaCommand request,
         CancellationToken cancellationToken)
     {
@@ -54,6 +69,12 @@ public class AnalyzeExistingMediaCommandHandler
         if (mission == null)
         {
             throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
+        }
+
+        if ((_currentUser.Roles ?? Array.Empty<string>()).Contains(UavPms.Shared.Contracts.Constants.UserRoles.Manager) &&
+            mission.ManagerId != currentUserId)
+        {
+            throw new ForbiddenException("Managers may only request reanalysis for missions they manage.");
         }
 
         // 2. Kiểm tra InspectionMedia tồn tại
@@ -69,6 +90,11 @@ public class AnalyzeExistingMediaCommandHandler
             throw new BusinessRuleException("The specified inspection media does not belong to the selected mission.");
         }
 
+        if (!media.AssetId.HasValue || media.AssetId == Guid.Empty)
+        {
+            throw new BusinessRuleException("Mission inspection media must be associated with an asset before reanalysis.");
+        }
+
         // 4. Tạo bản ghi AIAnalysisRequest
         var aiRequest = new AIAnalysisRequest
         {
@@ -76,6 +102,8 @@ public class AnalyzeExistingMediaCommandHandler
             UploadedBy = currentUserId,
             MediaId = media.Id,
             MissionId = request.MissionId,
+            AssetId = media.AssetId,
+            ModelName = string.IsNullOrWhiteSpace(request.PreferredModel) ? "SERVER" : request.PreferredModel.Trim(),
             FileUrl = media.FileUrl,
             MediaType = media.MediaType,
             AnalysisType = request.AnalysisType,
@@ -85,6 +113,23 @@ public class AnalyzeExistingMediaCommandHandler
         };
         await _aiRequestRepository.AddAsync(aiRequest);
 
+        var workerEvent = new AIAnalysisRequestedEvent
+        {
+            RequestId = aiRequest.Id, FileUrl = aiRequest.FileUrl, MediaType = aiRequest.MediaType,
+            AnalysisType = aiRequest.AnalysisType.ToString(), Notes = aiRequest.Notes,
+            UploadedBy = currentUserId, RequestedAt = aiRequest.CreatedAt, MediaId = media.Id,
+            MissionId = request.MissionId, AssetId = media.AssetId, PreferredModel = aiRequest.ModelName
+        };
+        if (_outboxRepository != null)
+        {
+            await _outboxRepository.AddAsync(new OutboxMessage
+            {
+                Id = Guid.NewGuid(), MessageType = nameof(AIAnalysisRequestedEvent),
+                Payload = JsonSerializer.Serialize(workerEvent), OccurredAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow, CreatedBy = currentUserId
+            });
+        }
+
         // 5. Lưu xuống DB
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -93,24 +138,15 @@ public class AnalyzeExistingMediaCommandHandler
             aiRequest.Id, media.Id, request.MissionId);
 
         // 6. Phát sự kiện AIAnalysisRequestedEvent lên RabbitMQ để Python consumer xử lý
-        await _eventPublisher.PublishAsync(new AIAnalysisRequestedEvent
-        {
-            RequestId = aiRequest.Id,
-            FileUrl = aiRequest.FileUrl,
-            MediaType = aiRequest.MediaType,
-            AnalysisType = aiRequest.AnalysisType.ToString(),
-            Notes = aiRequest.Notes,
-            UploadedBy = currentUserId,
-            RequestedAt = aiRequest.CreatedAt,
-            MediaId = media.Id,
-            MissionId = request.MissionId,
-            AssetId = media.AssetId,
-            PreferredModel = request.PreferredModel
-        });
+        if (_outboxRepository == null)
+            await _eventPublisher.PublishAsync(workerEvent);
 
-        return new AIAnalysisUploadResult
+        return new AIAnalysisReanalysisResult
         {
             Id = aiRequest.Id,
+            MediaId = media.Id,
+            MissionId = media.MissionId,
+            AssetId = media.AssetId.Value,
             FileUrl = aiRequest.FileUrl,
             MediaType = aiRequest.MediaType,
             AnalysisType = aiRequest.AnalysisType,

@@ -258,6 +258,8 @@ public class AIAnalysisResultConsumer : BackgroundService
         {
             RequestId = payload.AnalysisId,
             MediaId = payload.MediaId,
+            MissionId = payload.MissionId,
+            AssetId = payload.AssetId,
             Status = payload.Status,
             ModelName = payload.ModelName,
             ModelVersion = payload.ModelVersion,

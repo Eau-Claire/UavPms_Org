@@ -200,6 +200,16 @@ public class MockAIAnalysisConsumer : BackgroundService
             var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
             var categoryRepository = scope.ServiceProvider.GetRequiredService<IGenericRepository<DefectCategory>>();
 
+            await mediator.Send(new ProcessAiAnalysisResultCommand
+            {
+                RequestId = aiRequestEvent.RequestId,
+                MediaId = aiRequestEvent.MediaId,
+                MissionId = aiRequestEvent.MissionId,
+                AssetId = aiRequestEvent.AssetId,
+                Status = "Processing",
+                CompletedAt = DateTime.UtcNow
+            }, cancellationToken);
+
             var categoryCode = await ResolveCategoryCodeAsync(categoryRepository);
             if (string.IsNullOrWhiteSpace(categoryCode))
             {
@@ -207,6 +217,8 @@ public class MockAIAnalysisConsumer : BackgroundService
                 {
                     RequestId = aiRequestEvent.RequestId,
                     MediaId = aiRequestEvent.MediaId,
+                    MissionId = aiRequestEvent.MissionId,
+                    AssetId = aiRequestEvent.AssetId,
                     Status = "Failed",
                     ErrorCode = "MOCK_AI_NO_CATEGORY",
                     ErrorMessage = "Mock AI could not find any DefectCategory to use for demo detection.",
@@ -222,6 +234,8 @@ public class MockAIAnalysisConsumer : BackgroundService
             {
                 RequestId = aiRequestEvent.RequestId,
                 MediaId = aiRequestEvent.MediaId,
+                MissionId = aiRequestEvent.MissionId,
+                AssetId = aiRequestEvent.AssetId,
                 Status = "Completed",
                 ModelName = _configuration["MockAI:ModelName"] ?? "MockAI",
                 ModelVersion = _configuration["MockAI:ModelVersion"] ?? "demo",

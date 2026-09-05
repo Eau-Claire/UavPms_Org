@@ -12,12 +12,17 @@ public class ProcessAiAnalysisResultCommandValidator : AbstractValidator<Process
 
         RuleFor(x => x.Status)
             .NotEmpty().WithMessage("Status is required.")
-            .Must(s => "Completed".Equals(s, StringComparison.OrdinalIgnoreCase) || 
+            .Must(s => "Processing".Equals(s, StringComparison.OrdinalIgnoreCase) ||
+                       "Completed".Equals(s, StringComparison.OrdinalIgnoreCase) ||
                        "Failed".Equals(s, StringComparison.OrdinalIgnoreCase))
-            .WithMessage("Status must be 'Completed' or 'Failed'.");
+            .WithMessage("Status must be 'Processing', 'Completed' or 'Failed'.");
 
         RuleFor(x => x.CompletedAt)
             .NotEmpty().WithMessage("CompletedAt is required.");
+
+        RuleFor(x => x.MediaId).NotEmpty().WithMessage("MediaId is required.");
+        RuleFor(x => x.MissionId).NotEmpty().WithMessage("MissionId is required.");
+        RuleFor(x => x.AssetId).NotEmpty().WithMessage("AssetId is required.");
 
         When(x => "Completed".Equals(x.Status, StringComparison.OrdinalIgnoreCase), () =>
         {
@@ -29,6 +34,9 @@ public class ProcessAiAnalysisResultCommandValidator : AbstractValidator<Process
 
             RuleForEach(x => x.Detections).ChildRules(detection =>
             {
+                detection.RuleFor(d => d.Id)
+                    .NotEmpty().WithMessage("Detection Id is required for callback idempotency.");
+
                 detection.RuleFor(d => d.CategoryCode)
                     .NotEmpty().WithMessage("CategoryCode is required.");
 
@@ -39,16 +47,31 @@ public class ProcessAiAnalysisResultCommandValidator : AbstractValidator<Process
                     .NotNull().WithMessage("BoundingBox is required.");
 
                 detection.RuleFor(d => d.BoundingBox.X)
-                    .InclusiveBetween(0, 1).WithMessage("BoundingBox X must be between 0 and 1.");
+                    .GreaterThanOrEqualTo(0).LessThan(1).WithMessage("BoundingBox X must be at least 0 and less than 1.");
 
                 detection.RuleFor(d => d.BoundingBox.Y)
-                    .InclusiveBetween(0, 1).WithMessage("BoundingBox Y must be between 0 and 1.");
+                    .GreaterThanOrEqualTo(0).LessThan(1).WithMessage("BoundingBox Y must be at least 0 and less than 1.");
 
                 detection.RuleFor(d => d.BoundingBox.Width)
-                    .InclusiveBetween(0, 1).WithMessage("BoundingBox Width must be between 0 and 1.");
+                    .GreaterThan(0).LessThanOrEqualTo(1).WithMessage("BoundingBox Width must be greater than 0 and at most 1.");
 
                 detection.RuleFor(d => d.BoundingBox.Height)
-                    .InclusiveBetween(0, 1).WithMessage("BoundingBox Height must be between 0 and 1.");
+                    .GreaterThan(0).LessThanOrEqualTo(1).WithMessage("BoundingBox Height must be greater than 0 and at most 1.");
+
+                detection.RuleFor(d => d.BoundingBox)
+                    .Must(box => box == null || (box.X + box.Width <= 1 && box.Y + box.Height <= 1))
+                    .WithMessage("BoundingBox must remain within normalized media bounds.");
+
+                detection.RuleFor(d => d.FrameIndex)
+                    .GreaterThanOrEqualTo(0).When(d => d.FrameIndex.HasValue);
+                detection.RuleFor(d => d.Timestamp)
+                    .GreaterThanOrEqualTo(0).When(d => d.Timestamp.HasValue);
+                detection.RuleFor(d => d.TimestampMs)
+                    .GreaterThanOrEqualTo(0).When(d => d.TimestampMs.HasValue);
+                detection.RuleFor(d => d.Gps!.Lat)
+                    .InclusiveBetween(-90, 90).When(d => d.Gps?.Lat.HasValue == true);
+                detection.RuleFor(d => d.Gps!.Lng)
+                    .InclusiveBetween(-180, 180).When(d => d.Gps?.Lng.HasValue == true);
             });
         });
 

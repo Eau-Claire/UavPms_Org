@@ -7,6 +7,7 @@ using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Domain.Common;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.OperationsService.Infrastructure.Persistence;
 
@@ -43,6 +44,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
     public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,

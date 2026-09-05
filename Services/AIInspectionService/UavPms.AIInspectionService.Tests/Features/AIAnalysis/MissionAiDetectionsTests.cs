@@ -21,6 +21,10 @@ public class MissionAiDetectionsTests
         var missionId = Guid.NewGuid();
         var mediaId = Guid.NewGuid();
         var repositoryMock = new Mock<IInspectionMediaRepository>();
+        var missionRepositoryMock = new Mock<IGenericRepository<Mission>>();
+        var currentUserMock = new Mock<ICurrentUserServices>();
+        missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Mission { Id = missionId });
         repositoryMock.Setup(r => r.GetByMissionIdWithDetailsAsync(missionId))
             .ReturnsAsync(new List<InspectionMedia>
             {
@@ -73,7 +77,8 @@ public class MissionAiDetectionsTests
                 }
             });
 
-        var handler = new GetMissionAiDetectionsQueryHandler(repositoryMock.Object);
+        var handler = new GetMissionAiDetectionsQueryHandler(
+            repositoryMock.Object, missionRepositoryMock.Object, currentUserMock.Object);
 
         var result = await handler.Handle(new GetMissionAiDetectionsQuery(missionId), CancellationToken.None);
 
