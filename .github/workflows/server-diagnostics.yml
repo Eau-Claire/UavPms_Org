@@ -54,6 +54,14 @@ jobs:
             docker ps -a --filter status=exited 2>&1 || true
             docker ps -a --filter status=restarting 2>&1 || true
 
+            echo "========== SERVICE STATES =========="
+            docker inspect uav-ai-inspection-service \
+              --format 'Name={{.Name}} ExitCode={{.State.ExitCode}} Error={{.State.Error}} OOMKilled={{.State.OOMKilled}} Status={{.State.Status}}' \
+              2>&1 || true
+            docker inspect uav-operations-service \
+              --format 'Name={{.Name}} ExitCode={{.State.ExitCode}} Error={{.State.Error}} OOMKilled={{.State.OOMKilled}} Status={{.State.Status}}' \
+              2>&1 || true
+
             echo "========== HEALTH =========="
             if [ -n "$GATEWAY_HEALTH_URL" ]; then
               curl -fsS -i "$GATEWAY_HEALTH_URL" 2>&1 || true
@@ -80,3 +88,9 @@ jobs:
                 printf '%s\n' "$COMPOSE_SERVICES"
               fi
             fi
+
+            echo "========== AI INSPECTION LOGS =========="
+            docker compose logs --tail=300 aiinspectionservice 2>&1 || true
+
+            echo "========== OPERATIONS LOGS =========="
+            docker compose logs --tail=300 operationsservice 2>&1 || true
