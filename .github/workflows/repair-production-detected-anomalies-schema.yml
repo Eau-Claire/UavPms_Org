@@ -1,0 +1,51 @@
+name: Repair Production Detected Anomalies Schema
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type REPAIR_DETECTED_ANOMALIES_ASSET_ID to add and backfill DetectedAnomalies.AssetId.
+        required: true
+        type: string
+
+concurrency:
+  group: production-detected-anomalies-schema-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Repair DetectedAnomalies AssetId
+    if: ${{ inputs.confirmation == 'REPAIR_DETECTED_ANOMALIES_ASSET_ID' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+
+    steps:
+      - name: Repair DetectedAnomalies over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "========== DETECTED ANOMALIES REPAIR PREFLIGHT =========="
+            DB_STATUS="$(docker inspect uavpms-db --format '{{.State.Status}}')"
+            if [ "$DB_STATUS" != "running" ]; then echo "ERROR: uavpms-db is not running."; exit 1; fi
+            COMPONENT_ID_EXISTS="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'DetectedAnomalies' AND column_name = 'ComponentId');")"
+            if [ "$COMPONENT_ID_EXISTS" != "t" ]; then echo "ERROR: legacy DetectedAnomalies.ComponentId is absent; refusing to guess a backfill source."; exit 1; fi
+            echo "Adding DetectedAnomalies.AssetId..."
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'ALTER TABLE public."DetectedAnomalies" ADD COLUMN IF NOT EXISTS "AssetId" uuid NULL;'
+            echo "Backfilling AssetId from legacy ComponentId..."
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'UPDATE public."DetectedAnomalies" SET "AssetId" = "ComponentId" WHERE "AssetId" IS NULL AND "ComponentId" IS NOT NULL;'
+            echo "Ensuring DetectedAnomalies AssetId index..."
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'CREATE INDEX IF NOT EXISTS "IX_DetectedAnomalies_AssetId" ON public."DetectedAnomalies" ("AssetId");'
+            ASSET_ID_FK_EXISTS="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_DetectedAnomalies_AssetComponents_AssetId' AND conrelid = 'public.\"DetectedAnomalies\"'::regclass);")"
+            if [ "$ASSET_ID_FK_EXISTS" != "t" ]; then docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'ALTER TABLE public."DetectedAnomalies" ADD CONSTRAINT "FK_DetectedAnomalies_AssetComponents_AssetId" FOREIGN KEY ("AssetId") REFERENCES public."AssetComponents" ("Id") ON DELETE RESTRICT;'; fi
+            echo "========== DETECTED ANOMALIES REPAIR VERIFICATION =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'DetectedAnomalies' AND column_name IN ('ComponentId', 'AssetId') ORDER BY column_name;"
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'SELECT count(*) AS total_rows, count("AssetId") AS populated_asset_ids, count("ComponentId") AS populated_component_ids FROM public."DetectedAnomalies";'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT conname FROM pg_constraint WHERE conrelid = 'public.\"DetectedAnomalies\"'::regclass AND conname = 'FK_DetectedAnomalies_AssetComponents_AssetId';"
+            echo "DetectedAnomalies schema repair completed successfully."
