@@ -39,6 +39,11 @@ jobs:
             cd "$DEPLOY_PATH"
             CURRENT_BRANCH="$(git branch --show-current)"
             if [ "$CURRENT_BRANCH" != main ]; then echo "ERROR: deployment checkout is on '$CURRENT_BRANCH', expected main."; exit 1; fi
+            EXCLUDE_FILE="$DEPLOY_PATH/.git/info/exclude"
+            mkdir -p "$(dirname "$EXCLUDE_FILE")"
+            for preserved_path in analysis-get.js benchmark_ai.py health.js monitoring/prometheus.yml backups/; do
+              grep -qxF "$preserved_path" "$EXCLUDE_FILE" 2>/dev/null || printf '%s\n' "$preserved_path" >> "$EXCLUDE_FILE"
+            done
             DIRTY_FILES="$(git status --porcelain --untracked-files=all)"
             if [ -n "$DIRTY_FILES" ]; then echo "ERROR: deployment checkout is not clean:"; printf '%s\n' "$DIRTY_FILES"; exit 1; fi
             if [ ! -f "$DEPLOY_PATH/docs/danh_sach_cot_dien_mock.csv" ]; then echo "ERROR: manifest CSV is missing from deployment checkout."; exit 1; fi
