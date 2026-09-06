@@ -46,6 +46,18 @@ jobs:
             done
             DIRTY_FILES="$(git status --porcelain --untracked-files=all)"
             if [ -n "$DIRTY_FILES" ]; then echo "ERROR: deployment checkout is not clean:"; printf '%s\n' "$DIRTY_FILES"; exit 1; fi
+            echo "Updating clean deployment checkout from origin/main..."
+            git fetch origin main
+            if ! git merge-base --is-ancestor HEAD origin/main && ! git merge-base --is-ancestor origin/main HEAD; then
+              echo "ERROR: deployment checkout has diverged from origin/main; reconcile it manually."; exit 1
+            fi
+            if git merge-base --is-ancestor HEAD origin/main && ! git merge-base --is-ancestor origin/main HEAD; then
+              git merge --ff-only origin/main
+            fi
+            CURRENT_BRANCH="$(git branch --show-current)"
+            if [ "$CURRENT_BRANCH" != main ]; then echo "ERROR: deployment checkout changed to '$CURRENT_BRANCH', expected main."; exit 1; fi
+            DIRTY_FILES="$(git status --porcelain --untracked-files=all)"
+            if [ -n "$DIRTY_FILES" ]; then echo "ERROR: fast-forward made deployment checkout dirty:"; printf '%s\n' "$DIRTY_FILES"; exit 1; fi
             if [ ! -f "$DEPLOY_PATH/docs/danh_sach_cot_dien_mock.csv" ]; then echo "ERROR: manifest CSV is missing from deployment checkout."; exit 1; fi
             DB_STATUS="$(docker inspect uavpms-db --format '{{.State.Status}}')"
             if [ "$DB_STATUS" != running ]; then echo "ERROR: uavpms-db status is '$DB_STATUS', expected running."; exit 1; fi
