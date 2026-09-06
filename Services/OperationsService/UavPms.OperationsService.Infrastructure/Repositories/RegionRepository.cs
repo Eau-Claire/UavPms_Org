@@ -20,7 +20,7 @@ public class RegionRepository : GenericRepository<Region>, IRegionRepository
         int pageSize,
         string? searchTerm)
     {
-        var query = _context.Regions.Where(r => !r.IsDeleted);
+        var query = ReadQuery.Where(r => !r.IsDeleted);
 
         if (!string.IsNullOrEmpty(searchTerm))
         {

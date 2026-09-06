@@ -1,3 +1,5 @@
+using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Infrastructure.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -18,31 +20,31 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
         _context = context;
     }
 
-    public async Task<T?> GetByIdAsync(Guid id, bool track = true)
+    // All generic reads, including tracked direct-ID reads, execute the geographic predicate.
+    protected IQueryable<T> ReadQuery
     {
-        if (track)
+        get
         {
-            return await _context.Set<T>().FindAsync(id);
+            var access = new GeographicAccessFilter(_context, _context.CurrentUser);
+            object query = typeof(T) == typeof(Asset) ? access.ApplyToAssets(_context.Assets)
+                : typeof(T) == typeof(Tower) ? access.ApplyToTowers(_context.Towers)
+                : typeof(T) == typeof(TransmissionLine) ? access.ApplyToLines(_context.TransmissionLines)
+                : typeof(T) == typeof(Substation) ? access.ApplyToSubstations(_context.Substations)
+                : typeof(T) == typeof(ManagementUnit) ? access.ApplyToManagementUnits(_context.ManagementUnits)
+                : typeof(T) == typeof(Region) ? access.ApplyToRegions(_context.Regions)
+                : _context.Set<T>();
+            return (IQueryable<T>)query;
         }
-        
-        return await _context.Set<T>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(e => EF.Property<Guid>(e, "Id") == id);
     }
 
-    public async Task<IReadOnlyList<T>> GetAllAsync(bool track = false)
-    {
-        return track 
-            ? await _context.Set<T>().ToListAsync()
-            : await _context.Set<T>().AsNoTracking().ToListAsync();
-    }
+    public async Task<T?> GetByIdAsync(Guid id, bool track = true) =>
+        await (track ? ReadQuery : ReadQuery.AsNoTracking()).FirstOrDefaultAsync(e => EF.Property<Guid>(e, "Id") == id);
 
-    public async Task<IReadOnlyList<T>> FindAsync(Expression<Func<T, bool>> predicate, bool track = false)
-    {
-        return track
-            ? await _context.Set<T>().Where(predicate).ToListAsync()
-            : await _context.Set<T>().AsNoTracking().Where(predicate).ToListAsync();
-    }
+    public async Task<IReadOnlyList<T>> GetAllAsync(bool track = false) =>
+        await (track ? ReadQuery : ReadQuery.AsNoTracking()).ToListAsync();
+
+    public async Task<IReadOnlyList<T>> FindAsync(Expression<Func<T, bool>> predicate, bool track = false) =>
+        await (track ? ReadQuery : ReadQuery.AsNoTracking()).Where(predicate).ToListAsync();
 
     public async Task<T> AddAsync(T entity)
     {

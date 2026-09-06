@@ -13,7 +13,7 @@ public class TransmissionLineRepository : GenericRepository<TransmissionLine>, I
 
     public async Task<(IReadOnlyList<TransmissionLine> Items, int TotalCount)> GetTransmissionLinesPagedAsync(int page, int pageSize, Guid? substationAssetId, string? searchTerm)
     {
-        var query = _context.TransmissionLines.Where(l => !l.IsDeleted);
+        var query = ReadQuery.Where(l => !l.IsDeleted);
         if (substationAssetId.HasValue)
         {
             query = query.Where(l => l.SubstationAssetId == substationAssetId.Value);

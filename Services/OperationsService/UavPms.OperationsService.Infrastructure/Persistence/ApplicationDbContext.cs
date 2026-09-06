@@ -14,6 +14,7 @@ namespace UavPms.OperationsService.Infrastructure.Persistence;
 public class ApplicationDbContext : DbContext
 {
     private readonly ICurrentUserServices? _currentUserServices;
+    internal ICurrentUserServices? CurrentUser => _currentUserServices;
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();

@@ -1,0 +1,97 @@
+name: Import Production Pole Manifest
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type IMPORT_PRODUCTION_POLE_MANIFEST to import DEMO/mock pole data.
+        required: true
+        type: string
+concurrency:
+  group: production-pole-manifest-import
+  cancel-in-progress: false
+permissions: {}
+jobs:
+  import:
+    if: ${{ inputs.confirmation == 'IMPORT_PRODUCTION_POLE_MANIFEST' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Import demo manifest over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          IMPORT_RUN: ${{ github.run_id }}_${{ github.run_attempt }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          envs: DEPLOY_PATH,CONFIRMATION,IMPORT_RUN
+          script_stop: true
+          script: |
+            set -euo pipefail
+            [ "${CONFIRMATION:-}" = IMPORT_PRODUCTION_POLE_MANIFEST ]
+            [ -n "${DEPLOY_PATH:-}" ]
+            cd "$DEPLOY_PATH"
+            [ "$(git branch --show-current)" = main ]
+            [ -z "$(git status --porcelain --untracked-files=all)" ]
+            [ -f "$DEPLOY_PATH/docs/danh_sach_cot_dien_mock.csv" ]
+            [ "$(docker inspect uavpms-db --format '{{.State.Status}}')" = running ]
+            [[ "$IMPORT_RUN" =~ ^[0-9]+_[0-9]+$ ]]
+            STAGING="pole_manifest_${IMPORT_RUN}"
+            CSVPATH="/tmp/${STAGING}.csv"
+            cleanup() {
+              docker exec uavpms-db rm -f -- "$CSVPATH"
+            }
+            trap cleanup EXIT
+            docker cp "$DEPLOY_PATH/docs/danh_sach_cot_dien_mock.csv" "uavpms-db:$CSVPATH"
+            # Asset is mapped to AssetComponents; no separate Assets table exists.
+            # Numeric CSV values are never rounded; PostGIS stores point ordinates as float8.
+            SQL='BEGIN;
+            SELECT pg_advisory_xact_lock(728490061);
+            LOCK TABLE public."Regions", public."ManagementUnits", public."Substations", public."TransmissionLines", public."Towers", public."AssetComponents" IN SHARE ROW EXCLUSIVE MODE;
+            CREATE TABLE public.STAGING (pole_id text NOT NULL, line_code text NOT NULL, latitude numeric NOT NULL, longitude numeric NOT NULL, voltage text NOT NULL, pole_type text NOT NULL, street text NOT NULL, provider text, region_code text, city text);
+            COPY public.STAGING (pole_id,line_code,latitude,longitude,voltage,pole_type,street) FROM $v$CSVPATH$v$ WITH (FORMAT csv, HEADER true, ENCODING $v$UTF8$v$);
+            SELECT count(*) AS invalid_coordinate_count FROM public.STAGING WHERE latitude NOT BETWEEN 8.15 AND 23.5 OR longitude NOT BETWEEN 102 AND 110;
+            SELECT count(*) AS duplicate_natural_key_count_in_staging FROM (SELECT pole_id FROM public.STAGING GROUP BY pole_id HAVING count(*) > 1) d;
+            DO $check$ BEGIN
+             IF NOT EXISTS (SELECT 1 FROM public.STAGING) OR EXISTS (SELECT 1 FROM public.STAGING WHERE latitude NOT BETWEEN 8.15 AND 23.5 OR longitude NOT BETWEEN 102 AND 110 OR pole_id = $v$$v$ OR line_code = $v$$v$ OR pole_id LIKE $v$DEMO-%$v$) OR EXISTS (SELECT pole_id FROM public.STAGING GROUP BY pole_id HAVING count(*) > 1) THEN RAISE EXCEPTION $v$Invalid manifest$v$; END IF;
+            END $check$;
+            UPDATE public.STAGING SET provider = CASE WHEN pole_id LIKE $v$NPC\_%$v$ ESCAPE $v$\$v$ THEN $v$EVNNPC$v$ WHEN pole_id LIKE $v$CPC\_%$v$ ESCAPE $v$\$v$ THEN $v$EVNCPC$v$ WHEN pole_id LIKE $v$SPC\_DN\_%$v$ ESCAPE $v$\$v$ THEN $v$EVNSPC$v$ WHEN pole_id LIKE $v$SPC\_HCM\_%$v$ ESCAPE $v$\$v$ THEN $v$EVNHCMC$v$ END,
+            region_code = CASE WHEN pole_id LIKE $v$NPC\_%$v$ ESCAPE $v$\$v$ THEN $v$North$v$ WHEN pole_id LIKE $v$CPC\_%$v$ ESCAPE $v$\$v$ THEN $v$Central$v$ WHEN pole_id LIKE $v$SPC\_%$v$ ESCAPE $v$\$v$ THEN $v$South$v$ END;
+            UPDATE public.STAGING SET city = CASE split_part(pole_id,$v$_$v$,1) || $v$_$v$ || split_part(pole_id,$v$_$v$,2) WHEN $v$NPC_HN$v$ THEN $v$Hà Nội$v$ WHEN $v$NPC_HP$v$ THEN $v$Hải Phòng$v$ WHEN $v$CPC_HUE$v$ THEN $v$Huế$v$ WHEN $v$CPC_DN$v$ THEN $v$Đà Nẵng$v$ WHEN $v$SPC_DN$v$ THEN $v$Biên Hòa$v$ WHEN $v$SPC_HCM$v$ THEN $v$TP.HCM$v$ END;
+            INSERT INTO public.STAGING VALUES
+            ($v$DEMO-COVERAGE-HT$v$,$v$DEMO-COVERAGE-HT$v$,18.35,105.90,$v$DEMO$v$,$v$DEMO coverage marker only; not a field pole$v$,$v$Hà Tĩnh$v$,$v$EVNNPC$v$,$v$North$v$,$v$Hà Tĩnh$v$),
+            ($v$DEMO-COVERAGE-KH$v$,$v$DEMO-COVERAGE-KH$v$,12.25,109.18,$v$DEMO$v$,$v$DEMO coverage marker only; not a field pole$v$,$v$Khánh Hòa$v$,$v$EVNCPC$v$,$v$Central$v$,$v$Khánh Hòa$v$),
+            ($v$DEMO-COVERAGE-LD$v$,$v$DEMO-COVERAGE-LD$v$,11.94,108.44,$v$DEMO$v$,$v$DEMO coverage marker only; not a field pole$v$,$v$Lâm Đồng$v$,$v$EVNSPC$v$,$v$South$v$,$v$Lâm Đồng$v$),
+            ($v$DEMO-COVERAGE-CM$v$,$v$DEMO-COVERAGE-CM$v$,9.18,105.15,$v$DEMO$v$,$v$DEMO coverage marker only; not a field pole$v$,$v$Cà Mau$v$,$v$EVNSPC$v$,$v$South$v$,$v$Cà Mau$v$);
+            DO $check$ BEGIN
+             IF EXISTS (SELECT 1 FROM public.STAGING WHERE provider IS NULL OR region_code IS NULL OR city IS NULL) THEN RAISE EXCEPTION $v$Unknown provider/region mapping$v$; END IF;
+             IF EXISTS (SELECT provider,line_code FROM public.STAGING GROUP BY provider,line_code HAVING count(DISTINCT voltage)>1 OR count(DISTINCT region_code)>1 OR count(DISTINCT city)>1) THEN RAISE EXCEPTION $v$Ambiguous line mapping$v$; END IF;
+             IF EXISTS (SELECT 1 FROM public."Substations" WHERE "SubstationName" IN (SELECT DISTINCT provider || $v$:$v$ || city || $v$ DEMO manifest$v$ FROM public.STAGING) GROUP BY "RegionAssetId","SubstationName" HAVING count(*)>1) THEN RAISE EXCEPTION $v$Ambiguous substation natural key$v$; END IF;
+            END $check$;
+            INSERT INTO public."Regions" ("Id","Code","RegionName","Type","CreatedAt","IsDeleted") SELECT gen_random_uuid(),region_code,region_code,$v$Region$v$,now(),false FROM public.STAGING GROUP BY region_code ON CONFLICT ("Code") DO NOTHING;
+            INSERT INTO public."ManagementUnits" ("Id","Code","Name","Type","Status","CreatedAt","IsDeleted") SELECT gen_random_uuid(),provider,CASE provider WHEN $v$EVNHCMC$v$ THEN $v$EVNHCMC / TP.HCM$v$ ELSE provider END,$v$PowerCompany$v$,$v$Active$v$,now(),false FROM public.STAGING GROUP BY provider ON CONFLICT ("Code") DO NOTHING;
+            INSERT INTO public."Substations" ("Id","RegionAssetId","SubstationName","VoltageLevel","CreatedAt","IsDeleted") SELECT gen_random_uuid(),r."Id",s.provider || $v$:$v$ || s.city || $v$ DEMO manifest$v$,$v$DEMO mixed voltage$v$,now(),false FROM (SELECT DISTINCT provider,region_code,city FROM public.STAGING) s JOIN public."Regions" r ON r."Code"=s.region_code WHERE NOT EXISTS (SELECT 1 FROM public."Substations" b WHERE b."RegionAssetId"=r."Id" AND b."SubstationName"=s.provider || $v$:$v$ || s.city || $v$ DEMO manifest$v$);
+            INSERT INTO public."TransmissionLines" ("Id","Code","LineName","SubstationAssetId","ManagementUnitId","VoltageLevel","Status","IsCriticalEdge","CreatedAt","IsDeleted") SELECT gen_random_uuid(),s.provider || $v$:$v$ || s.line_code,s.provider || $v$:$v$ || s.line_code || $v$ — DEMO/mock, unverified coordinates$v$,b."Id",u."Id",s.voltage,$v$Active$v$,false,now(),false FROM (SELECT DISTINCT provider,line_code,region_code,voltage,city FROM public.STAGING) s JOIN public."Regions" r ON r."Code"=s.region_code JOIN public."Substations" b ON b."RegionAssetId"=r."Id" AND b."SubstationName"=s.provider || $v$:$v$ || s.city || $v$ DEMO manifest$v$ JOIN public."ManagementUnits" u ON u."Code"=s.provider ON CONFLICT ("Code") DO UPDATE SET "SubstationAssetId"=EXCLUDED."SubstationAssetId","ManagementUnitId"=EXCLUDED."ManagementUnitId","VoltageLevel"=EXCLUDED."VoltageLevel";
+            UPDATE public."TransmissionLines" l SET "Geom"=g.geom FROM (SELECT provider || $v$:$v$ || line_code AS code, CASE WHEN count(*) > 1 THEN ST_MakeLine(ST_SetSRID(ST_MakePoint(longitude::double precision,latitude::double precision),4326) ORDER BY pole_id) ELSE NULL END AS geom FROM public.STAGING GROUP BY provider,line_code) g WHERE l."Code"=g.code;
+            WITH upserted AS (
+            INSERT INTO public."Towers" ("Id","TowerCode","LineAssetId","Geom","CreatedAt","IsDeleted") SELECT gen_random_uuid(),s.pole_id,l."Id",ST_SetSRID(ST_MakePoint(s.longitude::double precision,s.latitude::double precision),4326),now(),false FROM public.STAGING s JOIN public."TransmissionLines" l ON l."Code"=s.provider || $v$:$v$ || s.line_code ON CONFLICT ("TowerCode") DO UPDATE SET "LineAssetId"=EXCLUDED."LineAssetId","Geom"=EXCLUDED."Geom" RETURNING xmax=0 AS inserted)
+            SELECT count(*) FILTER (WHERE inserted) AS inserted_count,count(*) FILTER (WHERE NOT inserted) AS updated_count FROM upserted;
+            WITH upserted AS (
+            INSERT INTO public."AssetComponents" ("Id","ComponentCode","ComponentType","TowerId","PowerLineId","ManagementUnitId","Location","Status","CurrentHealthScore","RiskLevel","CreatedAt","IsDeleted") SELECT gen_random_uuid(),s.pole_id,s.pole_type,t."Id",l."Id",l."ManagementUnitId",ST_SetSRID(ST_MakePoint(s.longitude::double precision,s.latitude::double precision),4326),$v$Active$v$,0,$v$Unknown$v$,now(),false FROM public.STAGING s JOIN public."Towers" t ON t."TowerCode"=s.pole_id JOIN public."TransmissionLines" l ON l."Id"=t."LineAssetId" ON CONFLICT ("ComponentCode") DO UPDATE SET "ComponentType"=EXCLUDED."ComponentType","TowerId"=EXCLUDED."TowerId","PowerLineId"=EXCLUDED."PowerLineId","ManagementUnitId"=EXCLUDED."ManagementUnitId","Location"=EXCLUDED."Location" RETURNING xmax=0 AS inserted)
+            SELECT count(*) FILTER (WHERE inserted) AS assets_inserted_count,count(*) FILTER (WHERE NOT inserted) AS assets_updated_count FROM upserted;
+            SELECT count(*) AS total_imported_towers,(SELECT count(*) FROM public."AssetComponents" a JOIN public.STAGING s ON s.pole_id=a."ComponentCode") AS total_imported_assets FROM public."Towers" t JOIN public.STAGING s ON s.pole_id=t."TowerCode";
+            SELECT CASE s.provider WHEN $v$EVNNPC$v$ THEN $v$NPC$v$ WHEN $v$EVNCPC$v$ THEN $v$CPC$v$ WHEN $v$EVNSPC$v$ THEN $v$SPC$v$ ELSE $v$EVNHCMC$v$ END AS provider_group,count(*) AS towers,count(a."Id") AS assets,count(*) FILTER (WHERE s.pole_id LIKE $v$DEMO-%$v$) AS demo_coverage_markers FROM public.STAGING s JOIN public."Towers" t ON t."TowerCode"=s.pole_id LEFT JOIN public."AssetComponents" a ON a."ComponentCode"=s.pole_id AND a."TowerId"=t."Id" GROUP BY s.provider;
+            SELECT count(*) AS towers_without_assets FROM public."Towers" t JOIN public.STAGING s ON s.pole_id=t."TowerCode" WHERE NOT EXISTS (SELECT 1 FROM public."AssetComponents" a WHERE a."TowerId"=t."Id" AND NOT a."IsDeleted");
+            SELECT count(*) AS assets_without_towers FROM public."AssetComponents" a JOIN public.STAGING s ON s.pole_id=a."ComponentCode" WHERE NOT EXISTS (SELECT 1 FROM public."Towers" t WHERE t."Id"=a."TowerId" AND NOT t."IsDeleted");
+            SELECT count(*) AS lines_without_valid_provider_region_mapping FROM (SELECT DISTINCT provider,line_code,region_code FROM public.STAGING) s LEFT JOIN public."TransmissionLines" l ON l."Code"=s.provider || $v$:$v$ || s.line_code LEFT JOIN public."ManagementUnits" u ON u."Id"=l."ManagementUnitId" LEFT JOIN public."Substations" b ON b."Id"=l."SubstationAssetId" LEFT JOIN public."Regions" r ON r."Id"=b."RegionAssetId" WHERE u."Code" IS DISTINCT FROM s.provider OR r."Code" IS DISTINCT FROM s.region_code;
+            DO $check$ BEGIN
+             IF EXISTS (SELECT 1 FROM public.STAGING s JOIN public."Towers" t ON t."TowerCode"=s.pole_id JOIN public."AssetComponents" a ON a."ComponentCode"=s.pole_id JOIN public."TransmissionLines" l ON l."Id"=t."LineAssetId" JOIN public."Substations" b ON b."Id"=l."SubstationAssetId" JOIN public."Regions" r ON r."Id"=b."RegionAssetId" JOIN public."ManagementUnits" u ON u."Id"=l."ManagementUnitId" WHERE t."IsDeleted" OR a."IsDeleted" OR l."IsDeleted" OR b."IsDeleted" OR r."IsDeleted" OR u."IsDeleted") THEN RAISE EXCEPTION $v$Import conflicts with soft-deleted data; manual review required$v$; END IF;
+            END $check$;
+            DROP TABLE public.STAGING;
+            COMMIT;'
+            SQL="${SQL//STAGING/$STAGING}"
+            SQL="${SQL//CSVPATH/$CSVPATH}"
+            docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "$SQL"
