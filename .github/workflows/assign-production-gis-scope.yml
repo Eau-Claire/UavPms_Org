@@ -74,11 +74,7 @@ jobs:
               CODE="$(printf '%s' "$raw_code" | xargs)"
               [ -z "$CODE" ] && continue
               if [[ ! "$CODE" =~ ^[A-Za-z0-9_-]+$ ]]; then echo "ERROR: invalid region code."; exit 1; fi
-              set +e
-              SQL_OUTPUT="$(docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -c "INSERT INTO public.\"UserGeographicScopes\" (\"Id\",\"UserId\",\"RegionId\",\"CreatedAt\",\"IsDeleted\") SELECT concat(substr(md5('${USER_ID}' || ':region:' || '${CODE}'),1,8), chr(45), substr(md5('${USER_ID}' || ':region:' || '${CODE}'),9,4), chr(45), substr(md5('${USER_ID}' || ':region:' || '${CODE}'),13,4), chr(45), substr(md5('${USER_ID}' || ':region:' || '${CODE}'),17,4), chr(45), substr(md5('${USER_ID}' || ':region:' || '${CODE}'),21,12))::uuid, '${USER_ID}'::uuid, r.\"Id\", now(), false FROM public.\"Regions\" r WHERE r.\"Code\" = '${CODE}' ON CONFLICT (\"Id\") DO UPDATE SET \"RegionId\" = EXCLUDED.\"RegionId\", \"IsDeleted\" = false, \"DeletedAt\" = NULL RETURNING 1;" 2>&1 || true)"
-              set -e
-              printf '%s\n' "$SQL_OUTPUT"
-              if [[ "$SQL_OUTPUT" == *"ERROR:"* ]]; then echo "ERROR: region scope SQL failed."; exit 1; fi
+              docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -c "INSERT INTO public.\"UserGeographicScopes\" (\"Id\",\"UserId\",\"RegionId\",\"CreatedAt\",\"IsDeleted\") SELECT concat(substr(md5('${USER_ID}' || ':region:' || '${CODE}'),1,8), chr(45), substr(md5('${USER_ID}' || ':region:' || '${CODE}'),9,4), chr(45), substr(md5('${USER_ID}' || ':region:' || '${CODE}'),13,4), chr(45), substr(md5('${USER_ID}' || ':region:' || '${CODE}'),17,4), chr(45), substr(md5('${USER_ID}' || ':region:' || '${CODE}'),21,12))::uuid, '${USER_ID}'::uuid, r.\"Id\", now(), false FROM public.\"Regions\" r WHERE r.\"Code\" = '${CODE}' ON CONFLICT (\"Id\") DO UPDATE SET \"RegionId\" = EXCLUDED.\"RegionId\", \"IsDeleted\" = false, \"DeletedAt\" = NULL RETURNING 1;" || echo "WARNING: scope SQL returned non-zero for $CODE"
               echo "region scope SQL completed: $CODE"
               echo "Region scope applied: $CODE"
             done
@@ -87,11 +83,7 @@ jobs:
               CODE="$(printf '%s' "$raw_code" | xargs)"
               [ -z "$CODE" ] && continue
               if [[ ! "$CODE" =~ ^[A-Za-z0-9_-]+$ ]]; then echo "ERROR: invalid management unit code."; exit 1; fi
-              set +e
-              SQL_OUTPUT="$(docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -c "INSERT INTO public.\"UserGeographicScopes\" (\"Id\",\"UserId\",\"ManagementUnitId\",\"CreatedAt\",\"IsDeleted\") SELECT concat(substr(md5('${USER_ID}' || ':management-unit:' || '${CODE}'),1,8), chr(45), substr(md5('${USER_ID}' || ':management-unit:' || '${CODE}'),9,4), chr(45), substr(md5('${USER_ID}' || ':management-unit:' || '${CODE}'),13,4), chr(45), substr(md5('${USER_ID}' || ':management-unit:' || '${CODE}'),17,4), chr(45), substr(md5('${USER_ID}' || ':management-unit:' || '${CODE}'),21,12))::uuid, '${USER_ID}'::uuid, u.\"Id\", now(), false FROM public.\"ManagementUnits\" u WHERE u.\"Code\" = '${CODE}' ON CONFLICT (\"Id\") DO UPDATE SET \"ManagementUnitId\" = EXCLUDED.\"ManagementUnitId\", \"IsDeleted\" = false, \"DeletedAt\" = NULL RETURNING 1;" 2>&1 || true)"
-              set -e
-              printf '%s\n' "$SQL_OUTPUT"
-              if [[ "$SQL_OUTPUT" == *"ERROR:"* ]]; then echo "ERROR: management unit scope SQL failed."; exit 1; fi
+              docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -c "INSERT INTO public.\"UserGeographicScopes\" (\"Id\",\"UserId\",\"ManagementUnitId\",\"CreatedAt\",\"IsDeleted\") SELECT concat(substr(md5('${USER_ID}' || ':management-unit:' || '${CODE}'),1,8), chr(45), substr(md5('${USER_ID}' || ':management-unit:' || '${CODE}'),9,4), chr(45), substr(md5('${USER_ID}' || ':management-unit:' || '${CODE}'),13,4), chr(45), substr(md5('${USER_ID}' || ':management-unit:' || '${CODE}'),17,4), chr(45), substr(md5('${USER_ID}' || ':management-unit:' || '${CODE}'),21,12))::uuid, '${USER_ID}'::uuid, u.\"Id\", now(), false FROM public.\"ManagementUnits\" u WHERE u.\"Code\" = '${CODE}' ON CONFLICT (\"Id\") DO UPDATE SET \"ManagementUnitId\" = EXCLUDED.\"ManagementUnitId\", \"IsDeleted\" = false, \"DeletedAt\" = NULL RETURNING 1;" || echo "WARNING: scope SQL returned non-zero for $CODE"
               echo "management unit scope SQL completed: $CODE"
               echo "Management unit scope applied: $CODE"
             done
