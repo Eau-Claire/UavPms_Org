@@ -1,0 +1,72 @@
+name: Reset and Seed Production GIS Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RESET_PRODUCTION_AND_SEED_GIS to back up, clear non-identity application data, and seed GIS demo data.
+        required: true
+        type: string
+
+concurrency:
+  group: production-gis-reset-and-seed
+  cancel-in-progress: false
+
+jobs:
+  reset-and-seed:
+    if: ${{ inputs.confirmation == 'RESET_PRODUCTION_AND_SEED_GIS' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+
+    steps:
+      - name: Back up, reset, and seed over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          envs: DEPLOY_PATH
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "========== PRODUCTION GIS RESET PREFLIGHT =========="
+            if [ -z "${DEPLOY_PATH:-}" ]; then echo "ERROR: DEPLOY_PATH is not configured."; exit 1; fi
+            DB_STATUS="$(docker inspect uavpms-db --format '{{.State.Status}}')"
+            if [ "$DB_STATUS" != "running" ]; then echo "ERROR: uavpms-db is not running."; exit 1; fi
+            BACKUP_DIR="$DEPLOY_PATH/backups"
+            mkdir -p "$BACKUP_DIR"
+            BACKUP_FILE="$BACKUP_DIR/uavpms-before-gis-reset-$(date -u +%Y%m%dT%H%M%SZ).dump"
+            echo "Creating database backup: $BACKUP_FILE"
+            docker exec uavpms-db pg_dump -U uavpms -Fc -d uavpms > "$BACKUP_FILE"
+            test -s "$BACKUP_FILE"
+            echo "========== PRESERVING IDENTITY DATA =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'SELECT count(*) AS users, (SELECT count(*) FROM public."Roles") AS roles, (SELECT count(*) FROM public."UserRoles") AS user_roles FROM public."Users";'
+            echo "========== ENSURING GIS SCOPE SCHEMA =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'CREATE TABLE IF NOT EXISTS public."UserGeographicScopes" ("Id" uuid NOT NULL, "UserId" uuid NOT NULL, "RegionId" uuid NULL, "SubstationId" uuid NULL, "TransmissionLineId" uuid NULL, "ManagementUnitId" uuid NULL, "CreatedAt" timestamptz NOT NULL, "UpdatedAt" timestamptz NULL, "CreatedBy" uuid NULL, "UpdatedBy" uuid NULL, "IsDeleted" boolean NOT NULL DEFAULT false, "DeletedAt" timestamptz NULL, CONSTRAINT "PK_UserGeographicScopes" PRIMARY KEY ("Id"), CONSTRAINT "FK_UserGeographicScopes_Users_UserId" FOREIGN KEY ("UserId") REFERENCES public."Users" ("Id") ON DELETE CASCADE, CONSTRAINT "CK_UserGeographicScopes_HasScope" CHECK ("RegionId" IS NOT NULL OR "SubstationId" IS NOT NULL OR "TransmissionLineId" IS NOT NULL OR "ManagementUnitId" IS NOT NULL));'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'CREATE INDEX IF NOT EXISTS "IX_UserGeographicScopes_UserId_RegionId" ON public."UserGeographicScopes" ("UserId", "RegionId");'
+            echo "========== CLEARING NON-IDENTITY APPLICATION DATA =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'TRUNCATE TABLE public."AIAnalysisRequests", public."AlertEscalations", public."AssetComponents", public."AuditLogs", public."DefectCategories", public."DetectedAnomalies", public."EmergencyAlerts", public."IncidentReports", public."InspectionMedia", public."LineSegments", public."MaintenanceProofs", public."MaintenanceTickets", public."ManagementUnits", public."MaterialLogs", public."MissionFlightLogs", public."MissionTargetLines", public."MissionTargets", public."Missions", public."Notifications", public."OutboxMessages", public."RefreshTokens", public."Regions", public."Substations", public."TowerHealthHistories", public."Towers", public."TransmissionLines", public."TrustedDevices", public."UAVs", public."UserGeographicScopes", public.session RESTART IDENTITY CASCADE;'
+            echo "========== SEEDING ROLES AND ACCESS =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."Roles" ("RoleName", "Description") VALUES ($$SystemAdmin$$, $$Global system administration$$) ON CONFLICT ("RoleName") DO NOTHING;'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."UserRoles" ("UserId", "RoleId", "AssignedAt") SELECT $$469bfac4-8b96-4f27-a772-945cff2fbaa8$$::uuid, r."Id", now() FROM public."Roles" r WHERE r."RoleName" = $$SystemAdmin$$ ON CONFLICT DO NOTHING;'
+            echo "========== SEEDING GIS FOUNDATION =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."DefectCategories" ("CategoryCode", "CategoryName", "SeverityWeight", "IsEmergencyClass", "Description") VALUES ($$CORROSION$$, $$Ăn mòn$$, 0.7, false, $$Ăn mòn bề mặt thiết bị$$), ($$CRACK$$, $$Nứt vỡ$$, 0.9, true, $$Nứt vỡ kết cấu$$), ($$HOTSPOT$$, $$Điểm nóng$$, 1.0, true, $$Điểm nóng nhiệt$$), ($$VEGETATION$$, $$Cây cối xâm lấn$$, 0.6, false, $$Hành lang tuyến bị xâm lấn$$);'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."Regions" ("Id", "RegionName", "Code", "Type", "Geom", "CreatedAt", "IsDeleted") VALUES ($$10000000-0000-0000-0000-000000000001$$, $$Khu vực Hà Nội demo$$, $$HN-DEMO$$, $$Region$$, ST_GeomFromText($$POLYGON((105.75 20.98,105.95 20.98,105.95 21.12,105.75 21.12,105.75 20.98))$$, 4326), now(), false);'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."ManagementUnits" ("Id", "Code", "Name", "Type", "Status", "CreatedAt", "IsDeleted") VALUES ($$20000000-0000-0000-0000-000000000001$$, $$EVN-HN-DEMO$$, $$Đơn vị quản lý Hà Nội demo$$, $$PowerCompany$$, $$Active$$, now(), false);'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."Substations" ("Id", "RegionAssetId", "SubstationName", "VoltageLevel", "Geom", "CreatedAt", "IsDeleted") VALUES ($$30000000-0000-0000-0000-000000000001$$, $$10000000-0000-0000-0000-000000000001$$, $$Trạm biến áp Hà Nội demo$$, $$220kV$$, ST_SetSRID(ST_MakePoint(105.82, 21.04), 4326), now(), false);'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."TransmissionLines" ("Id", "SubstationAssetId", "LineName", "Code", "VoltageLevel", "ManagementUnitId", "Status", "IsCriticalEdge", "Geom", "CreatedAt", "IsDeleted") VALUES ($$40000000-0000-0000-0000-000000000001$$, $$30000000-0000-0000-0000-000000000001$$, $$Đường dây 220kV Hà Nội demo$$, $$HN-220-01$$, $$220kV$$, $$20000000-0000-0000-0000-000000000001$$, $$Active$$, true, ST_GeomFromText($$LINESTRING(105.80 21.02,105.82 21.04,105.86 21.07)$$, 4326), now(), false);'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."Towers" ("Id", "LineAssetId", "TowerCode", "Geom", "CreatedAt", "IsDeleted") VALUES ($$50000000-0000-0000-0000-000000000001$$, $$40000000-0000-0000-0000-000000000001$$, $$HN-T001$$, ST_SetSRID(ST_MakePoint(105.80, 21.02), 4326), now(), false), ($$50000000-0000-0000-0000-000000000002$$, $$40000000-0000-0000-0000-000000000001$$, $$HN-T002$$, ST_SetSRID(ST_MakePoint(105.82, 21.04), 4326), now(), false), ($$50000000-0000-0000-0000-000000000003$$, $$40000000-0000-0000-0000-000000000001$$, $$HN-T003$$, ST_SetSRID(ST_MakePoint(105.86, 21.07), 4326), now(), false);'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."AssetComponents" ("Id", "TowerId", "PowerLineId", "ManagementUnitId", "Location", "ComponentType", "ComponentCode", "Status", "CurrentHealthScore", "RiskLevel", "CreatedAt", "IsDeleted") VALUES ($$60000000-0000-0000-0000-000000000001$$, $$50000000-0000-0000-0000-000000000001$$, $$40000000-0000-0000-0000-000000000001$$, $$20000000-0000-0000-0000-000000000001$$, ST_SetSRID(ST_MakePoint(105.80, 21.02), 4326), $$Insulator$$, $$INS-HN-001$$, $$Active$$, 92, $$Low Risk$$, now(), false), ($$60000000-0000-0000-0000-000000000002$$, $$50000000-0000-0000-0000-000000000002$$, $$40000000-0000-0000-0000-000000000001$$, $$20000000-0000-0000-0000-000000000001$$, ST_SetSRID(ST_MakePoint(105.82, 21.04), 4326), $$Conductor$$, $$CON-HN-002$$, $$Operational$$, 73, $$Medium Risk$$, now(), false), ($$60000000-0000-0000-0000-000000000003$$, $$50000000-0000-0000-0000-000000000003$$, $$40000000-0000-0000-0000-000000000001$$, $$20000000-0000-0000-0000-000000000001$$, ST_SetSRID(ST_MakePoint(105.86, 21.07), 4326), $$Transformer$$, $$TRF-HN-003$$, $$Active$$, 45, $$High Risk$$, now(), false);'
+            echo "========== SEEDING USER GIS SCOPES =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."UserGeographicScopes" ("Id", "UserId", "RegionId", "CreatedAt", "IsDeleted") SELECT md5(u."Id"::text || $$:gis-demo-scope$$)::uuid, u."Id", $$10000000-0000-0000-0000-000000000001$$, now(), false FROM public."Users" u WHERE u."Status" = $$Active$$;'
+            echo "========== SEEDING TEST MISSION FOR MINH CHAU =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."UAVs" ("Id", "UavCode", "Model", "Status", "BatteryLevel", "CurrentLocation", "CreatedAt", "IsDeleted") VALUES ($$70000000-0000-0000-0000-000000000001$$, $$UAV-HN-01$$, $$DJI Matrice 350 RTK$$, $$Idle$$, 86, ST_SetSRID(ST_MakePoint(105.82, 21.04), 4326), now(), false);'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."Missions" ("Id", "MissionCode", "Title", "ManagerId", "InspectorId", "UavId", "Status", "ScheduledStartAt", "Description", "CreatedAt", "IsDeleted") VALUES ($$80000000-0000-0000-0000-000000000001$$, $$MIS-HN-DEMO-001$$, $$Kiểm tra đường dây Hà Nội demo$$, $$469bfac4-8b96-4f27-a772-945cff2fbaa8$$, $$469bfac4-8b96-4f27-a772-945cff2fbaa8$$, $$70000000-0000-0000-0000-000000000001$$, $$Pending$$, now() + interval $$1 day$$, $$Nhiệm vụ test cho Minh Châu$$, now(), false);'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'INSERT INTO public."MissionTargets" ("Id", "MissionId", "AssetId", "Sequence", "InspectionStatus", "CreatedAt", "IsDeleted") VALUES ($$90000000-0000-0000-0000-000000000001$$, $$80000000-0000-0000-0000-000000000001$$, $$60000000-0000-0000-0000-000000000001$$, 1, $$Pending$$, now(), false), ($$90000000-0000-0000-0000-000000000002$$, $$80000000-0000-0000-0000-000000000001$$, $$60000000-0000-0000-0000-000000000002$$, 2, $$Pending$$, now(), false), ($$90000000-0000-0000-0000-000000000003$$, $$80000000-0000-0000-0000-000000000001$$, $$60000000-0000-0000-0000-000000000003$$, 3, $$Pending$$, now(), false);'
+            echo "========== RESET AND SEED VERIFICATION =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'SELECT (SELECT count(*) FROM public."Users") AS preserved_users, (SELECT count(*) FROM public."UserRoles" WHERE "UserId" = $$469bfac4-8b96-4f27-a772-945cff2fbaa8$$::uuid) AS minh_chau_roles, (SELECT count(*) FROM public."Regions") AS regions, (SELECT count(*) FROM public."AssetComponents") AS assets, (SELECT count(*) FROM public."Missions") AS missions, (SELECT count(*) FROM public."AIAnalysisRequests") AS ai_analysis_requests;'
+            echo "Production GIS reset and seed completed. Backup retained at: $BACKUP_FILE"
