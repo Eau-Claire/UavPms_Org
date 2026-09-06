@@ -13,7 +13,7 @@ public class SubstationRepository : GenericRepository<Substation>, ISubstationRe
 
     public async Task<(IReadOnlyList<Substation> Items, int TotalCount)> GetSubstationsPagedAsync(int page, int pageSize, Guid? regionAssetId, string? searchTerm)
     {
-        var query = _context.Substations.Where(s => !s.IsDeleted);
+        var query = ReadQuery.Where(s => !s.IsDeleted);
 
         if (regionAssetId.HasValue)
         {
