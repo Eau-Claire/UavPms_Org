@@ -38,6 +38,9 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
+          debug: true
+          timeout: 30s
+          command_timeout: 30m
 
           envs: DEPLOY_PATH,DEPLOY_COMMIT,GATEWAY_HEALTH_URL
 
