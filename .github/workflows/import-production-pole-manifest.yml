@@ -34,14 +34,17 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-            [ "${CONFIRMATION:-}" = IMPORT_PRODUCTION_POLE_MANIFEST ]
-            [ -n "${DEPLOY_PATH:-}" ]
+            if [ "${CONFIRMATION:-}" != IMPORT_PRODUCTION_POLE_MANIFEST ]; then echo "ERROR: confirmation mismatch."; exit 1; fi
+            if [ -z "${DEPLOY_PATH:-}" ]; then echo "ERROR: DEPLOY_PATH is not configured."; exit 1; fi
             cd "$DEPLOY_PATH"
-            [ "$(git branch --show-current)" = main ]
-            [ -z "$(git status --porcelain --untracked-files=all)" ]
-            [ -f "$DEPLOY_PATH/docs/danh_sach_cot_dien_mock.csv" ]
-            [ "$(docker inspect uavpms-db --format '{{.State.Status}}')" = running ]
-            [[ "$IMPORT_RUN" =~ ^[0-9]+_[0-9]+$ ]]
+            CURRENT_BRANCH="$(git branch --show-current)"
+            if [ "$CURRENT_BRANCH" != main ]; then echo "ERROR: deployment checkout is on '$CURRENT_BRANCH', expected main."; exit 1; fi
+            DIRTY_FILES="$(git status --porcelain --untracked-files=all)"
+            if [ -n "$DIRTY_FILES" ]; then echo "ERROR: deployment checkout is not clean:"; printf '%s\n' "$DIRTY_FILES"; exit 1; fi
+            if [ ! -f "$DEPLOY_PATH/docs/danh_sach_cot_dien_mock.csv" ]; then echo "ERROR: manifest CSV is missing from deployment checkout."; exit 1; fi
+            DB_STATUS="$(docker inspect uavpms-db --format '{{.State.Status}}')"
+            if [ "$DB_STATUS" != running ]; then echo "ERROR: uavpms-db status is '$DB_STATUS', expected running."; exit 1; fi
+            if [[ ! "$IMPORT_RUN" =~ ^[0-9]+_[0-9]+$ ]]; then echo "ERROR: invalid import run identifier."; exit 1; fi
             STAGING="pole_manifest_${IMPORT_RUN}"
             CSVPATH="/tmp/${STAGING}.csv"
             cleanup() {
