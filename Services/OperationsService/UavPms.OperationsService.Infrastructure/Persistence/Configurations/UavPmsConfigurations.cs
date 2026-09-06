@@ -46,6 +46,21 @@ public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
     }
 }
 
+public class UserGeographicScopeConfiguration : IEntityTypeConfiguration<UserGeographicScope>
+{
+    public void Configure(EntityTypeBuilder<UserGeographicScope> builder)
+    {
+        builder.ToTable("UserGeographicScopes");
+        builder.HasKey(e => e.Id);
+        builder.HasIndex(e => new { e.UserId, e.RegionId });
+        builder.HasIndex(e => new { e.UserId, e.SubstationId });
+        builder.HasIndex(e => new { e.UserId, e.TransmissionLineId });
+        builder.HasIndex(e => new { e.UserId, e.ManagementUnitId });
+        builder.HasOne(e => e.User).WithMany(u => u.GeographicScopes).HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasCheckConstraint("CK_UserGeographicScopes_HasScope", "(\"RegionId\" IS NOT NULL OR \"SubstationId\" IS NOT NULL OR \"TransmissionLineId\" IS NOT NULL OR \"ManagementUnitId\" IS NOT NULL)");
+    }
+}
+
 public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 {
     public void Configure(EntityTypeBuilder<RefreshToken> builder)

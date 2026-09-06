@@ -12,4 +12,5 @@ public class User : BaseEntity
     public bool IsEmailVerified { get; set; }
 
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+    public virtual ICollection<UserGeographicScope> GeographicScopes { get; set; } = new List<UserGeographicScope>();
 }

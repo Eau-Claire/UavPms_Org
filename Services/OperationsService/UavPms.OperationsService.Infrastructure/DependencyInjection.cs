@@ -5,6 +5,7 @@ using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.OperationsService.Infrastructure.Messaging;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Infrastructure.Repositories;
+using UavPms.OperationsService.Infrastructure.Authorization;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.OperationsService.Application.Common.Options;
@@ -74,6 +75,7 @@ public static class DependencyInjection
 
         // Đăng ký Unit of Work và Generic Repository
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<GeographicAccessFilter>();
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUserRepository, UserRepository>();
         
