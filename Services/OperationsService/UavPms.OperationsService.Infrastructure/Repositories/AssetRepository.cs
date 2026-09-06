@@ -4,13 +4,17 @@ using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Infrastructure.Persistence;
+using UavPms.OperationsService.Infrastructure.Authorization;
 
 namespace UavPms.OperationsService.Infrastructure.Repositories;
 
 public class AssetRepository : GenericRepository<Asset>, IAssetRepository
 {
-    public AssetRepository(ApplicationDbContext context) : base(context)
+    private readonly GeographicAccessFilter _access;
+
+    public AssetRepository(ApplicationDbContext context, GeographicAccessFilter access) : base(context)
     {
+        _access = access;
     }
 
     public async Task<IReadOnlyList<Asset>> GetAssetsInBoundingBoxAsync(double minLat, double minLng, double maxLat, double maxLng)
@@ -19,7 +23,9 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
         var envelope = new Envelope(minLng, maxLng, minLat, maxLat);
         var box = geometryFactory.ToGeometry(envelope);
 
+        var accessibleAssetIds = _access.ApplyToAssets(_context.Assets.AsNoTracking()).Select(a => a.Id);
         return await _context.Assets
+            .Where(a => accessibleAssetIds.Contains(a.Id))
             .Include(a => a.Tower)
             .Where(a => a.Tower != null && a.Tower.Geom != null && a.Tower.Geom.Within(box))
             .ToListAsync();
@@ -27,6 +33,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
 
     public async Task<IReadOnlyList<Asset>> GetAssetsWithinDistanceAsync(double latitude, double longitude, double distanceInMeters)
     {
+        var accessibleAssetIds = _access.ApplyToAssets(_context.Assets.AsNoTracking()).Select(a => a.Id);
         return await _context.Assets
             .FromSqlInterpolated($@"
                 SELECT a.* 
@@ -35,6 +42,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
                 WHERE a.""IsDeleted"" = false 
                   AND t.""IsDeleted"" = false 
                   AND ST_DWithin(t.""Geom""::geography, ST_SetSRID(ST_Point({longitude}, {latitude}), 4326)::geography, {distanceInMeters})")
+            .Where(a => accessibleAssetIds.Contains(a.Id))
             .Include(a => a.Tower)
             .ToListAsync();
     }
@@ -53,14 +61,14 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
         string? sortBy = null,
         string? sortOrder = null)
     {
-        var query = _context.Assets
+        var query = _access.ApplyToAssets(_context.Assets
             .AsNoTracking()
             .Where(a => !a.IsDeleted)
             .Include(a => a.Tower)
                 .ThenInclude(t => t!.TransmissionLine)
                     .ThenInclude(l => l!.Substation)
                         .ThenInclude(s => s!.Region)
-            .AsQueryable();
+            .AsQueryable());
 
         if (towerId.HasValue)
         {
@@ -127,10 +135,10 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
 
     public async Task<Asset?> GetAssetWithDetailsAsync(Guid id)
     {
-        return await _context.Assets
+        return await _access.ApplyToAssets(_context.Assets
             .AsNoTracking()
             .Include(a => a.Tower)
-            .FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
+            ).FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
     }
 
     public async Task<IReadOnlyList<Asset>> GetAssetsByIdsAsync(
@@ -142,10 +150,10 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
             return Array.Empty<Asset>();
         }
 
-        return await _context.Assets
+        return await _access.ApplyToAssets(_context.Assets
             .Include(a => a.Tower)
             .Include(a => a.PowerLine)
-            .Where(a => assetIds.Contains(a.Id) && !a.IsDeleted)
+            .Where(a => assetIds.Contains(a.Id) && !a.IsDeleted))
             .ToListAsync(cancellationToken);
     }
 
@@ -156,12 +164,12 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
         string? assetType,
         CancellationToken cancellationToken)
     {
-        var query = _context.Assets
+        var query = _access.ApplyToAssets(_context.Assets
             .Where(a => !a.IsDeleted
                         && (a.Status == "Active" || a.Status == "Operational")
                         && a.Location != null
                         // Boundary points are selectable, hence Intersects rather than Within.
-                        && a.Location.Intersects(polygon));
+                        && a.Location.Intersects(polygon)));
         if (managementUnitId.HasValue) query = query.Where(a => a.ManagementUnitId == managementUnitId);
         if (powerLineId.HasValue) query = query.Where(a => a.PowerLineId == powerLineId);
         if (!string.IsNullOrWhiteSpace(assetType)) query = query.Where(a => a.AssetType == assetType);
@@ -200,9 +208,9 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
 
     public async Task<AssetHealthSummary> GetAssetHealthSummaryAsync(CancellationToken cancellationToken)
     {
-        var assets = _context.Assets
+        var assets = _access.ApplyToAssets(_context.Assets
             .AsNoTracking()
-            .Where(a => !a.IsDeleted);
+            .Where(a => !a.IsDeleted));
 
         var totalAssets = await assets.CountAsync(cancellationToken);
         if (totalAssets == 0)

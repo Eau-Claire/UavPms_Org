@@ -17,6 +17,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<UserGeographicScope> UserGeographicScopes => Set<UserGeographicScope>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Region> Regions => Set<Region>();
     public DbSet<Substation> Substations => Set<Substation>();

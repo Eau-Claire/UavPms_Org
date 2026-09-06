@@ -2,13 +2,19 @@ using Microsoft.EntityFrameworkCore;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Gis.Infrastructure;
 using UavPms.OperationsService.Infrastructure.Persistence;
+using UavPms.OperationsService.Infrastructure.Authorization;
 
 namespace UavPms.OperationsService.Infrastructure.Repositories;
 
 public class GisRepository : IGisRepository
 {
     private readonly ApplicationDbContext _context;
-    public GisRepository(ApplicationDbContext context) => _context = context;
+    private readonly GeographicAccessFilter _access;
+    public GisRepository(ApplicationDbContext context, GeographicAccessFilter access)
+    {
+        _context = context;
+        _access = access;
+    }
 
     public async Task<GisInfrastructureResponse> GetInfrastructureAsync(GisInfrastructureQuery request, CancellationToken ct)
     {
@@ -23,9 +29,9 @@ public class GisRepository : IGisRepository
         if (request.PowerLineId.HasValue && !await _context.TransmissionLines.AnyAsync(x => x.Id == request.PowerLineId, ct))
             throw new NotFoundException("PowerLine", "POWER_LINE_NOT_FOUND");
 
-        var lines = _context.TransmissionLines.AsNoTracking().AsQueryable();
+        var lines = _access.ApplyToLines(_context.TransmissionLines.AsNoTracking());
         var segments = _context.LineSegments.AsNoTracking().AsQueryable();
-        var assets = _context.Assets.AsNoTracking().Where(x => x.Location != null);
+        var assets = _access.ApplyToAssets(_context.Assets.AsNoTracking()).Where(x => x.Location != null);
         if (request.ManagementUnitId.HasValue) { lines = lines.Where(x => x.ManagementUnitId == request.ManagementUnitId); assets = assets.Where(x => x.ManagementUnitId == request.ManagementUnitId); }
         if (request.PowerLineId.HasValue) { lines = lines.Where(x => x.Id == request.PowerLineId); segments = segments.Where(x => x.PowerLineId == request.PowerLineId); assets = assets.Where(x => x.PowerLineId == request.PowerLineId); }
         if (!string.IsNullOrWhiteSpace(request.VoltageLevel)) lines = lines.Where(x => x.VoltageLevel == request.VoltageLevel);
