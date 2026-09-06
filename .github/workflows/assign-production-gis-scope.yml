@@ -1,0 +1,90 @@
+name: Assign Production GIS Scope
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type ASSIGN_PRODUCTION_GIS_SCOPE to add permanent geographic scopes.
+        required: true
+        type: string
+      user_email:
+        description: Existing user email to receive the scope.
+        required: true
+        type: string
+      region_codes:
+        description: Comma-separated Region codes, for example North,Central,South.
+        required: false
+        type: string
+      management_unit_codes:
+        description: Comma-separated ManagementUnit codes, for example EVNCPC,EVNSPC.
+        required: false
+        type: string
+
+concurrency:
+  group: production-gis-scope-assignment
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  assign:
+    if: ${{ inputs.confirmation == 'ASSIGN_PRODUCTION_GIS_SCOPE' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Assign geographic scope over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          USER_EMAIL: ${{ inputs.user_email }}
+          REGION_CODES: ${{ inputs.region_codes }}
+          MANAGEMENT_UNIT_CODES: ${{ inputs.management_unit_codes }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          debug: true
+          timeout: 60s
+          command_timeout: 10m
+          envs: DEPLOY_PATH,CONFIRMATION,USER_EMAIL,REGION_CODES,MANAGEMENT_UNIT_CODES
+          script_stop: true
+          script: |
+            set -euo pipefail
+            if [ "${CONFIRMATION:-}" != ASSIGN_PRODUCTION_GIS_SCOPE ]; then echo "ERROR: confirmation mismatch."; exit 1; fi
+            if [ -z "${DEPLOY_PATH:-}" ]; then echo "ERROR: DEPLOY_PATH is not configured."; exit 1; fi
+            if [ -z "${USER_EMAIL:-}" ] || [[ "$USER_EMAIL" == *"'"* ]] || [[ "$USER_EMAIL" != *@* ]]; then echo "ERROR: invalid user email."; exit 1; fi
+            if [ -z "${REGION_CODES//[[:space:],]/}" ] && [ -z "${MANAGEMENT_UNIT_CODES//[[:space:],]/}" ]; then echo "ERROR: provide region_codes or management_unit_codes."; exit 1; fi
+            cd "$DEPLOY_PATH"
+            if [ "$(git branch --show-current)" != main ]; then echo "ERROR: deployment checkout must be on main."; exit 1; fi
+            EXCLUDE_FILE="$DEPLOY_PATH/.git/info/exclude"
+            mkdir -p "$(dirname "$EXCLUDE_FILE")"
+            for preserved_path in analysis-get.js benchmark_ai.py health.js monitoring/prometheus.yml backups/; do
+              grep -qxF "$preserved_path" "$EXCLUDE_FILE" 2>/dev/null || printf '%s\n' "$preserved_path" >> "$EXCLUDE_FILE"
+            done
+            if [ -n "$(git status --porcelain --untracked-files=all)" ]; then echo "ERROR: deployment checkout is not clean."; exit 1; fi
+            if [ "$(docker inspect uavpms-db --format '{{.State.Status}}')" != running ]; then echo "ERROR: uavpms-db is not running."; exit 1; fi
+            DB_ARGS=(-X -v ON_ERROR_STOP=1 -U uavpms -d uavpms)
+            USER_ID="$(docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -v user_email="$USER_EMAIL" -c 'SELECT "Id" FROM public."Users" WHERE lower("Email") = lower(:'"'"'user_email'"'"') AND NOT "IsDeleted";')"
+            if [ -z "$USER_ID" ]; then echo "ERROR: user was not found."; exit 1; fi
+            echo "Assigning scopes to user: $USER_EMAIL"
+            IFS=',' read -r -a REGIONS <<< "${REGION_CODES:-}"
+            for raw_code in "${REGIONS[@]}"; do
+              CODE="$(printf '%s' "$raw_code" | xargs)"
+              [ -z "$CODE" ] && continue
+              if [[ ! "$CODE" =~ ^[A-Za-z0-9_-]+$ ]]; then echo "ERROR: invalid region code."; exit 1; fi
+              RESULT="$(docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -v user_id="$USER_ID" -v region_code="$CODE" -c 'INSERT INTO public."UserGeographicScopes" ("Id","UserId","RegionId","CreatedAt","IsDeleted") SELECT md5(:'"'"'user_id'"'"' || '"'"':region:'"'"' || :'"'"'region_code'"'"')::uuid, :'"'"'user_id'"'"'::uuid, r."Id", now(), false FROM public."Regions" r WHERE r."Code" = :'"'"'region_code'"'"' ON CONFLICT ("Id") DO UPDATE SET "RegionId" = EXCLUDED."RegionId", "IsDeleted" = false, "DeletedAt" = NULL RETURNING 1;')"
+              if [ "$RESULT" != 1 ]; then echo "ERROR: region code was not found: $CODE"; exit 1; fi
+              echo "Region scope applied: $CODE"
+            done
+            IFS=',' read -r -a UNITS <<< "${MANAGEMENT_UNIT_CODES:-}"
+            for raw_code in "${UNITS[@]}"; do
+              CODE="$(printf '%s' "$raw_code" | xargs)"
+              [ -z "$CODE" ] && continue
+              if [[ ! "$CODE" =~ ^[A-Za-z0-9_-]+$ ]]; then echo "ERROR: invalid management unit code."; exit 1; fi
+              RESULT="$(docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -v user_id="$USER_ID" -v management_unit_code="$CODE" -c 'INSERT INTO public."UserGeographicScopes" ("Id","UserId","ManagementUnitId","CreatedAt","IsDeleted") SELECT md5(:'"'"'user_id'"'"' || '"'"':management-unit:'"'"' || :'"'"'management_unit_code'"'"')::uuid, :'"'"'user_id'"'"'::uuid, u."Id", now(), false FROM public."ManagementUnits" u WHERE u."Code" = :'"'"'management_unit_code'"'"' ON CONFLICT ("Id") DO UPDATE SET "ManagementUnitId" = EXCLUDED."ManagementUnitId", "IsDeleted" = false, "DeletedAt" = NULL RETURNING 1;')"
+              if [ "$RESULT" != 1 ]; then echo "ERROR: management unit code was not found: $CODE"; exit 1; fi
+              echo "Management unit scope applied: $CODE"
+            done
+            docker exec uavpms-db psql "${DB_ARGS[@]}" -v user_id="$USER_ID" -c 'SELECT s."Id", s."RegionId", s."ManagementUnitId", s."IsDeleted" FROM public."UserGeographicScopes" s WHERE s."UserId" = :'"'"'user_id'"'"'::uuid ORDER BY s."CreatedAt";'
