@@ -49,7 +49,8 @@ jobs:
           timeout: 60s
           command_timeout: 10m
           envs: DEPLOY_PATH,CONFIRMATION,USER_EMAIL,REGION_CODES,MANAGEMENT_UNIT_CODES
-          script_stop: true
+          # Scope assignment remains idempotent; keep the SSH session alive so database diagnostics are visible.
+          script_stop: false
           script: |
             set -euo pipefail
             if [ "${CONFIRMATION:-}" != ASSIGN_PRODUCTION_GIS_SCOPE ]; then echo "ERROR: confirmation mismatch."; exit 1; fi
