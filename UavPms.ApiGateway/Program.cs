@@ -132,7 +132,23 @@ app.UseCors("GatewayCors");
 
         foreach (var target in swaggerTargets)
         {
-            var source = JsonNode.Parse(await client.GetStringAsync(target.Value, context.RequestAborted))!.AsObject();
+            using var response = await client.GetAsync(target.Value, context.RequestAborted);
+            var content = await response.Content.ReadAsStringAsync(context.RequestAborted);
+            if (!response.IsSuccessStatusCode && target.Value.Contains("/swagger/v1.0/", StringComparison.OrdinalIgnoreCase))
+            {
+                var v1Target = target.Value.Replace("/swagger/v1.0/", "/swagger/v1/", StringComparison.OrdinalIgnoreCase);
+                using var fallback = await client.GetAsync(v1Target, context.RequestAborted);
+                content = await fallback.Content.ReadAsStringAsync(context.RequestAborted);
+                response.Dispose();
+                if (!fallback.IsSuccessStatusCode)
+                    throw new InvalidOperationException($"Swagger document unavailable for {target.Key}: {fallback.StatusCode}");
+            }
+            else if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Swagger document unavailable for {target.Key}: {response.StatusCode}");
+            }
+
+            var source = JsonNode.Parse(content)!.AsObject();
             var prefix = target.Key.Replace("-", "");
             foreach (var path in source["paths"]!.AsObject())
                 paths[path.Key] = Rewrite(path.Value!.DeepClone(), prefix);
