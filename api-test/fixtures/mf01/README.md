@@ -34,3 +34,18 @@ Database insertion and end-to-end login have not been exercised by the offline g
 - Completed/cancelled missions support immutable-state and historical snapshot cases. Check geographic scoping through hierarchy even if a Region has no geometry (existing unit tests cover this variant).
 
 The fixture follows the current single-Inspector mission schema; multiple-assignment and planned-end data must be added when those contracts are implemented. It does not seed anomalies/alerts or fix the MF01 blockers documented in `docs/validation/mf01-be-fe-validation.md`.
+
+## GitHub Actions workflow
+
+Workflow: `.github/workflows/seed-mf01-test-data.yml` (**Seed MF01 Test Data**).
+
+1. Merge the workflow/generator into the default branch so the Run workflow button is available.
+2. Provision/migrate a dedicated `mf01_test*` PostGIS database in the existing `uavpms-db` container and seed application roles. This workflow deliberately reports an error for missing databases/schema; it does not clone production data, create databases, migrate, or restart services.
+3. In the existing `production` GitHub environment, reuse `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`, `SERVER_PORT`. Set `MF01_SEED_PASSWORD` (12–72 UTF-8 bytes). `SERVER_FINGERPRINT` can provide the SSH server SHA256 fingerprint for both transfer and execution.
+4. Actions → Seed MF01 Test Data → Run workflow. Set database (default `mf01_test`) and towers per line: 30 / 100 / 500, corresponding to 1,620 / 5,400 / 27,000 towers/assets.
+5. Approve the production environment job. The environment is reused for server access credentials/reviewers; the target database remains the explicitly selected test database. No remote step precedes that approval.
+6. On success, download the manifest artifact for fixture user/mission/region IDs. Login with the configured test password and the existing authentication flow. Existing fixture passwords are not reset on rerun.
+
+The runner hashes the password before file transfer. Only `manifest.json` is uploaded as an artifact. Seed files are removed from remote staging even on failure when SSH remains reachable. All row-presence verification happens before SQL COMMIT; partial failure rolls back. The workflow reads its selected commit via checkout and transfers its generated payload, so it does not pull/reset the running deployment checkout or depend on the server reaching GitHub.
+
+Implementation uses the published inputs of [scp-action v1.0.0](https://github.com/appleboy/scp-action/blob/v1.0.0/action.yml) and [ssh-action v1.2.0](https://github.com/appleboy/ssh-action/blob/v1.2.0/action.yml).

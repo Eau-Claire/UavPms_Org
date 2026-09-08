@@ -16,7 +16,7 @@ class MockDatasetTests(unittest.TestCase):
         self.assertEqual(data['counts']['AssetComponents'], 1620)
         self.assertEqual(data['counts']['MissionTargets'], 540)
         self.assertEqual(len(data['users']), 15)
-        self.assertIn("current_database() NOT LIKE 'mf01_test%'", sql)
+        self.assertIn("current_database() !~ '^mf01_test[a-zA-Z0-9_]*$'", sql)
 
     def test_regions_and_mission_targets_are_isolated(self):
         _, data = module.generate()

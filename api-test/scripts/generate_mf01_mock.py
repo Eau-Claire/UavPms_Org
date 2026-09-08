@@ -21,11 +21,13 @@ def generate(towers_per_line=30):
     if not 2 <= towers_per_line <= 500:
         raise ValueError('towers_per_line must be between 2 and 500')
     sql = ["\\set ON_ERROR_STOP on", "BEGIN;", """DO $$ BEGIN
-IF current_database() NOT LIKE 'mf01_test%' THEN
+IF current_database() !~ '^mf01_test[a-zA-Z0-9_]*$' THEN
   RAISE EXCEPTION 'MF01 fixtures require a disposable database named mf01_test*';
 END IF;
 END $$;"""]
     manifest = {'synthetic': True, 'regions': [], 'users': [], 'missions': [], 'counts': {}}
+
+    inserted_ids = {}
 
     def insert(table, key, values, geometry=None):
         ident = uid(key)
@@ -37,6 +39,7 @@ END $$;"""]
             columns.append(column)
             expressions.append(f'ST_GeomFromText({quote(wkt)},4326)')
         sql.append('INSERT INTO "' + table + '" (' + ','.join('"'+c+'"' for c in columns) + ') VALUES (' + ','.join(expressions) + ') ON CONFLICT ("Id") DO NOTHING;')
+        inserted_ids.setdefault(table, []).append(ident)
         manifest['counts'][table] = manifest['counts'].get(table, 0) + 1
         return ident
 
@@ -47,6 +50,7 @@ END $$;"""]
         sql.append(f'''INSERT INTO "Users" ("Id","Username","Email","PasswordHash","FullName","Phone","Status","IsEmailVerified","CreatedAt","IsDeleted")
 VALUES ('{ident}','{key}','{email}',crypt(:'mf01_password',gen_salt('bf',10)),'MOCK {key}','', 'Active',true,now(),false) ON CONFLICT ("Id") DO NOTHING;
 INSERT INTO "UserRoles" ("UserId","RoleId","AssignedAt") SELECT '{ident}',"Id",now() FROM "Roles" WHERE "RoleName"='{role}' ON CONFLICT DO NOTHING;''')
+        inserted_ids.setdefault('Users', []).append(ident)
         manifest['users'].append({'id': ident, 'email': email, 'role': role})
         return ident
 
@@ -92,6 +96,13 @@ INSERT INTO "UserRoles" ("UserId","RoleId","AssignedAt") SELECT '{ident}',"Id",n
         'emptyPolygon':{'type':'Polygon','coordinates':[[[109,12],[109.01,12],[109.01,12.01],[109,12.01],[109,12]]]},
         'crossRegionPolygon':{'type':'Polygon','coordinates':[[[105,10],[109,10],[109,22],[105,22],[105,10]]]},
         'invalidPolygon':{'type':'Polygon','coordinates':[[[105,10],[106,11],[106,10],[105,11],[105,10]]]}}
+    # Verify expected IDs before committing, including reused rows on rerun.
+    for table, ids in inserted_ids.items():
+        id_list = ','.join(quote(ident) for ident in ids)
+        sql.append(f"""DO $$ BEGIN
+IF (SELECT count(*) FROM \"{table}\" WHERE \"Id\" IN ({id_list}) AND NOT \"IsDeleted\") <> {len(ids)} THEN
+RAISE EXCEPTION 'MF01 verification failed: {table}';
+END IF; END $$;""")
     sql.append('COMMIT;')
     return '\n'.join(sql)+'\n',manifest
 
