@@ -93,6 +93,18 @@ app.UseCors("GatewayCors");
         await next();
     });
 
+    // Keep the conventional v1 document URL available for clients that do
+    // not use the gateway-specific document name.
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path.Equals("/swagger/v1/swagger.json", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Request.Path = "/swagger/gateway/swagger.json";
+        }
+
+        await next();
+    });
+
     var swaggerTargets = !useLocalDownstreams
         ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
