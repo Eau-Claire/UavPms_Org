@@ -1,39 +1,51 @@
 x-service-environment: &service-environment
   ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
   RunMigrations: ${RUN_MIGRATIONS:-false}
+
   ConnectionStrings__DefaultConnection: ${DB_CONNECTION}
   ConnectionStrings__HangfireConnection: ${HANGFIRE_DB_CONNECTION}
+
   Redis__ConnectionString: redis:6379,abortConnect=false
   Redis__Password: ${REDIS_PASSWORD}
+
   Jwt__SecretKey: ${JWT_SECRET}
   Jwt__Issuer: ${JWT_ISSUER}
   Jwt__Audience: ${JWT_AUDIENCE}
   Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES}
+
   Brevo__ApiKey: ${BREVO_API_KEY}
   Brevo__FromEmail: ${BREVO_FROM_EMAIL}
   Brevo__FromName: ${BREVO_FROM_NAME:-UavPms System}
+
   SendGrid__ApiKey: ${SENDGRID_API_KEY}
   SendGrid__FromEmail: ${SENDGRID_FROM_EMAIL}
   SendGrid__FromName: ${SENDGRID_FROM_NAME}
+
   Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
   Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}
   Cors__AllowedOrigins__2: ${CORS_ALLOWED_ORIGIN_2:-http://localhost:5194}
   Cors__AllowedOrigins__3: ${CORS_ALLOWED_ORIGIN_3:-https://seppms.vercel.app}
   Cors__AllowedOrigins__4: ${CORS_ALLOWED_ORIGIN_4:-https://uavpms.ddns.net}
+
   AIService__ServiceKey: ${AIService_ServiceKey}
+
   MockAI__Enabled: ${MOCK_AI_ENABLED:-false}
   MockAI__CategoryCode: ${MOCK_AI_CATEGORY_CODE:-}
   MockAI__Confidence: ${MOCK_AI_CONFIDENCE:-0.92}
   MockAI__ImageConcurrency: ${MOCK_AI_IMAGE_CONCURRENCY:-2}
   MockAI__VideoConcurrency: ${MOCK_AI_VIDEO_CONCURRENCY:-1}
+
   Supabase__Url: ${SUPABASE_URL}
   Supabase__ApiKey: ${SUPABASE_API_KEY}
   Supabase__Bucket: ${SUPABASE_BUCKET}
+
   RabbitMQ__HostName: rabbitmq
   RabbitMQ__UserName: ${RABBITMQ_USER:-guest}
   RabbitMQ__Password: ${RABBITMQ_PASSWORD:-guest}
   RabbitMQ__Port: 5672
+
   GrpcServices__InspectionEvaluationUrl: http://inspectionevaluationservice:8080
+
   AIAnalysisResultMessaging__ExchangeName: ${AI_RESULT_EXCHANGE:-identity-exchange}
   AIAnalysisResultMessaging__RoutingKey: ${AI_RESULT_ROUTING_KEY:-identity.event.aianalysisresultevent}
   AIAnalysisResultMessaging__QueueName: ${AI_RESULT_QUEUE_NAME:-ai.analysis.result}
@@ -43,7 +55,9 @@ x-service-environment: &service-environment
   AIAnalysisResultMessaging__RetryLimit: ${AI_RESULT_RETRY_LIMIT:-3}
   AIAnalysisResultMessaging__RetryDelayMs: ${AI_RESULT_RETRY_DELAY_MS:-15000}
 
+
 services:
+
   redis:
     image: redis:alpine
     container_name: uav-redis
@@ -51,108 +65,143 @@ services:
       - "6379:6379"
     restart: always
 
+
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: uav-rabbitmq
+
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+
     ports:
-      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-5672}:5672"
-      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+
     expose:
       - "5672"
+
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+
     restart: always
+
 
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: uav-mosquitto
+
     expose:
       - "1883"
+
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
     restart: always
+
 
   gateway:
     image: uavpms-gateway:latest
     container_name: uav-gateway
+
     build:
       context: .
       dockerfile: Dockerfile.gateway
       network: host
+
     ports:
-      - "${GATEWAY_HTTP_PORT:-5194}:8080"
+      - "127.0.0.1:${GATEWAY_HTTP_PORT:-5194}:8080"
+
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       Gateway__UseLocalDownstreams: ${GATEWAY_USE_LOCAL_DOWNSTREAMS:-false}
+
       Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN_0:-http://localhost:3000}
       Cors__AllowedOrigins__1: ${CORS_ALLOWED_ORIGIN_1:-http://localhost:5173}
       Cors__AllowedOrigins__2: ${CORS_ALLOWED_ORIGIN_2:-http://localhost:5194}
       Cors__AllowedOrigins__3: ${CORS_ALLOWED_ORIGIN_3:-https://seppms.vercel.app}
       Cors__AllowedOrigins__4: ${CORS_ALLOWED_ORIGIN_4:-https://uavpms.ddns.net}
+
     depends_on:
       - identityservice
       - operationsservice
       - aiinspectionservice
       - notificationservice
       - inspectionevaluationservice
+
     restart: always
+
 
   inspectionevaluationservice:
     image: uavpms-inspection-evaluation-service:latest
     container_name: uav-inspection-evaluation-service
+
     build:
       context: .
       dockerfile: Services/InspectionEvaluationService/UavPms.InspectionEvaluationService.API/Dockerfile
       network: host
+
     expose:
       - "8080"
       - "8081"
+
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       Grpc__Port: 8080
       Health__Port: 8081
+
     restart: always
+
 
   identityservice:
     image: uavpms-identity-service:latest
     container_name: uav-identity-service
+
     build:
       context: .
       dockerfile: Services/IdentityService/UavPms.IdentityService.API/Dockerfile
       network: host
+
     expose:
       - "8080"
+
     environment:
       <<: *service-environment
-    networks:
-      - default
-      - uavpms-infra
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
     depends_on:
       redis:
         condition: service_started
       rabbitmq:
         condition: service_healthy
+
+    networks:
+      - default
+      - uavpms-infra
+
     restart: always
+
 
   operationsservice:
     image: uavpms-operations-service:latest
     container_name: uav-operations-service
+
     build:
       context: .
       dockerfile: Services/OperationsService/UavPms.OperationsService.API/Dockerfile
       network: host
+
     expose:
       - "8080"
+
     environment:
       <<: *service-environment
+
       Mqtt__Enabled: ${MQTT_ENABLED:-true}
       Mqtt__Host: mosquitto
       Mqtt__Port: 1883
@@ -161,11 +210,10 @@ services:
       Mqtt__TelemetryTopic: uav/+/telemetry
       Mqtt__OfflineTimeoutSeconds: ${MQTT_OFFLINE_TIMEOUT_SECONDS:-30}
       Mqtt__LiveStateTtlSeconds: ${MQTT_LIVE_STATE_TTL_SECONDS:-30}
-    networks:
-      - default
-      - uavpms-infra
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
     depends_on:
       redis:
         condition: service_started
@@ -173,24 +221,32 @@ services:
         condition: service_healthy
       mosquitto:
         condition: service_started
+
+    networks:
+      - default
+      - uavpms-infra
+
     restart: always
+
 
   aiinspectionservice:
     image: uavpms-ai-inspection-service:latest
     container_name: uav-ai-inspection-service
+
     build:
       context: .
       dockerfile: Services/AIInspectionService/UavPms.AIInspectionService.API/Dockerfile
       network: host
+
     expose:
       - "8080"
+
     environment:
       <<: *service-environment
-    networks:
-      - default
-      - uavpms-infra
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
     depends_on:
       redis:
         condition: service_started
@@ -198,41 +254,60 @@ services:
         condition: service_healthy
       inspectionevaluationservice:
         condition: service_started
+
+    networks:
+      - default
+      - uavpms-infra
+
     restart: always
+
 
   fastapi-ai:
     image: ${FASTAPI_AI_IMAGE:-uavpms-fastapi-ai:latest}
     container_name: uav-fastapi-ai
+
     profiles:
       - fastapi-ai
+
     expose:
       - "8000"
+
     environment:
       AI_SERVICE_KEY: ${AIService_ServiceKey}
+
     restart: unless-stopped
+
 
   notificationservice:
     image: uavpms-notification-service:latest
     container_name: uav-notification-service
+
     build:
       context: .
       dockerfile: Services/NotificationService/UavPms.NotificationService.API/Dockerfile
       network: host
+
     expose:
       - "8080"
+
     environment:
       <<: *service-environment
-    networks:
-      - default
-      - uavpms-infra
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
     depends_on:
       redis:
         condition: service_started
       rabbitmq:
         condition: service_healthy
+
+    networks:
+      - default
+      - uavpms-infra
+
     restart: always
+
 
 networks:
   uavpms-infra:
