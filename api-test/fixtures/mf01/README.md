@@ -1,0 +1,36 @@
+# MF01 mock data by region
+
+Synthetic data for the Mission Management acceptance cases. Coordinates are invented near North/Central/South Vietnam; these are not actual grid assets or official administrative boundaries.
+
+Generate without database access:
+
+```bash
+python api-test/scripts/generate_mf01_mock.py --output /tmp/uavpms-mf01-mock
+python -m unittest discover -s api-test/fixtures/mf01
+```
+
+Default: 3 regions, 3 management units, 18 substations, 54 lines, 1,620 towers with one asset each, 54 UAVs, 54 missions, 540 persisted targets, and 15 users. `--towers-per-line 100` generates 5,400 towers/assets. IDs are deterministic UUIDs. Code/email prefixes identify mock records. SQL uses insert-on-conflict-do-nothing: reruns do not duplicate IDs and preserve edits; use a fresh database for an exact reset or a different volume.
+
+`manifest.json` contains users, regional hierarchy/asset IDs, mission assignments/targets, and test polygons. `seed.sql` supplies data using the existing application schema. No generated passwords or tokens are committed. This generator does not change FE responses or hide API errors.
+
+## Load only into a disposable test database
+
+Apply the current application migrations to a dedicated PostGIS database named `mf01_test*`, including current AssetComponents, MissionTargets (AssetId/Sequence/InspectionStatus), UserGeographicScopes and identity tables. Seed the existing SystemAdmin, Manager and Inspector roles first. Configure local BE services to use that database; configure FE to call that local gateway. SQL refuses other database names and wraps all inserts in one transaction with `ON_ERROR_STOP`.
+
+Run `psql "$DB_CONNECTION" -f /tmp/uavpms-mf01-mock/seed.sql` from a psql session/script where the `mf01_password` variable is set to your chosen local test password (for example with `\prompt 'Local test password: ' mf01_password` inside an interactive psql session, followed by `\i /tmp/uavpms-mf01-mock/seed.sql`). PostgreSQL pgcrypto hashes that supplied password. Existing fixture accounts keep their password on rerun. Login still follows the application's OTP/trusted-device flow; this seed does not bypass authentication.
+
+Database insertion and end-to-end login have not been exercised by the offline generator tests. The application schema must be migrated first; a schema mismatch fails the transaction. No production data was seeded as part of adding these files.
+
+## Region and assignment scenarios
+
+- `MF01-NORTH-MANAGER`, `MF01-CENTRAL-MANAGER`, `MF01-SOUTH-MANAGER`: each has exactly one own Region scope. Email is the lowercase key plus `@mf01.example.test`.
+- Three Inspectors per region have **no default geographic scope**. Their access derives from mission assignments; this is deliberate so broad region grants cannot hide assignment bugs.
+- `MF01-MANAGER-NO-SCOPE` and `MF01-INSPECTOR-UNASSIGNED`: no scopes or missions. `MF01-ADMIN` has SystemAdmin role for global comparison.
+- Each region has 540 assets, including 18 inactive assets excluded from seeded mission targets. Different voltage levels and asset types exercise filtering. Mission states include Pending, Executing, Completed and Cancelled; existing backend authorization bugs may fail the intended acceptance checks.
+- `cases.mixedRegionAssetIds`: send all three IDs as North manager; expect whole request rejected, no partial mission.
+- `cases.crossRegionPolygon`: covers all three regions; a regional manager's preview should return only eligible own-region assets (522 for default data), never other regions.
+- `cases.emptyPolygon`: no targets. `cases.invalidPolygon`: self-intersecting polygon, expect 400.
+- Inspectors have multiple missions with disjoint target subsets. Compare each mission's exact `targetAssetIds` against its GIS: access to mission A must not expose mission B's assets. General GIS union visibility is a different test.
+- Completed/cancelled missions support immutable-state and historical snapshot cases. Check geographic scoping through hierarchy even if a Region has no geometry (existing unit tests cover this variant).
+
+The fixture follows the current single-Inspector mission schema; multiple-assignment and planned-end data must be added when those contracts are implemented. It does not seed anomalies/alerts or fix the MF01 blockers documented in `docs/validation/mf01-be-fe-validation.md`.
