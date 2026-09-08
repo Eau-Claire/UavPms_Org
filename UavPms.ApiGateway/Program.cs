@@ -3,6 +3,7 @@ using Ocelot.Middleware;
 using Serilog;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using System.Text.Json.Nodes;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options =>
@@ -93,18 +94,6 @@ app.UseCors("GatewayCors");
         await next();
     });
 
-    // Keep the conventional v1 document URL available for clients that do
-    // not use the gateway-specific document name.
-    app.Use(async (context, next) =>
-    {
-        if (context.Request.Path.Equals("/swagger/v1/swagger.json", StringComparison.OrdinalIgnoreCase))
-        {
-            context.Request.Path = "/swagger/gateway/swagger.json";
-        }
-
-        await next();
-    });
-
     var swaggerTargets = !useLocalDownstreams
         ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -120,6 +109,59 @@ app.UseCors("GatewayCors");
             ["ai-inspection"] = builder.Configuration["SwaggerServices:AIInspectionUrl"] ?? "http://localhost:5103/swagger/v1.0/swagger.json",
             ["notifications"] = builder.Configuration["SwaggerServices:NotificationsUrl"] ?? "http://localhost:5104/swagger/v1.0/swagger.json"
         };
+
+    // Aggregate downstream documents for tools such as ZAP that import one URL.
+    app.Use(async (context, next) =>
+    {
+        if (!context.Request.Path.Equals("/swagger/v1/swagger.json", StringComparison.OrdinalIgnoreCase))
+        {
+            await next();
+            return;
+        }
+
+        var merged = new JsonObject
+        {
+            ["openapi"] = "3.0.1",
+            ["info"] = new JsonObject { ["title"] = "UAV PMS API", ["version"] = "1.0.0" },
+            ["paths"] = new JsonObject(),
+            ["components"] = new JsonObject()
+        };
+        var paths = (JsonObject)merged["paths"]!;
+        var components = (JsonObject)merged["components"]!;
+        var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient();
+
+        foreach (var target in swaggerTargets)
+        {
+            var source = JsonNode.Parse(await client.GetStringAsync(target.Value, context.RequestAborted))!.AsObject();
+            var prefix = target.Key.Replace("-", "");
+            foreach (var path in source["paths"]!.AsObject())
+                paths[path.Key] = Rewrite(path.Value!.DeepClone(), prefix);
+            if (source["components"] is JsonObject sourceComponents)
+                foreach (var group in sourceComponents)
+                    if (group.Value is JsonObject sourceGroup)
+                    {
+                        var dest = components[group.Key] as JsonObject ?? new JsonObject();
+                        components[group.Key] = dest;
+                        foreach (var item in sourceGroup)
+                            dest[$"{prefix}_{item.Key}"] = Rewrite(item.Value!.DeepClone(), prefix);
+                    }
+        }
+
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync(merged.ToJsonString(), context.RequestAborted);
+        return;
+
+        static JsonNode Rewrite(JsonNode node, string prefix)
+        {
+            if (node is JsonObject obj)
+                foreach (var item in obj.ToList()) obj[item.Key] = Rewrite(item.Value!, prefix);
+            else if (node is JsonArray array)
+                for (var i = 0; i < array.Count; i++) array[i] = Rewrite(array[i]!, prefix);
+            else if (node is JsonValue value && value.TryGetValue<string>(out var text) && text.StartsWith("#/components/"))
+                return JsonValue.Create($"#/components/{text[14..].Split('/')[0]}/{prefix}_{text[(text.IndexOf('/', 14) + 1)..]}")!;
+            return node;
+        }
+    });
 
     app.Use(async (context, next) =>
     {
