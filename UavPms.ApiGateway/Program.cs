@@ -96,17 +96,17 @@ app.UseCors("GatewayCors");
     var swaggerTargets = !useLocalDownstreams
         ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["identity"] = builder.Configuration["SwaggerServices:IdentityUrl"] ?? "http://identityservice:8080/swagger/v1/swagger.json",
-            ["operations"] = builder.Configuration["SwaggerServices:OperationsUrl"] ?? "http://operationsservice:8080/swagger/v1/swagger.json",
-            ["ai-inspection"] = builder.Configuration["SwaggerServices:AIInspectionUrl"] ?? "http://aiinspectionservice:8080/swagger/v1/swagger.json",
-            ["notifications"] = builder.Configuration["SwaggerServices:NotificationsUrl"] ?? "http://notificationservice:8080/swagger/v1/swagger.json"
+            ["identity"] = builder.Configuration["SwaggerServices:IdentityUrl"] ?? "http://identityservice:8080/swagger/v1.0/swagger.json",
+            ["operations"] = builder.Configuration["SwaggerServices:OperationsUrl"] ?? "http://operationsservice:8080/swagger/v1.0/swagger.json",
+            ["ai-inspection"] = builder.Configuration["SwaggerServices:AIInspectionUrl"] ?? "http://aiinspectionservice:8080/swagger/v1.0/swagger.json",
+            ["notifications"] = builder.Configuration["SwaggerServices:NotificationsUrl"] ?? "http://notificationservice:8080/swagger/v1.0/swagger.json"
         }
         : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-            ["identity"] = builder.Configuration["SwaggerServices:IdentityUrl"] ?? "http://localhost:5101/swagger/v1/swagger.json",
-            ["operations"] = builder.Configuration["SwaggerServices:OperationsUrl"] ?? "http://localhost:5102/swagger/v1/swagger.json",
-            ["ai-inspection"] = builder.Configuration["SwaggerServices:AIInspectionUrl"] ?? "http://localhost:5103/swagger/v1/swagger.json",
-            ["notifications"] = builder.Configuration["SwaggerServices:NotificationsUrl"] ?? "http://localhost:5104/swagger/v1/swagger.json"
+            ["identity"] = builder.Configuration["SwaggerServices:IdentityUrl"] ?? "http://localhost:5101/swagger/v1.0/swagger.json",
+            ["operations"] = builder.Configuration["SwaggerServices:OperationsUrl"] ?? "http://localhost:5102/swagger/v1.0/swagger.json",
+            ["ai-inspection"] = builder.Configuration["SwaggerServices:AIInspectionUrl"] ?? "http://localhost:5103/swagger/v1.0/swagger.json",
+            ["notifications"] = builder.Configuration["SwaggerServices:NotificationsUrl"] ?? "http://localhost:5104/swagger/v1.0/swagger.json"
         };
 
     app.Use(async (context, next) =>
