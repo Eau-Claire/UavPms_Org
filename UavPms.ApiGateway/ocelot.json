@@ -284,6 +284,13 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
+      "DownstreamPathTemplate": "/api/v{version}/gis/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/gis/{everything}",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
       "DownstreamPathTemplate": "/images/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],

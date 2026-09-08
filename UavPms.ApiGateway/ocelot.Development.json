@@ -283,6 +283,13 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
+      "DownstreamPathTemplate": "/api/v{version}/gis/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/gis/{everything}",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
       "DownstreamPathTemplate": "/images/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
