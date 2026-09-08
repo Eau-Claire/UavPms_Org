@@ -132,21 +132,10 @@ app.UseCors("GatewayCors");
 
         foreach (var target in swaggerTargets)
         {
-            using var response = await client.GetAsync(target.Value, context.RequestAborted);
-            var content = await response.Content.ReadAsStringAsync(context.RequestAborted);
-            if (!response.IsSuccessStatusCode && target.Value.Contains("/swagger/v1.0/", StringComparison.OrdinalIgnoreCase))
-            {
-                var v1Target = target.Value.Replace("/swagger/v1.0/", "/swagger/v1/", StringComparison.OrdinalIgnoreCase);
-                using var fallback = await client.GetAsync(v1Target, context.RequestAborted);
-                content = await fallback.Content.ReadAsStringAsync(context.RequestAborted);
-                response.Dispose();
-                if (!fallback.IsSuccessStatusCode)
-                    throw new InvalidOperationException($"Swagger document unavailable for {target.Key}: {fallback.StatusCode}");
-            }
-            else if (!response.IsSuccessStatusCode)
-            {
+            using var response = await FetchSwaggerAsync(client, target.Value, context.RequestAborted);
+            if (!response.IsSuccessStatusCode)
                 throw new InvalidOperationException($"Swagger document unavailable for {target.Key}: {response.StatusCode}");
-            }
+            var content = await response.Content.ReadAsStringAsync(context.RequestAborted);
 
             var source = JsonNode.Parse(content)!.AsObject();
             var prefix = target.Key.Replace("-", "");
@@ -167,8 +156,11 @@ app.UseCors("GatewayCors");
         await context.Response.WriteAsync(merged.ToJsonString(), context.RequestAborted);
         return;
 
-        static JsonNode Rewrite(JsonNode node, string prefix)
+        static JsonNode? Rewrite(JsonNode? node, string prefix)
         {
+            if (node is null)
+                return null;
+
             if (node is JsonObject obj)
             {
                 var rewritten = new JsonObject();
@@ -230,7 +222,7 @@ app.UseCors("GatewayCors");
         }
 
         var httpClientFactory = context.RequestServices.GetRequiredService<IHttpClientFactory>();
-        using var response = await httpClientFactory.CreateClient().GetAsync(targetUrl, context.RequestAborted);
+        using var response = await FetchSwaggerAsync(httpClientFactory.CreateClient(), targetUrl, context.RequestAborted);
         var content = await response.Content.ReadAsStringAsync(context.RequestAborted);
 
         context.Response.StatusCode = (int)response.StatusCode;
@@ -254,3 +246,18 @@ app.UseCors("GatewayCors");
 await app.UseOcelot();
 
 app.Run();
+
+// Some downstream versions publish v1 rather than v1.0. Use the same fallback
+// for the merged document and the individual documents loaded by Swagger UI.
+static async Task<HttpResponseMessage> FetchSwaggerAsync(
+    HttpClient client, string targetUrl, CancellationToken cancellationToken)
+{
+    var response = await client.GetAsync(targetUrl, cancellationToken);
+    if (response.StatusCode != System.Net.HttpStatusCode.NotFound ||
+        !targetUrl.Contains("/swagger/v1.0/", StringComparison.OrdinalIgnoreCase))
+        return response;
+
+    response.Dispose();
+    var fallbackUrl = targetUrl.Replace("/swagger/v1.0/", "/swagger/v1/", StringComparison.OrdinalIgnoreCase);
+    return await client.GetAsync(fallbackUrl, cancellationToken);
+}
