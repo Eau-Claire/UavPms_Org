@@ -183,8 +183,22 @@ app.UseCors("GatewayCors");
                     rewritten.Add(Rewrite(item!, prefix));
                 return rewritten;
             }
-            else if (node is JsonValue value && value.TryGetValue<string>(out var text) && text.StartsWith("#/components/"))
-                return JsonValue.Create($"#/components/{text[14..].Split('/')[0]}/{prefix}_{text[(text.IndexOf('/', 14) + 1)..]}")!;
+            else if (node is JsonValue value && value.TryGetValue<string>(out var text) && text.StartsWith("#/components/", StringComparison.Ordinal))
+            {
+                const string componentsPointer = "#/components/";
+                var pointer = text[componentsPointer.Length..];
+                var separator = pointer.IndexOf('/');
+
+                // Only rewrite references to component items. Keep malformed or
+                // non-item pointers unchanged so the merge cannot create invalid
+                // JSON references.
+                if (separator > 0 && separator < pointer.Length - 1)
+                {
+                    var componentGroup = pointer[..separator];
+                    var componentName = pointer[(separator + 1)..];
+                    return JsonValue.Create($"{componentsPointer}{componentGroup}/{prefix}_{componentName}")!;
+                }
+            }
             return node.DeepClone();
         }
     });
