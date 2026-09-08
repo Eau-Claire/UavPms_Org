@@ -170,12 +170,22 @@ app.UseCors("GatewayCors");
         static JsonNode Rewrite(JsonNode node, string prefix)
         {
             if (node is JsonObject obj)
-                foreach (var item in obj.ToList()) obj[item.Key] = Rewrite(item.Value!, prefix);
+            {
+                var rewritten = new JsonObject();
+                foreach (var item in obj)
+                    rewritten[item.Key] = Rewrite(item.Value!, prefix);
+                return rewritten;
+            }
             else if (node is JsonArray array)
-                for (var i = 0; i < array.Count; i++) array[i] = Rewrite(array[i]!, prefix);
+            {
+                var rewritten = new JsonArray();
+                foreach (var item in array)
+                    rewritten.Add(Rewrite(item!, prefix));
+                return rewritten;
+            }
             else if (node is JsonValue value && value.TryGetValue<string>(out var text) && text.StartsWith("#/components/"))
                 return JsonValue.Create($"#/components/{text[14..].Split('/')[0]}/{prefix}_{text[(text.IndexOf('/', 14) + 1)..]}")!;
-            return node;
+            return node.DeepClone();
         }
     });
 
