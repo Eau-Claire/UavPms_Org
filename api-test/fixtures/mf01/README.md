@@ -1,6 +1,6 @@
 # MF01 mock data by region
 
-Synthetic data for the Mission Management acceptance cases. Coordinates are invented near North/Central/South Vietnam; these are not actual grid assets or official administrative boundaries.
+Synthetic data for the Mission Management acceptance cases. Coordinates and operating-area polygons are invented; these are not actual grid assets or official administrative boundaries.
 
 Generate without database access:
 
@@ -23,11 +23,11 @@ Database insertion and end-to-end login have not been exercised by the offline g
 
 ## Region and assignment scenarios
 
-- `MF01-NORTH-MANAGER`, `MF01-CENTRAL-MANAGER`, `MF01-SOUTH-MANAGER`: each has exactly one own Region scope. Email is the lowercase key plus `@mf01.example.test`.
+- `MF01-NINHTHUAN-MANAGER`, `MF01-DONGNAI-MANAGER`, `MF01-CAMAU-MANAGER`: each has exactly one EVNSPC-style Region scope. Email is the lowercase key plus `@mf01.example.test`.
 - Three Inspectors per region have **no default geographic scope**. Their access derives from mission assignments; this is deliberate so broad region grants cannot hide assignment bugs.
 - `MF01-MANAGER-NO-SCOPE` and `MF01-INSPECTOR-UNASSIGNED`: no scopes or missions. `MF01-ADMIN` has SystemAdmin role for global comparison.
 - Each region has 540 assets, including 18 inactive assets excluded from seeded mission targets. Different voltage levels and asset types exercise filtering. Mission states include Pending, Executing, Completed and Cancelled; existing backend authorization bugs may fail the intended acceptance checks.
-- `cases.mixedRegionAssetIds`: send all three IDs as North manager; expect whole request rejected, no partial mission.
+- `cases.mixedRegionAssetIds`: send all three IDs as one scoped manager; expect whole request rejected, no partial mission.
 - `cases.crossRegionPolygon`: covers all three regions; a regional manager's preview should return only eligible own-region assets (522 for default data), never other regions.
 - `cases.emptyPolygon`: no targets. `cases.invalidPolygon`: self-intersecting polygon, expect 400.
 - Inspectors have multiple missions with disjoint target subsets. Compare each mission's exact `targetAssetIds` against its GIS: access to mission A must not expose mission B's assets. General GIS union visibility is a different test.

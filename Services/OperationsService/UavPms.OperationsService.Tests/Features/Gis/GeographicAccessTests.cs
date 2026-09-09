@@ -20,7 +20,7 @@ public class GeographicAccessTests
     {
         var user = CurrentUser(role);
         await using var context = Context(user.Object);
-        var region = new Region { Code = "South" };
+        var region = new Region { Code = "EVNSPC-CAMAU" };
         var station = new Substation { Region = region };
         var line = new TransmissionLine { Substation = station };
         var assigned = new Asset { Tower = new Tower { TransmissionLine = line }, PowerLine = line };
@@ -45,9 +45,9 @@ public class GeographicAccessTests
         var user = CurrentUser("Manager");
         await using var context = Context(user.Object);
         var unit = new ManagementUnit { Code = "EVNHCMC" };
-        var region = new Region { Code = "South" };
+        var region = new Region { Code = "EVNSPC-CAMAU" };
         var allowed = new Asset { ManagementUnit = unit, Tower = new Tower { TransmissionLine = new TransmissionLine { ManagementUnit = unit, Substation = new Substation { Region = region } } } };
-        var denied = new Asset { Tower = new Tower { TransmissionLine = new TransmissionLine { Substation = new Substation { Region = new Region { Code = "North" } } } } };
+        var denied = new Asset { Tower = new Tower { TransmissionLine = new TransmissionLine { Substation = new Substation { Region = new Region { Code = "EVNSPC-DONGNAI" } } } } };
         context.Assets.AddRange(allowed, denied);
         context.UserGeographicScopes.Add(new UserGeographicScope { UserId = user.Object.UserId, RegionId = organizationScope ? null : region.Id, ManagementUnitId = organizationScope ? unit.Id : null });
         await context.SaveChangesAsync();
@@ -87,7 +87,7 @@ public class GeographicAccessTests
     {
         var user = CurrentUser("Manager");
         await using var context = Context(user.Object);
-        var region = new Region { Code = "North" };
+        var region = new Region { Code = "EVNSPC-NINHTHUAN" };
         var asset = new Asset { Location = new NetTopologySuite.Geometries.Point(105.9, 18.35) { SRID = 4326 }, Tower = new Tower { TransmissionLine = new TransmissionLine { Substation = new Substation { Region = region } } } };
         context.Assets.Add(asset);
         context.UserGeographicScopes.Add(new UserGeographicScope { UserId = user.Object.UserId, RegionId = region.Id });

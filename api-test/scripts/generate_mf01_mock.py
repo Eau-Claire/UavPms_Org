@@ -59,7 +59,8 @@ INSERT INTO "UserRoles" ("UserId","RoleId","AssignedAt") SELECT '{ident}',"Id",n
     user('MF01-ADMIN', 'SystemAdmin')
     user('MF01-MANAGER-NO-SCOPE', 'Manager')
     user('MF01-INSPECTOR-UNASSIGNED', 'Inspector')
-    for region_code, longitude, latitude in [('NORTH',105.7,21.0), ('CENTRAL',108.0,16.0), ('SOUTH',106.6,10.7)]:
+    # Synthetic EVNSPC-style operating areas; never seed generic national zones.
+    for region_code, longitude, latitude in [('NINHTHUAN',108.9,11.5), ('DONGNAI',107.1,10.9), ('CAMAU',105.0,9.1)]:
         key = 'MF01-' + region_code
         ring = f'{longitude} {latitude},{longitude+.3} {latitude},{longitude+.3} {latitude+.3},{longitude} {latitude+.3},{longitude} {latitude}'
         region = insert('Regions',key,{'Code':key,'RegionName':'MOCK '+region_code,'Type':'Region'},('Geom',f'POLYGON(({ring}))'))

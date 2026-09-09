@@ -10,6 +10,7 @@ using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.OperationsService.Application.Common.Options;
 using UavPms.OperationsService.Application.Features.Gis.Infrastructure;
+using UavPms.OperationsService.Application.Features.Missions;
 
 namespace UavPms.OperationsService.Infrastructure;
 
@@ -91,6 +92,7 @@ public static class DependencyInjection
         services.AddScoped<IAnomalyRepository, AnomalyRepository>();
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
         services.AddScoped<IMissionRepository, MissionRepository>();
+        services.AddScoped<IMissionLifecycleService, MissionLifecycleService>();
         services.AddScoped<IUavRepository, UavRepository>();
 
         // Đăng ký Notification Repository
