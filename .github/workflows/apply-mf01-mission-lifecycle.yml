@@ -83,11 +83,56 @@ jobs:
 
             docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc 'SELECT 1;' >/dev/null
 
-            GIS_MIGRATION_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20260902033000_AddGisAssetSelection');")"
-            SCOPE_MIGRATION_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20260906090000_AddUserGeographicScopes');")"
-            if [ "$GIS_MIGRATION_APPLIED" != "t" ] || [ "$SCOPE_MIGRATION_APPLIED" != "t" ]; then
-              echo "ERROR: MF01 requires the GIS and UserGeographicScopes migrations first."
-              exit 1
+            db_scalar() {
+              docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "$1"
+            }
+            migration_applied() {
+              db_scalar "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$1');"
+            }
+            record_existing_migration() {
+              local migration_id="$1"
+              echo "Schema for $migration_id is complete; reconciling EF migration history."
+              docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c \
+                "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") SELECT '$migration_id', COALESCE((SELECT \"ProductVersion\" FROM \"__EFMigrationsHistory\" ORDER BY \"MigrationId\" DESC LIMIT 1), '9.0.16') WHERE NOT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$migration_id');"
+            }
+
+            echo "========== PREREQUISITE MIGRATION RECONCILIATION =========="
+            GIS_MIGRATION_ID="20260902033000_AddGisAssetSelection"
+            if [ "$(migration_applied "$GIS_MIGRATION_ID")" != "t" ]; then
+              GIS_TABLE_COUNT="$(db_scalar "SELECT count(*) FROM (VALUES ('ManagementUnits'),('AssetComponents'),('LineSegments')) AS expected(name) WHERE to_regclass('public.\"' || name || '\"') IS NOT NULL;")"
+              GIS_COLUMN_COUNT="$(db_scalar "SELECT count(*) FROM (VALUES ('Regions','Code'),('Regions','Type'),('Regions','ParentId'),('TransmissionLines','Code'),('TransmissionLines','VoltageLevel'),('TransmissionLines','ManagementUnitId'),('TransmissionLines','Status'),('AssetComponents','PowerLineId'),('AssetComponents','ManagementUnitId'),('AssetComponents','Location'),('MissionTargets','AssetId'),('MissionTargets','InspectionStatus'),('MissionTargets','CreatedAt'),('MissionTargets','IsDeleted'),('InspectionMedia','TowerId'),('InspectionMedia','CaptureLocation')) AS expected(table_name,column_name) JOIN information_schema.columns actual USING (table_name,column_name) WHERE actual.table_schema='public';")"
+              GIS_LEGACY_COUNT="$(db_scalar "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND ((table_name='MissionTargets' AND column_name='TowerId') OR (table_name='Assets'));")"
+              if [ "$GIS_TABLE_COUNT" = "0" ] && [ "$GIS_COLUMN_COUNT" = "0" ]; then
+                echo "GIS schema is absent; EF will apply $GIS_MIGRATION_ID normally."
+              elif [ "$GIS_TABLE_COUNT" = "3" ] && [ "$GIS_COLUMN_COUNT" = "16" ] && [ "$GIS_LEGACY_COUNT" = "0" ]; then
+                record_existing_migration "$GIS_MIGRATION_ID"
+              else
+                echo "ERROR: GIS migration history is absent and its schema is incomplete (tables=$GIS_TABLE_COUNT/3, columns=$GIS_COLUMN_COUNT/16, legacy_markers=$GIS_LEGACY_COUNT)."
+                echo "Reconcile the production GIS schema before applying MF01; no history row was written."
+                exit 1
+              fi
+            fi
+
+            UNIFY_MIGRATION_ID="20260905090000_UnifyInspectionAiFlow"
+            if [ "$(migration_applied "$UNIFY_MIGRATION_ID")" != "t" ]; then
+              UNIFY_MARKER_COUNT="$(db_scalar "SELECT (CASE WHEN to_regclass('public.\"OutboxMessages\"') IS NULL THEN 0 ELSE 1 END) + (SELECT count(*) FROM (VALUES ('InspectionMedia','UploadedBy'),('AIAnalysisRequests','SourceEventId'),('AIAnalysisRequests','AssetId'),('AIAnalysisRequests','ModelName')) AS expected(table_name,column_name) JOIN information_schema.columns actual USING (table_name,column_name) WHERE actual.table_schema='public');")"
+              if [ "$UNIFY_MARKER_COUNT" = "5" ]; then
+                record_existing_migration "$UNIFY_MIGRATION_ID"
+              elif [ "$UNIFY_MARKER_COUNT" != "0" ]; then
+                echo "ERROR: inspection/AI prerequisite schema is partial ($UNIFY_MARKER_COUNT/5 markers); refusing migration-history reconciliation."
+                exit 1
+              fi
+            fi
+
+            SCOPE_MIGRATION_ID="20260906090000_AddUserGeographicScopes"
+            if [ "$(migration_applied "$SCOPE_MIGRATION_ID")" != "t" ]; then
+              SCOPE_MARKER_COUNT="$(db_scalar "SELECT (CASE WHEN to_regclass('public.\"UserGeographicScopes\"') IS NULL THEN 0 ELSE 1 END) + (SELECT count(*) FROM (VALUES ('UserGeographicScopes','UserId'),('UserGeographicScopes','RegionId'),('UserGeographicScopes','SubstationId'),('UserGeographicScopes','TransmissionLineId'),('UserGeographicScopes','ManagementUnitId')) AS expected(table_name,column_name) JOIN information_schema.columns actual USING (table_name,column_name) WHERE actual.table_schema='public');")"
+              if [ "$SCOPE_MARKER_COUNT" = "6" ]; then
+                record_existing_migration "$SCOPE_MIGRATION_ID"
+              elif [ "$SCOPE_MARKER_COUNT" != "0" ]; then
+                echo "ERROR: geographic-scope prerequisite schema is partial ($SCOPE_MARKER_COUNT/6 markers); refusing migration-history reconciliation."
+                exit 1
+              fi
             fi
 
             echo "========== NON-DESTRUCTIVE REGION AUDIT =========="
