@@ -97,7 +97,7 @@ public class CreateMissionCommandHandlerTests
         
         result.Should().NotBeNull();
         result.Title.Should().Be("Inspection A");
-        result.Status.Should().Be("Pending");
+        result.Status.Should().Be("Draft");
         result.AssignedToEmail.Should().Be("inspector@test.com");
         
         _missionRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Mission>()), Times.Once);
