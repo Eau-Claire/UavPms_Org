@@ -1,0 +1,142 @@
+name: Seed MF01 Test Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      database:
+        description: Existing migrated test database (must start with mf01_test)
+        required: true
+        default: mf01_test
+        type: string
+      towers_per_line:
+        description: Towers per line (30 = 1620 assets, 100 = 5400 assets)
+        required: true
+        default: '30'
+        type: choice
+        options: ['30', '100', '500']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mf01-database-seed
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    name: Seed regional MF01 fixtures on server
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Reuse the existing server secrets and required reviewers. All remote
+    # operations are steps of this protected job, after environment approval.
+    environment: production
+    env:
+      MF01_DATABASE: ${{ inputs.database }}
+      MF01_TOWERS: ${{ inputs.towers_per_line }}
+      MF01_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate inputs and generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$MF01_DATABASE" =~ ^mf01_test[a-zA-Z0-9_]*$ ]] || { echo 'Invalid test database name'; exit 1; }
+          [[ "$MF01_TOWERS" =~ ^(30|100|500)$ ]] || { echo 'Invalid fixture volume'; exit 1; }
+          python -m unittest discover -s api-test/fixtures/mf01
+          python api-test/scripts/generate_mf01_mock.py --output mf01-payload --towers-per-line "$MF01_TOWERS"
+          cp api-test/scripts/apply_mf01_mock.sh mf01-payload/apply.sh
+
+      - name: Prepare hashed fixture credentials
+        shell: bash
+        env:
+          MF01_SEED_PASSWORD: ${{ secrets.MF01_SEED_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check bcrypt==4.2.1
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import bcrypt
+          password = os.environ.get('MF01_SEED_PASSWORD', '').encode()
+          if not 12 <= len(password) <= 72:
+              raise SystemExit('Set MF01_SEED_PASSWORD secret to a test password of 12–72 UTF-8 bytes')
+          hashed = bcrypt.hashpw(password, bcrypt.gensalt(rounds=10)).decode()
+          print('::add-mask::' + hashed)
+          path = Path('mf01-payload/seed.sql')
+          sql = path.read_text()
+          marker = "crypt(:'mf01_password',gen_salt('bf',10))"
+          if sql.count(marker) != 15:
+              raise SystemExit('Unexpected fixture credential count')
+          path.write_text(sql.replace(marker, "'" + hashed + "'"))
+          path.chmod(0o600)
+          PY
+
+      - name: Create private server staging directory
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          MF01_RUN: ${{ env.MF01_RUN }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          fingerprint: ${{ secrets.SERVER_FINGERPRINT }}
+          envs: MF01_RUN
+          script: |
+            set -eu
+            case "$MF01_RUN" in *[!0-9-]*|'') exit 1;; esac
+            umask 077
+            mkdir -m 700 "/tmp/uavpms-mf01-$MF01_RUN"
+
+      - name: Transfer seed from this workflow commit
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          fingerprint: ${{ secrets.SERVER_FINGERPRINT }}
+          source: mf01-payload/*
+          target: /tmp/uavpms-mf01-${{ env.MF01_RUN }}
+          strip_components: 1
+
+      - name: Apply and verify seed transaction
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          fingerprint: ${{ secrets.SERVER_FINGERPRINT }}
+          envs: MF01_RUN,MF01_DATABASE
+          command_timeout: 20m
+          script: |
+            set -eu
+            bash "/tmp/uavpms-mf01-$MF01_RUN/apply.sh" "$MF01_DATABASE" "/tmp/uavpms-mf01-$MF01_RUN/seed.sql"
+
+      - name: Save non-secret fixture manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: mf01-manifest-${{ github.run_id }}
+          path: mf01-payload/manifest.json
+          retention-days: 14
+
+      - name: Remove remote staging files
+        if: ${{ always() }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          fingerprint: ${{ secrets.SERVER_FINGERPRINT }}
+          envs: MF01_RUN
+          script: |
+            set -eu
+            case "$MF01_RUN" in *[!0-9-]*|'') exit 1;; esac
+            rm -rf -- "/tmp/uavpms-mf01-$MF01_RUN"

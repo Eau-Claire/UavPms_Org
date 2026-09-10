@@ -2,20 +2,28 @@ using MediatR;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Missions.DTOs;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
+using UavPms.OperationsService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Constants;
+using UavPms.OperationsService.Domain.Enums;
 
 namespace UavPms.OperationsService.Application.Features.Missions.Queries.GetMissionDetails;
 
 public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQuery, MissionDto>
 {
     private readonly IMissionRepository _missionRepository;
+    private readonly ICurrentUserServices? _current;
 
-    public GetMissionDetailsQueryHandler(IMissionRepository missionRepository)
+    public GetMissionDetailsQueryHandler(IMissionRepository missionRepository, ICurrentUserServices? current = null)
     {
         _missionRepository = missionRepository;
+        _current = current;
     }
     
     public async Task<MissionDto> Handle(GetMissionDetailsQuery request, CancellationToken cancellationToken)
     {
+        if (_current is { IsAuthenticated: true } && !await _missionRepository.UserCanAccessAsync(request.Id, _current.UserId,
+                _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase), cancellationToken))
+            throw new ForbiddenException("MISSION_ACCESS_DENIED");
         var mission = await _missionRepository.GetMissionDetailsByIdAsync(request.Id);
         if (mission  == null)
         {
@@ -35,6 +43,19 @@ public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQu
             InspectorEmail = mission.Inspector?.Email ?? string.Empty,
             UavId = mission.UavId,
             ScheduledStartAt = mission.ScheduledStartAt,
+            RegionId = mission.RegionId == Guid.Empty ? null : mission.RegionId,
+            RegionName = mission.Region?.RegionName,
+            ScheduleId = mission.ScheduleId,
+            ScheduleName = mission.Schedule?.Name,
+            MissionType = mission.MissionType.ToString(),
+            TriggerReason = mission.TriggerReason,
+            PlannedStart = mission.PlannedStart,
+            PlannedEnd = mission.PlannedEnd,
+            ActualStart = mission.StartedAt,
+            ActualCompleted = mission.EndedAt,
+            BoundaryWkt = mission.Boundary?.AsText(),
+            Team = mission.Assignments.Select(a => new MissionAssignmentDto(a.Id, a.UserId, a.User?.FullName ?? "", a.AssignmentRole,
+                a.Status.ToString(), mission.CheckIns.Where(c => c.UserId == a.UserId && c.Status == MissionCheckInStatus.CheckedIn).Select(c => (DateTime?)c.CheckedInAt).FirstOrDefault())).ToList(),
             Status = mission.Status.ToString(),
             Description = mission.Description,
             ManagerId = mission.ManagerId,
