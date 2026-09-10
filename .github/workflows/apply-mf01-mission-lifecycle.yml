@@ -115,11 +115,42 @@ jobs:
 
             UNIFY_MIGRATION_ID="20260905090000_UnifyInspectionAiFlow"
             if [ "$(migration_applied "$UNIFY_MIGRATION_ID")" != "t" ]; then
-              UNIFY_MARKER_COUNT="$(db_scalar "SELECT (CASE WHEN to_regclass('public.\"OutboxMessages\"') IS NULL THEN 0 ELSE 1 END) + (SELECT count(*) FROM (VALUES ('InspectionMedia','UploadedBy'),('AIAnalysisRequests','SourceEventId'),('AIAnalysisRequests','AssetId'),('AIAnalysisRequests','ModelName')) AS expected(table_name,column_name) JOIN information_schema.columns actual USING (table_name,column_name) WHERE actual.table_schema='public');")"
-              if [ "$UNIFY_MARKER_COUNT" = "5" ]; then
+              OUTBOX_EXISTS="$(db_scalar "SELECT to_regclass('public.\"OutboxMessages\"') IS NOT NULL;")"
+              OUTBOX_COLUMN_COUNT="$(db_scalar "SELECT count(*) FROM (VALUES ('Id'),('MessageType'),('Payload'),('OccurredAt'),('PublishedAt'),('Attempts'),('LastError'),('CreatedAt'),('UpdatedAt'),('CreatedBy'),('UpdatedBy'),('IsDeleted'),('DeletedAt')) AS expected(column_name) JOIN information_schema.columns actual USING (column_name) WHERE actual.table_schema='public' AND actual.table_name='OutboxMessages';")"
+              UNIFY_COLUMN_COUNT="$(db_scalar "SELECT count(*) FROM (VALUES ('InspectionMedia','UploadedBy'),('AIAnalysisRequests','SourceEventId'),('AIAnalysisRequests','AssetId'),('AIAnalysisRequests','ModelName')) AS expected(table_name,column_name) JOIN information_schema.columns actual USING (table_name,column_name) WHERE actual.table_schema='public';")"
+              if [ "$OUTBOX_EXISTS" = "f" ] && [ "$UNIFY_COLUMN_COUNT" = "0" ]; then
+                echo "Inspection/AI schema is absent; EF will apply $UNIFY_MIGRATION_ID normally."
+              elif [ "$OUTBOX_EXISTS" = "t" ] && [ "$OUTBOX_COLUMN_COUNT" = "13" ]; then
+                echo "Completing additive inspection/AI schema before reconciling migration history."
+                docker exec -i uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms <<'SQL'
+            ALTER TABLE public."InspectionMedia" ADD COLUMN IF NOT EXISTS "UploadedBy" uuid NULL;
+            ALTER TABLE public."AIAnalysisRequests" ADD COLUMN IF NOT EXISTS "SourceEventId" uuid NULL;
+            ALTER TABLE public."AIAnalysisRequests" ADD COLUMN IF NOT EXISTS "AssetId" uuid NULL;
+            ALTER TABLE public."AIAnalysisRequests" ADD COLUMN IF NOT EXISTS "ModelName" varchar(100) NOT NULL DEFAULT 'SERVER';
+            CREATE INDEX IF NOT EXISTS "IX_OutboxMessages_MessageType_OccurredAt" ON public."OutboxMessages" ("MessageType", "OccurredAt") WHERE "PublishedAt" IS NULL AND "IsDeleted" = false;
+            CREATE INDEX IF NOT EXISTS "IX_InspectionMedia_UploadedBy" ON public."InspectionMedia" ("UploadedBy");
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_AIAnalysisRequests_SourceEventId" ON public."AIAnalysisRequests" ("SourceEventId") WHERE "SourceEventId" IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS "IX_AIAnalysisRequests_AssetId" ON public."AIAnalysisRequests" ("AssetId");
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_AIAnalysisRequests_ActiveLogicalAnalysis" ON public."AIAnalysisRequests" ("MediaId", "AnalysisType", "ModelName") WHERE "MediaId" IS NOT NULL AND "IsDeleted" = false AND "Status" IN (0, 1);
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_DetectedAnomalies_MediaId_AiDetectionId" ON public."DetectedAnomalies" ("MediaId", "AiDetectionId") WHERE "AiDetectionId" IS NOT NULL AND "IsDeleted" = false;
+            DO $repair$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='FK_InspectionMedia_Users_UploadedBy') THEN
+                ALTER TABLE public."InspectionMedia" ADD CONSTRAINT "FK_InspectionMedia_Users_UploadedBy" FOREIGN KEY ("UploadedBy") REFERENCES public."Users" ("Id") ON DELETE RESTRICT;
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='FK_AIAnalysisRequests_AssetComponents_AssetId') THEN
+                ALTER TABLE public."AIAnalysisRequests" ADD CONSTRAINT "FK_AIAnalysisRequests_AssetComponents_AssetId" FOREIGN KEY ("AssetId") REFERENCES public."AssetComponents" ("Id") ON DELETE RESTRICT;
+              END IF;
+            END $repair$;
+            SQL
+                UNIFY_COLUMN_COUNT="$(db_scalar "SELECT count(*) FROM (VALUES ('InspectionMedia','UploadedBy'),('AIAnalysisRequests','SourceEventId'),('AIAnalysisRequests','AssetId'),('AIAnalysisRequests','ModelName')) AS expected(table_name,column_name) JOIN information_schema.columns actual USING (table_name,column_name) WHERE actual.table_schema='public';")"
+                if [ "$UNIFY_COLUMN_COUNT" != "4" ]; then
+                  echo "ERROR: inspection/AI prerequisite repair did not produce all required columns ($UNIFY_COLUMN_COUNT/4)."
+                  exit 1
+                fi
                 record_existing_migration "$UNIFY_MIGRATION_ID"
-              elif [ "$UNIFY_MARKER_COUNT" != "0" ]; then
-                echo "ERROR: inspection/AI prerequisite schema is partial ($UNIFY_MARKER_COUNT/5 markers); refusing migration-history reconciliation."
+              else
+                echo "ERROR: OutboxMessages exists but is incomplete ($OUTBOX_COLUMN_COUNT/13 columns); refusing automatic repair."
                 exit 1
               fi
             fi
