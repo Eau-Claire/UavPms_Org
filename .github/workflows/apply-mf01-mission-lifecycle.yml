@@ -166,18 +166,24 @@ jobs:
               migration_mode_started=true
               RUN_MIGRATIONS=true docker compose up -d --build --force-recreate operationsservice
 
-              for attempt in $(seq 1 45); do
-                if docker inspect uav-operations-service --format '{{.State.Running}}' 2>/dev/null | grep -qx true; then
+              APPLIED_AFTER_START=false
+              for attempt in $(seq 1 60); do
+                APPLIED_AFTER_START="$(migration_applied "$MIGRATION_ID")"
+                if [ "$APPLIED_AFTER_START" = "t" ]; then
+                  echo "MF01 migration recorded after startup check $attempt."
                   break
+                fi
+                CONTAINER_STATUS="$(docker inspect uav-operations-service --format '{{.State.Status}}' 2>/dev/null || true)"
+                if [ "$CONTAINER_STATUS" = "exited" ] || [ "$CONTAINER_STATUS" = "dead" ]; then
+                  echo "ERROR: OperationsService stopped while applying MF01 migration (status: $CONTAINER_STATUS)."
+                  docker compose logs --tail=200 operationsservice
+                  exit 1
                 fi
                 sleep 2
               done
 
-              docker inspect uav-operations-service --format '{{.State.Running}}' | grep -qx true
-
-              APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID');")"
               if [ "$APPLIED_AFTER_START" != "t" ]; then
-                echo "ERROR: OperationsService started but MF01 migration was not recorded."
+                echo "ERROR: MF01 migration was not recorded within 120 seconds."
                 docker compose logs --tail=200 operationsservice
                 exit 1
               fi
