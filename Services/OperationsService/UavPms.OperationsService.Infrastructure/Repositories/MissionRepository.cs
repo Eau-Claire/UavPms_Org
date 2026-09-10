@@ -89,11 +89,6 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
             .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
-            .Include(m => m.Region)
-            .Include(m => m.Schedule)
-            .Include(m => m.Assignments).ThenInclude(a => a.User)
-            .Include(m => m.CheckIns)
-            .Include(m => m.DroneHandovers)
             .Include(m => m.MissionTargets)
                 .ThenInclude(t => t.Asset)
                     .ThenInclude(a => a!.PowerLine)
@@ -101,13 +96,5 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
                 .ThenInclude(t => t.Asset)
                     .ThenInclude(a => a!.Tower)
             .FirstOrDefaultAsync(m => m.Id == id);
-    }
-
-    public Task<bool> UserCanAccessAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken)
-    {
-        if (global) return Task.FromResult(true);
-        return _context.Missions.AnyAsync(m => m.Id == missionId &&
-            (m.ManagerId == userId || m.Assignments.Any(a => a.UserId == userId && a.Status == MissionAssignmentStatus.Active)
-             || _context.UserGeographicScopes.Any(s => s.UserId == userId && s.RegionId == m.RegionId)), cancellationToken);
     }
 }

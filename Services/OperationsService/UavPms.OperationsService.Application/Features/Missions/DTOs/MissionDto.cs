@@ -13,18 +13,6 @@ public class MissionDto
     public string InspectorEmail { get; set; } = string.Empty;
     public Guid? UavId { get; set; }
     public DateTime? ScheduledStartAt { get; set; }
-    public Guid? RegionId { get; set; }
-    public string? RegionName { get; set; }
-    public Guid? ScheduleId { get; set; }
-    public string? ScheduleName { get; set; }
-    public string MissionType { get; set; } = string.Empty;
-    public string? TriggerReason { get; set; }
-    public DateTime? PlannedStart { get; set; }
-    public DateTime? PlannedEnd { get; set; }
-    public DateTime? ActualStart { get; set; }
-    public DateTime? ActualCompleted { get; set; }
-    public string? BoundaryWkt { get; set; }
-    public List<MissionAssignmentDto> Team { get; set; } = new();
     public string Status { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public Guid? ManagerId { get; set; }
@@ -33,8 +21,6 @@ public class MissionDto
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
-
-public record MissionAssignmentDto(Guid Id, Guid UserId, string UserName, string AssignmentRole, string Status, DateTime? CheckedInAt);
 
 public class MissionTargetDto
 {

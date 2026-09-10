@@ -203,11 +203,6 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.Property(e => e.Status).HasConversion(
             status => status.ToString(),
             value => ParseMissionStatus(value));
-        builder.Property(e => e.MissionType).HasConversion<string>();
-        builder.Property(e => e.Boundary).HasColumnType("geometry(Geometry,4326)");
-        builder.Property(e => e.Version).IsConcurrencyToken();
-        builder.HasIndex(e => e.RegionId);
-        builder.HasIndex(e => e.ScheduleId);
         builder.Ignore(e => e.RouteData);
         builder.Ignore(e => e.AssignedToUserId);
         builder.Ignore(e => e.DroneCode);
@@ -226,74 +221,24 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
             .WithMany(u => u.Missions)
             .HasForeignKey(e => e.UavId)
             .OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(e => e.Region).WithMany().HasForeignKey(e => e.RegionId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(e => e.Schedule).WithMany().HasForeignKey(e => e.ScheduleId).OnDelete(DeleteBehavior.Restrict);
     }
 
     private static MissionStatus ParseMissionStatus(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return MissionStatus.Draft;
+            return MissionStatus.Pending;
         }
 
         var normalized = value.Trim().Replace(" ", string.Empty);
-        if (normalized.Equals("Pending", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Draft;
-        if (normalized.Equals("Executing", StringComparison.OrdinalIgnoreCase)) return MissionStatus.InProgress;
+        if (normalized.Equals("Assigned", StringComparison.OrdinalIgnoreCase))
+        {
+            return MissionStatus.Pending;
+        }
 
         return Enum.TryParse<MissionStatus>(normalized, true, out var status)
             ? status
-            : MissionStatus.Draft;
-    }
-}
-
-public class InspectionScheduleConfiguration : IEntityTypeConfiguration<InspectionSchedule>
-{
-    public void Configure(EntityTypeBuilder<InspectionSchedule> builder)
-    {
-        builder.ToTable("InspectionSchedules");
-        builder.HasKey(x => x.Id);
-        builder.Property(x => x.Name).HasMaxLength(256).IsRequired();
-        builder.Property(x => x.RecurrenceRule).HasMaxLength(512).IsRequired();
-        builder.HasOne(x => x.Region).WithMany().HasForeignKey(x => x.RegionId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
-public class MissionAssignmentConfiguration : IEntityTypeConfiguration<MissionAssignment>
-{
-    public void Configure(EntityTypeBuilder<MissionAssignment> builder)
-    {
-        builder.ToTable("MissionAssignments"); builder.HasKey(x => x.Id);
-        builder.Property(x => x.AssignmentRole).HasMaxLength(100).IsRequired();
-        builder.Property(x => x.Status).HasConversion<string>();
-        builder.HasIndex(x => new { x.MissionId, x.UserId }).IsUnique().HasFilter("\"Status\" = 'Active' AND NOT \"IsDeleted\"");
-        builder.HasOne(x => x.Mission).WithMany(x => x.Assignments).HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
-public class MissionCheckInConfiguration : IEntityTypeConfiguration<MissionCheckIn>
-{
-    public void Configure(EntityTypeBuilder<MissionCheckIn> builder)
-    {
-        builder.ToTable("MissionCheckIns"); builder.HasKey(x => x.Id);
-        builder.Property(x => x.Status).HasConversion<string>();
-        builder.HasIndex(x => new { x.MissionId, x.UserId }).IsUnique().HasFilter("NOT \"IsDeleted\"");
-        builder.HasOne(x => x.Mission).WithMany(x => x.CheckIns).HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
-public class DroneHandoverConfiguration : IEntityTypeConfiguration<DroneHandover>
-{
-    public void Configure(EntityTypeBuilder<DroneHandover> builder)
-    {
-        builder.ToTable("DroneHandovers"); builder.HasKey(x => x.Id);
-        builder.Property(x => x.Condition).HasMaxLength(500).IsRequired();
-        builder.Property(x => x.Status).HasConversion<string>();
-        builder.HasIndex(x => new { x.MissionId, x.DroneId }).IsUnique().HasFilter("\"ReturnedAt\" IS NULL AND NOT \"IsDeleted\"");
-        builder.HasOne(x => x.Mission).WithMany(x => x.DroneHandovers).HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.Drone).WithMany().HasForeignKey(x => x.DroneId).OnDelete(DeleteBehavior.Restrict);
+            : MissionStatus.Pending;
     }
 }
 

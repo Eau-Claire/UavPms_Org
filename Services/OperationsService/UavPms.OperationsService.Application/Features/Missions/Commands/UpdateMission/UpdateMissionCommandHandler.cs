@@ -33,13 +33,25 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
             throw new NotFoundException("Mission", request.Id);
         }
 
-        if (misison.Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled)
-            throw new BusinessRuleException("MISSION_IMMUTABLE_AFTER_START");
+        var assignedUser = await _userRepository.GetByIdAsync(request.AssignedToUserId);
+        if (assignedUser == null)
+        {
+            throw new NotFoundException("User", request.AssignedToUserId);
+        }
+
+        var uav = await _uavRepository.GetByUavCodeAsync(request.DroneCode);
+        if (uav == null)
+        {
+            throw new NotFoundException("Drone", request.DroneCode);
+        }
         
         misison.Title = request.Title;
         misison.RouteData = request.RouteData;
-        // Assignment, drone and lifecycle state have dedicated MF01 actions. The
-        // generic update endpoint never trusts a client-submitted status.
+        misison.AssignedToUserId = request.AssignedToUserId;
+        misison.InspectorId = request.AssignedToUserId;
+        misison.DroneCode = request.DroneCode;
+        misison.UavId = uav.Id;
+        misison.Status = misison.Status = Enum.TryParse<MissionStatus>(request.Status, true, out var parsedStatus) ? parsedStatus : misison.Status;
         misison.Description = request.Description ?? string.Empty;
         misison.UpdatedAt = DateTime.UtcNow;
         
@@ -57,8 +69,8 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
             Title = misison.Title,
             RouteData = misison.RouteData,
             AssignedToUserId = misison.AssignedToUserId,
-            AssignedToEmail = misison.Inspector?.Email ?? string.Empty,
-            DroneCode = misison.Uav?.UavCode ?? string.Empty,
+            AssignedToEmail = assignedUser.Email,
+            DroneCode = misison.DroneCode,
             Status = misison.Status.ToString(),
             Description = misison.Description,
             ManagerId = misison.ManagerId,

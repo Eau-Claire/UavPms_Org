@@ -15,5 +15,4 @@ public interface IMissionRepository : IGenericRepository<Mission>
     Task<IReadOnlyList<Mission>> GetMissionsByAssignedUserAsync(Guid userId);
     
     Task<Mission?> GetMissionDetailsByIdAsync(Guid id);
-    Task<bool> UserCanAccessAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken);
 }
