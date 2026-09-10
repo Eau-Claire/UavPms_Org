@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using UavPms.OperationsService.Infrastructure.Migrations;
 using UavPms.OperationsService.Infrastructure.Persistence;
+using UavPms.OperationsService.Domain.Entities;
 
 namespace UavPms.OperationsService.Tests.Infrastructure;
 
@@ -26,5 +27,20 @@ public sealed class MigrationDiscoveryTests
                 .Cast<DbContextAttribute>()
                 .Single()
                 .ContextType);
+    }
+
+    [Fact]
+    public void MissionRegion_MatchesNullableLegacyRolloutColumn()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseNpgsql(
+                "Host=localhost;Database=model_only;Username=test;Password=test",
+                npgsql => npgsql.UseNetTopologySuite())
+            .Options;
+
+        using var context = new ApplicationDbContext(options, currentUserServices: null);
+
+        Assert.True(context.Model.FindEntityType(typeof(Mission))!
+            .FindProperty(nameof(Mission.RegionId))!.IsNullable);
     }
 }

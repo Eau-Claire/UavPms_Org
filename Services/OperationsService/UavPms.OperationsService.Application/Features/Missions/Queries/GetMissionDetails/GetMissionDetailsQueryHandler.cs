@@ -43,7 +43,7 @@ public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQu
             InspectorEmail = mission.Inspector?.Email ?? string.Empty,
             UavId = mission.UavId,
             ScheduledStartAt = mission.ScheduledStartAt,
-            RegionId = mission.RegionId == Guid.Empty ? null : mission.RegionId,
+            RegionId = mission.RegionId,
             RegionName = mission.Region?.RegionName,
             ScheduleId = mission.ScheduleId,
             ScheduleName = mission.Schedule?.Name,
