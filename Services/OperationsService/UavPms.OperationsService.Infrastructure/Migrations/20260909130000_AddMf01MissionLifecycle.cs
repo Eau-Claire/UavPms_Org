@@ -1,9 +1,12 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using NetTopologySuite.Geometries;
+using UavPms.OperationsService.Infrastructure.Persistence;
 
 #nullable disable
 namespace UavPms.OperationsService.Infrastructure.Migrations;
 
+[DbContext(typeof(ApplicationDbContext))]
 [Migration("20260909130000_AddMf01MissionLifecycle")]
 public sealed class AddMf01MissionLifecycle : Migration
 {
