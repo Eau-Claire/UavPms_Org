@@ -1,0 +1,70 @@
+name: Run API Regression Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: Pytest -k filter expression (optional, e.g. "pre_mission" or "drone_technical")
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: production-api-regression-tests
+  cancel-in-progress: false
+
+jobs:
+  run-tests:
+    name: Execute API Regression Tests over SSH
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Run tests on server
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          TEST_FILTER: ${{ inputs.test_filter }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          envs: DEPLOY_PATH,TEST_FILTER
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+
+            [ -n "${DEPLOY_PATH:-}" ] || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
+            cd "$DEPLOY_PATH"
+
+            echo "========== 1. SYNCING REPOSITORY =========="
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            echo "Server checkout is at: $(git rev-parse --short HEAD)"
+
+            echo "========== 2. STARTING API-TEST CONTAINER =========="
+            docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build api-test
+
+            echo "Waiting for api-test service to become healthy..."
+            for attempt in $(seq 1 20); do
+              if curl -sf http://localhost:8081/api/health >/dev/null 2>&1; then
+                echo "api-test is healthy on attempt $attempt."
+                break
+              fi
+              sleep 2
+            done
+
+            echo "========== 3. RUNNING REGRESSION TESTS =========="
+            if [ -n "${TEST_FILTER:-}" ]; then
+              echo "Running filtered tests (-k $TEST_FILTER)..."
+              docker exec uav-api-test pytest -v -k "$TEST_FILTER"
+            else
+              echo "Running full test suite..."
+              docker exec uav-api-test pytest -v
+            fi
+
+            echo "========== 4. LATEST TEST RUN STATUS =========="
+            curl -s http://localhost:8081/api/results | jq '.summary // .' || true
