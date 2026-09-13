@@ -142,6 +142,12 @@ def test_mission_accept_assignment_requires_authentication(client: httpx.Client)
     assert response.status_code == 401, response.text
 
 
+def test_mission_accept_assignment_rejects_analyst_role(client: httpx.Client, role_headers) -> None:
+    fake_mission_id = "00000000-0000-0000-0000-000000000099"
+    response = client.post(f"/api/v1/missions/{fake_mission_id}/assignments/accept", headers=role_headers("analyst"))
+    assert response.status_code == 403, response.text
+
+
 def test_mission_accept_assignment_returns_404_for_unknown_mission(client: httpx.Client, role_headers) -> None:
     fake_mission_id = "00000000-0000-0000-0000-000000000099"
     response = client.post(f"/api/v1/missions/{fake_mission_id}/assignments/accept", headers=role_headers("inspector"))
@@ -154,6 +160,16 @@ def test_mission_postpone_assignment_requires_authentication(client: httpx.Clien
     assert response.status_code == 401, response.text
 
 
+def test_mission_postpone_assignment_rejects_analyst_role(client: httpx.Client, role_headers) -> None:
+    fake_mission_id = "00000000-0000-0000-0000-000000000099"
+    response = client.post(
+        f"/api/v1/missions/{fake_mission_id}/assignments/postpone",
+        json={"reason": "Heavy rain"},
+        headers=role_headers("analyst"),
+    )
+    assert response.status_code == 403, response.text
+
+
 def test_mission_postpone_assignment_validates_reason(client: httpx.Client, role_headers) -> None:
     fake_mission_id = "00000000-0000-0000-0000-000000000099"
     response = client.post(
@@ -162,4 +178,30 @@ def test_mission_postpone_assignment_validates_reason(client: httpx.Client, role
         headers=role_headers("inspector"),
     )
     assert response.status_code in (400, 422), response.text
+
+
+def test_mission_accept_assignment_happy_path(created_gis_mission: dict, client: httpx.Client, role_headers) -> None:
+    mission_id = created_gis_mission["id"]
+    response = client.post(f"/api/v1/missions/{mission_id}/assignments/accept", headers=role_headers("inspector"))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body.get("success") is True or "accepted" in response.text.lower()
+
+
+def test_mission_postpone_assignment_happy_path(gis_seed: dict, client: httpx.Client, role_headers) -> None:
+    # Create a separate mission to test postpone flow
+    payload = _mission_payload(gis_seed, f"GIS API Postpone Test {uuid.uuid4()}")
+    create_res = client.post("/api/v1/missions", json=payload, headers=role_headers("manager"))
+    assert create_res.status_code == 200, create_res.text
+    mission_id = create_res.json()["data"]["id"]
+
+    postpone_res = client.post(
+        f"/api/v1/missions/{mission_id}/assignments/postpone",
+        json={"reason": "High wind speed exceeds UAV limit"},
+        headers=role_headers("inspector"),
+    )
+    assert postpone_res.status_code == 200, postpone_res.text
+    body = postpone_res.json()
+    assert body.get("success") is True or "postponed" in postpone_res.text.lower()
+
 
