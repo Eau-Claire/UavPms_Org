@@ -44,6 +44,8 @@ jobs:
             [ -f "$MIGRATION_FILE" ] || { echo "ERROR: deploy the application commit containing $MIGRATION_FILE first."; exit 1; }
             [ "$(docker inspect uavpms-db --format '{{.State.Status}}')" = running ] || { echo "ERROR: uavpms-db is not running."; exit 1; }
             docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc 'SELECT 1;' >/dev/null
+            ASSET_TABLE_EXISTS="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT to_regclass('public.\"AssetComponents\"') IS NOT NULL;" | tr -d '[:space:]')"
+            [ "$ASSET_TABLE_EXISTS" = t ] || { echo "ERROR: required OperationsService table AssetComponents is missing."; exit 1; }
 
             GIS_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20260902033000_AddGisAssetSelection');")"
             SCOPE_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20260906090000_AddUserGeographicScopes');")"
@@ -76,5 +78,7 @@ jobs:
             done
             COLUMN_COUNT="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='Missions' AND column_name='PreMissionAssessmentId';")"
             [ "$COLUMN_COUNT" = 1 ] || { echo "ERROR: Missions.PreMissionAssessmentId is missing."; exit 1; }
+            ASSET_FK_OK="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT count(*) FROM information_schema.referential_constraints WHERE constraint_schema='public' AND constraint_name='FK_PreMissionAssessmentAssets_AssetComponents_AssetId';" | tr -d '[:space:]')"
+            [ "$ASSET_FK_OK" = 1 ] || { echo "ERROR: assessment asset FK to AssetComponents is missing."; exit 1; }
             docker inspect uav-operations-service --format '{{.State.Running}}' | grep -qx true
             echo "MF01/MF02 v2 migration verified successfully."
