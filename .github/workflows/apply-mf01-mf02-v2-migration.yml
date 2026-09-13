@@ -69,7 +69,9 @@ jobs:
               APPLIED_AFTER_START=""
               for attempt in $(seq 1 45); do
                 APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" 2>/tmp/migration-check-error | tr -d '[:space:]' || true)"
-                [ "$APPLIED_AFTER_START" = "1" ] && break
+                if [ "$APPLIED_AFTER_START" = "1" ]; then
+                  break
+                fi
                 sleep 2
               done
               if [ "$APPLIED_AFTER_START" != "1" ]; then
