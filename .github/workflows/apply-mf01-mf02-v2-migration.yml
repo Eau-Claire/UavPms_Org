@@ -43,9 +43,32 @@ jobs:
             [ -n "${DEPLOY_PATH:-}" ] || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
             cd "$DEPLOY_PATH"
             [ "$(git branch --show-current)" = main ] || { echo "ERROR: deployment checkout must be on main."; exit 1; }
-            if ! git diff --quiet || ! git diff --cached --quiet; then echo "ERROR: deployment checkout has changes to tracked files."; exit 1; fi
+            DIRTY_FILES="$(git status --porcelain)"
+            if [ -n "$DIRTY_FILES" ]; then
+              UNSAFE_FILES="$(printf '%s\n' "$DIRTY_FILES" | grep -vE '^\?\? (analysis-get\.js|benchmark_ai\.py|health\.js|monitoring/)' || true)"
+              if [ -n "$UNSAFE_FILES" ]; then
+                echo "ERROR: deployment checkout has unexpected changes."
+                printf '%s\n' "$UNSAFE_FILES"
+                exit 1
+              fi
+              echo "Ignoring approved diagnostic files in the deployment checkout."
+            fi
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "ERROR: deployment checkout has changes to tracked files."
+              git status --short --untracked-files=no
+              exit 1
+            fi
             [ -f "$BASE_FILE" ] || { echo "ERROR: deploy the application commit containing $BASE_FILE first."; exit 1; }
             [ -f "$HARDEN_FILE" ] || { echo "ERROR: deploy the application commit containing $HARDEN_FILE first."; exit 1; }
+
+            migration_mode_started=false
+            restore_normal_mode() {
+              if [ "$migration_mode_started" = "true" ]; then
+                echo "Restoring RUN_MIGRATIONS=false after migration attempt..."
+                RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice || true
+              fi
+            }
+            trap restore_normal_mode EXIT
 
             [ "$(docker inspect uavpms-db --format '{{.State.Status}}')" = running ] || { echo "ERROR: uavpms-db is not running."; exit 1; }
             docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc 'SELECT 1;' >/dev/null
@@ -60,16 +83,27 @@ jobs:
             HARDEN_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_V2_HARDEN');")"
             if [ "$HARDEN_APPLIED" != t ]; then
               echo "Applying pending MF01/MF02 v2 migrations..."
-              RUN_MIGRATIONS=true docker compose build --no-cache operationsservice
-              if ! docker compose run --rm --no-deps -e RunMigrations=true -e MigrationOnly=true operationsservice; then
-                echo "ERROR: migration-only OperationsService failed."
-                docker compose logs --tail=200 operationsservice || true
-                exit 1
-              fi
+              migration_mode_started=true
+              RUN_MIGRATIONS=true docker compose up -d --build --force-recreate operationsservice
 
-              RECORDED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_V2_HARDEN';" | tr -d '[:space:]')"
-              if [ "$RECORDED" != "1" ]; then
-                echo "ERROR: migration $MIGRATION_V2_HARDEN was not recorded. OperationsService diagnostics:"
+              APPLIED_AFTER_START=false
+              for attempt in $(seq 1 60); do
+                APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_V2_HARDEN');")"
+                if [ "$APPLIED_AFTER_START" = "t" ]; then
+                  echo "MF01/MF02 v2 migration recorded after startup check $attempt."
+                  break
+                fi
+                CONTAINER_STATUS="$(docker inspect uav-operations-service --format '{{.State.Status}}' 2>/dev/null || true)"
+                if [ "$CONTAINER_STATUS" = "exited" ] || [ "$CONTAINER_STATUS" = "dead" ]; then
+                  echo "ERROR: OperationsService stopped while applying MF01/MF02 v2 migration (status: $CONTAINER_STATUS)."
+                  docker compose logs --tail=200 operationsservice
+                  exit 1
+                fi
+                sleep 2
+              done
+
+              if [ "$APPLIED_AFTER_START" != "t" ]; then
+                echo "ERROR: migration $MIGRATION_V2_HARDEN was not recorded within 120 seconds. OperationsService diagnostics:"
                 echo "Migration history:"
                 docker exec uavpms-db psql -U uavpms -d uavpms -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 10;' || true
                 docker compose logs --tail=200 operationsservice
@@ -79,8 +113,9 @@ jobs:
               echo "MF01/MF02 v2 migrations are already applied."
             fi
 
-            echo "Restarting OperationsService container..."
+            echo "Restoring normal OperationsService configuration..."
             RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice
+            migration_mode_started=false
             for attempt in $(seq 1 30); do
               docker inspect uav-operations-service --format '{{.State.Running}}' | grep -qx true && break
               sleep 2

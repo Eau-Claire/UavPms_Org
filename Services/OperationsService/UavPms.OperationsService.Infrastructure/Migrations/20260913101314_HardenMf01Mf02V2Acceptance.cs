@@ -38,7 +38,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 table: "PreMissionAssessments",
                 type: "text",
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "Pending");
 
             migrationBuilder.AddColumn<string>(
                 name: "IdempotencyKey",
@@ -51,14 +51,14 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 table: "PreMissionAssessmentPersonnel",
                 type: "text",
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "Unknown");
 
             migrationBuilder.AddColumn<string>(
                 name: "EligibilityStatus",
                 table: "PreMissionAssessmentPersonnel",
                 type: "text",
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "Unknown");
 
             migrationBuilder.AddColumn<string>(
                 name: "ReasonCode",
@@ -71,14 +71,14 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 table: "PreMissionAssessmentPersonnel",
                 type: "timestamp with time zone",
                 nullable: false,
-                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
+                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc));
 
             migrationBuilder.AddColumn<string>(
                 name: "OperationalAvailabilityStatus",
                 table: "PreMissionAssessmentDrones",
                 type: "text",
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "Unknown");
 
             migrationBuilder.AddColumn<string>(
                 name: "ReasonCode",
@@ -91,14 +91,14 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 table: "PreMissionAssessmentDrones",
                 type: "timestamp with time zone",
                 nullable: false,
-                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
+                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc));
 
             migrationBuilder.AddColumn<string>(
                 name: "TechnicalEligibilityStatus",
                 table: "PreMissionAssessmentDrones",
                 type: "text",
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "Unknown");
 
             migrationBuilder.AlterColumn<Guid>(
                 name: "RegionId",
@@ -137,7 +137,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 table: "MissionAssignments",
                 type: "timestamp with time zone",
                 nullable: false,
-                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
+                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc));
 
             migrationBuilder.AddColumn<bool>(
                 name: "IsRequired",
@@ -163,7 +163,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 table: "MissionAssignments",
                 type: "text",
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "Pending");
 
             migrationBuilder.AddColumn<long>(
                 name: "Version",
@@ -196,7 +196,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 table: "DroneTechnicalMetrics",
                 type: "text",
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "None");
 
             migrationBuilder.AddColumn<string>(
                 name: "Subsystem",
@@ -204,7 +204,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 type: "character varying(100)",
                 maxLength: 100,
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "General");
 
             migrationBuilder.AddColumn<string>(
                 name: "Unit",
@@ -229,14 +229,13 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 table: "DroneTechnicalInspections",
                 type: "timestamp with time zone",
                 nullable: false,
-                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
+                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc));
 
             migrationBuilder.AddColumn<Guid>(
                 name: "TechnicianUserId",
                 table: "DroneTechnicalInspections",
                 type: "uuid",
-                nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"));
+                nullable: true);
 
             migrationBuilder.AddColumn<long>(
                 name: "Version",
