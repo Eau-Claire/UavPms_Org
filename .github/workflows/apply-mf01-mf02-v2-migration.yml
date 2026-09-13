@@ -57,7 +57,11 @@ jobs:
               migration_mode_started=true
               # Force a fresh publish layer so the checked-out migration is guaranteed to be in the image.
               RUN_MIGRATIONS=true docker compose build --no-cache operationsservice
-              RUN_MIGRATIONS=true docker compose up -d --force-recreate operationsservice
+              if ! RUN_MIGRATIONS=true docker compose up -d --force-recreate operationsservice; then
+                echo "ERROR: failed to start migration-mode OperationsService."
+                docker compose logs --tail=200 operationsservice || true
+                exit 1
+              fi
               for attempt in $(seq 1 45); do
                 docker inspect uav-operations-service --format '{{.State.Running}}' 2>/dev/null | grep -qx true && break
                 sleep 2
@@ -78,6 +82,8 @@ jobs:
                 docker compose logs --tail=200 operationsservice
                 exit 1
               fi
+              echo "Migration recorded. OperationsService migration logs:"
+              docker compose logs --tail=200 operationsservice || true
             fi
             RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice
             migration_mode_started=false
