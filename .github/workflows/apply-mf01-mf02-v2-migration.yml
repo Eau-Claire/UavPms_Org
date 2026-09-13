@@ -64,13 +64,17 @@ jobs:
               done
               APPLIED_AFTER_START=""
               for attempt in $(seq 1 45); do
-                APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" | tr -d '[:space:]')"
+                APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" 2>/tmp/migration-check-error | tr -d '[:space:]' || true)"
                 [ "$APPLIED_AFTER_START" = "1" ] && break
                 sleep 2
               done
               if [ "$APPLIED_AFTER_START" != "1" ]; then
                 echo "ERROR: migration was not recorded. OperationsService diagnostics:"
                 docker inspect uav-operations-service --format 'status={{.State.Status}} exit={{.State.ExitCode}} restart={{.RestartCount}} error={{.State.Error}}'
+                echo "Database migration check output:"
+                cat /tmp/migration-check-error || true
+                echo "Migration history:"
+                docker exec uavpms-db psql -U uavpms -d uavpms -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 10;' || true
                 docker compose logs --tail=200 operationsservice
                 exit 1
               fi
@@ -81,7 +85,8 @@ jobs:
             echo "========== V2 SCHEMA VERIFICATION =========="
             docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';"
             for table in PreMissionAssessments PreMissionAssessmentAssets PreMissionAssessmentPersonnel PreMissionAssessmentDrones DroneTechnicalInspections DroneTechnicalMetrics; do
-              docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT to_regclass('public.\"$table\"') AS table_name;" | grep -q "$table"
+              TABLE_EXISTS="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='$table');" | tr -d '[:space:]')"
+              [ "$TABLE_EXISTS" = t ] || { echo "ERROR: expected table $table is missing."; exit 1; }
             done
             COLUMN_COUNT="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='Missions' AND column_name='PreMissionAssessmentId';")"
             [ "$COLUMN_COUNT" = 1 ] || { echo "ERROR: Missions.PreMissionAssessmentId is missing."; exit 1; }
