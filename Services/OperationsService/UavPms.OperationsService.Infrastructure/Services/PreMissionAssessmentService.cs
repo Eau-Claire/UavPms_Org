@@ -30,6 +30,18 @@ public sealed class PreMissionAssessmentService
         return assessment;
     }
 
+    public async Task<PreMissionAssessment> GetAsync(Guid id, CancellationToken ct)
+    {
+        await RequireManager(ct);
+        return await _db.PreMissionAssessments.Include(x => x.Assets).Include(x => x.PersonnelCandidates).Include(x => x.DroneCandidates).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("PreMissionAssessment", id);
+    }
+
+    public async Task<IReadOnlyList<PreMissionAssessment>> ListAsync(CancellationToken ct)
+    {
+        await RequireManager(ct);
+        return await _db.PreMissionAssessments.Where(x => x.ManagerId == _current.UserId || _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)).OrderByDescending(x => x.CreatedAt).Take(100).ToListAsync(ct);
+    }
+
     public async Task<PreMissionAssessment> EvaluateAsync(Guid id, CancellationToken ct)
     {
         await RequireManager(ct);
