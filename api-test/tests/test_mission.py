@@ -134,3 +134,32 @@ def test_failed_target_validation_leaves_no_partial_mission(gis_seed: dict, clie
     with db_connection.cursor() as cursor:
         cursor.execute('SELECT count(*) FROM "Missions" WHERE "Title"=%s', (title,))
         assert cursor.fetchone()[0] == 0
+
+
+def test_mission_accept_assignment_requires_authentication(client: httpx.Client) -> None:
+    fake_mission_id = "00000000-0000-0000-0000-000000000099"
+    response = client.post(f"/api/v1/missions/{fake_mission_id}/assignments/accept")
+    assert response.status_code == 401, response.text
+
+
+def test_mission_accept_assignment_returns_404_for_unknown_mission(client: httpx.Client, role_headers) -> None:
+    fake_mission_id = "00000000-0000-0000-0000-000000000099"
+    response = client.post(f"/api/v1/missions/{fake_mission_id}/assignments/accept", headers=role_headers("inspector"))
+    assert response.status_code in (400, 404), response.text
+
+
+def test_mission_postpone_assignment_requires_authentication(client: httpx.Client) -> None:
+    fake_mission_id = "00000000-0000-0000-0000-000000000099"
+    response = client.post(f"/api/v1/missions/{fake_mission_id}/assignments/postpone", json={"reason": "Rainstorm"})
+    assert response.status_code == 401, response.text
+
+
+def test_mission_postpone_assignment_validates_reason(client: httpx.Client, role_headers) -> None:
+    fake_mission_id = "00000000-0000-0000-0000-000000000099"
+    response = client.post(
+        f"/api/v1/missions/{fake_mission_id}/assignments/postpone",
+        json={"reason": ""},
+        headers=role_headers("inspector"),
+    )
+    assert response.status_code in (400, 422), response.text
+

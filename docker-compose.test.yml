@@ -29,7 +29,14 @@ services:
     depends_on:
       gateway:
         condition: service_started
+    networks:
+      - default
+      - uavpms-infra
     restart: unless-stopped
+
+networks:
+  uavpms-infra:
+    external: true
 
 volumes:
   api-test-reports:
