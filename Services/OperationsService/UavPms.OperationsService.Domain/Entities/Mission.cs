@@ -21,7 +21,7 @@ public class Mission : BaseEntity
     public DateTime? StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }
     public string Description { get; set; } = string.Empty;
-    public Guid RegionId { get; set; }
+    public Guid? RegionId { get; set; }
     public Guid? ScheduleId { get; set; }
     public MissionType MissionType { get; set; } = MissionType.AdHoc;
     public string? TriggerReason { get; set; }

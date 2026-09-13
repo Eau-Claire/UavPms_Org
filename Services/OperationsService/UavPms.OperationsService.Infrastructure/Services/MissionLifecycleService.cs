@@ -47,7 +47,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     public async Task<IReadOnlyList<Asset>> ResolveScopeAsync(Guid missionId, string boundaryWkt, CancellationToken ct)
     {
         var mission = await ManagedMission(missionId, ct); var boundary = ParseBoundary(boundaryWkt);
-        return await AssetsForRegion(mission.RegionId).Where(x => x.Location != null && boundary.Covers(x.Location)).ToListAsync(ct);
+        var regionId = mission.RegionId ?? throw new BusinessRuleException("MISSION_REGION_REQUIRED");
+        return await AssetsForRegion(regionId).Where(x => x.Location != null && boundary.Covers(x.Location)).ToListAsync(ct);
     }
 
     public async Task ConfirmAssetsAsync(Guid missionId, string boundaryWkt, IReadOnlyCollection<Guid> assetIds, CancellationToken ct)
@@ -56,7 +57,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         if (assetIds.Count == 0) throw new BusinessRuleException("MISSION_TARGET_REQUIRED");
         var distinct = assetIds.Distinct().ToArray(); if (distinct.Length != assetIds.Count) throw new BusinessRuleException("DUPLICATE_ASSET");
         var boundary = ParseBoundary(boundaryWkt);
-        var assets = await AssetsForRegion(mission.RegionId).Where(x => distinct.Contains(x.Id)).ToListAsync(ct);
+        var regionId = mission.RegionId ?? throw new BusinessRuleException("MISSION_REGION_REQUIRED");
+        var assets = await AssetsForRegion(regionId).Where(x => distinct.Contains(x.Id)).ToListAsync(ct);
         if (assets.Count != distinct.Length) throw new ForbiddenException("ASSET_OUTSIDE_REGION_OR_SCOPE");
         if (assets.Any(x => x.Location == null || !boundary.Covers(x.Location))) throw new BusinessRuleException("ASSET_OUTSIDE_BOUNDARY");
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -139,7 +141,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     private async Task<Mission> ManagedMission(Guid id, CancellationToken ct, bool graph = false) { await RequireManageMission(id, ct); return await MissionQuery(graph).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Mission", id); }
     private async Task<Mission> AccessibleMission(Guid id, CancellationToken ct, bool graph = false) { await RequireActiveCaller(ct); var global = IsGlobal; var uid = _current.UserId; var m = await MissionQuery(graph).SingleOrDefaultAsync(x => x.Id == id && (global || x.ManagerId == uid || x.Assignments.Any(a => a.UserId == uid && a.Status == MissionAssignmentStatus.Active)), ct); return m ?? throw new ForbiddenException("MISSION_ACCESS_DENIED"); }
     private IQueryable<Mission> MissionQuery(bool graph) { var q = _db.Missions.AsQueryable(); return graph ? q.Include(x => x.Assignments).Include(x => x.CheckIns).Include(x => x.DroneHandovers).Include(x => x.MissionTargets) : q; }
-    private async Task RequireManageMission(Guid id, CancellationToken ct) { var region = await _db.Missions.Where(x => x.Id == id).Select(x => (Guid?)x.RegionId).SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Mission", id); await RequireManageRegion(region, ct); }
+    private async Task RequireManageMission(Guid id, CancellationToken ct) { var region = await _db.Missions.Where(x => x.Id == id).Select(x => x.RegionId).SingleOrDefaultAsync(ct) ?? throw new BusinessRuleException("MISSION_REGION_REQUIRED"); await RequireManageRegion(region, ct); }
     private async Task RequireManageRegion(Guid region, CancellationToken ct) { if (IsGlobal) return; if (!_current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) || !await _db.UserGeographicScopes.AnyAsync(x => x.UserId == _current.UserId && x.RegionId == region, ct)) throw new ForbiddenException("REGION_MANAGEMENT_SCOPE_REQUIRED"); }
     private async Task RequireActiveCaller(CancellationToken ct) { if (!_current.IsAuthenticated || _current.UserId == Guid.Empty) throw new ForbiddenException("AUTHENTICATION_REQUIRED"); var user = await _db.Users.SingleOrDefaultAsync(x => x.Id == _current.UserId, ct); if (user == null || !IsActive(user.Status)) throw new ForbiddenException("ACTIVE_USER_REQUIRED"); }
     private bool IsGlobal => _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
