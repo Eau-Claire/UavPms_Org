@@ -4,7 +4,7 @@ using UavPms.OperationsService.Domain.Enums;
 
 namespace UavPms.OperationsService.Domain.Entities;
 
-public sealed class PreMissionAssessment : BaseEntity
+public class PreMissionAssessment : BaseEntity
 {
     public Guid ManagerId { get; set; }
     public Guid RegionId { get; set; }
