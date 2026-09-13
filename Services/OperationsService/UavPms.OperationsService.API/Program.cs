@@ -104,6 +104,11 @@ if (app.Configuration.GetValue<bool>("RunMigrations"))
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     dbContext.Database.Migrate();
+    if (app.Configuration.GetValue<bool>("MigrationOnly"))
+    {
+        Log.Information("Database migration completed in migration-only mode.");
+        return;
+    }
 }
 else
 {

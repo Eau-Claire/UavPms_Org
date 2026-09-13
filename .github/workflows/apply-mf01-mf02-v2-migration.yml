@@ -50,45 +50,23 @@ jobs:
             [ "$GIS_APPLIED" = t ] && [ "$SCOPE_APPLIED" = t ] || { echo "ERROR: required GIS/scope migrations are missing."; exit 1; }
 
             ALREADY_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID');")"
-            migration_mode_started=false
-            restore_normal_mode() { if [ "$migration_mode_started" = true ]; then RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice || true; fi; }
-            trap restore_normal_mode EXIT
             if [ "$ALREADY_APPLIED" != t ]; then
-              migration_mode_started=true
-              # Force a fresh publish layer so the checked-out migration is guaranteed to be in the image.
               RUN_MIGRATIONS=true docker compose build --no-cache operationsservice
-              if ! RUN_MIGRATIONS=true docker compose up -d --force-recreate operationsservice; then
-                echo "ERROR: failed to start migration-mode OperationsService."
+              if ! docker compose run --rm --no-deps -e RunMigrations=true -e MigrationOnly=true operationsservice; then
+                echo "ERROR: migration-only OperationsService failed."
                 docker compose logs --tail=200 operationsservice || true
                 exit 1
               fi
-              for attempt in $(seq 1 45); do
-                docker inspect uav-operations-service --format '{{.State.Running}}' 2>/dev/null | grep -qx true && break
-                sleep 2
-              done
-              APPLIED_AFTER_START=""
-              for attempt in $(seq 1 45); do
-                APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" 2>/tmp/migration-check-error | tr -d '[:space:]' || true)"
-                if [ "$APPLIED_AFTER_START" = "1" ]; then
-                  break
-                fi
-                sleep 2
-              done
+              APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" | tr -d '[:space:]')"
               if [ "$APPLIED_AFTER_START" != "1" ]; then
                 echo "ERROR: migration was not recorded. OperationsService diagnostics:"
-                docker inspect uav-operations-service --format 'status={{.State.Status}} exit={{.State.ExitCode}} restart={{.RestartCount}} error={{.State.Error}}'
-                echo "Database migration check output:"
-                cat /tmp/migration-check-error || true
                 echo "Migration history:"
                 docker exec uavpms-db psql -U uavpms -d uavpms -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 10;' || true
                 docker compose logs --tail=200 operationsservice
                 exit 1
               fi
-              echo "Migration recorded. OperationsService migration logs:"
-              docker compose logs --tail=200 operationsservice || true
             fi
             RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice
-            migration_mode_started=false
 
             echo "========== V2 SCHEMA VERIFICATION =========="
             docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';"
