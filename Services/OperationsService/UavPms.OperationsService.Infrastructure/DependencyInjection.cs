@@ -93,6 +93,7 @@ public static class DependencyInjection
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
         services.AddScoped<IMissionRepository, MissionRepository>();
         services.AddScoped<IMissionLifecycleService, MissionLifecycleService>();
+        services.AddScoped<PreMissionAssessmentService>();
         services.AddScoped<IUavRepository, UavRepository>();
 
         // Đăng ký Notification Repository

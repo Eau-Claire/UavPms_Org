@@ -29,6 +29,7 @@ public class Mission : BaseEntity
     public DateTime? PlannedEnd { get; set; }
     public Geometry? Boundary { get; set; }
     public uint Version { get; set; }
+    public Guid? PreMissionAssessmentId { get; set; }
 
     public virtual User? Manager { get; set; }
     public virtual User? Inspector { get; set; }
@@ -36,6 +37,7 @@ public class Mission : BaseEntity
     public virtual Uav? Uav { get; set; }
     public virtual Region? Region { get; set; }
     public virtual InspectionSchedule? Schedule { get; set; }
+    public virtual PreMissionAssessment? PreMissionAssessment { get; set; }
     public virtual ICollection<MissionAssignment> Assignments { get; set; } = new List<MissionAssignment>();
     public virtual ICollection<MissionCheckIn> CheckIns { get; set; } = new List<MissionCheckIn>();
     public virtual ICollection<DroneHandover> DroneHandovers { get; set; } = new List<DroneHandover>();

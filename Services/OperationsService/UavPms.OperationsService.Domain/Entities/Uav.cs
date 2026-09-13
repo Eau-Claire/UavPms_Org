@@ -11,11 +11,14 @@ public class Uav : BaseEntity
     public string UavCode { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;
     public DroneStatus Status { get; set; } = DroneStatus.Idle;
+    public DroneOperationalStatus OperationalStatus { get; set; } = DroneOperationalStatus.Available;
+    public TechnicalHealth TechnicalHealth { get; set; } = TechnicalHealth.Unknown;
     public double BatteryLevel { get; set; }
     public Point? CurrentLocation { get; set; }
     public DateTime? LastMaintenanceAt { get; set; }
 
     public virtual ICollection<Mission> Missions { get; set; } = new List<Mission>();
+    public virtual ICollection<DroneTechnicalInspection> TechnicalInspections { get; set; } = new List<DroneTechnicalInspection>();
     
     #region Rich Domain Methods
 
