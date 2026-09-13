@@ -35,7 +35,7 @@ jobs:
           script: |
             set -euo pipefail
 
-            MIGRATION_ID="20260913044232_AddPreMissionAssessmentAndDroneTechnicalReadinessV2"
+            MIGRATION_ID="20260913065455_AddPreMissionAssessmentAndDroneTechnicalReadinessV2"
             MIGRATION_FILE="Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations/${MIGRATION_ID}.cs"
             [ -n "${DEPLOY_PATH:-}" ] || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
             cd "$DEPLOY_PATH"
@@ -57,7 +57,10 @@ jobs:
               migration_mode_started=true
               RUN_MIGRATIONS=true docker compose up -d --build --force-recreate operationsservice
               for attempt in $(seq 1 45); do docker inspect uav-operations-service --format '{{.State.Running}}' 2>/dev/null | grep -qx true && break; sleep 2; done
-              docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" >/dev/null
+              if ! docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" >/dev/null; then
+                docker compose logs --tail=200 operationsservice
+                exit 1
+              fi
             fi
             RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice
             migration_mode_started=false
