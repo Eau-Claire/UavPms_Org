@@ -12,11 +12,14 @@ using UavPms.OperationsService.Application.Features.Missions.Queries.GetMyMissio
 using UavPms.OperationsService.Application.Features.Missions.Queries.ListMissions;
 using UavPms.Shared.Contracts.Constants;
 
+using UavPms.OperationsService.Application.Features.Assessments.DTOs;
+
 namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/missions")]
 [ApiVersion("1.0")]
+[ApiVersion("2.0")]
 [Authorize]
 public class MissionController : ControllerBase
 {
@@ -85,7 +88,25 @@ public class MissionController : ControllerBase
 
     [HttpPost("{id:guid}/check-in")]
     [Authorize(Roles = UserRoles.AdminManagerInspector)]
-    public async Task<IActionResult> CheckIn(Guid id, CancellationToken ct) => Ok(new ApiResponse(true, "Checked in", await _lifecycle.CheckInAsync(id, ct)));
+    public async Task<IActionResult> CheckIn(Guid id, CancellationToken ct) => Ok(new ApiResponse(true, "Checked in", await _lifecycle!.CheckInAsync(id, ct)));
+
+    [HttpPost("{id:guid}/assignments/accept")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    public async Task<IActionResult> AcceptAssignment(Guid id, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var assignment = await _lifecycle.AcceptAssignmentAsync(id, ct);
+        return Ok(new ApiResponse(true, "Assignment accepted", assignment));
+    }
+
+    [HttpPost("{id:guid}/assignments/postpone")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    public async Task<IActionResult> PostponeAssignment(Guid id, [FromBody] PostponeAssignmentRequest request, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var assignment = await _lifecycle.PostponeAssignmentAsync(id, request.Reason, ct);
+        return Ok(new ApiResponse(true, "Assignment postponed", assignment));
+    }
 
     [HttpPost("{id:guid}/start")]
     [Authorize(Roles = UserRoles.AdminManagerInspector)]

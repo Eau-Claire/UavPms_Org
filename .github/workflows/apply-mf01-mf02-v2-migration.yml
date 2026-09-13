@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type APPLY_MF01_MF02_V2 to apply and verify the pre-mission assessment migration.
+        description: Type APPLY_MF01_MF02_V2 to apply and verify the pre-mission assessment and mission assignment v2 migrations.
         required: true
         type: string
 
@@ -35,15 +35,21 @@ jobs:
           script: |
             set -euo pipefail
 
-            MIGRATION_ID="20260913065455_AddPreMissionAssessmentAndDroneTechnicalReadinessV2"
-            MIGRATION_FILE="Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations/${MIGRATION_ID}.cs"
+            MIGRATION_V2_BASE="20260913065455_AddPreMissionAssessmentAndDroneTechnicalReadinessV2"
+            MIGRATION_V2_HARDEN="20260913101314_HardenMf01Mf02V2Acceptance"
+            BASE_FILE="Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations/${MIGRATION_V2_BASE}.cs"
+            HARDEN_FILE="Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations/${MIGRATION_V2_HARDEN}.cs"
+
             [ -n "${DEPLOY_PATH:-}" ] || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
             cd "$DEPLOY_PATH"
             [ "$(git branch --show-current)" = main ] || { echo "ERROR: deployment checkout must be on main."; exit 1; }
-            if ! git diff --quiet || ! git diff --cached --quiet; then echo "ERROR: deployment checkout has changes."; exit 1; fi
-            [ -f "$MIGRATION_FILE" ] || { echo "ERROR: deploy the application commit containing $MIGRATION_FILE first."; exit 1; }
+            if ! git diff --quiet || ! git diff --cached --quiet; then echo "ERROR: deployment checkout has changes to tracked files."; exit 1; fi
+            [ -f "$BASE_FILE" ] || { echo "ERROR: deploy the application commit containing $BASE_FILE first."; exit 1; }
+            [ -f "$HARDEN_FILE" ] || { echo "ERROR: deploy the application commit containing $HARDEN_FILE first."; exit 1; }
+
             [ "$(docker inspect uavpms-db --format '{{.State.Status}}')" = running ] || { echo "ERROR: uavpms-db is not running."; exit 1; }
             docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc 'SELECT 1;' >/dev/null
+
             ASSET_TABLE_EXISTS="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT to_regclass('public.\"AssetComponents\"') IS NOT NULL;" | tr -d '[:space:]')"
             [ "$ASSET_TABLE_EXISTS" = t ] || { echo "ERROR: required OperationsService table AssetComponents is missing."; exit 1; }
 
@@ -51,34 +57,93 @@ jobs:
             SCOPE_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20260906090000_AddUserGeographicScopes');")"
             [ "$GIS_APPLIED" = t ] && [ "$SCOPE_APPLIED" = t ] || { echo "ERROR: required GIS/scope migrations are missing."; exit 1; }
 
-            ALREADY_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID');")"
-            if [ "$ALREADY_APPLIED" != t ]; then
+            HARDEN_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_V2_HARDEN');")"
+            if [ "$HARDEN_APPLIED" != t ]; then
+              echo "Applying pending MF01/MF02 v2 migrations..."
               RUN_MIGRATIONS=true docker compose build --no-cache operationsservice
               if ! docker compose run --rm --no-deps -e RunMigrations=true -e MigrationOnly=true operationsservice; then
                 echo "ERROR: migration-only OperationsService failed."
                 docker compose logs --tail=200 operationsservice || true
                 exit 1
               fi
-              APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" | tr -d '[:space:]')"
-              if [ "$APPLIED_AFTER_START" != "1" ]; then
-                echo "ERROR: migration was not recorded. OperationsService diagnostics:"
+
+              RECORDED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_V2_HARDEN';" | tr -d '[:space:]')"
+              if [ "$RECORDED" != "1" ]; then
+                echo "ERROR: migration $MIGRATION_V2_HARDEN was not recorded. OperationsService diagnostics:"
                 echo "Migration history:"
                 docker exec uavpms-db psql -U uavpms -d uavpms -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 10;' || true
                 docker compose logs --tail=200 operationsservice
                 exit 1
               fi
+            else
+              echo "MF01/MF02 v2 migrations are already applied."
             fi
+
+            echo "Restarting OperationsService container..."
             RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice
+            for attempt in $(seq 1 30); do
+              docker inspect uav-operations-service --format '{{.State.Running}}' | grep -qx true && break
+              sleep 2
+            done
+            docker inspect uav-operations-service --format '{{.State.Running}}' | grep -qx true
 
             echo "========== V2 SCHEMA VERIFICATION =========="
-            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';"
-            for table in PreMissionAssessments PreMissionAssessmentAssets PreMissionAssessmentPersonnel PreMissionAssessmentDrones DroneTechnicalInspections DroneTechnicalMetrics; do
+            echo "1. Checking migration history entries..."
+            for mig in "$MIGRATION_V2_BASE" "$MIGRATION_V2_HARDEN"; do
+              docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$mig';"
+            done
+
+            echo "2. Verifying tables..."
+            for table in PreMissionAssessments PreMissionAssessmentAssets PreMissionAssessmentPersonnel PreMissionAssessmentDrones DroneTechnicalInspections DroneTechnicalMetrics ResourceBookings; do
               TABLE_EXISTS="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='$table');" | tr -d '[:space:]')"
               [ "$TABLE_EXISTS" = t ] || { echo "ERROR: expected table $table is missing."; exit 1; }
             done
-            COLUMN_COUNT="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='Missions' AND column_name='PreMissionAssessmentId';")"
-            [ "$COLUMN_COUNT" = 1 ] || { echo "ERROR: Missions.PreMissionAssessmentId is missing."; exit 1; }
+
+            echo "3. Verifying required columns..."
+            check_col() {
+              local tbl="$1" col="$2"
+              local cnt="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='$tbl' AND column_name='$col';")"
+              [ "$cnt" = 1 ] || { echo "ERROR: column $tbl.$col is missing."; exit 1; }
+            }
+            check_col "Missions" "PreMissionAssessmentId"
+            check_col "Missions" "IdempotencyKey"
+            check_col "Missions" "PostponeReason"
+            check_col "Missions" "PostponedAt"
+            check_col "Missions" "AcceptedAt"
+            check_col "PreMissionAssessments" "IdempotencyKey"
+            check_col "PreMissionAssessments" "SiteFeasibilityStatus"
+            check_col "PreMissionAssessments" "EvaluationPolicyVersion"
+            check_col "PreMissionAssessmentPersonnel" "EligibilityStatus"
+            check_col "PreMissionAssessmentPersonnel" "AvailabilityStatus"
+            check_col "PreMissionAssessmentPersonnel" "ReasonCode"
+            check_col "PreMissionAssessmentPersonnel" "SnapshotAt"
+            check_col "PreMissionAssessmentDrones" "OperationalAvailabilityStatus"
+            check_col "PreMissionAssessmentDrones" "TechnicalEligibilityStatus"
+            check_col "PreMissionAssessmentDrones" "ReasonCode"
+            check_col "PreMissionAssessmentDrones" "SnapshotAt"
+            check_col "DroneTechnicalInspections" "TechnicianUserId"
+            check_col "DroneTechnicalInspections" "PolicyVersion"
+            check_col "DroneTechnicalMetrics" "BoolValue"
+            check_col "DroneTechnicalMetrics" "IsRequired"
+            check_col "MissionAssignments" "IsRequired"
+            check_col "MissionAssignments" "AssignedAt"
+            check_col "MissionAssignments" "ResponseStatus"
+            check_col "MissionAssignments" "ResponseReason"
+            check_col "UAVs" "LastTechnicalInspectionId"
+            check_col "UAVs" "TechnicalHealthUpdatedAt"
+
+            echo "4. Verifying foreign keys & constraints..."
             ASSET_FK_OK="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT count(*) FROM information_schema.referential_constraints WHERE constraint_schema='public' AND constraint_name='FK_PreMissionAssessmentAssets_AssetComponents_AssetId';" | tr -d '[:space:]')"
             [ "$ASSET_FK_OK" = 1 ] || { echo "ERROR: assessment asset FK to AssetComponents is missing."; exit 1; }
-            docker inspect uav-operations-service --format '{{.State.Running}}' | grep -qx true
-            echo "MF01/MF02 v2 migration verified successfully."
+
+            BOOKING_ONE_RESOURCE="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT count(*) FROM information_schema.check_constraints WHERE constraint_schema='public' AND constraint_name='CK_ResourceBookings_OneResource';" | tr -d '[:space:]')"
+            [ "$BOOKING_ONE_RESOURCE" = 1 ] || { echo "ERROR: CK_ResourceBookings_OneResource check constraint is missing."; exit 1; }
+
+            echo "5. Verifying idempotency unique indexes..."
+            ASSESSMENT_IDEM_IDX="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND tablename='PreMissionAssessments' AND indexname='IX_PreMissionAssessments_IdempotencyKey';" | tr -d '[:space:]')"
+            [ "$ASSESSMENT_IDEM_IDX" = 1 ] || { echo "ERROR: unique index IX_PreMissionAssessments_IdempotencyKey is missing."; exit 1; }
+
+            MISSION_IDEM_IDX="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND tablename='Missions' AND indexname='IX_Missions_IdempotencyKey';" | tr -d '[:space:]')"
+            [ "$MISSION_IDEM_IDX" = 1 ] || { echo "ERROR: unique index IX_Missions_IdempotencyKey is missing."; exit 1; }
+
+            echo "MF01/MF02 v2 migrations and schema verified successfully."

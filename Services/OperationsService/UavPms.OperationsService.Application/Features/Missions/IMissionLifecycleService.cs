@@ -18,6 +18,8 @@ public interface IMissionLifecycleService
     Task AssignDroneAsync(Guid missionId, Guid droneId, CancellationToken ct);
     Task<DroneHandover> ConfirmHandoverAsync(Guid missionId, Mf01Handover request, CancellationToken ct);
     Task<MissionCheckIn> CheckInAsync(Guid missionId, CancellationToken ct);
+    Task<MissionAssignment> AcceptAssignmentAsync(Guid missionId, CancellationToken ct);
+    Task<MissionAssignment> PostponeAssignmentAsync(Guid missionId, string reason, CancellationToken ct);
     Task StartAsync(Guid missionId, CancellationToken ct);
     Task CompleteAsync(Guid missionId, CancellationToken ct);
     Task CancelAsync(Guid missionId, CancellationToken ct);

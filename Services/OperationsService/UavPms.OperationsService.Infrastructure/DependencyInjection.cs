@@ -11,6 +11,7 @@ using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.OperationsService.Application.Common.Options;
 using UavPms.OperationsService.Application.Features.Gis.Infrastructure;
 using UavPms.OperationsService.Application.Features.Missions;
+using UavPms.OperationsService.Application.Features.Assessments;
 
 namespace UavPms.OperationsService.Infrastructure;
 
@@ -94,6 +95,7 @@ public static class DependencyInjection
         services.AddScoped<IMissionRepository, MissionRepository>();
         services.AddScoped<IMissionLifecycleService, MissionLifecycleService>();
         services.AddScoped<PreMissionAssessmentService>();
+        services.AddScoped<IDroneTechnicalInspectionService, DroneTechnicalInspectionService>();
         services.AddScoped<IUavRepository, UavRepository>();
 
         // Đăng ký Notification Repository

@@ -5,3 +5,7 @@ public enum DroneOperationalStatus { Available, Reserved, InUse, Maintenance, Un
 public enum TechnicalHealth { Unknown, Healthy, Warning, Critical }
 public enum DroneTechnicalInspectionStatus { Pending, InProgress, Passed, Failed, Incomplete }
 public enum MissionAssignmentResponse { Pending, Accepted, Postponed, Replaced, Cancelled }
+public enum ReadinessCheckStatus { Pending, Passed, Failed, Incomplete, Warning }
+public enum ResourceAvailabilityStatus { Unknown, Available, Conflict, Unavailable }
+public enum ResourceEligibilityStatus { Unknown, Eligible, Ineligible, RequiresInspection }
+public enum ResourceBookingStatus { Active, Released, Cancelled }

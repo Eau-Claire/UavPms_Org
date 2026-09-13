@@ -30,6 +30,10 @@ public class Mission : BaseEntity
     public Geometry? Boundary { get; set; }
     public uint Version { get; set; }
     public Guid? PreMissionAssessmentId { get; set; }
+    public DateTime? AcceptedAt { get; set; }
+    public DateTime? PostponedAt { get; set; }
+    public string? PostponeReason { get; set; }
+    public string? IdempotencyKey { get; set; }
 
     public virtual User? Manager { get; set; }
     public virtual User? Inspector { get; set; }
@@ -41,6 +45,7 @@ public class Mission : BaseEntity
     public virtual ICollection<MissionAssignment> Assignments { get; set; } = new List<MissionAssignment>();
     public virtual ICollection<MissionCheckIn> CheckIns { get; set; } = new List<MissionCheckIn>();
     public virtual ICollection<DroneHandover> DroneHandovers { get; set; } = new List<DroneHandover>();
+    public virtual ICollection<ResourceBooking> ResourceBookings { get; set; } = new List<ResourceBooking>();
 
     public virtual ICollection<MissionTargetLine> MissionTargetLines { get; set; } = new List<MissionTargetLine>();
     public virtual ICollection<MissionTarget> MissionTargets { get; set; } = new List<MissionTarget>();
@@ -71,19 +76,32 @@ public class Mission : BaseEntity
 
     public void Cancel()
     {
-        if (Status is not (MissionStatus.Draft or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready))
+        if (Status is not (MissionStatus.Draft or MissionStatus.PendingAcceptance or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready))
             throw new InvalidOperationException($"Cannot cancel mission with status {Status}.");
         
         Status = MissionStatus.Cancelled;
         EndedAt = DateTime.UtcNow;
     }
 
+    public bool CheckAcceptance()
+    {
+        if (Status != MissionStatus.PendingAcceptance) return false;
+        var requiredAssignments = Assignments.Where(x => x.Status == MissionAssignmentStatus.Active && x.IsRequired).ToList();
+        if (requiredAssignments.Count > 0 && requiredAssignments.All(a => a.ResponseStatus == MissionAssignmentResponse.Accepted))
+        {
+            Status = MissionStatus.Assigned;
+            AcceptedAt = DateTime.UtcNow;
+            return true;
+        }
+        return false;
+    }
+
     public bool RecalculateReadiness()
     {
-        if (Status is MissionStatus.Cancelled or MissionStatus.Completed or MissionStatus.InProgress) return false;
+        if (Status is MissionStatus.Cancelled or MissionStatus.Completed or MissionStatus.InProgress or MissionStatus.PendingAcceptance) return false;
         var active = Assignments.Where(x => x.Status == MissionAssignmentStatus.Active).ToList();
         var ready = active.Count > 0
-            && active.All(a => CheckIns.Any(c => c.UserId == a.UserId && c.Status == MissionCheckInStatus.CheckedIn))
+            && active.All(a => (!a.IsRequired || a.ResponseStatus == MissionAssignmentResponse.Accepted) && CheckIns.Any(c => c.UserId == a.UserId && c.Status == MissionCheckInStatus.CheckedIn))
             && UavId != Guid.Empty
             && MissionTargets.Count > 0
             && DroneHandovers.Any(h => h.DroneId == UavId && h.Status == DroneHandoverStatus.Accepted && h.ReturnedAt == null);

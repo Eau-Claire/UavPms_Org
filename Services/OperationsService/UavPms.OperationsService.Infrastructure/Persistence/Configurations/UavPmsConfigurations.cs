@@ -211,6 +211,7 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.HasIndex(e => e.RegionId);
         builder.HasIndex(e => e.ScheduleId);
         builder.HasIndex(e => e.PreMissionAssessmentId).IsUnique().HasFilter("\"PreMissionAssessmentId\" IS NOT NULL AND NOT \"IsDeleted\"");
+        builder.HasIndex(e => e.IdempotencyKey).IsUnique().HasFilter("\"IdempotencyKey\" IS NOT NULL AND NOT \"IsDeleted\"");
         builder.HasOne(e => e.PreMissionAssessment).WithMany().HasForeignKey(e => e.PreMissionAssessmentId).OnDelete(DeleteBehavior.Restrict);
         builder.Ignore(e => e.RouteData);
         builder.Ignore(e => e.AssignedToUserId);
@@ -258,11 +259,13 @@ public class PreMissionAssessmentConfiguration : IEntityTypeConfiguration<PreMis
         builder.ToTable("PreMissionAssessments", t => t.HasCheckConstraint("CK_PreMissionAssessments_PlannedWindow", "\"PlannedEnd\" > \"PlannedStart\""));
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Status).HasConversion<string>();
+        builder.Property(x => x.SiteFeasibilityStatus).HasConversion<string>();
         builder.Property(x => x.OverallTechnicalHealth).HasConversion<string>();
         builder.Property(x => x.Findings).HasColumnType("jsonb");
         builder.Property(x => x.ProposedBoundary).HasColumnType("geometry(Geometry,4326)");
         builder.Property(x => x.Version).IsConcurrencyToken();
         builder.HasIndex(x => new { x.ManagerId, x.Status });
+        builder.HasIndex(x => x.IdempotencyKey).IsUnique().HasFilter("\"IdempotencyKey\" IS NOT NULL AND NOT \"IsDeleted\"");
         builder.HasOne(x => x.Region).WithMany().HasForeignKey(x => x.RegionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Manager).WithMany().HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.Restrict);
     }
@@ -286,6 +289,8 @@ public class PreMissionAssessmentPersonnelConfiguration : IEntityTypeConfigurati
         builder.ToTable("PreMissionAssessmentPersonnel"); builder.HasKey(x => x.Id);
         builder.HasIndex(x => new { x.AssessmentId, x.UserId }).IsUnique();
         builder.Property(x => x.Findings).HasColumnType("jsonb");
+        builder.Property(x => x.EligibilityStatus).HasConversion<string>();
+        builder.Property(x => x.AvailabilityStatus).HasConversion<string>();
         builder.HasOne(x => x.Assessment).WithMany(x => x.PersonnelCandidates).HasForeignKey(x => x.AssessmentId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
     }
@@ -298,6 +303,8 @@ public class PreMissionAssessmentDroneConfiguration : IEntityTypeConfiguration<P
         builder.ToTable("PreMissionAssessmentDrones"); builder.HasKey(x => x.Id);
         builder.HasIndex(x => new { x.AssessmentId, x.DroneId }).IsUnique();
         builder.Property(x => x.TechnicalHealth).HasConversion<string>();
+        builder.Property(x => x.OperationalAvailabilityStatus).HasConversion<string>();
+        builder.Property(x => x.TechnicalEligibilityStatus).HasConversion<string>();
         builder.HasOne(x => x.Assessment).WithMany(x => x.DroneCandidates).HasForeignKey(x => x.AssessmentId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.Drone).WithMany().HasForeignKey(x => x.DroneId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.TechnicalInspection).WithMany().HasForeignKey(x => x.TechnicalInspectionId).OnDelete(DeleteBehavior.Restrict);
@@ -311,8 +318,10 @@ public class DroneTechnicalInspectionConfiguration : IEntityTypeConfiguration<Dr
         builder.ToTable("DroneTechnicalInspections"); builder.HasKey(x => x.Id);
         builder.Property(x => x.Status).HasConversion<string>(); builder.Property(x => x.Health).HasConversion<string>();
         builder.Property(x => x.RawSnapshot).HasColumnType("jsonb");
+        builder.Property(x => x.Version).IsConcurrencyToken();
         builder.HasIndex(x => new { x.DroneId, x.CompletedAt });
         builder.HasOne(x => x.Drone).WithMany(x => x.TechnicalInspections).HasForeignKey(x => x.DroneId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Technician).WithMany().HasForeignKey(x => x.TechnicianUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -322,7 +331,10 @@ public class DroneTechnicalMetricConfiguration : IEntityTypeConfiguration<DroneT
     {
         builder.ToTable("DroneTechnicalMetrics"); builder.HasKey(x => x.Id);
         builder.Property(x => x.MetricCode).HasMaxLength(100).IsRequired();
-        builder.HasIndex(x => new { x.InspectionId, x.MetricCode }).IsUnique();
+        builder.Property(x => x.Subsystem).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.Metadata).HasColumnType("jsonb");
+        builder.HasIndex(x => new { x.InspectionId, x.Subsystem, x.MetricCode }).IsUnique();
+        builder.ToTable(t => t.HasCheckConstraint("CK_DroneTechnicalMetrics_SingleValue", "(CASE WHEN \"NumericValue\" IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN \"ValueText\" IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN \"BoolValue\" IS NOT NULL THEN 1 ELSE 0 END) <= 1"));
         builder.HasOne(x => x.Inspection).WithMany(x => x.Metrics).HasForeignKey(x => x.InspectionId).OnDelete(DeleteBehavior.Cascade);
     }
 }
@@ -346,9 +358,31 @@ public class MissionAssignmentConfiguration : IEntityTypeConfiguration<MissionAs
         builder.ToTable("MissionAssignments"); builder.HasKey(x => x.Id);
         builder.Property(x => x.AssignmentRole).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Status).HasConversion<string>();
+        builder.Property(x => x.ResponseStatus).HasConversion<string>();
+        builder.Property(x => x.Version).IsConcurrencyToken();
+        builder.ToTable(t => t.HasCheckConstraint("CK_MissionAssignments_PostponeReason", "\"ResponseStatus\" <> 'Postponed' OR (\"ResponseReason\" IS NOT NULL AND length(trim(\"ResponseReason\")) > 0)"));
         builder.HasIndex(x => new { x.MissionId, x.UserId }).IsUnique().HasFilter("\"Status\" = 'Active' AND NOT \"IsDeleted\"");
         builder.HasOne(x => x.Mission).WithMany(x => x.Assignments).HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public sealed class ResourceBookingConfiguration : IEntityTypeConfiguration<ResourceBooking>
+{
+    public void Configure(EntityTypeBuilder<ResourceBooking> builder)
+    {
+        builder.ToTable("ResourceBookings", t =>
+        {
+            t.HasCheckConstraint("CK_ResourceBookings_OneResource", "(\"UserId\" IS NOT NULL) <> (\"DroneId\" IS NOT NULL)");
+            t.HasCheckConstraint("CK_ResourceBookings_Time", "\"EndAt\" > \"StartAt\"");
+        });
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Status).HasConversion<string>();
+        builder.HasIndex(x => new { x.UserId, x.StartAt, x.EndAt });
+        builder.HasIndex(x => new { x.DroneId, x.StartAt, x.EndAt });
+        builder.HasOne(x => x.Mission).WithMany(x => x.ResourceBookings).HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Drone).WithMany().HasForeignKey(x => x.DroneId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

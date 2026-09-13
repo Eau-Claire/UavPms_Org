@@ -13,6 +13,8 @@ public class Uav : BaseEntity
     public DroneStatus Status { get; set; } = DroneStatus.Idle;
     public DroneOperationalStatus OperationalStatus { get; set; } = DroneOperationalStatus.Available;
     public TechnicalHealth TechnicalHealth { get; set; } = TechnicalHealth.Unknown;
+    public Guid? LastTechnicalInspectionId { get; set; }
+    public DateTime? TechnicalHealthUpdatedAt { get; set; }
     public double BatteryLevel { get; set; }
     public Point? CurrentLocation { get; set; }
     public DateTime? LastMaintenanceAt { get; set; }

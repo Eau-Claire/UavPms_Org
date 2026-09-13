@@ -9,6 +9,7 @@ public enum MissionStatus
     InProgress = 4,
     Completed = 5,
     Cancelled = 6,
+    PendingAcceptance = 7,
 
     // Source compatibility for older callers. Persisted legacy values are mapped in EF.
     Pending = Draft,

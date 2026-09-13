@@ -20,10 +20,29 @@ public class MissionAssignment : BaseEntity
     public Guid UserId { get; set; }
     public string AssignmentRole { get; set; } = string.Empty;
     public MissionAssignmentStatus Status { get; set; } = MissionAssignmentStatus.Active;
+    public MissionAssignmentResponse ResponseStatus { get; set; } = MissionAssignmentResponse.Pending;
+    public bool IsRequired { get; set; } = true;
+    public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? RespondedAt { get; set; }
+    public string? ResponseReason { get; set; }
+    public uint Version { get; set; } = 1;
     public Guid AssignedByUserId { get; set; }
     public DateTime? EndedAt { get; set; }
     public virtual Mission? Mission { get; set; }
     public virtual User? User { get; set; }
+}
+
+public sealed class ResourceBooking : BaseEntity
+{
+    public Guid MissionId { get; set; }
+    public Guid? UserId { get; set; }
+    public Guid? DroneId { get; set; }
+    public DateTime StartAt { get; set; }
+    public DateTime EndAt { get; set; }
+    public ResourceBookingStatus Status { get; set; } = ResourceBookingStatus.Active;
+    public Mission? Mission { get; set; }
+    public User? User { get; set; }
+    public Uav? Drone { get; set; }
 }
 
 public class MissionCheckIn : BaseEntity

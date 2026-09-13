@@ -122,19 +122,112 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
 
     public async Task<MissionCheckIn> CheckInAsync(Guid missionId, CancellationToken ct)
     {
-        await RequireActiveCaller(ct); var mission = await AccessibleMission(missionId, ct, true);
-        if (mission.Status is not (MissionStatus.Assigned or MissionStatus.Preparing)) throw new BusinessRuleException("CHECK_IN_INVALID_STATE");
-        if (!mission.Assignments.Any(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active)) throw new ForbiddenException("USER_NOT_ASSIGNED");
-        if (mission.CheckIns.Any(x => x.UserId == _current.UserId && x.Status == MissionCheckInStatus.CheckedIn)) throw new BusinessRuleException("DUPLICATE_CHECK_IN");
+        await RequireActiveCaller(ct);
+        var mission = await AccessibleMission(missionId, ct, true);
+        if (mission.Status is not (MissionStatus.Assigned or MissionStatus.Preparing))
+            throw new BusinessRuleException("CHECK_IN_INVALID_STATE");
+
+        var assignment = mission.Assignments.SingleOrDefault(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active);
+        if (assignment == null)
+            throw new ForbiddenException("USER_NOT_ASSIGNED");
+
+        if (assignment.ResponseStatus != MissionAssignmentResponse.Accepted)
+            throw new BusinessRuleException("ASSIGNMENT_NOT_ACCEPTED");
+
+        if (mission.CheckIns.Any(x => x.UserId == _current.UserId && x.Status == MissionCheckInStatus.CheckedIn))
+            throw new BusinessRuleException("DUPLICATE_CHECK_IN");
+
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
         var checkIn = new MissionCheckIn { MissionId = missionId, UserId = _current.UserId, CheckedInAt = DateTime.UtcNow };
-        _db.MissionCheckIns.Add(checkIn); mission.CheckIns.Add(checkIn); var ready = mission.RecalculateReadiness(); Audit(mission.Id, "CHECK_IN"); if (ready) Audit(mission.Id, "MISSION_READY");
-        await _db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return checkIn;
+        _db.MissionCheckIns.Add(checkIn);
+        mission.CheckIns.Add(checkIn);
+        var ready = mission.RecalculateReadiness();
+        Audit(mission.Id, "CHECK_IN");
+        if (ready) Audit(mission.Id, "MISSION_READY");
+        await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return checkIn;
+    }
+
+    public async Task<MissionAssignment> AcceptAssignmentAsync(Guid missionId, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await AccessibleMission(missionId, ct, true);
+        var assignment = mission.Assignments.SingleOrDefault(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active)
+            ?? throw new NotFoundException("MissionAssignment", _current.UserId);
+
+        if (assignment.ResponseStatus == MissionAssignmentResponse.Accepted)
+            return assignment;
+
+        await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(ct) : null;
+        assignment.ResponseStatus = MissionAssignmentResponse.Accepted;
+        assignment.RespondedAt = DateTime.UtcNow;
+        assignment.Version++;
+
+        if (mission.Status == MissionStatus.PendingAcceptance)
+        {
+            mission.CheckAcceptance();
+        }
+        else
+        {
+            mission.RecalculateReadiness();
+        }
+
+        Audit(mission.Id, "ASSIGNMENT_ACCEPTED");
+        await _db.SaveChangesAsync(ct);
+        if (tx != null) await tx.CommitAsync(ct);
+        return assignment;
+    }
+
+    public async Task<MissionAssignment> PostponeAssignmentAsync(Guid missionId, string reason, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new BusinessRuleException("POSTPONE_REASON_REQUIRED", "A reason must be provided when postponing an assignment.");
+
+        var mission = await AccessibleMission(missionId, ct, true);
+        var assignment = mission.Assignments.SingleOrDefault(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active)
+            ?? throw new NotFoundException("MissionAssignment", _current.UserId);
+
+        await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(ct) : null;
+        assignment.ResponseStatus = MissionAssignmentResponse.Postponed;
+        assignment.ResponseReason = reason;
+        assignment.RespondedAt = DateTime.UtcNow;
+        assignment.Version++;
+
+        mission.PostponedAt = DateTime.UtcNow;
+        mission.PostponeReason = reason;
+        mission.Version++;
+
+        Audit(mission.Id, "ASSIGNMENT_POSTPONED");
+        Notify(mission.ManagerId, mission, "ASSIGNMENT_POSTPONED");
+        await _db.SaveChangesAsync(ct);
+        if (tx != null) await tx.CommitAsync(ct);
+        return assignment;
     }
 
     public async Task StartAsync(Guid missionId, CancellationToken ct) { var m = await AccessibleMission(missionId, ct, true); m.Start(); m.Version++; Audit(m.Id, "MISSION_STARTED"); await SaveConcurrency(ct); }
     public async Task CompleteAsync(Guid missionId, CancellationToken ct) { var m = await AccessibleMission(missionId, ct, true); m.Complete(); m.Version++; Audit(m.Id, "MISSION_COMPLETED"); await SaveConcurrency(ct); }
-    public async Task CancelAsync(Guid missionId, CancellationToken ct) { var m = await ManagedMission(missionId, ct, true); m.Cancel(); m.Version++; Audit(m.Id, "MISSION_CANCELLED"); foreach (var a in m.Assignments.Where(x => x.Status == MissionAssignmentStatus.Active)) Notify(a.UserId, m, "MISSION_CANCELLED"); await SaveConcurrency(ct); }
+    public async Task CancelAsync(Guid missionId, CancellationToken ct)
+    {
+        var m = await ManagedMission(missionId, ct, true);
+        m.Cancel();
+        m.Version++;
+
+        var bookings = await _db.ResourceBookings
+            .Where(b => b.MissionId == missionId && b.Status == ResourceBookingStatus.Active)
+            .ToListAsync(ct);
+        foreach (var b in bookings)
+        {
+            b.Status = ResourceBookingStatus.Cancelled;
+        }
+
+        Audit(m.Id, "MISSION_CANCELLED");
+        foreach (var a in m.Assignments.Where(x => x.Status == MissionAssignmentStatus.Active))
+            Notify(a.UserId, m, "MISSION_CANCELLED");
+
+        await SaveConcurrency(ct);
+    }
 
     private IQueryable<Asset> AssetsForRegion(Guid regionId) => _db.Assets.Where(x => (x.Status == "Active" || x.Status == "Operational") && x.Tower!.TransmissionLine!.Substation!.RegionAssetId == regionId);
     private static Geometry ParseBoundary(string wkt) { try { var g = new WKTReader().Read(wkt); if (!g.IsValid || g.IsEmpty || g is not (Polygon or MultiPolygon)) throw new Exception(); g.SRID = 4326; return g; } catch { throw new BusinessRuleException("INVALID_GEOMETRY"); } }
@@ -149,5 +242,16 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     private static void RequirePreExecution(Mission m) { if (m.Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled) throw new BusinessRuleException("MISSION_IMMUTABLE_AFTER_START"); }
     private void Audit(Guid id, string action) => _db.AuditLogs.Add(new AuditLog { UserId = _current.UserId, TableName = "Missions", RecordId = id, ActionType = action, OldValues = "{}", NewValues = "{}", IpAddress = _current.IpAddress ?? "", UserAgent = _current.UserAgent ?? "" });
     private void Notify(Guid userId, Mission m, string type) => _db.Notifications.Add(new Notification { UserId = userId, Type = type, ReferenceType = "Mission", ReferenceId = m.Id, Title = m.Title, Body = type });
-    private async Task SaveConcurrency(CancellationToken ct) { try { await _db.SaveChangesAsync(ct); } catch (DbUpdateConcurrencyException) { throw new BusinessRuleException("MISSION_CONCURRENCY_CONFLICT"); } }
+    private async Task SaveConcurrency(CancellationToken ct)
+    {
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            var entityNames = string.Join(", ", ex.Entries.Select(e => $"{e.Metadata.ClrType.Name} ({e.State})"));
+            throw new BusinessRuleException("MISSION_CONCURRENCY_CONFLICT", $"{entityNames}: {ex.Message}");
+        }
+    }
 }

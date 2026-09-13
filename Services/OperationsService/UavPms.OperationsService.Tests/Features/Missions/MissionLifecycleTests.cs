@@ -27,7 +27,7 @@ public class MissionLifecycleTests
     {
         var user = Guid.NewGuid(); var drone = Guid.NewGuid();
         var mission = new Mission { Status = MissionStatus.Assigned, UavId = drone };
-        mission.Assignments.Add(new MissionAssignment { UserId = user });
+        mission.Assignments.Add(new MissionAssignment { UserId = user, ResponseStatus = MissionAssignmentResponse.Accepted });
         mission.MissionTargets.Add(new MissionTarget { AssetId = Guid.NewGuid() });
         mission.RecalculateReadiness().Should().BeFalse();
         mission.CheckIns.Add(new MissionCheckIn { UserId = user });

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using UavPms.OperationsService.Infrastructure.Persistence;
 namespace UavPms.OperationsService.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260913101314_HardenMf01Mf02V2Acceptance")]
+    partial class HardenMf01Mf02V2Acceptance
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -599,7 +602,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("TechnicianUserId")
+                    b.Property<Guid>("TechnicianUserId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -1363,10 +1366,6 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("IdempotencyKey")
-                        .IsUnique()
-                        .HasFilter("\"IdempotencyKey\" IS NOT NULL AND NOT \"IsDeleted\"");
-
                     b.HasIndex("InspectorId");
 
                     b.HasIndex("ManagerId");
@@ -1712,9 +1711,6 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
-                    b.Property<string>("IdempotencyKey")
-                        .HasColumnType("text");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -1759,10 +1755,6 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .HasColumnType("bigint");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("IdempotencyKey")
-                        .IsUnique()
-                        .HasFilter("\"IdempotencyKey\" IS NOT NULL AND NOT \"IsDeleted\"");
 
                     b.HasIndex("RegionId");
 
@@ -2761,7 +2753,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasOne("UavPms.OperationsService.Domain.Entities.User", "Technician")
                         .WithMany()
                         .HasForeignKey("TechnicianUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Drone");
 
