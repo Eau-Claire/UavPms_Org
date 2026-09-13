@@ -275,7 +275,8 @@ public class PreMissionAssessmentAssetConfiguration : IEntityTypeConfiguration<P
         builder.ToTable("PreMissionAssessmentAssets"); builder.HasKey(x => x.Id);
         builder.HasIndex(x => new { x.AssessmentId, x.AssetId }).IsUnique();
         builder.HasOne(x => x.Assessment).WithMany(x => x.Assets).HasForeignKey(x => x.AssessmentId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        // Asset data is owned outside this service; AssetId is an external reference.
+        builder.Ignore(x => x.Asset);
     }
 }
 
