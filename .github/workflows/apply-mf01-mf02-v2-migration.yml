@@ -55,12 +55,19 @@ jobs:
             trap restore_normal_mode EXIT
             if [ "$ALREADY_APPLIED" != t ]; then
               migration_mode_started=true
-              RUN_MIGRATIONS=true docker compose up -d --build --force-recreate operationsservice
+              # Force a fresh publish layer so the checked-out migration is guaranteed to be in the image.
+              RUN_MIGRATIONS=true docker compose build --no-cache operationsservice
+              RUN_MIGRATIONS=true docker compose up -d --force-recreate operationsservice
               for attempt in $(seq 1 45); do
                 docker inspect uav-operations-service --format '{{.State.Running}}' 2>/dev/null | grep -qx true && break
                 sleep 2
               done
-              APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';")"
+              APPLIED_AFTER_START=""
+              for attempt in $(seq 1 45); do
+                APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" | tr -d '[:space:]')"
+                [ "$APPLIED_AFTER_START" = "1" ] && break
+                sleep 2
+              done
               if [ "$APPLIED_AFTER_START" != "1" ]; then
                 echo "ERROR: migration was not recorded. OperationsService diagnostics:"
                 docker inspect uav-operations-service --format 'status={{.State.Status}} exit={{.State.ExitCode}} restart={{.RestartCount}} error={{.State.Error}}'
