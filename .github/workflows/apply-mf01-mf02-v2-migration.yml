@@ -1,0 +1,73 @@
+name: Apply MF01 MF02 v2 Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type APPLY_MF01_MF02_V2 to apply and verify the pre-mission assessment migration.
+        required: true
+        type: string
+
+concurrency:
+  group: production-operations-database-update
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply and verify MF01/MF02 v2 migration
+    if: ${{ inputs.confirmation == 'APPLY_MF01_MF02_V2' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Apply migration over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          envs: DEPLOY_PATH
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+
+            MIGRATION_ID="20260913044232_AddPreMissionAssessmentAndDroneTechnicalReadinessV2"
+            MIGRATION_FILE="Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations/${MIGRATION_ID}.cs"
+            [ -n "${DEPLOY_PATH:-}" ] || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
+            cd "$DEPLOY_PATH"
+            [ "$(git branch --show-current)" = main ] || { echo "ERROR: deployment checkout must be on main."; exit 1; }
+            if ! git diff --quiet || ! git diff --cached --quiet; then echo "ERROR: deployment checkout has changes."; exit 1; fi
+            [ -f "$MIGRATION_FILE" ] || { echo "ERROR: deploy the application commit containing $MIGRATION_FILE first."; exit 1; }
+            [ "$(docker inspect uavpms-db --format '{{.State.Status}}')" = running ] || { echo "ERROR: uavpms-db is not running."; exit 1; }
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc 'SELECT 1;' >/dev/null
+
+            GIS_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20260902033000_AddGisAssetSelection');")"
+            SCOPE_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20260906090000_AddUserGeographicScopes');")"
+            [ "$GIS_APPLIED" = t ] && [ "$SCOPE_APPLIED" = t ] || { echo "ERROR: required GIS/scope migrations are missing."; exit 1; }
+
+            ALREADY_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID');")"
+            migration_mode_started=false
+            restore_normal_mode() { if [ "$migration_mode_started" = true ]; then RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice || true; fi; }
+            trap restore_normal_mode EXIT
+            if [ "$ALREADY_APPLIED" != t ]; then
+              migration_mode_started=true
+              RUN_MIGRATIONS=true docker compose up -d --build --force-recreate operationsservice
+              for attempt in $(seq 1 45); do docker inspect uav-operations-service --format '{{.State.Running}}' 2>/dev/null | grep -qx true && break; sleep 2; done
+              docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" >/dev/null
+            fi
+            RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice
+            migration_mode_started=false
+
+            echo "========== V2 SCHEMA VERIFICATION =========="
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';"
+            for table in PreMissionAssessments PreMissionAssessmentAssets PreMissionAssessmentPersonnel PreMissionAssessmentDrones DroneTechnicalInspections DroneTechnicalMetrics; do
+              docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c "SELECT to_regclass('public.\"$table\"') AS table_name;" | grep -q "$table"
+            done
+            COLUMN_COUNT="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='Missions' AND column_name='PreMissionAssessmentId';")"
+            [ "$COLUMN_COUNT" = 1 ] || { echo "ERROR: Missions.PreMissionAssessmentId is missing."; exit 1; }
+            docker inspect uav-operations-service --format '{{.State.Running}}' | grep -qx true
+            echo "MF01/MF02 v2 migration verified successfully."

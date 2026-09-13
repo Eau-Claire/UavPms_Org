@@ -51,6 +51,12 @@ public class ApplicationDbContext : DbContext
     public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
     public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<PreMissionAssessment> PreMissionAssessments => Set<PreMissionAssessment>();
+    public DbSet<PreMissionAssessmentAsset> PreMissionAssessmentAssets => Set<PreMissionAssessmentAsset>();
+    public DbSet<PreMissionAssessmentPersonnel> PreMissionAssessmentPersonnel => Set<PreMissionAssessmentPersonnel>();
+    public DbSet<PreMissionAssessmentDrone> PreMissionAssessmentDrones => Set<PreMissionAssessmentDrone>();
+    public DbSet<DroneTechnicalInspection> DroneTechnicalInspections => Set<DroneTechnicalInspection>();
+    public DbSet<DroneTechnicalMetric> DroneTechnicalMetrics => Set<DroneTechnicalMetric>();
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
