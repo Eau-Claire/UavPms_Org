@@ -60,7 +60,8 @@ jobs:
                 docker inspect uav-operations-service --format '{{.State.Running}}' 2>/dev/null | grep -qx true && break
                 sleep 2
               done
-              if ! docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';" >/dev/null; then
+              APPLIED_AFTER_START="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_ID';")"
+              if [ "$APPLIED_AFTER_START" != "1" ]; then
                 echo "ERROR: migration was not recorded. OperationsService diagnostics:"
                 docker inspect uav-operations-service --format 'status={{.State.Status}} exit={{.State.ExitCode}} restart={{.RestartCount}} error={{.State.Error}}'
                 docker compose logs --tail=200 operationsservice
