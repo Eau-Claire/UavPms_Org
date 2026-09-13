@@ -1,10 +1,14 @@
 using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using UavPms.OperationsService.Infrastructure.Persistence;
 
 #nullable disable
 
 namespace UavPms.OperationsService.Infrastructure.Migrations;
 
+[DbContext(typeof(ApplicationDbContext))]
+[Migration("20260913065455_AddPreMissionAssessmentAndDroneTechnicalReadinessV2")]
 public partial class AddPreMissionAssessmentAndDroneTechnicalReadinessV2 : Migration
 {
     protected override void Up(MigrationBuilder m)
