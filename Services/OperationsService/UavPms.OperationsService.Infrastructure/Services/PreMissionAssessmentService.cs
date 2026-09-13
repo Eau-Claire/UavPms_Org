@@ -36,7 +36,7 @@ public sealed class PreMissionAssessmentService
         var assessment = await _db.PreMissionAssessments.Include(x => x.Assets).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("PreMissionAssessment", id);
         if (assessment.ManagerId != _current.UserId && !_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
         var activeUsers = await _db.Users.Where(x => x.IsEmailVerified && (x.Status == "Active" || x.Status == "Enabled")).ToListAsync(ct);
-        foreach (var user in activeUsers.Where(x => x.UserRoles.Any(r => r.Role != null && (r.Role.RoleName == UserRoles.Inspector || r.Role.RoleName == UserRoles.Pilot))))
+        foreach (var user in activeUsers.Where(x => x.UserRoles.Any(r => r.Role != null && r.Role.RoleName == UserRoles.Inspector)))
             if (!assessment.PersonnelCandidates.Any(x => x.UserId == user.Id)) assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = user.Id, IsEligible = true });
         var drones = await _db.Uavs.Include(x => x.TechnicalInspections).Where(x => x.OperationalStatus == DroneOperationalStatus.Available && !x.IsDeleted).ToListAsync(ct);
         foreach (var drone in drones)
