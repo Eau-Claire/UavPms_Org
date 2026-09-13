@@ -42,7 +42,13 @@ jobs:
 
             [ -n "${DEPLOY_PATH:-}" ] || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
             cd "$DEPLOY_PATH"
-            [ "$(git branch --show-current)" = main ] || { echo "ERROR: deployment checkout must be on main."; exit 1; }
+
+            echo "Fetching latest repository state from origin main..."
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            echo "Deployment checkout is at commit: $(git rev-parse --short HEAD)"
+
             DIRTY_FILES="$(git status --porcelain)"
             if [ -n "$DIRTY_FILES" ]; then
               UNSAFE_FILES="$(printf '%s\n' "$DIRTY_FILES" | grep -vE '^\?\? (analysis-get\.js|benchmark_ai\.py|health\.js|monitoring/)' || true)"
@@ -58,8 +64,8 @@ jobs:
               git status --short --untracked-files=no
               exit 1
             fi
-            [ -f "$BASE_FILE" ] || { echo "ERROR: deploy the application commit containing $BASE_FILE first."; exit 1; }
-            [ -f "$HARDEN_FILE" ] || { echo "ERROR: deploy the application commit containing $HARDEN_FILE first."; exit 1; }
+            [ -f "$BASE_FILE" ] || { echo "ERROR: deployed commit does not contain $BASE_FILE."; exit 1; }
+            [ -f "$HARDEN_FILE" ] || { echo "ERROR: deployed commit does not contain $HARDEN_FILE."; exit 1; }
 
             migration_mode_started=false
             restore_normal_mode() {
@@ -83,8 +89,10 @@ jobs:
             HARDEN_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$MIGRATION_V2_HARDEN');")"
             if [ "$HARDEN_APPLIED" != t ]; then
               echo "Applying pending MF01/MF02 v2 migrations..."
+              echo "Building OperationsService image without cache..."
+              docker compose build --no-cache operationsservice
               migration_mode_started=true
-              RUN_MIGRATIONS=true docker compose up -d --build --force-recreate operationsservice
+              RUN_MIGRATIONS=true docker compose up -d --force-recreate operationsservice
 
               APPLIED_AFTER_START=false
               for attempt in $(seq 1 60); do
