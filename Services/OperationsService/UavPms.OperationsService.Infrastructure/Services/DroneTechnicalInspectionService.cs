@@ -152,7 +152,8 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 
         var isAllowed = _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
                         _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) ||
-                        _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase);
+                        _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase) ||
+                        _current.Roles.Contains("Technician", StringComparer.OrdinalIgnoreCase);
 
         if (!isAllowed)
             throw new ForbiddenException("TECHNICIAN_OR_MANAGER_ROLE_REQUIRED");

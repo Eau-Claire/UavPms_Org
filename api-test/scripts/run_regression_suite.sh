@@ -3,8 +3,8 @@ set -euo pipefail
 
 FILTER="${1:-}"
 
-echo "========== 2. STARTING API-TEST AND GATEWAY CONTAINERS =========="
-docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build gateway api-test
+echo "========== 2. STARTING API-TEST, GATEWAY AND OPERATIONS CONTAINERS =========="
+docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build gateway operationsservice api-test
 
 echo "Waiting for api-test service to become healthy..."
 for attempt in $(seq 1 25); do

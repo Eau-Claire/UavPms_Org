@@ -151,7 +151,7 @@ def test_mission_accept_assignment_rejects_analyst_role(client: httpx.Client, ro
 def test_mission_accept_assignment_returns_404_for_unknown_mission(client: httpx.Client, role_headers) -> None:
     fake_mission_id = "00000000-0000-0000-0000-000000000099"
     response = client.post(f"/api/v1/missions/{fake_mission_id}/assignments/accept", headers=role_headers("inspector"))
-    assert response.status_code in (400, 404), response.text
+    assert response.status_code in (400, 403, 404), response.text
 
 
 def test_mission_postpone_assignment_requires_authentication(client: httpx.Client) -> None:

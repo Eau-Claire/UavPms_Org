@@ -71,7 +71,7 @@ def test_drone_technical_inspection_submit_validates_payload(client: httpx.Clien
             ],
             "notes": "Automated regression inspection",
         },
-        headers=role_headers("technician"),
+        headers=role_headers("manager"),
     )
     # The drone does not exist, so it should cleanly return 404 (DRONE_NOT_FOUND) or 400
     assert response.status_code in (400, 404), response.text
@@ -93,7 +93,7 @@ def test_drone_technical_inspection_rejects_multiple_value_types(client: httpx.C
                 }
             ],
         },
-        headers=role_headers("technician"),
+        headers=role_headers("manager"),
     )
     assert response.status_code in (400, 404, 422), response.text
 

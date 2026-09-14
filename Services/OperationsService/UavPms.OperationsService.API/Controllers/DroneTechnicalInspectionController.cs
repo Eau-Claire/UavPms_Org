@@ -22,7 +22,7 @@ public sealed class DroneTechnicalInspectionController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = $"{UserRoles.MaintenanceTechnician},{UserRoles.Manager},{UserRoles.SystemAdmin}")]
+    [Authorize(Roles = $"{UserRoles.MaintenanceTechnician},Technician,{UserRoles.Manager},{UserRoles.SystemAdmin}")]
     public async Task<IActionResult> SubmitInspection([FromBody] DroneInspectionSubmitRequest request, CancellationToken ct)
     {
         var inspection = await _inspectionService.SubmitInspectionAsync(request, ct);

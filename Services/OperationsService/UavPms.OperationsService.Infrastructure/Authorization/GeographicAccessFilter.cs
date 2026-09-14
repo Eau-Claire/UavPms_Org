@@ -23,12 +23,29 @@ public sealed class GeographicAccessFilter
         _currentUser = currentUser;
     }
 
+    private bool IsManagerWithoutRestrictions(Guid userId)
+    {
+        if (_currentUser?.IsAuthenticated != true || !_currentUser.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))
+            return false;
+
+        var hasScopes = _context.UserGeographicScopes.Any(s => s.UserId == userId);
+        if (hasScopes) return false;
+
+        var hasAssignments = _context.MissionTargets.Any(t => (t.Mission!.InspectorId == userId || t.Mission.ManagerId == userId)
+                && t.Mission.Status != MissionStatus.Completed && t.Mission.Status != MissionStatus.Cancelled)
+            || _context.MaintenanceTickets.Any(t => (t.TechnicianId == userId || t.ManagerId == userId)
+                && t.Status != TicketStatus.Resolved && t.Status != TicketStatus.Closed);
+
+        return !hasAssignments;
+    }
+
     public IQueryable<Asset> ApplyToAssets(IQueryable<Asset> assets)
     {
         if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return assets;
         if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return assets.Where(_ => false);
 
         var userId = _currentUser.UserId;
+        if (IsManagerWithoutRestrictions(userId)) return assets;
         var scopes = _context.UserGeographicScopes.AsNoTracking().Where(s => s.UserId == userId);
         var missionAssetIds = _context.MissionTargets.AsNoTracking()
             .Where(t => (t.Mission!.InspectorId == userId || t.Mission.ManagerId == userId)
@@ -61,6 +78,7 @@ public sealed class GeographicAccessFilter
         if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return lines.Where(_ => false);
 
         var userId = _currentUser.UserId;
+        if (IsManagerWithoutRestrictions(userId)) return lines;
         var scopes = _context.UserGeographicScopes.AsNoTracking().Where(s => s.UserId == userId);
         var assignedAssetIds = ApplyToAssets(_context.Assets.AsNoTracking()).Select(a => a.Id);
         return lines.Where(line => _context.Assets.Any(a => assignedAssetIds.Contains(a.Id) && (a.PowerLineId == line.Id || a.Tower!.LineAssetId == line.Id))
@@ -75,6 +93,7 @@ public sealed class GeographicAccessFilter
         if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return towers;
         if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return towers.Where(_ => false);
         var userId = _currentUser.UserId;
+        if (IsManagerWithoutRestrictions(userId)) return towers;
         var scopes = _context.UserGeographicScopes.Where(s => s.UserId == userId);
         var allowedTowerIds = ApplyToAssets(_context.Assets).Select(a => a.TowerId);
         return towers.Where(tower => allowedTowerIds.Contains(tower.Id)
@@ -87,24 +106,30 @@ public sealed class GeographicAccessFilter
     public IQueryable<Substation> ApplyToSubstations(IQueryable<Substation> substations)
     {
         if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return substations;
+        if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return substations.Where(_ => false);
+        var userId = _currentUser.UserId;
+        if (IsManagerWithoutRestrictions(userId)) return substations;
         var lineSubstations = ApplyToLines(_context.TransmissionLines).Select(l => l.SubstationAssetId);
-        var userId = _currentUser?.IsAuthenticated == true ? _currentUser.UserId : Guid.Empty;
         return substations.Where(s => lineSubstations.Contains(s.Id) || _context.UserGeographicScopes.Any(scope => scope.UserId == userId && userId != Guid.Empty && (scope.SubstationId == s.Id || scope.RegionId == s.RegionAssetId)));
     }
 
     public IQueryable<Region> ApplyToRegions(IQueryable<Region> regions)
     {
         if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return regions;
+        if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return regions.Where(_ => false);
+        var userId = _currentUser.UserId;
+        if (IsManagerWithoutRestrictions(userId)) return regions;
         var regionIds = ApplyToSubstations(_context.Substations).Select(s => s.RegionAssetId);
-        var userId = _currentUser?.IsAuthenticated == true ? _currentUser.UserId : Guid.Empty;
         return regions.Where(r => regionIds.Contains(r.Id) || _context.UserGeographicScopes.Any(scope => scope.UserId == userId && userId != Guid.Empty && scope.RegionId == r.Id));
     }
     public IQueryable<ManagementUnit> ApplyToManagementUnits(IQueryable<ManagementUnit> units)
     {
         if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return units;
+        if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return units.Where(_ => false);
+        var userId = _currentUser.UserId;
+        if (IsManagerWithoutRestrictions(userId)) return units;
         var unitIds = ApplyToLines(_context.TransmissionLines).Select(l => l.ManagementUnitId);
         var assetUnitIds = ApplyToAssets(_context.Assets).Select(a => a.ManagementUnitId);
-        var userId = _currentUser?.IsAuthenticated == true ? _currentUser.UserId : Guid.Empty;
         return units.Where(u => unitIds.Contains(u.Id) || assetUnitIds.Contains(u.Id)
             || _context.UserGeographicScopes.Any(s => s.UserId == userId && userId != Guid.Empty && s.ManagementUnitId == u.Id));
     }

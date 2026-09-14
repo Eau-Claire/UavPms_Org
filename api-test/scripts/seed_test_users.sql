@@ -18,7 +18,8 @@ WITH seed_roles AS (
     ('Manager', 'Manager role for operational regression tests.'),
     ('Inspector', 'Inspector role for mission and inspection regression tests.'),
     ('Analyst', 'Analyst role for monitoring and AI regression tests.'),
-    ('Technician', 'Technician role for maintenance regression tests.')
+    ('Technician', 'Technician role for maintenance regression tests.'),
+    ('MaintenanceTechnician', 'Maintenance technician role for maintenance regression tests.')
   ) AS value("RoleName", "Description")
 ),
 updated_roles AS (
@@ -146,7 +147,7 @@ inserted_roles AS (
     r."Id",
     NOW() AT TIME ZONE 'UTC'
   FROM selected_users su
-  JOIN "Roles" r ON r."RoleName" = su."RoleName"
+  JOIN "Roles" r ON r."RoleName" = su."RoleName" OR (su."RoleName" = 'Technician' AND r."RoleName" = 'MaintenanceTechnician')
   WHERE NOT EXISTS (
     SELECT 1
     FROM "UserRoles" ur

@@ -270,7 +270,7 @@ public class AssetRepository : GenericRepository<Asset>, IAssetRepository
 
 }
 
-internal static class AssetSortingExtensions
+public static class AssetSortingExtensions
 {
     public static IQueryable<Asset> ApplyAssetSort(
         this IQueryable<Asset> query,

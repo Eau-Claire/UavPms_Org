@@ -168,8 +168,10 @@ def test_pre_mission_assessment_v2_create_mission_not_found(client: httpx.Client
     payload = {
         "assessmentId": fake_id,
         "title": "Regression Mission Creation",
-        "inspectorId": str(uuid.uuid4()),
-        "droneId": str(uuid.uuid4()),
+        "droneIds": [str(uuid.uuid4())],
+        "personnel": [
+            {"userId": str(uuid.uuid4()), "role": "INSPECTOR", "isRequired": True}
+        ],
         "idempotencyKey": f"test-mission-idem-{uuid.uuid4()}",
     }
     response = client.post(f"{PATH_V2}/{fake_id}/create-mission", json=payload, headers=role_headers("manager"))
