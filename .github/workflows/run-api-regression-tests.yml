@@ -45,43 +45,5 @@ jobs:
             git reset --hard origin/main
             echo "Server checkout is at: $(git rev-parse --short HEAD)"
 
-            echo "========== 2. STARTING API-TEST CONTAINER =========="
-            docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build api-test
-
-            echo "Waiting for api-test service to become healthy..."
-            for attempt in $(seq 1 20); do
-              if curl -sf http://localhost:8081/api/health >/dev/null 2>&1; then
-                echo "api-test is healthy on attempt $attempt."
-                break
-              fi
-              sleep 2
-            done
-
-            echo "========== 3. RUNNING REGRESSION TESTS =========="
-            set +e
-            case "${TEST_FILTER:-}" in
-              ""|*[Oo][Pp][Tt][Ii][Oo][Nn][Aa][Ll]*|*[Nn][Oo][Nn][Ee]*|*[Aa][Ll][Ll]*|*[Nn][Uu][Ll][Ll]*)
-                echo "Running full test suite..."
-                docker exec uav-api-test pytest -v
-                TEST_EXIT_CODE=$?
-                ;;
-              *)
-                echo "Running filtered tests (-k \"$TEST_FILTER\")..."
-                docker exec uav-api-test pytest -v -k "$TEST_FILTER"
-                TEST_EXIT_CODE=$?
-                ;;
-            esac
-            set -e
-
-            echo "========== 4. LATEST TEST RUN STATUS =========="
-            if command -v jq >/dev/null 2>&1; then
-              curl -s http://localhost:8081/api/results | jq '.summary // .' || true
-            else
-              curl -s http://localhost:8081/api/results || true
-            fi
-            echo ""
-
-            if [ "$TEST_EXIT_CODE" -ne 0 ]; then
-              echo "Tests finished with exit code $TEST_EXIT_CODE"
-              exit "$TEST_EXIT_CODE"
-            fi
+            chmod +x api-test/scripts/run_regression_suite.sh
+            api-test/scripts/run_regression_suite.sh "${TEST_FILTER:-}"
