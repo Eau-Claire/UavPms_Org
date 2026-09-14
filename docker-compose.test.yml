@@ -23,6 +23,7 @@ services:
       # Used by deterministic API fixtures to seed and verify PostGIS/MissionTarget data.
       DB_CONNECTION: ${DB_CONNECTION:-}
       ALLOW_API_TEST_DB_SEED: ${ALLOW_API_TEST_DB_SEED:-false}
+      REDIS_CONNECTION: ${REDIS_CONNECTION:-redis:6379}
     volumes:
       - ./api-test/data:/app/data:ro
       - api-test-reports:/app/reports
