@@ -99,13 +99,15 @@ def login_for_role(client: httpx.Client, role_data: dict[str, Any]) -> str:
     )
 
     if not token and (body.get("message") == "OTP required" or "otp" in str(body).lower()):
-        token = _verify_otp_for_login(client, email)
+        token, device_trust_token = _verify_otp_for_login(client, email)
+        if device_trust_token:
+            role_data["deviceTrustToken"] = device_trust_token
 
     assert token, f"POST /api/v1/auth/login did not return an access token: {body}"
     return token
 
 
-def _verify_otp_for_login(client: httpx.Client, email: str) -> str | None:
+def _verify_otp_for_login(client: httpx.Client, email: str) -> tuple[str | None, str | None]:
     test_otp = "000000"
     _try_set_redis_otp(email, test_otp)
 
@@ -116,14 +118,22 @@ def _verify_otp_for_login(client: httpx.Client, email: str) -> str | None:
     if verify_resp.status_code == 200:
         data = verify_resp.json()
         auth_res = data.get("data", {}).get("authResult", {})
-        return (
+        token = (
             data.get("token")
             or data.get("accessToken")
             or data.get("data", {}).get("token")
             or data.get("data", {}).get("accessToken")
             or (auth_res.get("accessToken") if isinstance(auth_res, dict) else None)
         )
-    return None
+        device_token = (
+            (auth_res.get("deviceTrustToken") if isinstance(auth_res, dict) else None)
+            or data.get("deviceTrustToken")
+            or data.get("data", {}).get("deviceTrustToken")
+        )
+        return token, device_token
+    else:
+        print(f"[conftest] OTP verify returned {verify_resp.status_code}: {verify_resp.text}")
+    return None, None
 
 
 def _try_set_redis_otp(email: str, otp_code: str) -> None:
@@ -133,10 +143,12 @@ def _try_set_redis_otp(email: str, otp_code: str) -> None:
 
     redis_conns = [
         os.getenv("REDIS_CONNECTION"),
+        os.getenv("Redis__ConnectionString"),
         "redis:6379",
         "uav-redis:6379",
         "localhost:6379",
     ]
+    default_pwd = os.getenv("REDIS_PASSWORD") or os.getenv("Redis__Password") or None
     key = f"otp:login:{email.strip().lower()}"
     attempts_key = f"{key}:attempts"
     hashed = base64.b64encode(hashlib.sha256(otp_code.encode("utf-8")).digest()).decode("ascii")
@@ -145,7 +157,13 @@ def _try_set_redis_otp(email: str, otp_code: str) -> None:
         if not conn_str:
             continue
         try:
+            pwd = default_pwd
             endpoint = conn_str.split(",", 1)[0]
+            if "password=" in conn_str:
+                for part in conn_str.split(","):
+                    if part.strip().startswith("password="):
+                        pwd = part.split("=", 1)[1].strip()
+                        break
             if ":" in endpoint:
                 host, port_s = endpoint.rsplit(":", 1)
                 port = int(port_s)
@@ -154,14 +172,16 @@ def _try_set_redis_otp(email: str, otp_code: str) -> None:
             r = redis.Redis(
                 host=host,
                 port=port,
-                password=os.getenv("REDIS_PASSWORD") or None,
+                password=pwd,
                 decode_responses=True,
                 socket_timeout=2,
             )
             r.setex(key, 180, hashed)
             r.delete(attempts_key)
+            print(f"[conftest] Set OTP in Redis for {email} via {host}:{port}")
             return
-        except Exception:
+        except Exception as ex:
+            print(f"[conftest] Failed to connect to Redis {conn_str}: {ex}")
             continue
 
 

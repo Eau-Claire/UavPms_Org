@@ -349,8 +349,6 @@ public sealed class PreMissionAssessmentService
                 return existingMission;
         }
 
-        await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(ct) : null;
-
         var assessment = await _db.PreMissionAssessments
             .Include(x => x.Assets)
             .Include(x => x.PersonnelCandidates)
@@ -422,6 +420,8 @@ public sealed class PreMissionAssessmentService
             ?? throw new NotFoundException("Drone", primaryDroneId);
 
         var primaryInspectorId = request.Personnel.First().UserId;
+
+        await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(ct) : null;
 
         // Gap #11: Mission starts at PendingAcceptance
         var mission = new Mission

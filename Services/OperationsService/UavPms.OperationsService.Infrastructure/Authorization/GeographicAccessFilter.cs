@@ -31,12 +31,12 @@ public sealed class GeographicAccessFilter
         var hasScopes = _context.UserGeographicScopes.Any(s => s.UserId == userId);
         if (hasScopes) return false;
 
-        var hasAssignments = _context.MissionTargets.Any(t => (t.Mission!.InspectorId == userId || t.Mission.ManagerId == userId)
+        var hasFieldAssignment = _context.MissionTargets.Any(t => t.Mission!.InspectorId == userId
                 && t.Mission.Status != MissionStatus.Completed && t.Mission.Status != MissionStatus.Cancelled)
-            || _context.MaintenanceTickets.Any(t => (t.TechnicianId == userId || t.ManagerId == userId)
+            || _context.MaintenanceTickets.Any(t => t.TechnicianId == userId
                 && t.Status != TicketStatus.Resolved && t.Status != TicketStatus.Closed);
 
-        return !hasAssignments;
+        return !hasFieldAssignment;
     }
 
     public IQueryable<Asset> ApplyToAssets(IQueryable<Asset> assets)
@@ -122,6 +122,7 @@ public sealed class GeographicAccessFilter
         var regionIds = ApplyToSubstations(_context.Substations).Select(s => s.RegionAssetId);
         return regions.Where(r => regionIds.Contains(r.Id) || _context.UserGeographicScopes.Any(scope => scope.UserId == userId && userId != Guid.Empty && scope.RegionId == r.Id));
     }
+
     public IQueryable<ManagementUnit> ApplyToManagementUnits(IQueryable<ManagementUnit> units)
     {
         if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return units;
