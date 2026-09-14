@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       test_filter:
-        description: Pytest -k filter expression (optional, e.g. "pre_mission" or "drone_technical")
+        description: 'Filter keyword (e.g. pre_mission, drone_technical, mission). Leave BLANK to run all tests.'
         required: false
         default: ""
         type: string
@@ -58,13 +58,28 @@ jobs:
             done
 
             echo "========== 3. RUNNING REGRESSION TESTS =========="
-            if [ -n "${TEST_FILTER:-}" ]; then
-              echo "Running filtered tests (-k $TEST_FILTER)..."
-              docker exec uav-api-test pytest -v -k "$TEST_FILTER"
+            RAW_FILTER="${TEST_FILTER:-}"
+            CLEAN_FILTER="$(echo "$RAW_FILTER" | xargs || echo "$RAW_FILTER")"
+            LOWER_FILTER="$(echo "$CLEAN_FILTER" | tr '[:upper:]' '[:lower:]')"
+
+            TEST_EXIT_CODE=0
+            if [ -n "$CLEAN_FILTER" ] && [ "$LOWER_FILTER" != "optional" ] && [ "$LOWER_FILTER" != "none" ] && [ "$LOWER_FILTER" != "all" ] && [ "$LOWER_FILTER" != "null" ]; then
+              echo "Running filtered tests (-k \"$CLEAN_FILTER\")..."
+              docker exec uav-api-test pytest -v -k "$CLEAN_FILTER" || TEST_EXIT_CODE=$?
             else
-              echo "Running full test suite..."
-              docker exec uav-api-test pytest -v
+              echo "Running full test suite (all 69 test cases)..."
+              docker exec uav-api-test pytest -v || TEST_EXIT_CODE=$?
             fi
 
             echo "========== 4. LATEST TEST RUN STATUS =========="
-            curl -s http://localhost:8081/api/results | jq '.summary // .' || true
+            if command -v jq >/dev/null 2>&1; then
+              curl -s http://localhost:8081/api/results | jq '.summary // .' || true
+            else
+              curl -s http://localhost:8081/api/results || true
+            fi
+            echo ""
+
+            if [ "$TEST_EXIT_CODE" -ne 0 ]; then
+              echo "Tests finished with exit code $TEST_EXIT_CODE"
+              exit "$TEST_EXIT_CODE"
+            fi
