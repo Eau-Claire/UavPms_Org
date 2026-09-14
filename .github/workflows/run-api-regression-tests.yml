@@ -58,18 +58,20 @@ jobs:
             done
 
             echo "========== 3. RUNNING REGRESSION TESTS =========="
-            RAW_FILTER="${TEST_FILTER:-}"
-            CLEAN_FILTER="$(echo "$RAW_FILTER" | xargs || echo "$RAW_FILTER")"
-            LOWER_FILTER="$(echo "$CLEAN_FILTER" | tr '[:upper:]' '[:lower:]')"
-
-            TEST_EXIT_CODE=0
-            if [ -n "$CLEAN_FILTER" ] && [ "$LOWER_FILTER" != "optional" ] && [ "$LOWER_FILTER" != "none" ] && [ "$LOWER_FILTER" != "all" ] && [ "$LOWER_FILTER" != "null" ]; then
-              echo "Running filtered tests (-k \"$CLEAN_FILTER\")..."
-              docker exec uav-api-test pytest -v -k "$CLEAN_FILTER" || TEST_EXIT_CODE=$?
-            else
-              echo "Running full test suite (all 69 test cases)..."
-              docker exec uav-api-test pytest -v || TEST_EXIT_CODE=$?
-            fi
+            set +e
+            case "${TEST_FILTER:-}" in
+              ""|*[Oo][Pp][Tt][Ii][Oo][Nn][Aa][Ll]*|*[Nn][Oo][Nn][Ee]*|*[Aa][Ll][Ll]*|*[Nn][Uu][Ll][Ll]*)
+                echo "Running full test suite..."
+                docker exec uav-api-test pytest -v
+                TEST_EXIT_CODE=$?
+                ;;
+              *)
+                echo "Running filtered tests (-k \"$TEST_FILTER\")..."
+                docker exec uav-api-test pytest -v -k "$TEST_FILTER"
+                TEST_EXIT_CODE=$?
+                ;;
+            esac
+            set -e
 
             echo "========== 4. LATEST TEST RUN STATUS =========="
             if command -v jq >/dev/null 2>&1; then
