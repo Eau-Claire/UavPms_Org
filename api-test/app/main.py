@@ -34,7 +34,7 @@ async def _auto_run_once() -> None:
         pass
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 async def health() -> dict:
     return {
         "status": "healthy",
@@ -59,7 +59,7 @@ async def history(limit: int = 25) -> list[dict]:
 @app.post("/api/run", status_code=202)
 async def run_tests() -> dict:
     if runner.is_running:
-        raise HTTPException(status_code=409, detail="test run already in progress")
+        raise HTTPException(status_code=409, detail="A test run is already in progress")
 
     async def run_background() -> None:
         await runner.run(reason="manual")
@@ -68,7 +68,7 @@ async def run_tests() -> dict:
     return {"status": "accepted", "message": "test run started"}
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def dashboard() -> str:
     return """
 <!doctype html>
