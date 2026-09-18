@@ -97,6 +97,7 @@ public static class DependencyInjection
         services.AddScoped<PreMissionAssessmentService>();
         services.AddScoped<IDroneTechnicalInspectionService, DroneTechnicalInspectionService>();
         services.AddScoped<IUavRepository, UavRepository>();
+        services.AddScoped<IReportRepository, ReportRepository>();
 
         // Đăng ký Notification Repository
         services.AddScoped<INotificationRepository, NotificationRepository>();
