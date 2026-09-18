@@ -24,6 +24,8 @@ public interface IReportRepository : IGenericRepository<Report>
 
     Task<string> GetNextReportCodeAsync(int year);
 
+    Task<int> CountAnomaliesByMissionIdsAsync(IEnumerable<Guid> missionIds);
+
     Task<(int Total, Dictionary<string, int> ByType, Dictionary<string, int> ByStatus)> GetReportStatisticsAsync(
         DateTimeOffset? from = null,
         DateTimeOffset? to = null

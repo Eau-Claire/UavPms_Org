@@ -82,9 +82,11 @@ public class CreateReportCommandHandler : IRequestHandler<CreateReportCommand, R
             CreatedBy = _currentUserServices.UserId != Guid.Empty ? _currentUserServices.UserId : null
         };
 
+        int defectCount = 0;
         if (request.MissionIds != null && request.MissionIds.Any())
         {
             var distinctMissionIds = request.MissionIds.Distinct().ToList();
+            defectCount = await _reportRepository.CountAnomaliesByMissionIdsAsync(distinctMissionIds);
             foreach (var missionId in distinctMissionIds)
             {
                 var mission = await _missionRepository.GetByIdAsync(missionId);
@@ -99,6 +101,8 @@ public class CreateReportCommandHandler : IRequestHandler<CreateReportCommand, R
                 }
             }
         }
+
+        report.DefectCount = defectCount;
 
         await _reportRepository.AddAsync(report);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

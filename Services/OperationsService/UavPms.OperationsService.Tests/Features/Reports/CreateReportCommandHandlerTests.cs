@@ -195,6 +195,42 @@ public class CreateReportCommandHandlerTests
         capturedReport.ReportMissions.First().MissionId.Should().Be(validMissionId);
     }
 
+    [Fact]
+    public async Task CreateReport_ShouldCalculateDefectCountAutomatically_WhenMissionsProvided()
+    {
+        // Arrange
+        var missionId = Guid.NewGuid();
+        var mission = new Mission { Id = missionId, MissionCode = "MS-001", Title = "Mission 1", IsDeleted = false };
+        _missionRepositoryMock.Setup(m => m.GetByIdAsync(missionId, true)).ReturnsAsync(mission);
+        _reportRepositoryMock.Setup(r => r.GetNextReportCodeAsync(It.IsAny<int>())).ReturnsAsync("BC-2026-0010");
+        _reportRepositoryMock.Setup(r => r.CountAnomaliesByMissionIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(7);
+
+        Report? capturedReport = null;
+        _reportRepositoryMock.Setup(r => r.AddAsync(It.IsAny<Report>()))
+            .Callback<Report>(r => capturedReport = r)
+            .ReturnsAsync((Report r) => r);
+
+        var handler = new CreateReportCommandHandler(
+            _unitOfWorkMock.Object,
+            _reportRepositoryMock.Object,
+            _transmissionLineRepositoryMock.Object,
+            _substationRepositoryMock.Object,
+            _missionRepositoryMock.Object,
+            _currentUserServicesMock.Object
+        );
+
+        var command = new CreateReportCommand("Báo cáo khuyết tật", "defect", null, null, new List<Guid> { missionId }, null, null, null);
+
+        // Act
+        await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        capturedReport.Should().NotBeNull();
+        capturedReport!.DefectCount.Should().Be(7);
+        _reportRepositoryMock.Verify(r => r.CountAnomaliesByMissionIdsAsync(It.Is<IEnumerable<Guid>>(ids => ids.Contains(missionId))), Times.Once);
+    }
+
     [Theory]
     [InlineData("", "defect", false)]
     [InlineData("   ", "defect", false)]

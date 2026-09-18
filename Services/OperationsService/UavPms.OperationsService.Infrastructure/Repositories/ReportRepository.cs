@@ -118,6 +118,19 @@ public class ReportRepository : GenericRepository<Report>, IReportRepository
         return $"{prefix}{nextSeq:D4}";
     }
 
+    public async Task<int> CountAnomaliesByMissionIdsAsync(IEnumerable<Guid> missionIds)
+    {
+        var ids = missionIds?.Distinct().ToList();
+        if (ids == null || !ids.Any())
+        {
+            return 0;
+        }
+
+        return await _context.DetectedAnomalies
+            .Where(a => !a.IsDeleted && a.Media != null && ids.Contains(a.Media.MissionId))
+            .CountAsync();
+    }
+
     public async Task<(int Total, Dictionary<string, int> ByType, Dictionary<string, int> ByStatus)> GetReportStatisticsAsync(
         DateTimeOffset? from = null,
         DateTimeOffset? to = null)

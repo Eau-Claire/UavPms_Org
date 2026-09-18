@@ -71,6 +71,38 @@ public class UpdateAndDeleteReportCommandHandlerTests
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task UpdateReport_ShouldRecalculateDefectCount_WhenMissionsUpdated()
+    {
+        // Arrange
+        var reportId = Guid.NewGuid();
+        var missionId = Guid.NewGuid();
+        var mission = new Mission { Id = missionId, MissionCode = "MS-002", Title = "Mission 2", IsDeleted = false };
+        var report = new Report { Id = reportId, Title = "Title", Status = ReportStatus.Draft, DefectCount = 2 };
+        _reportRepositoryMock.Setup(r => r.GetReportByIdWithDetailsAsync(reportId)).ReturnsAsync(report);
+        _missionRepositoryMock.Setup(m => m.GetByIdAsync(missionId, true)).ReturnsAsync(mission);
+        _reportRepositoryMock.Setup(r => r.CountAnomaliesByMissionIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+            .ReturnsAsync(9);
+
+        var handler = new UpdateReportCommandHandler(
+            _unitOfWorkMock.Object,
+            _reportRepositoryMock.Object,
+            _transmissionLineRepositoryMock.Object,
+            _substationRepositoryMock.Object,
+            _missionRepositoryMock.Object,
+            _currentUserServicesMock.Object
+        );
+
+        var command = new UpdateReportCommand(reportId, "New Title", null, null, null, new List<Guid> { missionId }, null, null);
+
+        // Act
+        await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        report.DefectCount.Should().Be(9);
+        _reportRepositoryMock.Verify(r => r.CountAnomaliesByMissionIdsAsync(It.Is<IEnumerable<Guid>>(ids => ids.Contains(missionId))), Times.Once);
+    }
+
     [Theory]
     [InlineData(ReportStatus.Pending)]
     [InlineData(ReportStatus.Approved)]

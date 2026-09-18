@@ -82,6 +82,7 @@ public class UpdateReportCommandHandler : IRequestHandler<UpdateReportCommand, R
         {
             report.ReportMissions.Clear();
             var distinctMissionIds = request.MissionIds.Distinct().ToList();
+            report.DefectCount = await _reportRepository.CountAnomaliesByMissionIdsAsync(distinctMissionIds);
             foreach (var missionId in distinctMissionIds)
             {
                 var mission = await _missionRepository.GetByIdAsync(missionId);
