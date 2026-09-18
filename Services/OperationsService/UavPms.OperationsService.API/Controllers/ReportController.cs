@@ -8,9 +8,11 @@ using Microsoft.AspNetCore.Mvc;
 using UavPms.OperationsService.Application.Features.Reports.Commands.ApproveReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.CreateReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.DeleteReport;
+using UavPms.OperationsService.Application.Features.Reports.Commands.GenerateReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.RejectReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.SubmitReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.UpdateReport;
+using UavPms.OperationsService.Application.Features.Reports.Queries.DownloadReport;
 using UavPms.OperationsService.Application.Features.Reports.Queries.GetReportById;
 using UavPms.OperationsService.Application.Features.Reports.Queries.GetReportsPaged;
 using UavPms.OperationsService.Application.Features.Reports.Queries.GetReportStatistics;
@@ -183,30 +185,21 @@ public class ReportController : ControllerBase
     [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     public async Task<IActionResult> Generate(Guid id, [FromQuery] string format = "pdf")
     {
-        var query = new GetReportByIdQuery(id);
-        var report = await _mediator.Send(query);
-        return Ok(new ApiResponse(true, $"Yêu cầu tạo tệp báo cáo định dạng {format.ToUpperInvariant()} đã được ghi nhận.", new { id, format }));
+        var command = new GenerateReportCommand(id, format);
+        var result = await _mediator.Send(command);
+        return Ok(new ApiResponse(true, $"Tạo tệp báo cáo định dạng {format.ToUpperInvariant()} thành công.", result));
     }
 
     /// <summary>
     /// Tải tệp báo cáo đã xuất bản.
     /// </summary>
     [HttpGet("{id:guid}/download")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     public async Task<IActionResult> Download(Guid id, [FromQuery] string format = "pdf")
     {
-        var query = new GetReportByIdQuery(id);
-        var report = await _mediator.Send(query);
-
-        string? downloadUrl = string.Equals(format, "excel", StringComparison.OrdinalIgnoreCase)
-            ? report.ExcelFileUrl
-            : report.PdfFileUrl;
-
-        if (string.IsNullOrEmpty(downloadUrl))
-        {
-            return NotFound(new ApiResponse(false, $"Tệp báo cáo định dạng {format.ToUpperInvariant()} chưa được tạo.", null, null, "FILE_NOT_GENERATED"));
-        }
-
-        return Ok(new ApiResponse(true, "Lấy thông tin tệp tải về thành công.", new { downloadUrl, fileName = $"{report.Code}.{format}" }));
+        var query = new DownloadReportQuery(id, format);
+        var result = await _mediator.Send(query);
+        return File(result.FileStream, result.ContentType, result.FileName);
     }
 }
 
