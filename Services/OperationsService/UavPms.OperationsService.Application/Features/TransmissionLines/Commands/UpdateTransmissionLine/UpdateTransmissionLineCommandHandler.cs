@@ -53,6 +53,14 @@ public class UpdateTransmissionLineCommandHandler : IRequestHandler<UpdateTransm
             }
         }
 
+        if (request.Code != null)
+        {
+            line.Code = request.Code;
+        }
+        if (request.VoltageLevel != null)
+        {
+            line.VoltageLevel = request.VoltageLevel;
+        }
         line.SubstationAssetId = request.SubstationAssetId;
         line.LineName = request.LineName;
         line.IsCriticalEdge = request.IsCriticalEdge;
@@ -66,6 +74,8 @@ public class UpdateTransmissionLineCommandHandler : IRequestHandler<UpdateTransm
             line.Id,
             line.SubstationAssetId,
             line.LineName,
+            line.Code,
+            line.VoltageLevel,
             line.IsCriticalEdge,
             line.Geom?.AsText()
         );
