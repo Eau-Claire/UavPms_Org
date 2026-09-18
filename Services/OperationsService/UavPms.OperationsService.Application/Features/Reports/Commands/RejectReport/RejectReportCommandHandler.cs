@@ -8,6 +8,8 @@ using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Reports.DTOs;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
+using UavPms.OperationsService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.Application.Features.Reports.Commands.RejectReport;
 
@@ -15,11 +17,16 @@ public class RejectReportCommandHandler : IRequestHandler<RejectReportCommand, R
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IReportRepository _reportRepository;
+    private readonly ICurrentUserServices _currentUserServices;
 
-    public RejectReportCommandHandler(IUnitOfWork unitOfWork, IReportRepository reportRepository)
+    public RejectReportCommandHandler(
+        IUnitOfWork unitOfWork,
+        IReportRepository reportRepository,
+        ICurrentUserServices currentUserServices)
     {
         _unitOfWork = unitOfWork;
         _reportRepository = reportRepository;
+        _currentUserServices = currentUserServices;
     }
 
     public async Task<ReportDetailDto> Handle(RejectReportCommand request, CancellationToken cancellationToken)
@@ -33,6 +40,23 @@ public class RejectReportCommandHandler : IRequestHandler<RejectReportCommand, R
         if (report == null || report.IsDeleted)
         {
             throw new NotFoundException("Report", request.Id);
+        }
+
+        bool isAdmin = _currentUserServices.Roles.Any(r => string.Equals(r, UserRoles.SystemAdmin, StringComparison.OrdinalIgnoreCase));
+        bool isManager = _currentUserServices.Roles.Any(r => string.Equals(r, UserRoles.Manager, StringComparison.OrdinalIgnoreCase));
+
+        if (!isAdmin && !isManager)
+        {
+            throw new ForbiddenException("Chỉ cấp quản lý hoặc quản trị viên mới có quyền từ chối báo cáo.");
+        }
+
+        if (isManager && !isAdmin)
+        {
+            var canManage = await _reportRepository.CanUserManageReportAsync(_currentUserServices.UserId, report);
+            if (!canManage)
+            {
+                throw new ForbiddenException("Bạn không có quyền từ chối báo cáo ngoài khu vực quản lý.");
+            }
         }
 
         if (report.Status != ReportStatus.Pending)

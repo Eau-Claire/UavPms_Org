@@ -7,6 +7,8 @@ using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Reports.DTOs;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
+using UavPms.OperationsService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.Application.Features.Reports.Commands.SubmitReport;
 
@@ -14,11 +16,16 @@ public class SubmitReportCommandHandler : IRequestHandler<SubmitReportCommand, R
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IReportRepository _reportRepository;
+    private readonly ICurrentUserServices _currentUserServices;
 
-    public SubmitReportCommandHandler(IUnitOfWork unitOfWork, IReportRepository reportRepository)
+    public SubmitReportCommandHandler(
+        IUnitOfWork unitOfWork,
+        IReportRepository reportRepository,
+        ICurrentUserServices currentUserServices)
     {
         _unitOfWork = unitOfWork;
         _reportRepository = reportRepository;
+        _currentUserServices = currentUserServices;
     }
 
     public async Task<ReportDetailDto> Handle(SubmitReportCommand request, CancellationToken cancellationToken)
@@ -27,6 +34,25 @@ public class SubmitReportCommandHandler : IRequestHandler<SubmitReportCommand, R
         if (report == null || report.IsDeleted)
         {
             throw new NotFoundException("Report", request.Id);
+        }
+
+        bool isAdmin = _currentUserServices.Roles.Any(r => string.Equals(r, UserRoles.SystemAdmin, StringComparison.OrdinalIgnoreCase));
+        bool isManager = _currentUserServices.Roles.Any(r => string.Equals(r, UserRoles.Manager, StringComparison.OrdinalIgnoreCase));
+
+        if (!isAdmin)
+        {
+            if (isManager)
+            {
+                bool canManage = await _reportRepository.CanUserManageReportAsync(_currentUserServices.UserId, report);
+                if (!canManage)
+                {
+                    throw new ForbiddenException("Quản lý không có quyền gửi duyệt báo cáo ngoài khu vực quản lý.");
+                }
+            }
+            else if (report.CreatedBy.HasValue && report.CreatedBy.Value != _currentUserServices.UserId)
+            {
+                throw new ForbiddenException("Bạn không có quyền gửi duyệt báo cáo do người khác tạo.");
+            }
         }
 
         if (report.Status != ReportStatus.Draft)

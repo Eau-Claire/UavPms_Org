@@ -131,6 +131,55 @@ public class ReportRepository : GenericRepository<Report>, IReportRepository
             .CountAsync();
     }
 
+    public async Task<bool> CanUserManageReportAsync(Guid userId, Report report)
+    {
+        var hasScopes = await _context.UserGeographicScopes.AnyAsync(s => s.UserId == userId);
+        if (!hasScopes)
+        {
+            return true;
+        }
+
+        if (!report.TransmissionLineId.HasValue && !report.SubstationId.HasValue)
+        {
+            return true;
+        }
+
+        var scopes = await _context.UserGeographicScopes
+            .Where(s => s.UserId == userId)
+            .ToListAsync();
+
+        if (report.SubstationId.HasValue)
+        {
+            var subId = report.SubstationId.Value;
+            var sub = report.Substation ?? await _context.Substations.FirstOrDefaultAsync(s => s.Id == subId);
+            if (sub != null)
+            {
+                if (scopes.Any(s => s.SubstationId == subId || (s.RegionId != null && s.RegionId == sub.RegionAssetId)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (report.TransmissionLineId.HasValue)
+        {
+            var lineId = report.TransmissionLineId.Value;
+            var line = report.TransmissionLine ?? await _context.TransmissionLines.Include(l => l.Substation).FirstOrDefaultAsync(l => l.Id == lineId);
+            if (line != null)
+            {
+                if (scopes.Any(s => s.TransmissionLineId == lineId
+                    || (s.SubstationId != null && s.SubstationId == line.SubstationAssetId)
+                    || (s.RegionId != null && line.Substation != null && s.RegionId == line.Substation.RegionAssetId)
+                    || (s.ManagementUnitId != null && s.ManagementUnitId == line.ManagementUnitId)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public async Task<(int Total, Dictionary<string, int> ByType, Dictionary<string, int> ByStatus)> GetReportStatisticsAsync(
         DateTimeOffset? from = null,
         DateTimeOffset? to = null)
