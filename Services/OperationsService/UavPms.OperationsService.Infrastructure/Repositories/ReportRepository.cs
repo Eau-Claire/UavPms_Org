@@ -131,6 +131,24 @@ public class ReportRepository : GenericRepository<Report>, IReportRepository
             .CountAsync();
     }
 
+    public async Task<IReadOnlyList<DetectedAnomaly>> GetAnomaliesByMissionIdsAsync(IEnumerable<Guid> missionIds)
+    {
+        var ids = missionIds?.Distinct().ToList();
+        if (ids == null || !ids.Any())
+        {
+            return Array.Empty<DetectedAnomaly>();
+        }
+
+        return await _context.DetectedAnomalies
+            .AsNoTracking()
+            .Include(a => a.Category)
+            .Include(a => a.Media)
+                .ThenInclude(m => m!.Mission)
+            .Where(a => !a.IsDeleted && a.Media != null && ids.Contains(a.Media.MissionId))
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync();
+    }
+
     public async Task<bool> CanUserManageReportAsync(Guid userId, Report report)
     {
         var hasScopes = await _context.UserGeographicScopes.AnyAsync(s => s.UserId == userId);

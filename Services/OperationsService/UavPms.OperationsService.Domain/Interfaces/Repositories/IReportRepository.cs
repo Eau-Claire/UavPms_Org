@@ -26,6 +26,8 @@ public interface IReportRepository : IGenericRepository<Report>
 
     Task<int> CountAnomaliesByMissionIdsAsync(IEnumerable<Guid> missionIds);
 
+    Task<IReadOnlyList<DetectedAnomaly>> GetAnomaliesByMissionIdsAsync(IEnumerable<Guid> missionIds);
+
     Task<bool> CanUserManageReportAsync(Guid userId, Report report);
 
     Task<(int Total, Dictionary<string, int> ByType, Dictionary<string, int> ByStatus)> GetReportStatisticsAsync(
