@@ -801,3 +801,61 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.HasIndex(e => new { e.MessageType, e.OccurredAt }).HasFilter("\"PublishedAt\" IS NULL AND \"IsDeleted\" = false");
     }
 }
+
+public class ReportConfiguration : IEntityTypeConfiguration<Report>
+{
+    public void Configure(EntityTypeBuilder<Report> builder)
+    {
+        builder.ToTable("Reports");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Code).HasMaxLength(50).IsRequired();
+        builder.HasIndex(e => e.Code).IsUnique();
+        builder.Property(e => e.Title).HasMaxLength(255).IsRequired();
+        builder.Property(e => e.Type).HasConversion<string>().HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
+
+        builder.HasOne(e => e.TransmissionLine)
+            .WithMany()
+            .HasForeignKey(e => e.TransmissionLineId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Substation)
+            .WithMany()
+            .HasForeignKey(e => e.SubstationId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.ApprovedBy)
+            .WithMany()
+            .HasForeignKey(e => e.ApprovedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.CreatedByUser)
+            .WithMany()
+            .HasForeignKey(e => e.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(e => e.Status);
+        builder.HasIndex(e => e.Type);
+        builder.HasIndex(e => e.CreatedAt);
+    }
+}
+
+public class ReportMissionConfiguration : IEntityTypeConfiguration<ReportMission>
+{
+    public void Configure(EntityTypeBuilder<ReportMission> builder)
+    {
+        builder.ToTable("ReportMissions");
+        builder.HasKey(e => new { e.ReportId, e.MissionId });
+
+        builder.HasOne(e => e.Report)
+            .WithMany(r => r.ReportMissions)
+            .HasForeignKey(e => e.ReportId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.Mission)
+            .WithMany()
+            .HasForeignKey(e => e.MissionId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+

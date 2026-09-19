@@ -52,7 +52,9 @@ public class TransmissionLineController : ControllerBase
             request.SubstationAssetId,
             request.LineName,
             request.IsCriticalEdge,
-            request.GeomWkt
+            request.GeomWkt,
+            request.Code,
+            request.VoltageLevel
         );
         var result = await _mediator.Send(command);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, new ApiResponse(true, "Tạo đường dây truyền tải thành công.", result));
@@ -67,7 +69,9 @@ public class TransmissionLineController : ControllerBase
             request.SubstationAssetId,
             request.LineName,
             request.IsCriticalEdge,
-            request.GeomWkt
+            request.GeomWkt,
+            request.Code,
+            request.VoltageLevel
         );
         var result = await _mediator.Send(command);
         return Ok(new ApiResponse(true, "Cập nhật đường dây truyền tải thành công.", result));
@@ -91,12 +95,16 @@ public record CreateTransmissionLineRequest(
     Guid SubstationAssetId,
     string LineName,
     bool IsCriticalEdge,
-    string? GeomWkt
+    string? GeomWkt,
+    string? Code = null,
+    string? VoltageLevel = null
 );
 
 public record UpdateTransmissionLineRequest(
     Guid SubstationAssetId,
     string LineName,
     bool IsCriticalEdge,
-    string? GeomWkt
+    string? GeomWkt,
+    string? Code = null,
+    string? VoltageLevel = null
 );

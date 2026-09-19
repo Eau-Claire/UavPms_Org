@@ -8,5 +8,7 @@ public record UpdateTransmissionLineCommand(
     Guid SubstationAssetId,
     string LineName,
     bool IsCriticalEdge,
-    string? GeomWkt
+    string? GeomWkt,
+    string? Code = null,
+    string? VoltageLevel = null
 ) : IRequest<TransmissionLineDto>;

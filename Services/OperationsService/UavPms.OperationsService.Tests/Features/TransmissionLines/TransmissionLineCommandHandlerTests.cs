@@ -44,7 +44,7 @@ public class TransmissionLineCommandHandlerTests
             _transmissionLineRepositoryMock.Object,
             _substationRepositoryMock.Object);
 
-        var command = new CreateTransmissionLineCommand(substationId, "Line 500kV Hanoi-Haiphong", true, null);
+        var command = new CreateTransmissionLineCommand(substationId, "Line 500kV Hanoi-Haiphong", true, null, "DZ500-01", "500kV");
 
         // Act
         var result = await handler.Handle(command, CancellationToken.None);
@@ -52,7 +52,9 @@ public class TransmissionLineCommandHandlerTests
         // Assert
         result.Should().NotBeNull();
         result.LineName.Should().Be("Line 500kV Hanoi-Haiphong");
-        _transmissionLineRepositoryMock.Verify(l => l.AddAsync(It.Is<TransmissionLine>(x => x.LineName == "Line 500kV Hanoi-Haiphong")), Times.Once);
+        result.Code.Should().Be("DZ500-01");
+        result.VoltageLevel.Should().Be("500kV");
+        _transmissionLineRepositoryMock.Verify(l => l.AddAsync(It.Is<TransmissionLine>(x => x.LineName == "Line 500kV Hanoi-Haiphong" && x.Code == "DZ500-01" && x.VoltageLevel == "500kV")), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -98,7 +100,7 @@ public class TransmissionLineCommandHandlerTests
             _substationRepositoryMock.Object,
             _unitOfWorkMock.Object);
 
-        var command = new UpdateTransmissionLineCommand(lineId, substationId, "Updated Line Name", true, null);
+        var command = new UpdateTransmissionLineCommand(lineId, substationId, "Updated Line Name", true, null, "DZ220-99", "220kV");
 
         // Act
         var result = await handler.Handle(command, CancellationToken.None);
@@ -106,6 +108,10 @@ public class TransmissionLineCommandHandlerTests
         // Assert
         result.Should().NotBeNull();
         result.LineName.Should().Be("Updated Line Name");
+        result.Code.Should().Be("DZ220-99");
+        result.VoltageLevel.Should().Be("220kV");
+        existingLine.Code.Should().Be("DZ220-99");
+        existingLine.VoltageLevel.Should().Be("220kV");
         _transmissionLineRepositoryMock.Verify(l => l.UpdateAsync(existingLine), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -163,7 +169,7 @@ public class TransmissionLineCommandHandlerTests
     {
         // Arrange
         var lineId = Guid.NewGuid();
-        var line = new TransmissionLine { Id = lineId, LineName = "Line 500kV", IsDeleted = false };
+        var line = new TransmissionLine { Id = lineId, LineName = "Line 500kV", Code = "DZ500-01", VoltageLevel = "500kV", IsDeleted = false };
         _transmissionLineRepositoryMock.Setup(l => l.GetByIdAsync(lineId, true)).ReturnsAsync(line);
 
         var handler = new GetTransmissionLineByIdQueryHandler(_transmissionLineRepositoryMock.Object);
@@ -176,6 +182,8 @@ public class TransmissionLineCommandHandlerTests
         result.Should().NotBeNull();
         result.Id.Should().Be(lineId);
         result.LineName.Should().Be("Line 500kV");
+        result.Code.Should().Be("DZ500-01");
+        result.VoltageLevel.Should().Be("500kV");
     }
 
     [Fact]
@@ -184,8 +192,8 @@ public class TransmissionLineCommandHandlerTests
         // Arrange
         var lines = new List<TransmissionLine>
         {
-            new TransmissionLine { Id = Guid.NewGuid(), LineName = "L1" },
-            new TransmissionLine { Id = Guid.NewGuid(), LineName = "L2" }
+            new TransmissionLine { Id = Guid.NewGuid(), LineName = "L1", Code = "DZ-01", VoltageLevel = "500kV" },
+            new TransmissionLine { Id = Guid.NewGuid(), LineName = "L2", Code = "DZ-02", VoltageLevel = "220kV" }
         };
         _transmissionLineRepositoryMock.Setup(l => l.GetTransmissionLinesPagedAsync(1, 10, null, null))
             .ReturnsAsync((lines, 2));
@@ -199,6 +207,8 @@ public class TransmissionLineCommandHandlerTests
         // Assert
         result.Should().NotBeNull();
         result.Items.Should().HaveCount(2);
+        result.Items[0].Code.Should().Be("DZ-01");
+        result.Items[0].VoltageLevel.Should().Be("500kV");
         result.Pagination.TotalItems.Should().Be(2);
     }
 

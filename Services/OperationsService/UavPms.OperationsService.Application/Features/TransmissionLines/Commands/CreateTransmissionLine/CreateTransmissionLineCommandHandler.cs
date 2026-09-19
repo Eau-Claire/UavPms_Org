@@ -53,6 +53,8 @@ public class CreateTransmissionLineCommandHandler : IRequestHandler<CreateTransm
             Id = Guid.NewGuid(),
             SubstationAssetId = request.SubstationAssetId,
             LineName = request.LineName,
+            Code = request.Code ?? string.Empty,
+            VoltageLevel = request.VoltageLevel ?? string.Empty,
             IsCriticalEdge = request.IsCriticalEdge,
             Geom = geom,
             CreatedAt = DateTime.UtcNow
@@ -65,6 +67,8 @@ public class CreateTransmissionLineCommandHandler : IRequestHandler<CreateTransm
             line.Id,
             line.SubstationAssetId,
             line.LineName,
+            line.Code,
+            line.VoltageLevel,
             line.IsCriticalEdge,
             line.Geom?.AsText()
         );

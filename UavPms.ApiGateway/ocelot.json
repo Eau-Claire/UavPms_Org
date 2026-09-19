@@ -185,6 +185,20 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
+      "DownstreamPathTemplate": "/api/v{version}/reports/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/reports/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/reports",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/reports",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
       "DownstreamPathTemplate": "/api/v{version}/towers/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],

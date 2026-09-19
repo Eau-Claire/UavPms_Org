@@ -27,6 +27,8 @@ public class GetTransmissionLinesQueryHandler : IRequestHandler<GetTransmissionL
             l.Id,
             l.SubstationAssetId,
             l.LineName,
+            l.Code,
+            l.VoltageLevel,
             l.IsCriticalEdge,
             l.Geom?.AsText()
         )).ToList();

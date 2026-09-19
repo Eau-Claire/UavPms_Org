@@ -2047,6 +2047,129 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.ToTable("Regions", (string)null);
                 });
 
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.Report", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ApprovedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DateFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DateTo")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DefectCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<long?>("ExcelFileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ExcelFileUrl")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<long?>("PdfFileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PdfFileUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RejectionReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid?>("SubstationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid?>("TransmissionLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedById");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("SubstationId");
+
+                    b.HasIndex("TransmissionLineId");
+
+                    b.HasIndex("Type");
+
+                    b.ToTable("Reports", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.ReportMission", b =>
+                {
+                    b.Property<Guid>("ReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ReportId", "MissionId");
+
+                    b.HasIndex("MissionId");
+
+                    b.ToTable("ReportMissions", (string)null);
+                });
+
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.ResourceBooking", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3235,6 +3358,56 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Navigation("Parent");
                 });
 
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.Report", b =>
+                {
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.User", "ApprovedBy")
+                        .WithMany()
+                        .HasForeignKey("ApprovedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Substation", "Substation")
+                        .WithMany()
+                        .HasForeignKey("SubstationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.TransmissionLine", "TransmissionLine")
+                        .WithMany()
+                        .HasForeignKey("TransmissionLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ApprovedBy");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Substation");
+
+                    b.Navigation("TransmissionLine");
+                });
+
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.ReportMission", b =>
+                {
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Mission", "Mission")
+                        .WithMany()
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Report", "Report")
+                        .WithMany("ReportMissions")
+                        .HasForeignKey("ReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Mission");
+
+                    b.Navigation("Report");
+                });
+
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.ResourceBooking", b =>
                 {
                     b.HasOne("UavPms.OperationsService.Domain.Entities.Uav", "Drone")
@@ -3438,6 +3611,11 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Navigation("Children");
 
                     b.Navigation("Substations");
+                });
+
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.Report", b =>
+                {
+                    b.Navigation("ReportMissions");
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.Role", b =>
