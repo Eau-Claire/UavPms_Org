@@ -1,0 +1,106 @@
+name: Apply Management Reports Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type APPLY_MANAGEMENT_REPORTS_MIGRATION to apply the Reports schema migration.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-operations-database-update
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply Management Reports migration
+    if: ${{ inputs.confirmation == 'APPLY_MANAGEMENT_REPORTS_MIGRATION' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+
+    steps:
+      - name: Apply migration over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          fingerprint: ${{ secrets.SERVER_FINGERPRINT }}
+          envs: DEPLOY_PATH
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+
+            MIGRATION_ID="20260918025933_AddManagementReportsTable"
+            MIGRATION_FILE="Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations/${MIGRATION_ID}.cs"
+
+            [ -n "${DEPLOY_PATH:-}" ] || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
+            cd "$DEPLOY_PATH"
+
+            echo "========== SYNCING DEPLOYMENT CHECKOUT =========="
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            echo "Deployment commit: $(git rev-parse --short HEAD)"
+            [ -f "$MIGRATION_FILE" ] || { echo "ERROR: $MIGRATION_FILE is missing from origin/main."; exit 1; }
+
+            echo "========== DATABASE PREFLIGHT =========="
+            [ "$(docker inspect uavpms-db --format '{{.State.Status}}')" = running ] || {
+              echo "ERROR: uavpms-db is not running."; exit 1;
+            }
+            docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc 'SELECT 1;' >/dev/null
+
+            migration_applied() {
+              docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc \
+                "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$1');" | tr -d '[:space:]'
+            }
+
+            if [ "$(migration_applied "$MIGRATION_ID")" = "t" ]; then
+              echo "Migration $MIGRATION_ID is already applied. Nothing to do."
+              exit 0
+            fi
+
+            echo "========== APPLYING PENDING MIGRATIONS =========="
+            docker compose build operationsservice
+            RUN_MIGRATIONS=true MIGRATION_ONLY=true docker compose run --rm --no-deps operationsservice
+
+            echo "========== VERIFYING MIGRATION =========="
+            [ "$(migration_applied "$MIGRATION_ID")" = "t" ] || {
+              echo "ERROR: migration $MIGRATION_ID was not recorded."; exit 1;
+            }
+            docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c \
+              'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 10;'
+            docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc \
+              "SELECT to_regclass('public.\"Reports\"'), to_regclass('public.\"ReportMissions\"');"
+
+            echo "Management Reports migration applied successfully."
+
+      - name: Recreate OperationsService with normal settings
+        if: ${{ always() }}
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          fingerprint: ${{ secrets.SERVER_FINGERPRINT }}
+          envs: DEPLOY_PATH
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            [ -n "${DEPLOY_PATH:-}" ] || exit 1
+            cd "$DEPLOY_PATH"
+            RUN_MIGRATIONS=false MIGRATION_ONLY=false docker compose up -d --force-recreate operationsservice
