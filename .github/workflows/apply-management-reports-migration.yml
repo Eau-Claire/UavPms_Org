@@ -72,7 +72,7 @@ jobs:
 
             echo "========== APPLYING PENDING MIGRATIONS =========="
             docker compose build operationsservice
-            RUN_MIGRATIONS=true MIGRATION_ONLY=true docker compose run --rm --no-deps operationsservice
+            RunMigrations=true MigrationOnly=true docker compose run --rm --no-deps operationsservice
 
             echo "========== VERIFYING MIGRATION =========="
             [ "$(migration_applied "$MIGRATION_ID")" = "t" ] || {
@@ -103,4 +103,4 @@ jobs:
             set -euo pipefail
             [ -n "${DEPLOY_PATH:-}" ] || exit 1
             cd "$DEPLOY_PATH"
-            RUN_MIGRATIONS=false MIGRATION_ONLY=false docker compose up -d --force-recreate operationsservice
+            RunMigrations=false MigrationOnly=false docker compose up -d --force-recreate operationsservice
