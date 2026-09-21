@@ -23,6 +23,11 @@ public class CurrentUserServices : ICurrentUserServices
     }
     
     public string? Email => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Email)?.Value;
+
+    public string? Username => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Name)?.Value
+        ?? _httpContextAccessor.HttpContext?.User?.FindFirst("name")?.Value
+        ?? _httpContextAccessor.HttpContext?.User?.FindFirst("username")?.Value
+        ?? Email;
     
     public IReadOnlyList<string> Roles => _httpContextAccessor.HttpContext?.User?.FindAll(ClaimTypes.Role)
         .Select(x => x.Value)

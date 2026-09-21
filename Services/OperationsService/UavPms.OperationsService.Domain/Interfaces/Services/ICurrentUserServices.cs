@@ -4,6 +4,7 @@ public interface ICurrentUserServices
 {
     Guid UserId { get; }
     string? Email { get; }
+    string? Username { get; }
     IReadOnlyList<string> Roles { get; }
     bool IsAuthenticated { get; }
     string? IpAddress { get; }
