@@ -116,6 +116,7 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
     builder.Services.AddHostedService<DefectDetectedConsumer>();
     builder.Services.AddHostedService<NotificationPushConsumer>();
     builder.Services.AddHostedService<AIAnalysisStatusChangedConsumer>();
+    builder.Services.AddHostedService<MissionLifecycleRealtimeConsumer>();
 }
 
 // Register Hangfire background jobs in DI so Hangfire JobActivator can resolve them
@@ -123,6 +124,7 @@ builder.Services.AddTransient<CleanupJob>();
 builder.Services.AddTransient<DailySummaryJob>();
 builder.Services.AddTransient<PushNotificationsJob>();
 builder.Services.AddTransient<ScheduledNotificationJob>();
+builder.Services.AddTransient<MissionConfirmationOverdueJob>();
 
 var normalizedHangfireConnection = builder.Configuration.GetConnectionString("HangfireConnection");
 if (string.IsNullOrWhiteSpace(normalizedHangfireConnection))
@@ -155,7 +157,8 @@ if (!string.IsNullOrWhiteSpace(normalizedHangfireConnection))
 }
 else
 {
-    Log.Warning("Hangfire is disabled because neither HangfireConnection nor DefaultConnection is configured.");
+    Log.Warning("Hangfire is disabled because neither HangfireConnection nor DefaultConnection is configured. Enabling in-process overdue hosted service.");
+    builder.Services.AddHostedService<MissionConfirmationOverdueHostedService>();
 }
 
 builder.Services.AddCors(options =>
@@ -208,6 +211,7 @@ if (!string.IsNullOrWhiteSpace(normalizedHangfireConnection))
         RecurringJob.AddOrUpdate<CleanupJob>("auto-cleanup-job", job => job.Execute(), Cron.Weekly);
         RecurringJob.AddOrUpdate<DailySummaryJob>("daily-summary-job", job => job.Execute(), Cron.Daily);
         RecurringJob.AddOrUpdate<PushNotificationsJob>("push-notifications-sync", job => job.Execute(), Cron.Minutely);
+        RecurringJob.AddOrUpdate<MissionConfirmationOverdueJob>("mission-confirmation-overdue-job", job => job.Execute(), Cron.Minutely);
     }
     catch (Exception exception)
     {
