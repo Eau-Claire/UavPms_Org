@@ -173,6 +173,10 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.Property(e => e.RouteData).HasColumnType("text").IsRequired();
         builder.Property(e => e.DroneCode).HasMaxLength(100).IsRequired();
 
+        builder.Property(e => e.IsOverdueNotified).HasDefaultValue(false);
+        builder.Property(e => e.ManagerInstructions).HasColumnType("text");
+        builder.Property(e => e.ConfirmationDeadline);
+
         builder.HasOne(e => e.Manager)
             .WithMany()
             .HasForeignKey(e => e.ManagerId)
@@ -191,6 +195,31 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.HasOne(e => e.Uav)
             .WithMany(u => u.Missions)
             .HasForeignKey(e => e.UavId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class MissionCommunicationLogConfiguration : IEntityTypeConfiguration<MissionCommunicationLog>
+{
+    public void Configure(EntityTypeBuilder<MissionCommunicationLog> builder)
+    {
+        builder.ToTable("MissionCommunicationLogs");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.SenderName).HasMaxLength(255).IsRequired();
+        builder.Property(e => e.SenderRole).HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Type).HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Content).HasColumnType("text").IsRequired();
+        builder.HasIndex(e => e.MissionId);
+        builder.HasIndex(e => e.CreatedAt);
+
+        builder.HasOne(e => e.Mission)
+            .WithMany(m => m.CommunicationLogs)
+            .HasForeignKey(e => e.MissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.Sender)
+            .WithMany()
+            .HasForeignKey(e => e.SenderId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
