@@ -91,8 +91,8 @@ public class MissionCreationFromAssessmentTests
         mission.Assignments.Single().ResponseStatus.Should().Be(MissionAssignmentResponse.Pending);
         mission.MissionTargets.Should().HaveCount(1);
 
-        // Verify Assessment is consumed
-        assessment.Status.Should().Be(PreMissionAssessmentStatus.Consumed);
+        // Verify Assessment is completed
+        assessment.Status.Should().Be(PreMissionAssessmentStatus.Completed);
         assessment.ConsumedByMissionId.Should().Be(mission.Id);
 
         // Verify ResourceBookings were created
@@ -225,7 +225,7 @@ public class MissionCreationFromAssessmentTests
             RegionId = region.Id,
             PlannedStart = DateTime.UtcNow.AddDays(1),
             PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
-            Status = PreMissionAssessmentStatus.Consumed,
+            Status = PreMissionAssessmentStatus.Completed,
             ConsumedByMissionId = Guid.NewGuid()
         };
         db.PreMissionAssessments.Add(assessment);
