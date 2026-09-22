@@ -49,3 +49,8 @@ public record DroneInspectionSubmitRequest(
 public record PostponeAssignmentRequest(
     string Reason
 );
+
+public record MarkAssessmentCompletedRequest(
+    Guid? MissionId = null
+);
+
