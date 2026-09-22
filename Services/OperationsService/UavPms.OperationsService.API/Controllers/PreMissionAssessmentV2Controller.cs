@@ -35,9 +35,9 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
+    public async Task<IActionResult> List([FromQuery] string? status, CancellationToken ct)
     {
-        var list = await _service.ListAsync(ct);
+        var list = await _service.ListAsync(status, ct);
         return Ok(list);
     }
 
@@ -71,5 +71,19 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
 
         var mission = await _service.CreateMissionFromAssessmentAsync(finalRequest, ct);
         return Ok(mission);
+    }
+
+    [HttpPost("{id:guid}/mark-completed")]
+    public async Task<IActionResult> MarkCompleted(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
+    {
+        var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
+        return Ok(assessment);
+    }
+
+    [HttpPost("{id:guid}/consume")]
+    public async Task<IActionResult> Consume(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
+    {
+        var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
+        return Ok(assessment);
     }
 }
