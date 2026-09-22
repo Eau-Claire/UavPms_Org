@@ -288,9 +288,16 @@ public class PreMissionAssessmentConfiguration : IEntityTypeConfiguration<PreMis
 {
     public void Configure(EntityTypeBuilder<PreMissionAssessment> builder)
     {
-        builder.ToTable("PreMissionAssessments", t => t.HasCheckConstraint("CK_PreMissionAssessments_PlannedWindow", "\"PlannedEnd\" > \"PlannedStart\""));
+        builder.ToTable("PreMissionAssessments", t =>
+        {
+            t.HasCheckConstraint("CK_PreMissionAssessments_PlannedWindow", "\"PlannedEnd\" > \"PlannedStart\"");
+            t.HasCheckConstraint("CK_PreMissionAssessments_Status", "\"Status\" IN ('DRAFT', 'EVALUATING', 'READY', 'NOT_READY', 'EXPIRED', 'COMPLETED', 'CANCELLED')");
+        });
         builder.HasKey(x => x.Id);
-        builder.Property(x => x.Status).HasConversion<string>();
+        builder.Property(x => x.Status)
+            .HasConversion(
+                v => FormatAssessmentStatus(v),
+                v => ParseAssessmentStatus(v));
         builder.Property(x => x.SiteFeasibilityStatus).HasConversion<string>();
         builder.Property(x => x.OverallTechnicalHealth).HasConversion<string>();
         builder.Property(x => x.Findings).HasColumnType("jsonb");
@@ -300,6 +307,30 @@ public class PreMissionAssessmentConfiguration : IEntityTypeConfiguration<PreMis
         builder.HasIndex(x => x.IdempotencyKey).IsUnique().HasFilter("\"IdempotencyKey\" IS NOT NULL AND NOT \"IsDeleted\"");
         builder.HasOne(x => x.Region).WithMany().HasForeignKey(x => x.RegionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Manager).WithMany().HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static string FormatAssessmentStatus(PreMissionAssessmentStatus status) => status switch
+    {
+        PreMissionAssessmentStatus.NotReady => "NOT_READY",
+        PreMissionAssessmentStatus.Completed => "COMPLETED",
+        PreMissionAssessmentStatus.Draft => "DRAFT",
+        PreMissionAssessmentStatus.Evaluating => "EVALUATING",
+        PreMissionAssessmentStatus.Ready => "READY",
+        PreMissionAssessmentStatus.Expired => "EXPIRED",
+        PreMissionAssessmentStatus.Cancelled => "CANCELLED",
+        _ => status.ToString().ToUpperInvariant()
+    };
+
+    private static PreMissionAssessmentStatus ParseAssessmentStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return PreMissionAssessmentStatus.Draft;
+        var normalized = value.Trim().Replace(" ", string.Empty).Replace("_", string.Empty);
+        if (normalized.Equals("CONSUMED", StringComparison.OrdinalIgnoreCase)) return PreMissionAssessmentStatus.Completed;
+        if (normalized.Equals("INCOMPLETE", StringComparison.OrdinalIgnoreCase)) return PreMissionAssessmentStatus.NotReady;
+        if (normalized.Equals("NOTREADY", StringComparison.OrdinalIgnoreCase)) return PreMissionAssessmentStatus.NotReady;
+        return Enum.TryParse<PreMissionAssessmentStatus>(normalized, true, out var status)
+            ? status
+            : PreMissionAssessmentStatus.Draft;
     }
 }
 
