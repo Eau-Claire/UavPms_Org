@@ -76,7 +76,7 @@ jobs:
 
             echo "========== APPLYING PENDING MIGRATIONS =========="
             docker compose build operationsservice
-            RunMigrations=true MigrationOnly=true docker compose run --rm --no-deps operationsservice
+            RUN_MIGRATIONS=true MIGRATION_ONLY=true docker compose run --rm --no-deps operationsservice
 
             echo "========== VERIFYING MIGRATIONS =========="
             [ "$(migration_applied "$MIGRATION_1_ID")" = "t" ] || {
