@@ -12,13 +12,13 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
         {
             // 1. Migrate legacy data
             migrationBuilder.Sql("""
-                UPDATE \"PreMissionAssessments\"
-                SET \"Status\" = CASE UPPER(REPLACE(TRIM(\"Status\"), ' ', ''))
+                UPDATE "PreMissionAssessments"
+                SET "Status" = CASE UPPER(REPLACE(TRIM("Status"), ' ', ''))
                     WHEN 'CONSUMED' THEN 'COMPLETED'
                     WHEN 'INCOMPLETE' THEN 'NOT_READY'
                     WHEN 'NOTREADY' THEN 'NOT_READY'
                     WHEN 'CANCELED' THEN 'CANCELLED'
-                    ELSE UPPER(TRIM(\"Status\"))
+                    ELSE UPPER(TRIM("Status"))
                 END;
                 """);
 
