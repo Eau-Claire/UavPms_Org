@@ -1,0 +1,126 @@
+name: Apply Mission Realtime and Assessment Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type APPLY_MISSION_REALTIME_AND_ASSESSMENT_MIGRATION to apply the mission realtime and assessment schema migrations.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-operations-database-update
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply Mission Realtime and Assessment migrations
+    if: ${{ inputs.confirmation == 'APPLY_MISSION_REALTIME_AND_ASSESSMENT_MIGRATION' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+
+    steps:
+      - name: Apply migration over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          fingerprint: ${{ secrets.SERVER_FINGERPRINT }}
+          envs: DEPLOY_PATH
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+
+            MIGRATION_1_ID="20260921040000_AddMissionRealtimeAndCommunicationLogs"
+            MIGRATION_1_FILE="Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations/${MIGRATION_1_ID}.cs"
+
+            MIGRATION_2_ID="20260922050000_RefactorAssessmentStatusCompletedAndNotReady"
+            MIGRATION_2_FILE="Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations/${MIGRATION_2_ID}.cs"
+
+            [ -n "${DEPLOY_PATH:-}" ] || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
+            cd "$DEPLOY_PATH"
+
+            echo "========== SYNCING DEPLOYMENT CHECKOUT =========="
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            echo "Deployment commit: $(git rev-parse --short HEAD)"
+            [ -f "$MIGRATION_1_FILE" ] || { echo "ERROR: $MIGRATION_1_FILE is missing from origin/main."; exit 1; }
+            [ -f "$MIGRATION_2_FILE" ] || { echo "ERROR: $MIGRATION_2_FILE is missing from origin/main."; exit 1; }
+
+            echo "========== DATABASE PREFLIGHT =========="
+            [ "$(docker inspect uavpms-db --format '{{.State.Status}}')" = running ] || {
+              echo "ERROR: uavpms-db is not running."; exit 1;
+            }
+            docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc 'SELECT 1;' >/dev/null
+
+            migration_applied() {
+              docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc \
+                "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$1');" | tr -d '[:space:]'
+            }
+
+            if [ "$(migration_applied "$MIGRATION_1_ID")" = "t" ] && [ "$(migration_applied "$MIGRATION_2_ID")" = "t" ]; then
+              echo "Both migrations ($MIGRATION_1_ID and $MIGRATION_2_ID) are already applied. Nothing to do."
+              exit 0
+            fi
+
+            echo "========== APPLYING PENDING MIGRATIONS =========="
+            docker compose build operationsservice
+            RunMigrations=true MigrationOnly=true docker compose run --rm --no-deps operationsservice
+
+            echo "========== VERIFYING MIGRATIONS =========="
+            [ "$(migration_applied "$MIGRATION_1_ID")" = "t" ] || {
+              echo "ERROR: migration $MIGRATION_1_ID was not recorded."; exit 1;
+            }
+            [ "$(migration_applied "$MIGRATION_2_ID")" = "t" ] || {
+              echo "ERROR: migration $MIGRATION_2_ID was not recorded."; exit 1;
+            }
+
+            echo "Recent migration history:"
+            docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c \
+              'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 10;'
+
+            echo "Verifying MissionCommunicationLogs table exists:"
+            docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc \
+              "SELECT to_regclass('public.\"MissionCommunicationLogs\"');"
+
+            echo "Verifying Missions columns:"
+            docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c \
+              "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = 'Missions' AND column_name IN ('ConfirmationDeadline', 'IsOverdueNotified', 'ManagerInstructions');"
+
+            echo "Verifying PreMissionAssessments check constraint:"
+            docker exec uavpms-db psql -X -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c \
+              "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'CK_PreMissionAssessments_Status';"
+
+            echo "Mission Realtime and Assessment migrations applied successfully."
+
+      - name: Recreate services with normal settings
+        if: ${{ always() }}
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          fingerprint: ${{ secrets.SERVER_FINGERPRINT }}
+          envs: DEPLOY_PATH
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            [ -n "${DEPLOY_PATH:-}" ] || exit 1
+            cd "$DEPLOY_PATH"
+            RunMigrations=false MigrationOnly=false docker compose up -d --force-recreate operationsservice
+            docker compose up -d --force-recreate notificationservice
