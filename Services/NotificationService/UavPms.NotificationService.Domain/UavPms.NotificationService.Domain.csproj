@@ -11,4 +11,8 @@
     <PackageReference Include="NetTopologySuite" Version="2.6.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\UavPms.Shared.Contracts\UavPms.Shared.Contracts.csproj" />
+  </ItemGroup>
+
 </Project>

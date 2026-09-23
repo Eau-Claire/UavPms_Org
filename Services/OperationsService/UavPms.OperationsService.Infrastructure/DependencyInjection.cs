@@ -10,6 +10,7 @@ using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.OperationsService.Application.Common.Options;
 using UavPms.OperationsService.Application.Features.Gis.Infrastructure;
+using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Application.Features.Missions;
 using UavPms.OperationsService.Application.Features.Assessments;
 
@@ -94,6 +95,8 @@ public static class DependencyInjection
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
         services.AddScoped<IMissionRepository, MissionRepository>();
         services.AddScoped<IMissionLifecycleService, MissionLifecycleService>();
+        services.AddScoped<IMissionRealtimeNotifier, MissionRealtimeNotifier>();
+        services.AddHttpClient();
         services.AddScoped<PreMissionAssessmentService>();
         services.AddScoped<IDroneTechnicalInspectionService, DroneTechnicalInspectionService>();
         services.AddScoped<IUavRepository, UavRepository>();

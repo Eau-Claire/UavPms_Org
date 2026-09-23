@@ -50,14 +50,13 @@ public class UserGeographicScopeConfiguration : IEntityTypeConfiguration<UserGeo
 {
     public void Configure(EntityTypeBuilder<UserGeographicScope> builder)
     {
-        builder.ToTable("UserGeographicScopes");
+        builder.ToTable("UserGeographicScopes", t => t.HasCheckConstraint("CK_UserGeographicScopes_HasScope", "(\"RegionId\" IS NOT NULL OR \"SubstationId\" IS NOT NULL OR \"TransmissionLineId\" IS NOT NULL OR \"ManagementUnitId\" IS NOT NULL)"));
         builder.HasKey(e => e.Id);
         builder.HasIndex(e => new { e.UserId, e.RegionId });
         builder.HasIndex(e => new { e.UserId, e.SubstationId });
         builder.HasIndex(e => new { e.UserId, e.TransmissionLineId });
         builder.HasIndex(e => new { e.UserId, e.ManagementUnitId });
         builder.HasOne(e => e.User).WithMany(u => u.GeographicScopes).HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasCheckConstraint("CK_UserGeographicScopes_HasScope", "(\"RegionId\" IS NOT NULL OR \"SubstationId\" IS NOT NULL OR \"TransmissionLineId\" IS NOT NULL OR \"ManagementUnitId\" IS NOT NULL)");
     }
 }
 
@@ -218,6 +217,10 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.Ignore(e => e.DroneCode);
         builder.Ignore(e => e.AssignedToUser);
 
+        builder.Property(e => e.IsOverdueNotified).HasDefaultValue(false);
+        builder.Property(e => e.ManagerInstructions).HasColumnType("text");
+        builder.Property(e => e.ConfirmationDeadline);
+
         builder.HasOne(e => e.Manager)
             .WithMany()
             .HasForeignKey(e => e.ManagerId)
@@ -242,9 +245,13 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
             return MissionStatus.Draft;
         }
 
-        var normalized = value.Trim().Replace(" ", string.Empty);
+        var normalized = value.Trim().Replace(" ", string.Empty).Replace("_", string.Empty);
         if (normalized.Equals("Pending", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Draft;
         if (normalized.Equals("Executing", StringComparison.OrdinalIgnoreCase)) return MissionStatus.InProgress;
+        if (normalized.Equals("PENDINGCONFIRMATION", StringComparison.OrdinalIgnoreCase)) return MissionStatus.PendingAcceptance;
+        if (normalized.Equals("CONFIRMED", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Assigned;
+        if (normalized.Equals("SUSPENDED", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Suspended;
+        if (normalized.Equals("POSTPONED", StringComparison.OrdinalIgnoreCase)) return MissionStatus.Postponed;
 
         return Enum.TryParse<MissionStatus>(normalized, true, out var status)
             ? status
@@ -252,13 +259,45 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
     }
 }
 
+public class MissionCommunicationLogConfiguration : IEntityTypeConfiguration<MissionCommunicationLog>
+{
+    public void Configure(EntityTypeBuilder<MissionCommunicationLog> builder)
+    {
+        builder.ToTable("MissionCommunicationLogs");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.SenderName).HasMaxLength(255).IsRequired();
+        builder.Property(e => e.SenderRole).HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Type).HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Content).HasColumnType("text").IsRequired();
+        builder.HasIndex(e => e.MissionId);
+        builder.HasIndex(e => e.CreatedAt);
+
+        builder.HasOne(e => e.Mission)
+            .WithMany(m => m.CommunicationLogs)
+            .HasForeignKey(e => e.MissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.Sender)
+            .WithMany()
+            .HasForeignKey(e => e.SenderId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public class PreMissionAssessmentConfiguration : IEntityTypeConfiguration<PreMissionAssessment>
 {
     public void Configure(EntityTypeBuilder<PreMissionAssessment> builder)
     {
-        builder.ToTable("PreMissionAssessments", t => t.HasCheckConstraint("CK_PreMissionAssessments_PlannedWindow", "\"PlannedEnd\" > \"PlannedStart\""));
+        builder.ToTable("PreMissionAssessments", t =>
+        {
+            t.HasCheckConstraint("CK_PreMissionAssessments_PlannedWindow", "\"PlannedEnd\" > \"PlannedStart\"");
+            t.HasCheckConstraint("CK_PreMissionAssessments_Status", "\"Status\" IN ('DRAFT', 'EVALUATING', 'READY', 'NOT_READY', 'EXPIRED', 'COMPLETED', 'CANCELLED')");
+        });
         builder.HasKey(x => x.Id);
-        builder.Property(x => x.Status).HasConversion<string>();
+        builder.Property(x => x.Status)
+            .HasConversion(
+                v => FormatAssessmentStatus(v),
+                v => ParseAssessmentStatus(v));
         builder.Property(x => x.SiteFeasibilityStatus).HasConversion<string>();
         builder.Property(x => x.OverallTechnicalHealth).HasConversion<string>();
         builder.Property(x => x.Findings).HasColumnType("jsonb");
@@ -268,6 +307,30 @@ public class PreMissionAssessmentConfiguration : IEntityTypeConfiguration<PreMis
         builder.HasIndex(x => x.IdempotencyKey).IsUnique().HasFilter("\"IdempotencyKey\" IS NOT NULL AND NOT \"IsDeleted\"");
         builder.HasOne(x => x.Region).WithMany().HasForeignKey(x => x.RegionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Manager).WithMany().HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static string FormatAssessmentStatus(PreMissionAssessmentStatus status) => status switch
+    {
+        PreMissionAssessmentStatus.NotReady => "NOT_READY",
+        PreMissionAssessmentStatus.Completed => "COMPLETED",
+        PreMissionAssessmentStatus.Draft => "DRAFT",
+        PreMissionAssessmentStatus.Evaluating => "EVALUATING",
+        PreMissionAssessmentStatus.Ready => "READY",
+        PreMissionAssessmentStatus.Expired => "EXPIRED",
+        PreMissionAssessmentStatus.Cancelled => "CANCELLED",
+        _ => status.ToString().ToUpperInvariant()
+    };
+
+    private static PreMissionAssessmentStatus ParseAssessmentStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return PreMissionAssessmentStatus.Draft;
+        var normalized = value.Trim().Replace(" ", string.Empty).Replace("_", string.Empty);
+        if (normalized.Equals("CONSUMED", StringComparison.OrdinalIgnoreCase)) return PreMissionAssessmentStatus.Completed;
+        if (normalized.Equals("INCOMPLETE", StringComparison.OrdinalIgnoreCase)) return PreMissionAssessmentStatus.NotReady;
+        if (normalized.Equals("NOTREADY", StringComparison.OrdinalIgnoreCase)) return PreMissionAssessmentStatus.NotReady;
+        return Enum.TryParse<PreMissionAssessmentStatus>(normalized, true, out var status)
+            ? status
+            : PreMissionAssessmentStatus.Draft;
     }
 }
 

@@ -144,11 +144,31 @@ public sealed class PreMissionAssessmentService
 
     public async Task<IReadOnlyList<PreMissionAssessment>> ListAsync(CancellationToken ct)
     {
+        return await ListAsync(null, ct);
+    }
+
+    public async Task<IReadOnlyList<PreMissionAssessment>> ListAsync(string? status, CancellationToken ct)
+    {
         await RequireManager(ct);
 
-        var list = await _db.PreMissionAssessments
+        var query = _db.PreMissionAssessments
             .Include(x => x.Assets)
-            .Where(x => x.ManagerId == _current.UserId || _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
+            .Where(x => x.ManagerId == _current.UserId || _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var parsedStatus = NormalizeAssessmentStatusFilter(status);
+            if (parsedStatus.HasValue)
+            {
+                query = query.Where(x => x.Status == parsedStatus.Value);
+            }
+            else
+            {
+                query = query.Where(x => false);
+            }
+        }
+
+        var list = await query
             .OrderByDescending(x => x.CreatedAt)
             .Take(100)
             .ToListAsync(ct);
@@ -166,6 +186,25 @@ public sealed class PreMissionAssessmentService
         return list;
     }
 
+    public static PreMissionAssessmentStatus? NormalizeAssessmentStatusFilter(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+            return null;
+
+        var clean = status.Trim().Replace("-", "_").ToUpperInvariant();
+        return clean switch
+        {
+            "DRAFT" => PreMissionAssessmentStatus.Draft,
+            "EVALUATING" => PreMissionAssessmentStatus.Evaluating,
+            "READY" => PreMissionAssessmentStatus.Ready,
+            "NOT_READY" or "NOTREADY" or "INCOMPLETE" => PreMissionAssessmentStatus.NotReady,
+            "EXPIRED" => PreMissionAssessmentStatus.Expired,
+            "COMPLETED" or "CONSUMED" => PreMissionAssessmentStatus.Completed,
+            "CANCELLED" or "CANCELED" => PreMissionAssessmentStatus.Cancelled,
+            _ => Enum.TryParse<PreMissionAssessmentStatus>(clean, true, out var parsed) ? parsed : null
+        };
+    }
+
     public async Task<PreMissionAssessment> EvaluateAsync(Guid id, CancellationToken ct)
     {
         await RequireManager(ct);
@@ -181,7 +220,7 @@ public sealed class PreMissionAssessmentService
         if (assessment.ManagerId != _current.UserId && !_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
             throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
 
-        if (assessment.Status == PreMissionAssessmentStatus.Consumed)
+        if (assessment.Status == PreMissionAssessmentStatus.Completed)
             throw new BusinessRuleException("ASSESSMENT_ALREADY_CONSUMED");
 
         // Step 1: Site Feasibility
@@ -359,7 +398,7 @@ public sealed class PreMissionAssessmentService
         if (assessment.ManagerId != _current.UserId && !_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
             throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
 
-        if (assessment.Status == PreMissionAssessmentStatus.Consumed ||
+        if (assessment.Status == PreMissionAssessmentStatus.Completed ||
             assessment.ConsumedByMissionId.HasValue ||
             await _db.Missions.AnyAsync(x => x.PreMissionAssessmentId == request.AssessmentId, ct))
         {
@@ -496,7 +535,7 @@ public sealed class PreMissionAssessmentService
         }
 
         // Consume assessment
-        assessment.Status = PreMissionAssessmentStatus.Consumed;
+        assessment.Status = PreMissionAssessmentStatus.Completed;
         assessment.ConsumedByMissionId = mission.Id;
         assessment.Version++;
 
@@ -546,6 +585,37 @@ public sealed class PreMissionAssessmentService
             new List<Guid> { droneId }
         );
         return await CreateMissionFromAssessmentAsync(request, ct);
+    }
+
+    public async Task<PreMissionAssessment> MarkCompletedAsync(Guid assessmentId, Guid? missionId, CancellationToken ct)
+    {
+        await RequireManager(ct);
+
+        var assessment = await _db.PreMissionAssessments
+            .Include(x => x.Assets)
+            .Include(x => x.PersonnelCandidates)
+            .Include(x => x.DroneCandidates)
+            .Include(x => x.Region)
+            .SingleOrDefaultAsync(x => x.Id == assessmentId, ct)
+            ?? throw new NotFoundException("PreMissionAssessment", assessmentId);
+
+        if (assessment.ManagerId != _current.UserId && !_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
+            throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
+
+        if (assessment.Status == PreMissionAssessmentStatus.Completed || assessment.ConsumedByMissionId.HasValue)
+            throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED");
+
+        if (missionId.HasValue && missionId.Value != Guid.Empty)
+        {
+            assessment.ConsumedByMissionId = missionId.Value;
+        }
+
+        assessment.Status = PreMissionAssessmentStatus.Completed;
+        assessment.Version++;
+
+        Audit(assessment.Id, "ASSESSMENT_MARKED_COMPLETED");
+        await SaveWithConcurrency(ct);
+        return assessment;
     }
 
     private async Task RequireManager(CancellationToken ct)

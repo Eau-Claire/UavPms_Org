@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using UavPms.OperationsService.Application.Features.Assessments.DTOs;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.Shared.Contracts.Constants;
 
@@ -22,10 +23,10 @@ public sealed class PreMissionAssessmentController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
+    public async Task<IActionResult> List([FromQuery] string? status, CancellationToken ct)
     {
         AddSunsetHeader();
-        return Ok(await _service.ListAsync(ct));
+        return Ok(await _service.ListAsync(status, ct));
     }
 
     [HttpGet("{id:guid}")]
@@ -54,6 +55,20 @@ public sealed class PreMissionAssessmentController : ControllerBase
     {
         AddSunsetHeader();
         return Ok(await _service.CreateMissionAsync(id, request.Title, request.InspectorId, request.DroneId, ct));
+    }
+
+    [HttpPost("{id:guid}/mark-completed")]
+    public async Task<IActionResult> MarkCompleted(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
+    {
+        AddSunsetHeader();
+        return Ok(await _service.MarkCompletedAsync(id, request?.MissionId, ct));
+    }
+
+    [HttpPost("{id:guid}/consume")]
+    public async Task<IActionResult> Consume(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
+    {
+        AddSunsetHeader();
+        return Ok(await _service.MarkCompletedAsync(id, request?.MissionId, ct));
     }
 
     private void AddSunsetHeader()

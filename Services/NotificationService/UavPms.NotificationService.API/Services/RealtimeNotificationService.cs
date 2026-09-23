@@ -108,6 +108,74 @@ public class RealtimeNotificationService : IRealtimeNotificationService
         }
     }
 
+    public async Task SendMissionEventAsync(
+        UavPms.Shared.Contracts.Events.MissionLifecycleEventDto evt,
+        CancellationToken cancellationToken = default)
+    {
+        if (evt == null || string.IsNullOrWhiteSpace(evt.MissionId)) return;
+
+        try
+        {
+            var missionGroup = NotificationHub.MissionGroupName(evt.MissionId);
+
+            // 1. Aggregate event to mission room
+            await _hubContext.Clients.Group(missionGroup).SendAsync("MissionLifecycleEvent", evt, cancellationToken);
+
+            // 2. Specific event broadcast
+            switch (evt.Type?.ToUpperInvariant())
+            {
+                case "CONFIRMED":
+                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionConfirmed", evt, cancellationToken);
+                    break;
+                case "SUSPENDED":
+                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionSuspended", evt, cancellationToken);
+                    break;
+                case "POSTPONED":
+                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionPostponed", evt, cancellationToken);
+                    break;
+                case "RESUMED":
+                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionResumed", evt, cancellationToken);
+                    break;
+                case "CANCELLED":
+                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionCancelled", evt, cancellationToken);
+                    break;
+                case "REMINDER":
+                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionReminderSent", evt, cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(evt.TargetUserId) && Guid.TryParse(evt.TargetUserId, out var reminderTargetGuid))
+                    {
+                        await _hubContext.Clients.Group(NotificationHub.UserGroupName(reminderTargetGuid))
+                            .SendAsync("MissionReminderSent", evt, cancellationToken);
+                    }
+                    break;
+                case "COMMUNICATION":
+                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionCommunicationReceived", evt, cancellationToken);
+                    break;
+                case "DISPATCHED":
+                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionDispatched", evt, cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(evt.InspectorId) && Guid.TryParse(evt.InspectorId, out var inspectorGuid))
+                    {
+                        await _hubContext.Clients.Group(NotificationHub.UserGroupName(inspectorGuid))
+                            .SendAsync("MissionDispatched", evt, cancellationToken);
+                    }
+                    break;
+                case "OVERDUE":
+                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionConfirmationOverdue", evt, cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(evt.ManagerId) && Guid.TryParse(evt.ManagerId, out var managerGuid))
+                    {
+                        await _hubContext.Clients.Group(NotificationHub.UserGroupName(managerGuid))
+                            .SendAsync("MissionConfirmationOverdue", evt, cancellationToken);
+                    }
+                    break;
+            }
+
+            _logger.LogInformation("Realtime mission event broadcasted. MissionId={MissionId}, Type={Type}", evt.MissionId, evt.Type);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to broadcast realtime mission event. MissionId={MissionId}, Type={Type}", evt.MissionId, evt.Type);
+        }
+    }
+
     private static RealtimeNotificationPayload ToPayload(Notification notification)
     {
         return new RealtimeNotificationPayload

@@ -34,6 +34,9 @@ public class Mission : BaseEntity
     public DateTime? PostponedAt { get; set; }
     public string? PostponeReason { get; set; }
     public string? IdempotencyKey { get; set; }
+    public DateTime? ConfirmationDeadline { get; set; }
+    public bool IsOverdueNotified { get; set; } = false;
+    public string? ManagerInstructions { get; set; }
 
     public virtual User? Manager { get; set; }
     public virtual User? Inspector { get; set; }
@@ -46,6 +49,7 @@ public class Mission : BaseEntity
     public virtual ICollection<MissionCheckIn> CheckIns { get; set; } = new List<MissionCheckIn>();
     public virtual ICollection<DroneHandover> DroneHandovers { get; set; } = new List<DroneHandover>();
     public virtual ICollection<ResourceBooking> ResourceBookings { get; set; } = new List<ResourceBooking>();
+    public virtual ICollection<MissionCommunicationLog> CommunicationLogs { get; set; } = new List<MissionCommunicationLog>();
 
     public virtual ICollection<MissionTargetLine> MissionTargetLines { get; set; } = new List<MissionTargetLine>();
     public virtual ICollection<MissionTarget> MissionTargets { get; set; } = new List<MissionTarget>();

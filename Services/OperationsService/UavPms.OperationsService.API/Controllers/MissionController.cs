@@ -42,8 +42,19 @@ public class MissionController : ControllerBase
                 return BadRequest(new ApiResponse(false, "MissionType must be SCHEDULED or AD_HOC"));
             if (!request.PlannedStart.HasValue || !request.PlannedEnd.HasValue)
                 return BadRequest(new ApiResponse(false, "PlannedStart and PlannedEnd are required"));
-            var mission = await _lifecycle!.CreateAsync(new Mf01CreateMission(request.Title ?? request.Name ?? "", request.RegionId.Value,
-                missionType, request.ScheduleId, request.TriggerReason, request.PlannedStart.Value, request.PlannedEnd.Value, request.Description), cancellationToken);
+            var mission = await _lifecycle!.CreateAsync(new Mf01CreateMission(
+                request.Title ?? request.Name ?? "",
+                request.RegionId.Value,
+                missionType,
+                request.ScheduleId,
+                request.TriggerReason,
+                request.PlannedStart.Value,
+                request.PlannedEnd.Value,
+                request.Description,
+                request.ConfirmationDeadline,
+                request.ManagerInstructions,
+                request.AssignedToUserId ?? request.InspectorId,
+                request.DroneId ?? request.UavId), cancellationToken);
             return Ok(new ApiResponse(true, "Mission created successfully", mission.Id));
         }
         var command = new CreateMissionCommand(
@@ -76,15 +87,15 @@ public class MissionController : ControllerBase
 
     [HttpDelete("{id:guid}/assignments/{assignmentId:guid}")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
-    public async Task<IActionResult> RemoveAssignment(Guid id, Guid assignmentId, CancellationToken ct) { await _lifecycle.RemoveAssignmentAsync(id, assignmentId, ct); return Ok(new ApiResponse(true, "Mission assignment removed")); }
+    public async Task<IActionResult> RemoveAssignment(Guid id, Guid assignmentId, CancellationToken ct) { await _lifecycle!.RemoveAssignmentAsync(id, assignmentId, ct); return Ok(new ApiResponse(true, "Mission assignment removed")); }
 
     [HttpPut("{id:guid}/drone")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
-    public async Task<IActionResult> AssignDrone(Guid id, [FromBody] MissionDroneRequest request, CancellationToken ct) { await _lifecycle.AssignDroneAsync(id, request.DroneId, ct); return Ok(new ApiResponse(true, "Mission drone assigned")); }
+    public async Task<IActionResult> AssignDrone(Guid id, [FromBody] MissionDroneRequest request, CancellationToken ct) { await _lifecycle!.AssignDroneAsync(id, request.DroneId, ct); return Ok(new ApiResponse(true, "Mission drone assigned")); }
 
     [HttpPost("{id:guid}/drone-handover")]
     [Authorize(Roles = UserRoles.AdminManagerInspector)]
-    public async Task<IActionResult> Handover(Guid id, [FromBody] MissionHandoverRequest request, CancellationToken ct) => Ok(new ApiResponse(true, "Drone handover confirmed", await _lifecycle.ConfirmHandoverAsync(id, new Mf01Handover(request.DroneId, request.ReceivedBy, request.Condition, request.Accepted), ct)));
+    public async Task<IActionResult> Handover(Guid id, [FromBody] MissionHandoverRequest request, CancellationToken ct) => Ok(new ApiResponse(true, "Drone handover confirmed", await _lifecycle!.ConfirmHandoverAsync(id, new Mf01Handover(request.DroneId, request.ReceivedBy, request.Condition, request.Accepted), ct)));
 
     [HttpPost("{id:guid}/check-in")]
     [Authorize(Roles = UserRoles.AdminManagerInspector)]
@@ -110,13 +121,81 @@ public class MissionController : ControllerBase
 
     [HttpPost("{id:guid}/start")]
     [Authorize(Roles = UserRoles.AdminManagerInspector)]
-    public async Task<IActionResult> Start(Guid id, CancellationToken ct) { await _lifecycle.StartAsync(id, ct); return Ok(new ApiResponse(true, "Mission started")); }
+    public async Task<IActionResult> Start(Guid id, CancellationToken ct) { await _lifecycle!.StartAsync(id, ct); return Ok(new ApiResponse(true, "Mission started")); }
     [HttpPost("{id:guid}/complete")]
     [Authorize(Roles = UserRoles.AdminManagerInspector)]
-    public async Task<IActionResult> Complete(Guid id, CancellationToken ct) { await _lifecycle.CompleteAsync(id, ct); return Ok(new ApiResponse(true, "Mission completed")); }
+    public async Task<IActionResult> Complete(Guid id, CancellationToken ct) { await _lifecycle!.CompleteAsync(id, ct); return Ok(new ApiResponse(true, "Mission completed")); }
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
-    public async Task<IActionResult> Cancel(Guid id, CancellationToken ct) { await _lifecycle.CancelAsync(id, ct); return Ok(new ApiResponse(true, "Mission cancelled")); }
+    public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelMissionRequest? request = null, CancellationToken ct = default)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var mission = await _lifecycle.CancelMissionAsync(id, request?.Reason, ct);
+        return Ok(new ApiResponse(true, "Mission cancelled", mission));
+    }
+
+    [HttpPost("{id:guid}/confirm")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    public async Task<IActionResult> Confirm(Guid id, [FromBody] ConfirmMissionRequest? request = null, CancellationToken ct = default)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var mission = await _lifecycle.ConfirmMissionAsync(id, request?.Reason, ct);
+        return Ok(new ApiResponse(true, "Mission confirmed successfully", mission));
+    }
+
+    [HttpPost("{id:guid}/suspend")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> Suspend(Guid id, [FromBody] SuspendMissionRequest request, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var mission = await _lifecycle.SuspendMissionAsync(id, request.Reason, ct);
+        return Ok(new ApiResponse(true, "Mission suspended successfully", mission));
+    }
+
+    [HttpPost("{id:guid}/resume")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> Resume(Guid id, [FromBody] ResumeMissionRequest? request = null, CancellationToken ct = default)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var mission = await _lifecycle.ResumeMissionAsync(id, request?.Reason, ct);
+        return Ok(new ApiResponse(true, "Mission resumed successfully", mission));
+    }
+
+    [HttpPost("{id:guid}/postpone")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    public async Task<IActionResult> Postpone(Guid id, [FromBody] PostponeAssignmentRequest request, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var mission = await _lifecycle.PostponeMissionAsync(id, request.Reason, ct);
+        return Ok(new ApiResponse(true, "Mission postponed successfully", mission));
+    }
+
+    [HttpPost("{id:guid}/remind")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> Remind(Guid id, [FromBody] RemindMissionRequest? request = null, CancellationToken ct = default)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        await _lifecycle.RemindMissionAsync(id, request?.Reason, ct);
+        return Ok(new ApiResponse(true, "Mission reminder sent successfully"));
+    }
+
+    [HttpPost("{id:guid}/communications")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    public async Task<IActionResult> AddCommunication(Guid id, [FromBody] SendCommunicationRequest request, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var log = await _lifecycle.AddCommunicationAsync(id, request.Message, ct);
+        return Ok(new ApiResponse(true, "Communication message recorded", log));
+    }
+
+    [HttpGet("{id:guid}/communications")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    public async Task<IActionResult> GetCommunications(Guid id, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var logs = await _lifecycle.GetCommunicationsAsync(id, ct);
+        return Ok(new ApiResponse(true, "Communications retrieved successfully", logs));
+    }
 
     [HttpPut("{id:guid}")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
@@ -204,13 +283,22 @@ public record CreateMissionRequest(
     Guid? ScheduleId = null,
     string? TriggerReason = null,
     DateTime? PlannedStart = null,
-    DateTime? PlannedEnd = null);
+    DateTime? PlannedEnd = null,
+    DateTime? ConfirmationDeadline = null,
+    string? ManagerInstructions = null);
 
 public record MissionScopeRequest(string BoundaryWkt);
 public record MissionAssetsRequest(string BoundaryWkt, IReadOnlyCollection<Guid> AssetIds);
 public record MissionAssignmentRequest(Guid UserId, string AssignmentRole);
 public record MissionDroneRequest(Guid DroneId);
 public record MissionHandoverRequest(Guid DroneId, Guid ReceivedBy, string Condition, bool Accepted);
+
+public record ConfirmMissionRequest(string? Reason = null);
+public record SuspendMissionRequest(string Reason);
+public record ResumeMissionRequest(string? Reason = null);
+public record CancelMissionRequest(string? Reason = null);
+public record RemindMissionRequest(string? Reason = null);
+public record SendCommunicationRequest(string Message);
 
 public record UpdateMissionRequest(
     string Title,

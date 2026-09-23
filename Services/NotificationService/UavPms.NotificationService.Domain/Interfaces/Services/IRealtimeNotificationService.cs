@@ -9,4 +9,5 @@ public interface IRealtimeNotificationService
     Task SendToUsersAsync(IEnumerable<Guid> userIds, Notification notification, CancellationToken cancellationToken = default);
     Task SendToRoleAsync(string roleName, Notification notification, CancellationToken cancellationToken = default);
     Task SendAiAnalysisStatusToUserAsync(Guid userId, AIAnalysisStatusChangedEvent statusChanged, CancellationToken cancellationToken = default);
+    Task SendMissionEventAsync(UavPms.Shared.Contracts.Events.MissionLifecycleEventDto evt, CancellationToken cancellationToken = default);
 }

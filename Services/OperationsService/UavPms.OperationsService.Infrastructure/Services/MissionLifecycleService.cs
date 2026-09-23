@@ -2,12 +2,14 @@ using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using UavPms.OperationsService.Application.Common.Exceptions;
+using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Application.Features.Missions;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.Shared.Contracts.Constants;
+using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.OperationsService.Infrastructure.Services;
 
@@ -15,7 +17,17 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
 {
     private readonly ApplicationDbContext _db;
     private readonly ICurrentUserServices _current;
-    public MissionLifecycleService(ApplicationDbContext db, ICurrentUserServices current) { _db = db; _current = current; }
+    private readonly IMissionRealtimeNotifier? _notifier;
+
+    public MissionLifecycleService(
+        ApplicationDbContext db,
+        ICurrentUserServices current,
+        IMissionRealtimeNotifier? notifier = null)
+    {
+        _db = db;
+        _current = current;
+        _notifier = notifier;
+    }
 
     public async Task<Mission> CreateAsync(Mf01CreateMission request, CancellationToken ct)
     {
@@ -34,14 +46,99 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
         else if (request.ScheduleId is not null) throw new BusinessRuleException("AD_HOC_SCHEDULE_NOT_ALLOWED");
 
-        var mission = new Mission { MissionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmssfff}", Title = request.Title,
-            RegionId = request.RegionId, ScheduleId = request.ScheduleId, MissionType = request.MissionType,
-            TriggerReason = request.TriggerReason, PlannedStart = request.PlannedStart, PlannedEnd = request.PlannedEnd,
-            ScheduledStartAt = request.PlannedStart, Description = request.Description ?? string.Empty,
-            ManagerId = _current.UserId, Status = MissionStatus.Draft };
+        var status = request.ConfirmationDeadline.HasValue ? MissionStatus.PendingAcceptance : MissionStatus.Draft;
+        var mission = new Mission
+        {
+            MissionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
+            Title = request.Title,
+            RegionId = request.RegionId,
+            ScheduleId = request.ScheduleId,
+            MissionType = request.MissionType,
+            TriggerReason = request.TriggerReason,
+            PlannedStart = request.PlannedStart,
+            PlannedEnd = request.PlannedEnd,
+            ScheduledStartAt = request.PlannedStart,
+            Description = request.Description ?? string.Empty,
+            ManagerId = _current.UserId,
+            Status = status,
+            ConfirmationDeadline = request.ConfirmationDeadline,
+            ManagerInstructions = request.ManagerInstructions,
+            AssignedToUserId = request.AssignedToUserId ?? Guid.Empty,
+            InspectorId = request.AssignedToUserId ?? Guid.Empty,
+            UavId = request.DroneId ?? Guid.Empty
+        };
+
+        if (request.AssignedToUserId.HasValue && request.AssignedToUserId.Value != Guid.Empty)
+        {
+            var assignment = new MissionAssignment
+            {
+                MissionId = mission.Id,
+                UserId = request.AssignedToUserId.Value,
+                AssignmentRole = "PILOT",
+                AssignedByUserId = _current.UserId,
+                IsRequired = true,
+                ResponseStatus = MissionAssignmentResponse.Pending
+            };
+            mission.Assignments.Add(assignment);
+        }
+
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
-        _db.Missions.Add(mission); Audit(mission.Id, "MISSION_CREATED");
-        await _db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return mission;
+        _db.Missions.Add(mission);
+        Audit(mission.Id, "MISSION_CREATED");
+
+        if (mission.InspectorId != Guid.Empty)
+        {
+            Notify(mission.InspectorId, mission, "MISSION_DISPATCHED");
+        }
+
+        var dispatchLog = new MissionCommunicationLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            SenderId = _current.UserId,
+            SenderName = _current.Username ?? "Quản lý",
+            SenderRole = "MANAGER",
+            Type = "DISPATCH",
+            Content = string.IsNullOrWhiteSpace(request.ManagerInstructions)
+                ? $"Nhiệm vụ {mission.MissionCode} đã được ban hành và giao cho phi công."
+                : $"Nhiệm vụ {mission.MissionCode} đã được ban hành. Chỉ dẫn: {request.ManagerInstructions}",
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.MissionCommunicationLogs.Add(dispatchLog);
+
+        await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                Type = "DISPATCHED",
+                Status = "PENDING_CONFIRMATION",
+                ActorRole = "MANAGER",
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Quản lý",
+                ConfirmationDeadline = mission.ConfirmationDeadline?.ToString("o"),
+                ManagerInstructions = mission.ManagerInstructions,
+                InspectorId = mission.InspectorId != Guid.Empty ? mission.InspectorId.ToString() : null,
+                ManagerId = mission.ManagerId.ToString(),
+                Timestamp = DateTime.UtcNow,
+                Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
+                {
+                    Id = dispatchLog.Id.ToString(),
+                    SenderId = _current.UserId.ToString(),
+                    SenderName = dispatchLog.SenderName,
+                    SenderRole = dispatchLog.SenderRole,
+                    Type = dispatchLog.Type,
+                    Content = dispatchLog.Content,
+                    Timestamp = dispatchLog.CreatedAt
+                }
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
+
+        return mission;
     }
 
     public async Task<IReadOnlyList<Asset>> ResolveScopeAsync(Guid missionId, string boundaryWkt, CancellationToken ct)
@@ -227,6 +324,526 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Notify(a.UserId, m, "MISSION_CANCELLED");
 
         await SaveConcurrency(ct);
+    }
+
+    public async Task<Mission> ConfirmMissionAsync(Guid missionId, string? reason, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await AccessibleMission(missionId, ct, true);
+
+        mission.Status = MissionStatus.Assigned;
+        mission.AcceptedAt = DateTime.UtcNow;
+        mission.Version++;
+
+        foreach (var a in mission.Assignments.Where(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active))
+        {
+            a.ResponseStatus = MissionAssignmentResponse.Accepted;
+            a.RespondedAt = DateTime.UtcNow;
+            a.Version++;
+        }
+
+        Audit(mission.Id, "MISSION_CONFIRMED");
+        if (mission.ManagerId != Guid.Empty)
+        {
+            Notify(mission.ManagerId, mission, "MISSION_CONFIRMED");
+        }
+
+        var actorName = _current.Username ?? "Phi công";
+        var commContent = string.IsNullOrWhiteSpace(reason)
+            ? "Phi công đã xác nhận tiếp nhận sẵn sàng bay."
+            : $"Phi công đã xác nhận tiếp nhận: {reason}";
+
+        var commLog = new MissionCommunicationLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            SenderId = _current.UserId,
+            SenderName = actorName,
+            SenderRole = "INSPECTOR",
+            Type = "CONFIRM",
+            Content = commContent,
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.MissionCommunicationLogs.Add(commLog);
+
+        await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                Type = "CONFIRMED",
+                Status = "CONFIRMED",
+                ActorId = _current.UserId.ToString(),
+                ActorName = actorName,
+                ActorRole = "INSPECTOR",
+                Reason = commContent,
+                ManagerId = mission.ManagerId.ToString(),
+                InspectorId = mission.InspectorId.ToString(),
+                Timestamp = DateTime.UtcNow,
+                Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
+                {
+                    Id = commLog.Id.ToString(),
+                    SenderId = _current.UserId.ToString(),
+                    SenderName = commLog.SenderName,
+                    SenderRole = commLog.SenderRole,
+                    Type = commLog.Type,
+                    Content = commLog.Content,
+                    Timestamp = commLog.CreatedAt
+                }
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
+
+        return mission;
+    }
+
+    public async Task<Mission> SuspendMissionAsync(Guid missionId, string reason, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await ManagedMission(missionId, ct, true);
+
+        mission.Status = MissionStatus.Suspended;
+        mission.Version++;
+
+        Audit(mission.Id, "MISSION_SUSPENDED");
+        if (mission.InspectorId != Guid.Empty)
+        {
+            Notify(mission.InspectorId, mission, "MISSION_SUSPENDED");
+        }
+        foreach (var a in mission.Assignments.Where(x => x.Status == MissionAssignmentStatus.Active))
+        {
+            Notify(a.UserId, mission, "MISSION_SUSPENDED");
+        }
+
+        var actorName = _current.Username ?? "Quản lý";
+        var commContent = string.IsNullOrWhiteSpace(reason)
+            ? "Quản lý đã tạm đình chỉ bay khẩn cấp."
+            : $"Quản lý đã tạm đình chỉ bay khẩn cấp: {reason}";
+
+        var commLog = new MissionCommunicationLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            SenderId = _current.UserId,
+            SenderName = actorName,
+            SenderRole = "MANAGER",
+            Type = "SUSPEND",
+            Content = commContent,
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.MissionCommunicationLogs.Add(commLog);
+
+        await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                Type = "SUSPENDED",
+                Status = "SUSPENDED",
+                ActorId = _current.UserId.ToString(),
+                ActorName = actorName,
+                ActorRole = "MANAGER",
+                Reason = reason,
+                ManagerId = mission.ManagerId.ToString(),
+                InspectorId = mission.InspectorId.ToString(),
+                Timestamp = DateTime.UtcNow,
+                Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
+                {
+                    Id = commLog.Id.ToString(),
+                    SenderId = _current.UserId.ToString(),
+                    SenderName = commLog.SenderName,
+                    SenderRole = commLog.SenderRole,
+                    Type = commLog.Type,
+                    Content = commLog.Content,
+                    Timestamp = commLog.CreatedAt
+                }
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
+
+        return mission;
+    }
+
+    public async Task<Mission> ResumeMissionAsync(Guid missionId, string? reason, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await ManagedMission(missionId, ct, true);
+
+        mission.Status = mission.StartedAt != null
+            ? MissionStatus.InProgress
+            : (mission.RecalculateReadiness() ? MissionStatus.Ready : MissionStatus.Assigned);
+        mission.Version++;
+
+        Audit(mission.Id, "MISSION_RESUMED");
+        if (mission.InspectorId != Guid.Empty)
+        {
+            Notify(mission.InspectorId, mission, "MISSION_RESUMED");
+        }
+        foreach (var a in mission.Assignments.Where(x => x.Status == MissionAssignmentStatus.Active))
+        {
+            Notify(a.UserId, mission, "MISSION_RESUMED");
+        }
+
+        var actorName = _current.Username ?? "Quản lý";
+        var commContent = string.IsNullOrWhiteSpace(reason)
+            ? "Quản lý đã dỡ lệnh tạm đình chỉ bay."
+            : $"Quản lý đã dỡ lệnh tạm đình chỉ bay: {reason}";
+
+        var commLog = new MissionCommunicationLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            SenderId = _current.UserId,
+            SenderName = actorName,
+            SenderRole = "MANAGER",
+            Type = "RESUME",
+            Content = commContent,
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.MissionCommunicationLogs.Add(commLog);
+
+        await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                Type = "RESUMED",
+                Status = "CONFIRMED",
+                ActorId = _current.UserId.ToString(),
+                ActorName = actorName,
+                ActorRole = "MANAGER",
+                Reason = commContent,
+                ManagerId = mission.ManagerId.ToString(),
+                InspectorId = mission.InspectorId.ToString(),
+                Timestamp = DateTime.UtcNow,
+                Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
+                {
+                    Id = commLog.Id.ToString(),
+                    SenderId = _current.UserId.ToString(),
+                    SenderName = commLog.SenderName,
+                    SenderRole = commLog.SenderRole,
+                    Type = commLog.Type,
+                    Content = commLog.Content,
+                    Timestamp = commLog.CreatedAt
+                }
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
+
+        return mission;
+    }
+
+    public async Task<Mission> PostponeMissionAsync(Guid missionId, string reason, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new BusinessRuleException("POSTPONE_REASON_REQUIRED", "A reason must be provided when postponing an assignment.");
+
+        var mission = await AccessibleMission(missionId, ct, true);
+
+        mission.Status = MissionStatus.Postponed;
+        mission.PostponedAt = DateTime.UtcNow;
+        mission.PostponeReason = reason;
+        mission.Version++;
+
+        foreach (var a in mission.Assignments.Where(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active))
+        {
+            a.ResponseStatus = MissionAssignmentResponse.Postponed;
+            a.ResponseReason = reason;
+            a.RespondedAt = DateTime.UtcNow;
+            a.Version++;
+        }
+
+        Audit(mission.Id, "MISSION_POSTPONED");
+        if (mission.ManagerId != Guid.Empty)
+        {
+            Notify(mission.ManagerId, mission, "MISSION_POSTPONED");
+        }
+
+        var actorName = _current.Username ?? "Phi công";
+        var commLog = new MissionCommunicationLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            SenderId = _current.UserId,
+            SenderName = actorName,
+            SenderRole = "INSPECTOR",
+            Type = "POSTPONE",
+            Content = $"Phi công xin hoãn nhiệm vụ: {reason}",
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.MissionCommunicationLogs.Add(commLog);
+
+        await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                Type = "POSTPONED",
+                Status = "POSTPONED",
+                ActorId = _current.UserId.ToString(),
+                ActorName = actorName,
+                ActorRole = "INSPECTOR",
+                Reason = reason,
+                ManagerId = mission.ManagerId.ToString(),
+                InspectorId = mission.InspectorId.ToString(),
+                Timestamp = DateTime.UtcNow,
+                Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
+                {
+                    Id = commLog.Id.ToString(),
+                    SenderId = _current.UserId.ToString(),
+                    SenderName = commLog.SenderName,
+                    SenderRole = commLog.SenderRole,
+                    Type = commLog.Type,
+                    Content = commLog.Content,
+                    Timestamp = commLog.CreatedAt
+                }
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
+
+        return mission;
+    }
+
+    public async Task<Mission> CancelMissionAsync(Guid missionId, string? reason, CancellationToken ct)
+    {
+        var mission = await ManagedMission(missionId, ct, true);
+        mission.Cancel();
+        mission.Version++;
+
+        var bookings = await _db.ResourceBookings
+            .Where(b => b.MissionId == missionId && b.Status == ResourceBookingStatus.Active)
+            .ToListAsync(ct);
+        foreach (var b in bookings)
+        {
+            b.Status = ResourceBookingStatus.Cancelled;
+        }
+
+        Audit(mission.Id, "MISSION_CANCELLED");
+        foreach (var a in mission.Assignments.Where(x => x.Status == MissionAssignmentStatus.Active))
+            Notify(a.UserId, mission, "MISSION_CANCELLED");
+
+        var actorName = _current.Username ?? "Quản lý";
+        var commContent = string.IsNullOrWhiteSpace(reason)
+            ? "Quản lý đã hủy bỏ nhiệm vụ."
+            : $"Quản lý đã hủy bỏ nhiệm vụ: {reason}";
+
+        var commLog = new MissionCommunicationLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            SenderId = _current.UserId,
+            SenderName = actorName,
+            SenderRole = "MANAGER",
+            Type = "CANCEL",
+            Content = commContent,
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.MissionCommunicationLogs.Add(commLog);
+
+        await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                Type = "CANCELLED",
+                Status = "Cancelled",
+                ActorId = _current.UserId.ToString(),
+                ActorName = actorName,
+                ActorRole = "MANAGER",
+                Reason = reason,
+                ManagerId = mission.ManagerId.ToString(),
+                InspectorId = mission.InspectorId.ToString(),
+                Timestamp = DateTime.UtcNow,
+                Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
+                {
+                    Id = commLog.Id.ToString(),
+                    SenderId = _current.UserId.ToString(),
+                    SenderName = commLog.SenderName,
+                    SenderRole = commLog.SenderRole,
+                    Type = commLog.Type,
+                    Content = commLog.Content,
+                    Timestamp = commLog.CreatedAt
+                }
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
+
+        return mission;
+    }
+
+    public async Task RemindMissionAsync(Guid missionId, string? reason, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await ManagedMission(missionId, ct, true);
+
+        Audit(mission.Id, "MISSION_REMINDER");
+        var inspectorId = mission.InspectorId != Guid.Empty
+            ? mission.InspectorId
+            : (mission.AssignedToUserId != Guid.Empty
+                ? mission.AssignedToUserId
+                : (mission.Assignments.FirstOrDefault(a => a.Status == MissionAssignmentStatus.Active)?.UserId ?? Guid.Empty));
+        if (inspectorId != Guid.Empty)
+        {
+            Notify(inspectorId, mission, "MISSION_REMINDER");
+        }
+
+        var actorName = _current.Username ?? "Quản lý";
+        var commContent = string.IsNullOrWhiteSpace(reason)
+            ? "Nhắc nhở khẩn cấp: Vui lòng kiểm tra và tiếp nhận nhiệm vụ."
+            : $"Nhắc nhở khẩn cấp: {reason}";
+
+        var commLog = new MissionCommunicationLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            SenderId = _current.UserId,
+            SenderName = actorName,
+            SenderRole = "MANAGER",
+            Type = "REMINDER",
+            Content = commContent,
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.MissionCommunicationLogs.Add(commLog);
+
+        await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                Type = "REMINDER",
+                ActorId = _current.UserId.ToString(),
+                ActorName = actorName,
+                ActorRole = "MANAGER",
+                Reason = reason,
+                TargetUserId = inspectorId != Guid.Empty ? inspectorId.ToString() : null,
+                InspectorId = inspectorId != Guid.Empty ? inspectorId.ToString() : null,
+                ManagerId = mission.ManagerId.ToString(),
+                Timestamp = DateTime.UtcNow,
+                Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
+                {
+                    Id = commLog.Id.ToString(),
+                    SenderId = _current.UserId.ToString(),
+                    SenderName = commLog.SenderName,
+                    SenderRole = commLog.SenderRole,
+                    Type = commLog.Type,
+                    Content = commLog.Content,
+                    Timestamp = commLog.CreatedAt
+                }
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
+    }
+
+    public async Task<MissionCommunicationLogDto> AddCommunicationAsync(Guid missionId, string message, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        if (string.IsNullOrWhiteSpace(message))
+            throw new BusinessRuleException("MESSAGE_REQUIRED", "Tin nhắn không được để trống.");
+
+        var mission = await AccessibleMission(missionId, ct, true);
+
+        var isManager = _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase)
+                     || _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
+        var senderRole = isManager ? "MANAGER" : "INSPECTOR";
+        var actorName = _current.Username ?? (isManager ? "Quản lý" : "Phi công");
+
+        var commLog = new MissionCommunicationLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            SenderId = _current.UserId,
+            SenderName = actorName,
+            SenderRole = senderRole,
+            Type = "MESSAGE",
+            Content = message,
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.MissionCommunicationLogs.Add(commLog);
+
+        var recipientId = isManager
+            ? (mission.InspectorId != Guid.Empty ? mission.InspectorId : mission.AssignedToUserId)
+            : mission.ManagerId;
+        if (recipientId != Guid.Empty)
+        {
+            _db.Notifications.Add(new Notification
+            {
+                UserId = recipientId,
+                Type = "MISSION_COMMUNICATION",
+                ReferenceType = "Mission",
+                ReferenceId = mission.Id,
+                Title = $"[MF02] Tin nhắn mới trong nhiệm vụ {mission.MissionCode}",
+                Body = $"{actorName}: {message}"
+            });
+        }
+
+        await SaveConcurrency(ct);
+
+        var logDto = new MissionCommunicationLogDto
+        {
+            Id = commLog.Id.ToString(),
+            SenderId = _current.UserId.ToString(),
+            SenderName = commLog.SenderName,
+            SenderRole = commLog.SenderRole,
+            Type = commLog.Type,
+            Content = commLog.Content,
+            Timestamp = commLog.CreatedAt
+        };
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                Type = "COMMUNICATION",
+                ActorId = _current.UserId.ToString(),
+                ActorName = actorName,
+                ActorRole = senderRole,
+                Message = message,
+                ManagerId = mission.ManagerId.ToString(),
+                InspectorId = mission.InspectorId.ToString(),
+                Timestamp = DateTime.UtcNow,
+                Log = logDto
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
+
+        return logDto;
+    }
+
+    public async Task<IReadOnlyList<MissionCommunicationLogDto>> GetCommunicationsAsync(Guid missionId, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        await AccessibleMission(missionId, ct, false);
+
+        var logs = await _db.MissionCommunicationLogs
+            .Where(x => x.MissionId == missionId && !x.IsDeleted)
+            .OrderBy(x => x.CreatedAt)
+            .Select(x => new MissionCommunicationLogDto
+            {
+                Id = x.Id.ToString(),
+                SenderId = x.SenderId.HasValue ? x.SenderId.Value.ToString() : string.Empty,
+                SenderName = x.SenderName,
+                SenderRole = x.SenderRole,
+                Type = x.Type,
+                Content = x.Content,
+                Timestamp = x.CreatedAt
+            })
+            .ToListAsync(ct);
+
+        return logs;
     }
 
     private IQueryable<Asset> AssetsForRegion(Guid regionId) => _db.Assets.Where(x => (x.Status == "Active" || x.Status == "Operational") && x.Tower!.TransmissionLine!.Substation!.RegionAssetId == regionId);

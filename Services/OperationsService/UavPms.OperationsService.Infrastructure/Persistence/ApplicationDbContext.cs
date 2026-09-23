@@ -30,6 +30,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<AssetHealthHistory> AssetHealthHistories => Set<AssetHealthHistory>();
     public DbSet<Uav> Uavs => Set<Uav>();
     public DbSet<Mission> Missions => Set<Mission>();
+    public DbSet<MissionCommunicationLog> MissionCommunicationLogs => Set<MissionCommunicationLog>();
     public DbSet<InspectionSchedule> InspectionSchedules => Set<InspectionSchedule>();
     public DbSet<MissionAssignment> MissionAssignments => Set<MissionAssignment>();
     public DbSet<MissionCheckIn> MissionCheckIns => Set<MissionCheckIn>();

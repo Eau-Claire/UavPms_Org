@@ -296,4 +296,188 @@ public class PreMissionAssessmentServiceTests
 
         fetched.Status.Should().Be(PreMissionAssessmentStatus.Expired);
     }
+
+    [Fact]
+    public async Task MarkCompletedAsync_ValidAssessment_MarksCompletedSuccessfully()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Regions.Add(region);
+
+        var assessment = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Ready
+        };
+        db.PreMissionAssessments.Add(assessment);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, user.Object);
+        var missionId = Guid.NewGuid();
+
+        var result = await service.MarkCompletedAsync(assessment.Id, missionId, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result.Status.Should().Be(PreMissionAssessmentStatus.Completed);
+        result.ConsumedByMissionId.Should().Be(missionId);
+        result.Version.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task MarkCompletedAsync_AlreadyCompleted_ThrowsBusinessRuleException()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Regions.Add(region);
+
+        var assessment = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Completed,
+            ConsumedByMissionId = Guid.NewGuid()
+        };
+        db.PreMissionAssessments.Add(assessment);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, user.Object);
+
+        var act = () => service.MarkCompletedAsync(assessment.Id, Guid.NewGuid(), CancellationToken.None);
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*ASSESSMENT_ALREADY_COMPLETED*");
+    }
+
+    [Fact]
+    public async Task ListAsync_FilterByStatus_ReturnsOnlyMatchingStatus()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Regions.Add(region);
+
+        var a1 = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Completed
+        };
+        var a2 = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.NotReady
+        };
+        var a3 = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Ready
+        };
+        db.PreMissionAssessments.AddRange(a1, a2, a3);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, user.Object);
+
+        // Filter by COMPLETED
+        var completedList = await service.ListAsync("COMPLETED", CancellationToken.None);
+        completedList.Should().HaveCount(1);
+        completedList.Single().Id.Should().Be(a1.Id);
+
+        // Filter by NOT_READY
+        var notReadyList = await service.ListAsync("NOT_READY", CancellationToken.None);
+        notReadyList.Should().HaveCount(1);
+        notReadyList.Single().Id.Should().Be(a2.Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_LegacyStatusQuery_MapsConsumedAndIncomplete()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Regions.Add(region);
+
+        var a1 = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.Completed
+        };
+        var a2 = new PreMissionAssessment
+        {
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            Status = PreMissionAssessmentStatus.NotReady
+        };
+        db.PreMissionAssessments.AddRange(a1, a2);
+        await db.SaveChangesAsync();
+
+        var service = new PreMissionAssessmentService(db, user.Object);
+
+        // Legacy "CONSUMED" maps to Completed
+        var consumedList = await service.ListAsync("CONSUMED", CancellationToken.None);
+        consumedList.Should().HaveCount(1);
+        consumedList.Single().Id.Should().Be(a1.Id);
+
+        // Legacy "INCOMPLETE" maps to NotReady
+        var incompleteList = await service.ListAsync("INCOMPLETE", CancellationToken.None);
+        incompleteList.Should().HaveCount(1);
+        incompleteList.Single().Id.Should().Be(a2.Id);
+    }
+
+    [Theory]
+    [InlineData("CONSUMED", PreMissionAssessmentStatus.Completed)]
+    [InlineData("consumed", PreMissionAssessmentStatus.Completed)]
+    [InlineData("COMPLETED", PreMissionAssessmentStatus.Completed)]
+    [InlineData("completed", PreMissionAssessmentStatus.Completed)]
+    [InlineData("INCOMPLETE", PreMissionAssessmentStatus.NotReady)]
+    [InlineData("incomplete", PreMissionAssessmentStatus.NotReady)]
+    [InlineData("NOT_READY", PreMissionAssessmentStatus.NotReady)]
+    [InlineData("not_ready", PreMissionAssessmentStatus.NotReady)]
+    [InlineData("NOTREADY", PreMissionAssessmentStatus.NotReady)]
+    [InlineData("READY", PreMissionAssessmentStatus.Ready)]
+    [InlineData("DRAFT", PreMissionAssessmentStatus.Draft)]
+    [InlineData("EVALUATING", PreMissionAssessmentStatus.Evaluating)]
+    [InlineData("EXPIRED", PreMissionAssessmentStatus.Expired)]
+    [InlineData("CANCELLED", PreMissionAssessmentStatus.Cancelled)]
+    public void NormalizeAssessmentStatusFilter_NormalizesCorrectly(string input, PreMissionAssessmentStatus expected)
+    {
+        var result = PreMissionAssessmentService.NormalizeAssessmentStatusFilter(input);
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public void NormalizeAssessmentStatusFilter_InvalidString_ReturnsNull()
+    {
+        var result = PreMissionAssessmentService.NormalizeAssessmentStatusFilter("INVALID_STATUS");
+        result.Should().BeNull();
+    }
 }
