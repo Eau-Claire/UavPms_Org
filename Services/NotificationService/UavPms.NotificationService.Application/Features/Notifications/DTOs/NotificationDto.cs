@@ -12,4 +12,5 @@ public class NotificationDto
     public bool IsRead { get; set; }
     public DateTime SentAt { get; set; }
     public DateTime? ReadAt { get; set; }
+    public DateTime CreatedAt => SentAt;
 }

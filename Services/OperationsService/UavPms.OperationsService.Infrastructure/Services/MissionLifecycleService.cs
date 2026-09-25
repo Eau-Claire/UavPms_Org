@@ -83,13 +83,39 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             mission.Assignments.Add(assignment);
         }
 
+        if (request.Assignments != null && request.Assignments.Count > 0)
+        {
+            foreach (var a in request.Assignments)
+            {
+                if (a.UserId != Guid.Empty && !mission.Assignments.Any(x => x.UserId == a.UserId))
+                {
+                    mission.Assignments.Add(new MissionAssignment
+                    {
+                        MissionId = mission.Id,
+                        UserId = a.UserId,
+                        AssignmentRole = !string.IsNullOrWhiteSpace(a.Role) ? a.Role : "PILOT",
+                        AssignedByUserId = _current.UserId,
+                        IsRequired = a.IsRequired ?? true,
+                        ResponseStatus = MissionAssignmentResponse.Pending
+                    });
+                }
+            }
+        }
+
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
         _db.Missions.Add(mission);
         Audit(mission.Id, "MISSION_CREATED");
 
-        if (mission.InspectorId != Guid.Empty)
+        var assignedUserIds = mission.Assignments.Select(x => x.UserId).Distinct().ToList();
+        if (mission.InspectorId != Guid.Empty && !assignedUserIds.Contains(mission.InspectorId))
         {
-            Notify(mission.InspectorId, mission, "MISSION_DISPATCHED");
+            assignedUserIds.Add(mission.InspectorId);
+        }
+
+        foreach (var userId in assignedUserIds)
+        {
+            var role = mission.Assignments.FirstOrDefault(x => x.UserId == userId)?.AssignmentRole ?? "INSPECTOR";
+            Notify(userId, mission, "MISSION_DISPATCH", role);
         }
 
         var dispatchLog = new MissionCommunicationLog
@@ -115,6 +141,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
             {
                 MissionId = mission.Id.ToString(),
+                MissionCode = mission.MissionCode,
+                MissionTitle = mission.Title,
                 Type = "DISPATCHED",
                 Status = "PENDING_CONFIRMATION",
                 ActorRole = "MANAGER",
@@ -123,6 +151,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ConfirmationDeadline = mission.ConfirmationDeadline?.ToString("o"),
                 ManagerInstructions = mission.ManagerInstructions,
                 InspectorId = mission.InspectorId != Guid.Empty ? mission.InspectorId.ToString() : null,
+                AssignedUserIds = assignedUserIds.Select(u => u.ToString()).ToList(),
                 ManagerId = mission.ManagerId.ToString(),
                 Timestamp = DateTime.UtcNow,
                 Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
@@ -1386,7 +1415,28 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     private static bool IsActive(string status) => status.Equals("Active", StringComparison.OrdinalIgnoreCase) || status.Equals("Enabled", StringComparison.OrdinalIgnoreCase);
     private static void RequirePreExecution(Mission m) { if (m.Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled) throw new BusinessRuleException("MISSION_IMMUTABLE_AFTER_START"); }
     private void Audit(Guid id, string action) => _db.AuditLogs.Add(new AuditLog { UserId = _current.UserId, TableName = "Missions", RecordId = id, ActionType = action, OldValues = "{}", NewValues = "{}", IpAddress = _current.IpAddress ?? "", UserAgent = _current.UserAgent ?? "" });
-    private void Notify(Guid userId, Mission m, string type) => _db.Notifications.Add(new Notification { UserId = userId, Type = type, ReferenceType = "Mission", ReferenceId = m.Id, Title = m.Title, Body = type });
+    private void Notify(Guid userId, Mission m, string type, string? role = null)
+    {
+        var roleText = !string.IsNullOrWhiteSpace(role) ? $"vai trò {role}" : "nhiệm vụ";
+        var deadlineText = m.ConfirmationDeadline.HasValue 
+            ? $" Hạn chót xác nhận: {m.ConfirmationDeadline.Value:dd/MM/yyyy HH:mm}." 
+            : string.Empty;
+        var instructionsText = !string.IsNullOrWhiteSpace(m.ManagerInstructions)
+            ? $" Lời dặn: \"{m.ManagerInstructions}\""
+            : string.Empty;
+
+        _db.Notifications.Add(new Notification
+        {
+            UserId = userId,
+            Type = type == "MISSION_DISPATCHED" ? "MISSION_DISPATCH" : type,
+            ReferenceType = "MISSION",
+            ReferenceId = m.Id,
+            Title = $"[MF02 ĐIỀU PHỐI] Yêu cầu xác nhận nhiệm vụ: {m.MissionCode}",
+            Body = $"Bạn được phân công tham gia {roleText} cho nhiệm vụ \"{m.Title}\".{deadlineText}{instructionsText}",
+            IsRead = false,
+            SentAt = DateTime.UtcNow
+        });
+    }
     private async Task SaveConcurrency(CancellationToken ct)
     {
         try

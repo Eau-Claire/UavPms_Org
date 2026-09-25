@@ -26,25 +26,50 @@ public class NotificationController : ControllerBase
         _mediator = mediator;
     }
 
+    [HttpGet]
     [HttpGet("history")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
-    public async Task<IActionResult> GetHistory([FromQuery] string userId, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetHistory(
+        [FromQuery] string? userId = null,
+        [FromQuery] int limit = 50,
+        CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
+        var currentUserIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub")
+            ?? User.FindFirstValue("uid");
+
+        Guid targetGuid;
+        if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var userGuid))
+        {
+            targetGuid = userGuid;
+            // Kiểm tra người dùng chỉ được xem thông báo của chính mình (trừ Manager và Admin)
+            if (Guid.TryParse(currentUserIdStr, out var currentUserId) && currentUserId != userGuid)
+            {
+                var isManagerOrAdmin = User.IsInRole(UserRoles.Manager) || User.IsInRole(UserRoles.SystemAdmin);
+                if (!isManagerOrAdmin)
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new ApiResponse(false, "Forbidden: You can only access your own notifications."));
+                }
+            }
+        }
+        else if (!string.IsNullOrEmpty(currentUserIdStr) && Guid.TryParse(currentUserIdStr, out var currentUserId))
+        {
+            targetGuid = currentUserId;
+        }
+        else
         {
             return BadRequest(new ApiResponse(false, "Invalid UserId format."));
         }
 
-        // Kiểm tra người dùng chỉ được xem thông báo của chính mình
-        var currentUserIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (Guid.TryParse(currentUserIdStr, out var currentUserId) && currentUserId != userGuid)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new ApiResponse(false, "Forbidden: You can only access your own notifications."));
-        }
-
-        var query = new GetNotificationsQuery(userGuid);
+        var query = new GetNotificationsQuery(targetGuid);
         var result = await _mediator.Send(query, cancellationToken);
-        return Ok(new ApiResponse(true, "Notifications retrieved successfully", result));
+        var items = limit > 0 ? result.Take(limit).ToList() : result;
+
+        return Ok(new ApiResponse(true, "Notifications retrieved successfully", new
+        {
+            items,
+            totalCount = result.Count
+        }));
     }
 
 

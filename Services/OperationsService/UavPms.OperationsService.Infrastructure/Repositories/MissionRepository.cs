@@ -78,7 +78,10 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         return await _context.Missions
             .Include(m => m.Inspector)
             .Include(m => m.Manager)
-            .Where(m => m.InspectorId == userId)
+            .Include(m => m.AssignedToUser)
+            .Include(m => m.Uav)
+            .Include(m => m.Assignments).ThenInclude(a => a.User)
+            .Where(m => m.InspectorId == userId || m.AssignedToUserId == userId || m.Assignments.Any(a => a.UserId == userId))
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync();
     }

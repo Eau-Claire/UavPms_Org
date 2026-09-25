@@ -85,10 +85,44 @@ public class RealtimeMissionBroadcastController : ControllerBase
                 break;
             case "DISPATCHED":
                 await _hubContext.Clients.Group(missionGroup).SendAsync("MissionDispatched", evt, cancellationToken);
-                if (!string.IsNullOrWhiteSpace(evt.InspectorId) && Guid.TryParse(evt.InspectorId, out var inspectorGuid))
+
+                var targetUserIds = new System.Collections.Generic.HashSet<Guid>();
+                if (!string.IsNullOrWhiteSpace(evt.InspectorId) && Guid.TryParse(evt.InspectorId, out var inspId))
+                    targetUserIds.Add(inspId);
+                if (!string.IsNullOrWhiteSpace(evt.TargetUserId) && Guid.TryParse(evt.TargetUserId, out var tgtId))
+                    targetUserIds.Add(tgtId);
+                if (evt.AssignedUserIds != null)
                 {
-                    await _hubContext.Clients.Group(NotificationHub.UserGroupName(inspectorGuid))
-                        .SendAsync("MissionDispatched", evt, cancellationToken);
+                    foreach (var uidStr in evt.AssignedUserIds)
+                    {
+                        if (Guid.TryParse(uidStr, out var uid))
+                            targetUserIds.Add(uid);
+                    }
+                }
+
+                foreach (var userGuid in targetUserIds)
+                {
+                    var userGroup = NotificationHub.UserGroupName(userGuid);
+                    var notifPayload = new
+                    {
+                        id = Guid.NewGuid().ToString(),
+                        userId = userGuid.ToString(),
+                        title = $"[MF02 ĐIỀU PHỐI] Yêu cầu xác nhận nhiệm vụ: {evt.MissionCode ?? evt.MissionId}",
+                        body = $"Bạn được phân công tham gia nhiệm vụ \"{evt.MissionTitle ?? evt.MissionCode ?? evt.MissionId}\".{(string.IsNullOrWhiteSpace(evt.ConfirmationDeadline) ? "" : $" Hạn chót xác nhận: {evt.ConfirmationDeadline}.")}{(string.IsNullOrWhiteSpace(evt.ManagerInstructions) ? "" : $" Lời dặn: \"{evt.ManagerInstructions}\"")}",
+                        type = "MISSION_DISPATCH",
+                        referenceType = "MISSION",
+                        referenceId = evt.MissionId,
+                        isRead = false,
+                        createdAt = DateTime.UtcNow
+                    };
+
+                    await _hubContext.Clients.Group(userGroup).SendAsync("MissionDispatched", evt, cancellationToken);
+                    await _hubContext.Clients.Group(userGroup).SendAsync("ReceiveNotification", notifPayload, cancellationToken);
+                    await _hubContext.Clients.Group(userGroup).SendAsync("NotificationReceived", notifPayload, cancellationToken);
+                    await _hubContext.Clients.Group(userGroup).SendAsync("ReceiveMissionEvent", evt, cancellationToken);
+
+                    await _hubContext.Clients.User(userGuid.ToString()).SendAsync("ReceiveNotification", notifPayload, cancellationToken);
+                    await _hubContext.Clients.User(userGuid.ToString()).SendAsync("ReceiveMissionEvent", evt, cancellationToken);
                 }
                 break;
             case "OVERDUE":
