@@ -1771,6 +1771,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.ToTable("PreMissionAssessments", null, t =>
                         {
                             t.HasCheckConstraint("CK_PreMissionAssessments_PlannedWindow", "\"PlannedEnd\" > \"PlannedStart\"");
+                            t.HasCheckConstraint("CK_PreMissionAssessments_Status", "\"Status\" IN ('DRAFT', 'EVALUATING', 'READY', 'NOT_READY', 'EXPIRED', 'COMPLETED', 'CANCELLED')");
                         });
                 });
 

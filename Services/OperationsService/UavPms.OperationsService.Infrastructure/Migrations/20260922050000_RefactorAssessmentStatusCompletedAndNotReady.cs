@@ -11,9 +11,16 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             // 1. Migrate legacy data
-            migrationBuilder.Sql("UPDATE \"PreMissionAssessments\" SET \"Status\" = 'COMPLETED' WHERE \"Status\" IN ('CONSUMED', 'Consumed');");
-            migrationBuilder.Sql("UPDATE \"PreMissionAssessments\" SET \"Status\" = 'NOT_READY' WHERE \"Status\" IN ('INCOMPLETE', 'Incomplete', 'NOTREADY', 'NotReady');");
-            migrationBuilder.Sql("UPDATE \"PreMissionAssessments\" SET \"Status\" = UPPER(\"Status\");");
+            migrationBuilder.Sql("""
+                UPDATE "PreMissionAssessments"
+                SET "Status" = CASE UPPER(REPLACE(TRIM("Status"), ' ', ''))
+                    WHEN 'CONSUMED' THEN 'COMPLETED'
+                    WHEN 'INCOMPLETE' THEN 'NOT_READY'
+                    WHEN 'NOTREADY' THEN 'NOT_READY'
+                    WHEN 'CANCELED' THEN 'CANCELLED'
+                    ELSE UPPER(TRIM("Status"))
+                END;
+                """);
 
             // 2. Add Check Constraint
             migrationBuilder.AddCheckConstraint(

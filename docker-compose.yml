@@ -1,6 +1,7 @@
 x-service-environment: &service-environment
   ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
   RunMigrations: ${RUN_MIGRATIONS:-false}
+  MigrationOnly: ${MIGRATION_ONLY:-false}
 
   ConnectionStrings__DefaultConnection: ${DB_CONNECTION}
   ConnectionStrings__HangfireConnection: ${HANGFIRE_DB_CONNECTION}
