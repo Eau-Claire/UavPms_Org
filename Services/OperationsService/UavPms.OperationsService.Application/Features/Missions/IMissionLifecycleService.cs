@@ -36,4 +36,13 @@ public interface IMissionLifecycleService
     Task RemindMissionAsync(Guid missionId, string? reason, CancellationToken ct);
     Task<MissionCommunicationLogDto> AddCommunicationAsync(Guid missionId, string message, CancellationToken ct);
     Task<IReadOnlyList<MissionCommunicationLogDto>> GetCommunicationsAsync(Guid missionId, CancellationToken ct);
+
+    // MF02 Linear Workflow & Extended APIs
+    Task<IReadOnlyList<UavPms.OperationsService.Application.Features.Missions.DTOs.MissionDetectionDto>> GetMissionDetectionsAsync(Guid missionId, string? status, string? mediaType, bool? isEmergency, CancellationToken ct);
+    Task<UavPms.OperationsService.Application.Features.Missions.DTOs.ReviewDetectionResultDto> ReviewDetectionAsync(Guid missionId, Guid detectionId, UavPms.OperationsService.Application.Features.Missions.DTOs.ReviewDetectionRequest request, CancellationToken ct);
+    Task<IReadOnlyList<UavPms.OperationsService.Application.Features.Missions.DTOs.MissionMaintenanceTaskDto>> GetMissionMaintenanceTasksAsync(Guid missionId, CancellationToken ct);
+    Task<IReadOnlyList<UavPms.OperationsService.Application.Features.Missions.DTOs.MissionActivityDto>> GetActivitiesAsync(Guid missionId, CancellationToken ct);
+    Task<UavPms.OperationsService.Application.Features.Missions.DTOs.MissionActivityDto> AddActivityAsync(Guid missionId, UavPms.OperationsService.Application.Features.Missions.DTOs.CreateMissionActivityRequest request, CancellationToken ct);
+    Task<UavPms.OperationsService.Application.Features.Missions.DTOs.MissionAssignmentsOverviewDto> GetAssignmentsOverviewAsync(Guid missionId, CancellationToken ct);
 }
+
