@@ -13,6 +13,7 @@ using UavPms.OperationsService.Application.Features.Missions.Queries.ListMission
 using UavPms.Shared.Contracts.Constants;
 
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
+using UavPms.OperationsService.Application.Features.Missions.DTOs;
 
 namespace UavPms.OperationsService.API.Controllers;
 
@@ -80,6 +81,15 @@ public class MissionController : ControllerBase
     [HttpPut("{id:guid}/assets")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> ConfirmAssets(Guid id, [FromBody] MissionAssetsRequest request, CancellationToken ct) { await _lifecycle!.ConfirmAssetsAsync(id, request.BoundaryWkt, request.AssetIds, ct); return Ok(new ApiResponse(true, "Mission assets confirmed")); }
+
+    [HttpGet("{id:guid}/assignments")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    public async Task<IActionResult> GetAssignments(Guid id, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var result = await _lifecycle.GetAssignmentsOverviewAsync(id, ct);
+        return Ok(new ApiResponse(true, "Mission assignments overview retrieved successfully", result));
+    }
 
     [HttpPost("{id:guid}/assignments")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
@@ -195,6 +205,64 @@ public class MissionController : ControllerBase
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
         var logs = await _lifecycle.GetCommunicationsAsync(id, ct);
         return Ok(new ApiResponse(true, "Communications retrieved successfully", logs));
+    }
+
+    [HttpGet("{id:guid}/activities")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    public async Task<IActionResult> GetActivities(Guid id, CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var logs = await _lifecycle.GetActivitiesAsync(id, ct);
+        return Ok(new ApiResponse(true, "Activities retrieved successfully", logs));
+    }
+
+    [HttpPost("{id:guid}/activities")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    public async Task<IActionResult> AddActivity(
+        Guid id,
+        [FromBody] CreateMissionActivityRequest request,
+        CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var activity = await _lifecycle.AddActivityAsync(id, request, ct);
+        return Ok(new ApiResponse(true, "Activity recorded successfully", activity));
+    }
+
+    [HttpGet("{id:guid}/detections")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    public async Task<IActionResult> GetDetections(
+        Guid id,
+        [FromQuery] string? status = null,
+        [FromQuery] string? mediaType = null,
+        [FromQuery] bool? isEmergency = null,
+        CancellationToken ct = default)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var detections = await _lifecycle.GetMissionDetectionsAsync(id, status, mediaType, isEmergency, ct);
+        return Ok(new ApiResponse(true, "Mission detections retrieved successfully", detections));
+    }
+
+    [HttpPost("{missionId:guid}/detections/{detectionId:guid}/review")]
+    [HttpPut("{missionId:guid}/detections/{detectionId:guid}/review")]
+    [Authorize(Roles = UserRoles.ManagerAndInspector + "," + UserRoles.Analyst)]
+    public async Task<IActionResult> ReviewDetection(
+        Guid missionId,
+        Guid detectionId,
+        [FromBody] ReviewDetectionRequest request,
+        CancellationToken ct = default)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var result = await _lifecycle.ReviewDetectionAsync(missionId, detectionId, request, ct);
+        return Ok(new ApiResponse(true, "AI detection review saved successfully", result));
+    }
+
+    [HttpGet("{id:guid}/maintenance-tasks")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    public async Task<IActionResult> GetMaintenanceTasks(Guid id, CancellationToken ct = default)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var tasks = await _lifecycle.GetMissionMaintenanceTasksAsync(id, ct);
+        return Ok(new ApiResponse(true, "Maintenance tasks retrieved successfully", tasks));
     }
 
     [HttpPut("{id:guid}")]

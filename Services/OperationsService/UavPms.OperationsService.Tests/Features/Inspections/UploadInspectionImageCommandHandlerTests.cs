@@ -11,6 +11,7 @@ using UavPms.OperationsService.Application.Features.Inspections.Commands.UploadI
 using UavPms.OperationsService.Domain.Contracts;
 using UavPms.Shared.Contracts.Events;
 using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using Xunit;
@@ -102,7 +103,7 @@ public class UploadInspectionImageCommandHandlerTests
             ContentType = "image/jpeg"
         };
 
-        var mission = new Mission { Id = missionId };
+        var mission = new Mission { Id = missionId, Status = MissionStatus.InProgress };
 
         _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false))
             .ReturnsAsync(mission);
@@ -135,7 +136,8 @@ public class UploadInspectionImageCommandHandlerTests
         var mission = new Mission
         {
             Id = missionId,
-            InspectorId = inspectorId
+            InspectorId = inspectorId,
+            Status = MissionStatus.InProgress
         };
 
         var asset = new Asset { Id = assetId };
@@ -171,6 +173,43 @@ public class UploadInspectionImageCommandHandlerTests
         _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<InspectionMediaUploadedEvent>()), Times.Never);
     }
 
+    [Theory]
+    [InlineData(MissionStatus.Draft)]
+    [InlineData(MissionStatus.PendingAcceptance)]
+    public async Task Handle_ShouldThrowBusinessRuleException_WhenMissionInPreExecutionState(MissionStatus status)
+    {
+        // Arrange
+        var missionId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
+        var inspectorId = Guid.NewGuid();
+        var mission = new Mission
+        {
+            Id = missionId,
+            InspectorId = inspectorId,
+            Status = status
+        };
+
+        _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false))
+            .ReturnsAsync(mission);
+
+        var command = new UploadInspectionImageCommand
+        {
+            MissionId = missionId,
+            AssetId = assetId,
+            CapturedAt = DateTime.UtcNow,
+            FileStream = new MemoryStream(),
+            FileName = "test.jpg",
+            ContentType = "image/jpeg"
+        };
+
+        // Act
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<BusinessRuleException>()
+            .WithMessage("*Cannot upload inspection media*");
+    }
+
     [Fact]
     public async Task Handle_ShouldSaveImageAndSaveToDbAndPublishEvent_WhenValidRequest()
     {
@@ -185,7 +224,8 @@ public class UploadInspectionImageCommandHandlerTests
         var mission = new Mission
         {
             Id = missionId,
-            InspectorId = inspectorId
+            InspectorId = inspectorId,
+            Status = MissionStatus.InProgress
         };
 
         var asset = new Asset { Id = assetId };
@@ -254,7 +294,7 @@ public class UploadInspectionImageCommandHandlerTests
         var assetId = Guid.NewGuid();
         var inspectorId = Guid.NewGuid();
         _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false))
-            .ReturnsAsync(new Mission { Id = missionId, InspectorId = inspectorId });
+            .ReturnsAsync(new Mission { Id = missionId, InspectorId = inspectorId, Status = MissionStatus.InProgress });
         _assetRepositoryMock.Setup(r => r.GetByIdAsync(assetId, false))
             .ReturnsAsync(new Asset { Id = assetId });
         _currentUserServicesMock.SetupGet(x => x.UserId).Returns(inspectorId);

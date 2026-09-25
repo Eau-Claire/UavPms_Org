@@ -10,6 +10,7 @@ using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Events;
 using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Application.Common.Exceptions;
+using UavPms.OperationsService.Domain.Enums;
 using System.Text.Json;
 
 namespace UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage;
@@ -76,7 +77,18 @@ public class UploadInspectionImageCommandHandler
             throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
         }
 
-        // 1b. Kiểm tra Asset tồn tại
+        // 1b. State Machine Guard: Không cho phép nạp dữ liệu kiểm tra khi nhiệm vụ chưa thực thi hoặc bị hủy
+        if (mission.Status is MissionStatus.Draft or MissionStatus.PendingAcceptance)
+        {
+            throw new BusinessRuleException("MISSION_NOT_EXECUTING_OR_COMPLETED", "Cannot upload inspection media before the mission is executing or completed.");
+        }
+
+        if (mission.Status == MissionStatus.Cancelled)
+        {
+            throw new BusinessRuleException("MISSION_CANCELLED", "Cannot upload inspection media for cancelled mission.");
+        }
+
+        // 1c. Kiểm tra Asset tồn tại
         var asset = await _assetRepository.GetByIdAsync(request.AssetId, track: false);
         if (asset == null)
         {
@@ -97,6 +109,7 @@ public class UploadInspectionImageCommandHandler
         {
             throw new BusinessRuleException("The asset is not included in the mission inspection scope.");
         }
+
 
         // 3. Lưu file ảnh vào hệ thống
         string fileUrl;
