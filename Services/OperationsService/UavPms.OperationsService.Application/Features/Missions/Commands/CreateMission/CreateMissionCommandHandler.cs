@@ -19,6 +19,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserServices _currentUserServices;
     private readonly IEventPublisher _eventPublisher;
+    private readonly INotificationRepository? _notificationRepository;
 
     public CreateMissionCommandHandler(
         IMissionRepository missionRepository,
@@ -27,7 +28,8 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
         IAssetRepository assetRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserServices currentUserServices,
-        IEventPublisher eventPublisher)
+        IEventPublisher eventPublisher,
+        INotificationRepository? notificationRepository = null)
     {
         _missionRepository = missionRepository;
         _userRepository = userRepository;
@@ -36,6 +38,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
         _unitOfWork = unitOfWork;
         _currentUserServices = currentUserServices;
         _eventPublisher = eventPublisher;
+        _notificationRepository = notificationRepository;
     }
     
     public async Task<MissionDto> Handle(CreateMissionCommand request, CancellationToken cancellationToken)
@@ -124,10 +127,39 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             InspectionStatus = MissionTargetInspectionStatus.Pending
         }).ToList();
         
+        mission.Assignments.Add(new MissionAssignment
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            UserId = inspectorId,
+            AssignmentRole = UserRoles.Inspector,
+            Status = MissionAssignmentStatus.Active,
+            ResponseStatus = MissionAssignmentResponse.Pending,
+            IsRequired = true,
+            AssignedByUserId = _currentUserServices.UserId != Guid.Empty ? _currentUserServices.UserId : Guid.Empty,
+            AssignedAt = DateTime.UtcNow
+        });
+
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
             await _missionRepository.AddAsync(mission);
+            if (_notificationRepository != null)
+            {
+                var notif = new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = inspectorId,
+                    Title = $"[MF02 ĐIỀU PHỐI] Yêu cầu xác nhận nhiệm vụ: {mission.MissionCode}",
+                    Body = $"Bạn được phân công làm {UserRoles.Inspector} trong nhiệm vụ \"{mission.Title}\".",
+                    Type = "MISSION_DISPATCH",
+                    ReferenceType = "MISSION",
+                    ReferenceId = mission.Id,
+                    IsRead = false,
+                    SentAt = DateTime.UtcNow
+                };
+                await _notificationRepository.AddAsync(notif);
+            }
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
         }
         catch

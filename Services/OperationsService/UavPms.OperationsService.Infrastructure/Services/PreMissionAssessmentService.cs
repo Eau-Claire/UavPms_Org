@@ -562,7 +562,7 @@ public sealed class PreMissionAssessmentService
         Audit(mission.Id, "MISSION_CREATED_FROM_ASSESSMENT");
         foreach (var p in request.Personnel)
         {
-            Notify(p.UserId, mission, "MISSION_ASSIGNMENT_PENDING");
+            Notify(p.UserId, mission, "MISSION_DISPATCH", p.Role);
         }
 
         await SaveWithConcurrency(ct);
@@ -646,16 +646,28 @@ public sealed class PreMissionAssessmentService
             UserAgent = _current.UserAgent ?? ""
         });
 
-    private void Notify(Guid userId, Mission m, string type) =>
+    private void Notify(Guid userId, Mission m, string type, string? role = null)
+    {
+        var roleText = !string.IsNullOrWhiteSpace(role) ? $"vai trò {role}" : "nhiệm vụ";
+        var deadlineText = m.ConfirmationDeadline.HasValue 
+            ? $" Hạn chót xác nhận: {m.ConfirmationDeadline.Value:dd/MM/yyyy HH:mm}." 
+            : string.Empty;
+        var instructionsText = !string.IsNullOrWhiteSpace(m.ManagerInstructions)
+            ? $" Lời dặn: \"{m.ManagerInstructions}\""
+            : string.Empty;
+
         _db.Notifications.Add(new Notification
         {
             UserId = userId,
-            Type = type,
-            ReferenceType = "Mission",
+            Type = type == "MISSION_DISPATCHED" ? "MISSION_DISPATCH" : type,
+            ReferenceType = "MISSION",
             ReferenceId = m.Id,
-            Title = m.Title,
-            Body = type
+            Title = $"[MF02 ĐIỀU PHỐI] Yêu cầu xác nhận nhiệm vụ: {m.MissionCode}",
+            Body = $"Bạn được phân công tham gia {roleText} trong nhiệm vụ \"{m.Title}\".{deadlineText}{instructionsText}",
+            IsRead = false,
+            SentAt = DateTime.UtcNow
         });
+    }
 
     private async Task SaveWithConcurrency(CancellationToken ct)
     {

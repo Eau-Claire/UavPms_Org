@@ -32,6 +32,9 @@ public class MissionLifecycleEventDto
     public string? TargetUserId { get; set; }
     public string? InspectorId { get; set; }
     public string? ManagerId { get; set; }
+    public string? MissionCode { get; set; }
+    public string? MissionTitle { get; set; }
+    public System.Collections.Generic.List<string>? AssignedUserIds { get; set; }
 }
 
 public class MissionCommunicationLogDto

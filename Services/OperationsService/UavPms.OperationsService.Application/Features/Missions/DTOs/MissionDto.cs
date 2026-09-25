@@ -30,6 +30,10 @@ public class MissionDto
     public Guid? ManagerId { get; set; }
     public string ManagerEmail { get; set; } = string.Empty;
     public List<MissionTargetDto> Targets { get; set; } = new();
+    public string? AssignedToUsername { get; set; }
+    public Guid? DroneId { get; set; }
+    public DateTime? ConfirmationDeadline { get; set; }
+    public string? ManagerInstructions { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

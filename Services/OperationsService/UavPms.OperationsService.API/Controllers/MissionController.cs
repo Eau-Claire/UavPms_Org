@@ -55,7 +55,8 @@ public class MissionController : ControllerBase
                 request.ConfirmationDeadline,
                 request.ManagerInstructions,
                 request.AssignedToUserId ?? request.InspectorId,
-                request.DroneId ?? request.UavId), cancellationToken);
+                request.DroneId ?? request.UavId,
+                request.Assignments), cancellationToken);
             return Ok(new ApiResponse(true, "Mission created successfully", mission.Id));
         }
         var command = new CreateMissionCommand(
@@ -324,7 +325,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("my")]
-    [Authorize(Roles = UserRoles.InspectorOnly)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetMyMissions(CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetMyMissionsQuery(), cancellationToken);
@@ -353,7 +354,8 @@ public record CreateMissionRequest(
     DateTime? PlannedStart = null,
     DateTime? PlannedEnd = null,
     DateTime? ConfirmationDeadline = null,
-    string? ManagerInstructions = null);
+    string? ManagerInstructions = null,
+    IReadOnlyList<MissionAssignmentItemRequest>? Assignments = null);
 
 public record MissionScopeRequest(string BoundaryWkt);
 public record MissionAssetsRequest(string BoundaryWkt, IReadOnlyCollection<Guid> AssetIds);
