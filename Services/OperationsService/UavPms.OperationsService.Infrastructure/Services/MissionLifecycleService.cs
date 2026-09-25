@@ -10,6 +10,7 @@ using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.Shared.Contracts.Constants;
 using UavPms.Shared.Contracts.Events;
+using UavPms.OperationsService.Application.Features.Missions.DTOs;
 
 namespace UavPms.OperationsService.Infrastructure.Services;
 
@@ -261,9 +262,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         assignment.RespondedAt = DateTime.UtcNow;
         assignment.Version++;
 
+        var allConfirmed = false;
         if (mission.Status == MissionStatus.PendingAcceptance)
         {
-            mission.CheckAcceptance();
+            allConfirmed = mission.CheckAcceptance();
+            if (allConfirmed)
+            {
+                Audit(mission.Id, "MISSION_CONFIRMED");
+            }
         }
         else
         {
@@ -273,6 +279,24 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         Audit(mission.Id, "ASSIGNMENT_ACCEPTED");
         await _db.SaveChangesAsync(ct);
         if (tx != null) await tx.CommitAsync(ct);
+
+        if (allConfirmed && _notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                Type = "CONFIRMED",
+                Status = "CONFIRMED",
+                ActorRole = assignment.AssignmentRole,
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Thành viên",
+                ManagerId = mission.ManagerId.ToString(),
+                InspectorId = mission.InspectorId.ToString(),
+                Timestamp = DateTime.UtcNow
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
+
         return assignment;
     }
 
@@ -846,11 +870,515 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         return logs;
     }
 
+    public async Task<IReadOnlyList<MissionDetectionDto>> GetMissionDetectionsAsync(
+        Guid missionId,
+        string? status,
+        string? mediaType,
+        bool? isEmergency,
+        CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        await AccessibleMission(missionId, ct, false);
+
+        var mediaQuery = _db.InspectionMedia.Where(m => m.MissionId == missionId && !m.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(mediaType))
+        {
+            var mt = mediaType.Trim().ToLowerInvariant();
+            mediaQuery = mediaQuery.Where(m => m.MediaType.ToLower() == mt);
+        }
+
+        var mediaList = await mediaQuery.ToListAsync(ct);
+        if (mediaList.Count == 0)
+        {
+            return Array.Empty<MissionDetectionDto>();
+        }
+
+        var mediaIds = mediaList.Select(m => m.Id).ToList();
+        var mediaMap = mediaList.ToDictionary(m => m.Id);
+
+        var anomaliesQuery = _db.DetectedAnomalies
+            .Include(a => a.Category)
+            .Include(a => a.Asset)
+            .Include(a => a.EmergencyAlerts)
+            .Where(a => mediaIds.Contains(a.MediaId) && !a.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var s = status.Trim().ToLowerInvariant();
+            if (s is "approved" or "confirmed")
+            {
+                anomaliesQuery = anomaliesQuery.Where(a => a.ValidationStatus == "Confirmed" || a.ValidationStatus == "Approved");
+            }
+            else if (s == "rejected")
+            {
+                anomaliesQuery = anomaliesQuery.Where(a => a.ValidationStatus == "Rejected");
+            }
+            else if (s == "pending")
+            {
+                anomaliesQuery = anomaliesQuery.Where(a => a.ValidationStatus != "Confirmed" && a.ValidationStatus != "Approved" && a.ValidationStatus != "Rejected");
+            }
+        }
+
+        if (isEmergency.HasValue)
+        {
+            anomaliesQuery = anomaliesQuery.Where(a => (a.Category != null && a.Category.IsEmergencyClass == isEmergency.Value) || a.EmergencyAlerts.Any() == isEmergency.Value);
+        }
+
+        var anomalies = await anomaliesQuery.OrderByDescending(a => a.CreatedAt).ToListAsync(ct);
+
+        var results = new List<MissionDetectionDto>(anomalies.Count);
+        foreach (var a in anomalies)
+        {
+            mediaMap.TryGetValue(a.MediaId, out var media);
+            var isEmerg = (a.Category != null && a.Category.IsEmergencyClass) || a.EmergencyAlerts.Any();
+            var detStatus = string.Equals(a.ValidationStatus, "Confirmed", StringComparison.OrdinalIgnoreCase) || string.Equals(a.ValidationStatus, "Approved", StringComparison.OrdinalIgnoreCase)
+                ? "Approved"
+                : (string.Equals(a.ValidationStatus, "Rejected", StringComparison.OrdinalIgnoreCase) ? "Rejected" : "Pending");
+
+            results.Add(new MissionDetectionDto
+            {
+                Id = a.Id.ToString(),
+                MissionId = missionId.ToString(),
+                MediaId = a.MediaId.ToString(),
+                Title = !string.IsNullOrWhiteSpace(a.Category?.CategoryName) ? a.Category.CategoryName : "Khuyết tật thiết bị",
+                Confidence = a.ConfidenceScore <= 1.0 ? Math.Round(a.ConfidenceScore * 100, 1) : Math.Round(a.ConfidenceScore, 1),
+                CategoryCode = a.Category?.CategoryCode ?? "DEF-UNKNOWN",
+                SeverityWeight = a.Category?.SeverityWeight ?? 1,
+                IsEmergency = isEmerg,
+                Status = detStatus,
+                BoundingBox = ParseBoundingBoxDto(a.BoundingBox),
+                TimestampSeconds = a.Timestamp,
+                TimestampLabel = a.Timestamp.HasValue ? TimeSpan.FromSeconds(a.Timestamp.Value).ToString(@"mm\:ss") : null,
+                FrameIndex = a.FrameIndex,
+                ImageUrl = !string.IsNullOrWhiteSpace(a.ImageUrl) ? a.ImageUrl : (!string.IsNullOrWhiteSpace(a.CropUrl) ? a.CropUrl : media?.FileUrl),
+                SourceUrl = media?.FileUrl,
+                AssetId = a.AssetId?.ToString(),
+                Tower = a.TowerId ?? "Cột chưa xác định",
+                Gps = a.Gps,
+                Description = !string.IsNullOrWhiteSpace(a.Category?.Description) ? a.Category.Description : a.AnalystNotes,
+                DetectedAt = a.CreatedAt,
+                ReviewedByUserId = a.AnalystId?.ToString(),
+                ReviewedAt = a.ValidatedAt,
+                ReviewNotes = a.AnalystNotes
+            });
+        }
+
+        return results;
+    }
+
+    public async Task<ReviewDetectionResultDto> ReviewDetectionAsync(
+        Guid missionId,
+        Guid detectionId,
+        ReviewDetectionRequest request,
+        CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await AccessibleMission(missionId, ct, false);
+
+        var anomaly = await _db.DetectedAnomalies
+            .Include(a => a.Category)
+            .Include(a => a.Media)
+            .SingleOrDefaultAsync(a => a.Id == detectionId && !a.IsDeleted, ct)
+            ?? throw new NotFoundException("DetectedAnomaly", detectionId);
+
+        if (anomaly.Media == null || anomaly.Media.MissionId != missionId)
+        {
+            throw new BusinessRuleException("ANOMALY_MISSION_MISMATCH", $"Khuyết tật '{detectionId}' không thuộc nhiệm vụ '{missionId}'.");
+        }
+
+        var isApproved = string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(request.Status, "Confirmed", StringComparison.OrdinalIgnoreCase);
+        var isRejected = string.Equals(request.Status, "Rejected", StringComparison.OrdinalIgnoreCase);
+
+        if (!isApproved && !isRejected)
+        {
+            throw new BusinessRuleException("INVALID_REVIEW_STATUS", "Trạng thái phê duyệt phải là 'Approved' hoặc 'Rejected'.");
+        }
+
+        anomaly.ValidationStatus = isApproved ? "Confirmed" : "Rejected";
+        anomaly.AnalystId = _current.UserId;
+        anomaly.AnalystNotes = request.ReviewNotes ?? string.Empty;
+        anomaly.ValidatedAt = DateTime.UtcNow;
+
+        string? createdTaskId = null;
+        double? newHealthScore = null;
+
+        if (isApproved)
+        {
+            // 1. Cập nhật giảm điểm sức khỏe của thiết bị (Asset Health Score)
+            if (anomaly.AssetId.HasValue && anomaly.AssetId.Value != Guid.Empty)
+            {
+                var asset = await _db.Assets.SingleOrDefaultAsync(x => x.Id == anomaly.AssetId.Value, ct);
+                if (asset != null)
+                {
+                    double penalty = 15;
+                    if (string.Equals(request.OverrideSeverity, "Critical Risk", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(request.OverrideSeverity, "Urgent", StringComparison.OrdinalIgnoreCase))
+                    {
+                        penalty = 25;
+                    }
+                    else if ((anomaly.Category?.SeverityWeight ?? 0) > 0)
+                    {
+                        penalty = Math.Min(30, anomaly.Category!.SeverityWeight * 3);
+                    }
+
+                    asset.CurrentHealthScore = Math.Max(0, Math.Round(asset.CurrentHealthScore - penalty, 1));
+                    asset.LastInspectedAt = DateTime.UtcNow;
+                    newHealthScore = asset.CurrentHealthScore;
+
+                    var healthHistory = new AssetHealthHistory
+                    {
+                        Id = Guid.NewGuid(),
+                        AssetId = asset.Id,
+                        HealthScore = asset.CurrentHealthScore,
+                        CalculatedAt = DateTime.UtcNow,
+                        CalculationLog = $"{{\"penalty\": {penalty}, \"action\": \"AI_DETECTION_REVIEW\", \"notes\": \"{request.ReviewNotes}\"}}",
+                        RiskLevel = asset.CurrentHealthScore < 40 ? "Critical" : (asset.CurrentHealthScore < 70 ? "Medium" : "Low")
+                    };
+                    _db.AssetHealthHistories.Add(healthHistory);
+                }
+            }
+
+            // 2. Tự động sinh phiếu bảo dưỡng (MaintenanceTask) nếu chưa tồn tại
+            var existingTicket = await _db.MaintenanceTickets
+                .SingleOrDefaultAsync(t => t.AnomalyId == anomaly.Id && !t.IsDeleted, ct);
+
+            if (existingTicket == null)
+            {
+                var priority = TicketPriority.High;
+                if (string.Equals(request.OverrideSeverity, "Critical Risk", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(request.OverrideSeverity, "Urgent", StringComparison.OrdinalIgnoreCase) ||
+                    (anomaly.Category != null && anomaly.Category.IsEmergencyClass) ||
+                    (anomaly.Category != null && anomaly.Category.SeverityWeight >= 4))
+                {
+                    priority = TicketPriority.Emergency;
+                }
+                else if (string.Equals(request.OverrideSeverity, "Low", StringComparison.OrdinalIgnoreCase))
+                {
+                    priority = TicketPriority.Low;
+                }
+
+                var techAssignment = await _db.MissionAssignments
+                    .FirstOrDefaultAsync(a => a.MissionId == missionId && a.AssignmentRole.ToUpper() == "TECHNICIAN" && a.Status == MissionAssignmentStatus.Active, ct);
+
+                var ticket = new MaintenanceTicket
+                {
+                    Id = Guid.NewGuid(),
+                    TicketCode = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{new Random().Next(1000, 9999)}",
+                    AnomalyId = anomaly.Id,
+                    AssetId = anomaly.AssetId ?? Guid.Empty,
+                    ManagerId = mission.ManagerId,
+                    TechnicianId = techAssignment?.UserId ?? Guid.Empty,
+                    Status = TicketStatus.Open,
+                    Priority = priority,
+                    Description = $"[Khuyến nghị từ Giám định AI] {anomaly.Category?.CategoryName ?? "Khuyết tật đường dây"}. {request.ReviewNotes ?? anomaly.AnalystNotes}",
+                    AssignedAt = DateTime.UtcNow,
+                    DueDate = DateTime.UtcNow.AddDays(priority == TicketPriority.Emergency ? 1 : 7)
+                };
+
+                _db.MaintenanceTickets.Add(ticket);
+                createdTaskId = ticket.Id.ToString();
+            }
+            else
+            {
+                createdTaskId = existingTicket.Id.ToString();
+            }
+        }
+
+        Audit(mission.Id, isApproved ? "DETECTION_APPROVED" : "DETECTION_REJECTED");
+        await _db.SaveChangesAsync(ct);
+
+        return new ReviewDetectionResultDto
+        {
+            DetectionId = anomaly.Id.ToString(),
+            MissionId = missionId.ToString(),
+            Status = isApproved ? "Approved" : "Rejected",
+            ReviewNotes = anomaly.AnalystNotes,
+            MaintenanceTaskId = createdTaskId,
+            NewAssetHealthScore = newHealthScore,
+            ReviewedAt = anomaly.ValidatedAt ?? DateTime.UtcNow
+        };
+    }
+
+    public async Task<IReadOnlyList<MissionMaintenanceTaskDto>> GetMissionMaintenanceTasksAsync(
+        Guid missionId,
+        CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        await AccessibleMission(missionId, ct, false);
+
+        var mediaIds = await _db.InspectionMedia
+            .Where(m => m.MissionId == missionId && !m.IsDeleted)
+            .Select(m => m.Id)
+            .ToListAsync(ct);
+
+        if (mediaIds.Count == 0)
+        {
+            return Array.Empty<MissionMaintenanceTaskDto>();
+        }
+
+        var anomalyIds = await _db.DetectedAnomalies
+            .Where(a => mediaIds.Contains(a.MediaId) && (a.ValidationStatus == "Confirmed" || a.ValidationStatus == "Approved") && !a.IsDeleted)
+            .Select(a => a.Id)
+            .ToListAsync(ct);
+
+        if (anomalyIds.Count == 0)
+        {
+            return Array.Empty<MissionMaintenanceTaskDto>();
+        }
+
+        var tickets = await _db.MaintenanceTickets
+            .Include(t => t.Anomaly)
+                .ThenInclude(a => a!.Category)
+            .Include(t => t.Asset)
+            .Where(t => anomalyIds.Contains(t.AnomalyId) && !t.IsDeleted)
+            .OrderByDescending(t => t.CreatedAt)
+            .ToListAsync(ct);
+
+        var results = new List<MissionMaintenanceTaskDto>(tickets.Count);
+        foreach (var t in tickets)
+        {
+            var priorityStr = t.Priority switch
+            {
+                TicketPriority.Emergency => "Urgent",
+                TicketPriority.High => "High",
+                TicketPriority.Medium => "Medium",
+                _ => "Low"
+            };
+
+            var statusStr = t.Status switch
+            {
+                TicketStatus.Open => "Pending",
+                TicketStatus.InProgress or TicketStatus.PendingVerification => "InProgress",
+                TicketStatus.Resolved or TicketStatus.Closed => "Completed",
+                _ => "Pending"
+            };
+
+            var catName = t.Anomaly?.Category?.CategoryName ?? "Khuyết tật thiết bị";
+            var assetCode = t.Asset?.AssetCode ?? "INS-220KV-042-PHA-B";
+            var towerCode = t.Anomaly?.TowerId ?? "Cột 042";
+
+            results.Add(new MissionMaintenanceTaskDto
+            {
+                Id = t.Id.ToString(),
+                MissionId = missionId.ToString(),
+                DetectionId = t.AnomalyId.ToString(),
+                Title = $"Khắc phục & sửa chữa {catName}",
+                Priority = priorityStr,
+                TowerCode = towerCode,
+                AssetCode = assetCode,
+                DefectDescription = t.Description,
+                SuggestedAction = $"Cắt điện xuất tuyến, chuẩn bị vật tư và nhân lực chuyên dụng để xử lý {catName} theo quy trình kỹ thuật an toàn.",
+                Status = statusStr,
+                AssignedTeam = "Đội Truyền tải Điện Hà Nội 1",
+                CreatedAt = t.CreatedAt
+            });
+        }
+
+        return results;
+    }
+
+    public async Task<IReadOnlyList<MissionActivityDto>> GetActivitiesAsync(Guid missionId, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        await AccessibleMission(missionId, ct, false);
+
+        var logs = await _db.MissionCommunicationLogs
+            .Where(x => x.MissionId == missionId && !x.IsDeleted)
+            .OrderBy(x => x.CreatedAt)
+            .Select(x => new MissionActivityDto
+            {
+                Id = x.Id.ToString(),
+                MissionId = x.MissionId.ToString(),
+                SenderUserId = x.SenderId.HasValue ? x.SenderId.Value.ToString() : string.Empty,
+                SenderName = x.SenderName,
+                SenderRole = x.SenderRole,
+                Content = x.Content,
+                Timestamp = x.CreatedAt
+            })
+            .ToListAsync(ct);
+
+        return logs;
+    }
+
+    public async Task<MissionActivityDto> AddActivityAsync(
+        Guid missionId,
+        CreateMissionActivityRequest request,
+        CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await AccessibleMission(missionId, ct, false);
+
+        var content = !string.IsNullOrWhiteSpace(request.Content) ? request.Content : request.Message;
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            throw new BusinessRuleException("ACTIVITY_CONTENT_REQUIRED", "Nội dung trao đổi không được để trống.");
+        }
+
+        var actorName = _current.Username ?? "Thành viên";
+        var senderRole = !string.IsNullOrWhiteSpace(request.SenderRole)
+            ? request.SenderRole.ToUpperInvariant()
+            : (_current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase)
+                ? "INSPECTOR"
+                : (_current.Roles.Contains(UserRoles.Analyst, StringComparer.OrdinalIgnoreCase)
+                    ? "ANALYST"
+                    : (_current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) ? "MANAGER" : "SYSTEM")));
+
+        var commLog = new MissionCommunicationLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            SenderId = _current.UserId,
+            SenderName = actorName,
+            SenderRole = senderRole,
+            Type = "MESSAGE",
+            Content = content,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.MissionCommunicationLogs.Add(commLog);
+        await _db.SaveChangesAsync(ct);
+
+        var dto = new MissionActivityDto
+        {
+            Id = commLog.Id.ToString(),
+            MissionId = mission.Id.ToString(),
+            SenderUserId = (commLog.SenderId ?? Guid.Empty).ToString(),
+            SenderName = commLog.SenderName,
+            SenderRole = commLog.SenderRole,
+            Content = commLog.Content,
+            Timestamp = commLog.CreatedAt
+        };
+
+        if (_notifier != null)
+        {
+            var eventDto = new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                Type = "COMMUNICATION",
+                ActorId = _current.UserId.ToString(),
+                ActorName = actorName,
+                ActorRole = senderRole,
+                Message = content,
+                ManagerId = mission.ManagerId.ToString(),
+                InspectorId = mission.InspectorId.ToString(),
+                Timestamp = DateTime.UtcNow,
+                Log = new MissionCommunicationLogDto
+                {
+                    Id = commLog.Id.ToString(),
+                    SenderId = (commLog.SenderId ?? Guid.Empty).ToString(),
+                    SenderName = commLog.SenderName,
+                    SenderRole = commLog.SenderRole,
+                    Type = commLog.Type,
+                    Content = commLog.Content,
+                    Timestamp = commLog.CreatedAt
+                }
+            };
+            await _notifier.NotifyAsync(eventDto, ct);
+        }
+
+        return dto;
+    }
+
+    public async Task<MissionAssignmentsOverviewDto> GetAssignmentsOverviewAsync(Guid missionId, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await _db.Missions
+            .Include(m => m.Assignments)
+                .ThenInclude(a => a.User)
+            .SingleOrDefaultAsync(m => m.Id == missionId && !m.IsDeleted, ct)
+            ?? throw new NotFoundException("Mission", missionId);
+
+        var activeAssignments = mission.Assignments
+            .Where(a => a.Status == MissionAssignmentStatus.Active && !a.IsDeleted)
+            .ToList();
+
+        var requiredList = activeAssignments.Where(a => a.IsRequired).ToList();
+        var totalRequired = requiredList.Count > 0 ? requiredList.Count : activeAssignments.Count;
+        var confirmedCount = requiredList.Count > 0
+            ? requiredList.Count(a => a.ResponseStatus == MissionAssignmentResponse.Accepted)
+            : activeAssignments.Count(a => a.ResponseStatus == MissionAssignmentResponse.Accepted);
+
+        var allConfirmed = totalRequired > 0 && confirmedCount >= totalRequired;
+
+        var items = activeAssignments.Select(a => new MissionAssignmentItemDto
+        {
+            Id = a.Id.ToString(),
+            UserId = a.UserId.ToString(),
+            UserName = a.User?.FullName ?? a.UserId.ToString(),
+            UserFullName = a.User?.FullName ?? "Chưa rõ",
+            AssignmentRole = a.AssignmentRole,
+            Status = a.Status.ToString(),
+            ResponseStatus = a.ResponseStatus.ToString(),
+            AssignedAt = a.AssignedAt,
+            RespondedAt = a.RespondedAt,
+            ResponseReason = a.ResponseReason
+        }).ToList();
+
+        return new MissionAssignmentsOverviewDto
+        {
+            MissionId = mission.Id.ToString(),
+            TotalRequiredCount = totalRequired,
+            ConfirmedCount = confirmedCount,
+            AllConfirmed = allConfirmed,
+            ConfirmationDeadline = mission.ConfirmationDeadline,
+            Assignments = items
+        };
+    }
+
+    private static MissionDetectionBoundingBoxDto? ParseBoundingBoxDto(string? rawBoundingBox)
+    {
+        if (string.IsNullOrWhiteSpace(rawBoundingBox)) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(rawBoundingBox);
+            var root = doc.RootElement;
+            if (TryGetJsonDouble(root, "x", out var x) &&
+                TryGetJsonDouble(root, "y", out var y) &&
+                TryGetJsonDouble(root, "width", out var w) &&
+                TryGetJsonDouble(root, "height", out var h))
+            {
+                return new MissionDetectionBoundingBoxDto { X = x, Y = y, Width = w, Height = h };
+            }
+            if (TryGetJsonDouble(root, "x1", out var x1) &&
+                TryGetJsonDouble(root, "y1", out var y1) &&
+                TryGetJsonDouble(root, "x2", out var x2) &&
+                TryGetJsonDouble(root, "y2", out var y2))
+            {
+                return new MissionDetectionBoundingBoxDto { X = x1, Y = y1, Width = Math.Max(0, x2 - x1), Height = Math.Max(0, y2 - y1) };
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    private static bool TryGetJsonDouble(System.Text.Json.JsonElement elem, string propName, out double val)
+    {
+        val = 0;
+        foreach (var p in elem.EnumerateObject())
+        {
+            if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase))
+            {
+                if (p.Value.ValueKind == System.Text.Json.JsonValueKind.Number) return p.Value.TryGetDouble(out val);
+                if (p.Value.ValueKind == System.Text.Json.JsonValueKind.String && double.TryParse(p.Value.GetString(), out val)) return true;
+            }
+        }
+        return false;
+    }
+
     private IQueryable<Asset> AssetsForRegion(Guid regionId) => _db.Assets.Where(x => (x.Status == "Active" || x.Status == "Operational") && x.Tower!.TransmissionLine!.Substation!.RegionAssetId == regionId);
     private static Geometry ParseBoundary(string wkt) { try { var g = new WKTReader().Read(wkt); if (!g.IsValid || g.IsEmpty || g is not (Polygon or MultiPolygon)) throw new Exception(); g.SRID = 4326; return g; } catch { throw new BusinessRuleException("INVALID_GEOMETRY"); } }
     private async Task<Mission> ManagedMission(Guid id, CancellationToken ct, bool graph = false) { await RequireManageMission(id, ct); return await MissionQuery(graph).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Mission", id); }
-    private async Task<Mission> AccessibleMission(Guid id, CancellationToken ct, bool graph = false) { await RequireActiveCaller(ct); var global = IsGlobal; var uid = _current.UserId; var m = await MissionQuery(graph).SingleOrDefaultAsync(x => x.Id == id && (global || x.ManagerId == uid || x.Assignments.Any(a => a.UserId == uid && a.Status == MissionAssignmentStatus.Active)), ct); return m ?? throw new ForbiddenException("MISSION_ACCESS_DENIED"); }
-    private IQueryable<Mission> MissionQuery(bool graph) { var q = _db.Missions.AsQueryable(); return graph ? q.Include(x => x.Assignments).Include(x => x.CheckIns).Include(x => x.DroneHandovers).Include(x => x.MissionTargets) : q; }
+    private async Task<Mission> AccessibleMission(Guid id, CancellationToken ct, bool graph = false)
+    {
+        await RequireActiveCaller(ct);
+        var global = IsGlobal;
+        var uid = _current.UserId;
+        var isAnalyst = _current.Roles.Contains(UserRoles.Analyst, StringComparer.OrdinalIgnoreCase);
+        var m = await MissionQuery(graph).SingleOrDefaultAsync(x => x.Id == id && (global || isAnalyst || x.ManagerId == uid || x.Assignments.Any(a => a.UserId == uid && a.Status == MissionAssignmentStatus.Active)), ct);
+        return m ?? throw new ForbiddenException("MISSION_ACCESS_DENIED");
+    }
+    private IQueryable<Mission> MissionQuery(bool graph) { var q = _db.Missions.Include(x => x.Assignments).AsQueryable(); return graph ? q.Include(x => x.CheckIns).Include(x => x.DroneHandovers).Include(x => x.MissionTargets) : q; }
     private async Task RequireManageMission(Guid id, CancellationToken ct) { var region = await _db.Missions.Where(x => x.Id == id).Select(x => x.RegionId).SingleOrDefaultAsync(ct) ?? throw new BusinessRuleException("MISSION_REGION_REQUIRED"); await RequireManageRegion(region, ct); }
     private async Task RequireManageRegion(Guid region, CancellationToken ct) { if (IsGlobal) return; if (!_current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) || !await _db.UserGeographicScopes.AnyAsync(x => x.UserId == _current.UserId && x.RegionId == region, ct)) throw new ForbiddenException("REGION_MANAGEMENT_SCOPE_REQUIRED"); }
     private async Task RequireActiveCaller(CancellationToken ct) { if (!_current.IsAuthenticated || _current.UserId == Guid.Empty) throw new ForbiddenException("AUTHENTICATION_REQUIRED"); var user = await _db.Users.SingleOrDefaultAsync(x => x.Id == _current.UserId, ct); if (user == null || !IsActive(user.Status)) throw new ForbiddenException("ACTIVE_USER_REQUIRED"); }
