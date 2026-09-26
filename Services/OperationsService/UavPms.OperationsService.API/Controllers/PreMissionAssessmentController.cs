@@ -16,7 +16,7 @@ public sealed class PreMissionAssessmentController : ControllerBase
     public PreMissionAssessmentController(PreMissionAssessmentService service) => _service = service;
 
     [HttpPost]
-    public async Task<IActionResult> Create(V1CreateAssessmentRequest request, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] V1CreateAssessmentRequest request, CancellationToken ct)
     {
         AddSunsetHeader();
         return Ok(await _service.CreateAsync(request.RegionId, request.PlannedStart, request.PlannedEnd, request.AssetIds, ct));
@@ -51,7 +51,7 @@ public sealed class PreMissionAssessmentController : ControllerBase
     }
 
     [HttpPost("{id:guid}/create-mission")]
-    public async Task<IActionResult> CreateMission(Guid id, V1CreateMissionFromAssessmentRequest request, CancellationToken ct)
+    public async Task<IActionResult> CreateMission(Guid id, [FromBody] V1CreateMissionFromAssessmentRequest request, CancellationToken ct)
     {
         AddSunsetHeader();
         return Ok(await _service.CreateMissionAsync(id, request.Title, request.InspectorId, request.DroneId, ct));

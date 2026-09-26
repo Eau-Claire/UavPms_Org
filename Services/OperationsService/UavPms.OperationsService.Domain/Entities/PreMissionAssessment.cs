@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Domain.Common;
 using UavPms.OperationsService.Domain.Enums;
@@ -32,6 +33,7 @@ public sealed class PreMissionAssessmentAsset : BaseEntity
     public Guid AssessmentId { get; set; }
     public Guid AssetId { get; set; }
     public int Sequence { get; set; }
+    [JsonIgnore]
     public PreMissionAssessment? Assessment { get; set; }
     public Asset? Asset { get; set; }
 }
@@ -46,6 +48,7 @@ public sealed class PreMissionAssessmentPersonnel : BaseEntity
     public string? ReasonCode { get; set; }
     public DateTime SnapshotAt { get; set; }
     public string Findings { get; set; } = "{}";
+    [JsonIgnore]
     public PreMissionAssessment? Assessment { get; set; }
     public User? User { get; set; }
 }
@@ -61,6 +64,7 @@ public sealed class PreMissionAssessmentDrone : BaseEntity
     public DateTime SnapshotAt { get; set; }
     public TechnicalHealth TechnicalHealth { get; set; } = TechnicalHealth.Unknown;
     public Guid? TechnicalInspectionId { get; set; }
+    [JsonIgnore]
     public PreMissionAssessment? Assessment { get; set; }
     public Uav? Drone { get; set; }
     public DroneTechnicalInspection? TechnicalInspection { get; set; }
@@ -100,5 +104,6 @@ public sealed class DroneTechnicalMetric : BaseEntity
     public string Severity { get; set; } = string.Empty;
     public bool IsRequired { get; set; }
     public string? Metadata { get; set; }
+    [JsonIgnore]
     public DroneTechnicalInspection? Inspection { get; set; }
 }
