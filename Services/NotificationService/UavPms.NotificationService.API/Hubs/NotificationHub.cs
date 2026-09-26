@@ -150,9 +150,22 @@ public class NotificationHub : Hub
                 break;
             case "DISPATCHED":
                 await Clients.Group(missionGroup).SendAsync("MissionDispatched", evt);
+                var dispatchedTargets = new HashSet<Guid>();
                 if (!string.IsNullOrWhiteSpace(evt.InspectorId) && Guid.TryParse(evt.InspectorId, out var inspectorGuid))
                 {
-                    await Clients.Group(UserGroupName(inspectorGuid)).SendAsync("MissionDispatched", evt);
+                    dispatchedTargets.Add(inspectorGuid);
+                }
+                if (evt.AssignedUserIds != null)
+                {
+                    foreach (var uid in evt.AssignedUserIds)
+                    {
+                        if (Guid.TryParse(uid, out var g)) dispatchedTargets.Add(g);
+                    }
+                }
+                foreach (var targetId in dispatchedTargets)
+                {
+                    var targetGroup = UserGroupName(targetId);
+                    await Clients.Group(targetGroup).SendAsync("MissionDispatched", evt);
                 }
                 break;
             case "OVERDUE":

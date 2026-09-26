@@ -152,10 +152,22 @@ public class RealtimeNotificationService : IRealtimeNotificationService
                     break;
                 case "DISPATCHED":
                     await _hubContext.Clients.Group(missionGroup).SendAsync("MissionDispatched", evt, cancellationToken);
+                    var dispatchedUserGuids = new HashSet<Guid>();
                     if (!string.IsNullOrWhiteSpace(evt.InspectorId) && Guid.TryParse(evt.InspectorId, out var inspectorGuid))
                     {
-                        await _hubContext.Clients.Group(NotificationHub.UserGroupName(inspectorGuid))
-                            .SendAsync("MissionDispatched", evt, cancellationToken);
+                        dispatchedUserGuids.Add(inspectorGuid);
+                    }
+                    if (evt.AssignedUserIds != null)
+                    {
+                        foreach (var uid in evt.AssignedUserIds)
+                        {
+                            if (Guid.TryParse(uid, out var g)) dispatchedUserGuids.Add(g);
+                        }
+                    }
+                    foreach (var targetGuid in dispatchedUserGuids)
+                    {
+                        var targetGroup = NotificationHub.UserGroupName(targetGuid);
+                        await _hubContext.Clients.Group(targetGroup).SendAsync("MissionDispatched", evt, cancellationToken);
                     }
                     break;
                 case "OVERDUE":
