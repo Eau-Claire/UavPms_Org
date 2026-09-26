@@ -41,21 +41,22 @@ public class RedisOtpService : IOtpService
             }
         }
 
-        var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+        // Tạm thời cố định mã OTP mặc định là "123456" cho author và authen (thuận tiện cho việc test)
+        var code = "123456";
         var hashedCode = TokenHasher.Hash(code);
-        var expiryTime = DateTime.UtcNow.AddMinutes(3);
+        var expiryTime = DateTime.UtcNow.AddMinutes(15);
 
         try
         {
             await _emailService.SendOtpEmailAsync(email, code, expiryTime);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return (false, $"Failed to send OTP email: {ex.Message}");
+            // Bỏ qua lỗi gửi email (như thiếu SendGrid / Brevo API key) để không chặn luồng dev/test
         }
 
-        // Save hashed OTP in Redis with 3 minutes TTL
-        await db.StringSetAsync(otpKey, hashedCode, TimeSpan.FromMinutes(3));
+        // Save hashed OTP in Redis with 15 minutes TTL
+        await db.StringSetAsync(otpKey, hashedCode, TimeSpan.FromMinutes(15));
         // Reset attempts count when a new OTP is generated
         await db.KeyDeleteAsync(attemptsKey);
 
@@ -70,6 +71,23 @@ public class RedisOtpService : IOtpService
 
     public async Task<(bool IsValid, string Message)> VerifyOtpAsync(string email, string code, OtpPurpose purpose)
     {
+        // 1. Cho phép OTP mặc định "123456" luôn hợp lệ để thuận tiện cho việc dev/test (author & authen)
+        if (code == "123456")
+        {
+            var dbTest = GetDb();
+            var testOtpKey = RedisKeyBuilder.OtpKey(purpose, email);
+            var testAttemptsKey = RedisKeyBuilder.AttemptsKey(purpose, email);
+            try
+            {
+                await dbTest.KeyDeleteAsync(new RedisKey[] { testOtpKey, testAttemptsKey });
+            }
+            catch
+            {
+                // Bỏ qua nếu Redis gặp vấn đề tạm thời
+            }
+            return (true, "OTP verified successfully.");
+        }
+
         var db = GetDb();
         var otpKey = RedisKeyBuilder.OtpKey(purpose, email);
         var attemptsKey = RedisKeyBuilder.AttemptsKey(purpose, email);

@@ -83,6 +83,10 @@ graph TD
 
 ### MODULE 4.1: XÁC THỰC & BẢO MẬT (IDENTITY - AUTH & OTP)
 
+> [!TIP]
+> **MÃ OTP MẶC ĐỊNH CHO MÔI TRƯỜNG TEST / DEV**:
+> Hiện tại hệ thống đã được cấu hình mã OTP mặc định là **`123456`** cho toàn bộ các luồng xác thực và phân quyền (Authentication / Authorization / Step-Up / Quên mật khẩu). Khi test trên Frontend, bạn có thể nhập trực tiếp `123456` vào ô OTP mà không cần chờ email.
+
 #### [POST] `/api/v1/auth/login`
 - **Mô tả**: Đăng nhập tài khoản bằng email và mật khẩu. Tự động kiểm tra thiết bị tin cậy (`device_trust_token`).
 - **Phân quyền**: Public
