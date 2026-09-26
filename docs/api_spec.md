@@ -1,497 +1,678 @@
-# 📋 TÀI LIỆU TẢI ĐẶC TẢ API (API SPECIFICATION) - UAV-PMS SYSTEM V1
+# 📋 TÀI LIỆU ĐẶC TẢ API (API SPECIFICATION) - UAV-PMS SYSTEM
 
-Hệ thống UAV tích hợp AI để kiểm tra và quản lý bảo trì hạ tầng điện lực.
+Hệ thống UAV tích hợp AI để kiểm tra, giám sát và quản lý bảo trì hạ tầng lưới điện truyền tải.
 
 ---
 
 ## 1. QUY ƯỚC CHUNG (GENERAL CONVENTIONS)
 
-- **Base URL**: `http://localhost:5194/api/v1` hoặc `https://localhost:7155/api/v1`
-- **Định dạng dữ liệu**: `application/json` cho các request/response thông thường, `multipart/form-data` cho các tác vụ tải lên file.
-- **Xác thực (Authentication)**: Sử dụng JWT Token đính kèm ở Header:
+- **Base URL Gateway**:
+  - **Production**: `https://uavpms.ddns.net`
+  - **Local Development**: `http://localhost:5194`
+- **Tiền tố API**: `/api/v1` (Hầu hết các endpoints) hoặc `/api/v2` (Dành riêng cho Pre-Mission Assessments v2 & Missions v2).
+- **Định dạng dữ liệu**: `application/json` cho request/response tiêu chuẩn, `multipart/form-data` cho upload ảnh/file Excel.
+- **Xác thực (Authentication)**: Gửi Bearer JWT Token qua HTTP Request Header:
   ```http
   Authorization: Bearer <access_token>
   ```
-- **Chuẩn Mã trạng thái HTTP (HTTP Status Codes)**:
-  - `200 OK`: Yêu cầu thành công.
-  - `201 Created`: Tạo mới dữ liệu thành công.
-  - `204 No Content`: Cập nhật/Xóa thành công, không có dữ liệu trả về.
-  - `400 Bad Request`: Dữ liệu đầu vào không hợp lệ (mã lỗi validate).
-  - `401 Unauthorized`: Token xác thực không hợp lệ hoặc hết hạn.
-  - `403 Forbidden`: Người dùng không có vai trò phù hợp (RBAC).
-  - `404 Not Found`: Không tìm thấy tài nguyên yêu cầu.
-  - `500 Internal Server Error`: Lỗi hệ thống hoặc database.
+
+> [!WARNING]
+> ### QUY TẮC BẮT BUỘC VỀ ID TRÊN PATH (PATH PARAMETERS)
+> Mọi tham số `{id}`, `{missionId}`, `{droneId}`, `{userId}`, `{assetId}`, `{towerId}`, v.v. trên URL định tuyến backend đều áp dụng ràng buộc **`guid`** (UUID chuẩn 36 ký tự: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
+> - ✅ **HỢP LỆ**: `GET /api/v1/missions/3fa85f64-5717-4562-b3fc-2c963f66afa6/assignments`
+> - ❌ **LỖI 404 NOT FOUND**: `GET /api/v1/missions/msn-icrfyl/assignments` *(Do `msn-icrfyl` là chuỗi code/text, router ASP.NET không match regex GUID dẫn đến trả về 404 Not Found ngay lập tức).*
+>
+> **Frontend bắt buộc phải truyền `mission.id` (GUID) thay vì mã `mission.missionCode`!**
+
+---
+
+### Chuẩn Phản hồi (API Response Envelope)
+Tất cả các API trả về theo cấu trúc đóng gói thống nhất `ApiResponse`:
+```json
+{
+  "success": true,
+  "message": "Thông điệp phản hồi từ máy chủ",
+  "data": { ... }
+}
+```
+Trường hợp phân trang (`Pagination`), trường `data` tuân thủ format:
+```json
+{
+  "success": true,
+  "message": "Lấy danh sách thành công.",
+  "data": {
+    "items": [ ... ],
+    "totalCount": 120,
+    "page": 1,
+    "pageSize": 10,
+    "totalPages": 12
+  }
+}
+```
 
 ---
 
 ## 2. PHÂN QUYỀN VAI TRÒ (ROLE-BASED ACCESS CONTROL - RBAC)
 
-Các vai trò được cấu hình trong hệ thống:
-- `SystemAdmin`: Quản trị hệ thống, CRUD người dùng, xem Audit Logs.
-- `Manager`: Quản lý tài sản lưới điện, duyệt điều phối chuyến bay, tạo/đóng phiếu bảo trì, xem báo cáo thống kê.
-- `Inspector`: Phi công bay UAV, xem danh sách chuyến bay được giao, tải lên log bay và hình ảnh kiểm tra, báo cáo sự cố hiện trường.
-- `Analyst`: Nhà phân tích AI, duyệt/bác bỏ các lỗi do AI phát hiện, xử lý/leo thang cảnh báo khẩn cấp.
-- `Technician`: Kỹ thuật viên hiện trường, nhận phiếu bảo trì, thực hiện sửa chữa, khai báo vật tư sử dụng, tải lên ảnh minh chứng sửa chữa.
+Các vai trò được định nghĩa trong hệ thống (`UserRoles`):
+- `SystemAdmin`: Quản trị hệ thống, CRUD tài khoản, phân quyền, xem toàn bộ Audit Logs.
+- `Manager`: Lập kế hoạch bay, phân công phi công, gán UAV, duyệt báo cáo kiểm định, duyệt kết quả AI.
+- `Inspector`: Phi công/kỹ thuật viên bay UAV, nhận nhiệm vụ được giao, check-in hiện trường, bàn giao drone, tải lên ảnh kiểm tra và log bay.
+- `Analyst`: Chuyên viên phân tích AI, duyệt/bác bỏ phát hiện khuyết tật của YOLOv8, xử lý cảnh báo sự cố.
+- `MaintenanceTechnician` / `Technician`: Kỹ thuật viên bảo trì, kiểm định kỹ thuật drone định kỳ trước chuyến bay.
 
 ---
 
-## 3. DANH SÁCH ENDPOINTS CHI TIẾT
+## 3. SƠ ĐỒ ĐIỀU HƯỚNG API GATEWAY (OCELOT)
 
 ```mermaid
-mindmap
-  root((UAV-PMS API v1))
-    Auth & Users
-      POST /auth/login
-      POST /auth/refresh-token
-      GET /auth/me
-      CRUD /users
-    Grid Assets & GIS
-      GET /regions
-      GET /substations
-      GET /lines
-      GET /towers
-      GET /towers/in-bbox
-      GET /towers/import
-      GET /assets/in-bbox
-      GET /assets/{id}
-    Missions & UAVs
-      CRUD /uavs
-      CRUD /missions
-      PUT /missions/{id}/status
-      POST /missions/{id}/flight-log
-      POST /missions/{id}/media
-    AI & Defects
-      GET /anomalies/pending
-      GET /anomalies/geojson
-      PUT /anomalies/{id}/validate
-    Alerts
-      GET /alerts/active
-      PUT /alerts/{id}/review
-      POST /alerts/{id}/escalate
-    Maintenance
-      CRUD /maintenance/tickets
-      PUT /maintenance/tickets/{id}/status
-      POST /maintenance/tickets/{id}/proof
-      POST /maintenance/tickets/{id}/materials
+graph TD
+    Client[Frontend Client / App] -->|HTTP/HTTPS| Gateway[UavPms.ApiGateway :5194]
+    Gateway -->|/api/v1/auth, /api/v1/users| Identity[IdentityService :8080]
+    Gateway -->|/api/v1/missions, /lines, /towers, /assets, /reports...| Operations[OperationsService :8080]
+    Gateway -->|/api/v1/ai-analysis, /api/v1/vision| AIInspection[AIInspectionService :8080]
+    Gateway -->|/api/v1/notifications, /hubs/notifications| Notification[NotificationService :8080]
+    Gateway -->|/ai-service| FastAPIAI[fastapi-ai :8000]
 ```
 
 ---
 
-### MODULE 3.1: XÁC THỰC & QUẢN TRỊ NGƯỜI DÙNG (IDENTITY)
+## 4. CHI TIẾT TỪNG MODULE API
 
-#### [POST] `/auth/login`
-- **Mô tả**: Đăng nhập tài khoản bằng Username/Password, trả về cặp Access Token và Refresh Token.
-- **Yêu cầu phân quyền**: Không cần (Public)
+---
+
+### MODULE 4.1: XÁC THỰC & BẢO MẬT (IDENTITY - AUTH & OTP)
+
+#### [POST] `/api/v1/auth/login`
+- **Mô tả**: Đăng nhập tài khoản bằng email và mật khẩu. Tự động kiểm tra thiết bị tin cậy (`device_trust_token`).
+- **Phân quyền**: Public
 - **Request Body**:
   ```json
   {
-    "username": "admin",
-    "password": "AdminPassword123"
+    "email": "admin@uavpms.com",
+    "password": "Password123@"
   }
   ```
-- **Response `200 OK`**:
+- **Response `200 OK` (Khi không yêu cầu OTP)**:
   ```json
   {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "d8a1f81d-6b58-45b7-a3c3-63023e3e2b2a",
-    "expiresIn": 3600,
-    "user": {
-      "id": "e586b4a3-7649-43a9-a9a3-5c742f8c5cf1",
-      "username": "admin",
-      "fullName": "System Administrator",
-      "email": "admin@uavpms.com",
-      "roles": ["SystemAdmin"]
+    "success": true,
+    "message": "Success",
+    "data": {
+      "accessToken": "eyJhbGciOi...",
+      "tokenType": "Bearer",
+      "refreshToken": "d8a1f81d-6b58-45b7-a3c3-63023e3e2b2a",
+      "expiresIn": 3600,
+      "deviceTrustToken": "...",
+      "user": {
+        "id": "e586b4a3-7649-43a9-a9a3-5c742f8c5cf1",
+        "email": "admin@uavpms.com",
+        "fullName": "System Administrator",
+        "roles": ["SystemAdmin"]
+      }
     }
   }
   ```
-- **Response `400 Bad Request`**: Username hoặc Password sai.
+- **Response `200 OK` (Khi yêu cầu OTP trên thiết bị mới)**:
+  ```json
+  {
+    "success": true,
+    "message": "OTP required",
+    "data": {
+      "email": "admin@uavpms.com"
+    }
+  }
+  ```
 
-#### [POST] `/auth/refresh-token`
-- **Mô tả**: Sử dụng Refresh Token còn hạn để cấp lại Access Token mới.
-- **Yêu cầu phân quyền**: Đăng nhập
+#### [POST] `/api/v1/auth/refresh-token`
+- **Mô tả**: Cấp lại Access Token mới từ Refresh Token.
+- **Phân quyền**: Public
 - **Request Body**:
   ```json
   {
-    "accessToken": "eyJhbGciOi...",
     "refreshToken": "d8a1f81d-6b58-45b7-a3c3-63023e3e2b2a"
   }
   ```
-- **Response `200 OK`**:
-  ```json
-  {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new...",
-    "refreshToken": "f62b781a-6e58-41b9-a9c3-7303e3e2a2ba"
-  }
-  ```
 
-#### [GET] `/auth/me`
-- **Mô tả**: Lấy thông tin tài khoản hiện tại từ Token gửi lên.
-- **Yêu cầu phân quyền**: Đăng nhập (Mọi vai trò)
-- **Response `200 OK`**:
+#### [POST] `/api/v1/auth/otp/send`
+- **Mô tả**: Gửi mã OTP xác thực qua email (mục đích: Login, ResetPassword, ChangePassword).
+- **Request Body**:
   ```json
   {
-    "id": "e586b4a3-7649-43a9-a9a3-5c742f8c5cf1",
-    "username": "admin",
-    "fullName": "System Administrator",
     "email": "admin@uavpms.com",
-    "phone": "0123456789",
-    "status": "Active",
-    "roles": ["SystemAdmin"]
+    "purpose": "Login" // hoặc "ResetPassword", "ChangePassword"
   }
   ```
 
-#### [POST] `/users`
-- **Mô tả**: Tạo mới một tài khoản người dùng và gán vai trò.
-- **Yêu cầu phân quyền**: `SystemAdmin`
+#### [POST] `/api/v1/auth/otp/verify`
+- **Mô tả**: Xác thực mã OTP gửi về email.
 - **Request Body**:
   ```json
   {
-    "username": "technician1",
-    "password": "Password@123",
-    "fullName": "Nguyen Van A",
-    "email": "nva@uavpms.com",
-    "phone": "0987654321",
-    "roleNames": ["Technician"]
+    "email": "admin@uavpms.com",
+    "otp": "123456",
+    "purpose": "Login"
   }
   ```
-- **Response `201 Created`**: Trả về thông tin User vừa tạo kèm ID.
 
-#### [GET] `/users/assignable`
-- **Mô tả**: Lấy danh sách người dùng khả dụng để phân công chuyến bay (có vai trò `Inspector` và ở trạng thái hoạt động `Active`).
-- **Yêu cầu phân quyền**: `SystemAdmin` hoặc `Manager`
-- **Response `200 OK`**:
+#### [POST] `/api/v1/auth/reset-password`
+- **Mô tả**: Đặt lại mật khẩu sử dụng `verificationToken` nhận được sau khi verify OTP thành công.
+- **Request Body**:
   ```json
   {
-    "success": true,
-    "message": "Assignable users retrieved successfully.",
-    "data": [
-      {
-        "id": "f186b4a3-7649-43a9-a9a3-5c742f8c5cf2",
-        "username": "inspector1",
-        "fullName": "Nguyen Van Inspector",
-        "email": "inspector1@uavpms.com"
-      }
-    ]
+    "verificationToken": "valid-token-string",
+    "newPassword": "NewPassword123@"
   }
   ```
-- **Response `401 Unauthorized`**: Token không hợp lệ hoặc hết hạn.
-- **Response `403 Forbidden`**: Người dùng không có vai trò `SystemAdmin` hoặc `Manager`.
 
 ---
 
-### MODULE 3.2: TÀI SẢN LƯỚI ĐIỆN & HỆ THỐNG GIS (ASSET & GIS)
+### MODULE 4.2: QUẢN LÝ TÀI KHOẢN NGƯỜI DÙNG (USERS)
 
-#### [GET] `/towers/in-bbox`
-- **Mô tả**: Lấy danh sách cột điện nằm trong vùng viewport bản đồ (Bounding Box) để hiển thị.
-- **Yêu cầu phân quyền**: Đăng nhập (`SystemAdmin`, `Manager`, `Analyst`, `Inspector`)
+#### [GET] `/api/v1/users/me`
+- **Mô tả**: Lấy thông tin cá nhân của người dùng hiện tại đang đăng nhập.
+- **Phân quyền**: Tất cả vai trò đã đăng nhập
+
+#### [GET] `/api/v1/users`
+- **Mô tả**: Danh sách người dùng có phân trang và tìm kiếm.
+- **Phân quyền**: `SystemAdmin`
 - **Query Parameters**:
-  - `minLat` (double, required): Vĩ độ nhỏ nhất (ví dụ: `20.950`)
-  - `minLng` (double, required): Kinh độ nhỏ nhất (ví dụ: `105.750`)
-  - `maxLat` (double, required): Vĩ độ lớn nhất (ví dụ: `21.050`)
-  - `maxLng` (double, required): Kinh độ lớn nhất (ví dụ: `105.850`)
-- **Response `200 OK`**:
+  - `page` (int, default: 1)
+  - `pageSize` (int, default: 10)
+  - `search` (string, optional)
+
+#### [GET] `/api/v1/users/assignable`
+- **Mô tả**: Lấy danh sách nhân sự đủ điều kiện phân công bay (Active, vai trò Inspector).
+- **Phân quyền**: `SystemAdmin`, `Manager`
+
+#### [GET] `/api/v1/users/{id:guid}`
+- **Mô tả**: Lấy thông tin chi tiết một người dùng theo GUID.
+- **Phân quyền**: `SystemAdmin`
+
+#### [POST] `/api/v1/users`
+- **Mô tả**: Tạo tài khoản người dùng mới.
+- **Phân quyền**: `SystemAdmin`
+- **Request Body**:
   ```json
-  [
-    {
-      "id": "c7a8b9f0-d1e2-3456-789a-bcdef0123456",
-      "lineAssetId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-      "towerCode": "TOW-N1-05",
-      "latitude": 21.0084,
-      "longitude": 105.7942,
-      "transmissionLineName": "Đường dây 220kV Hòa Bình - Hà Đông",
-      "assetsCount": 4
+  {
+    "email": "pilot1@uavpms.com",
+    "fullName": "Trần Văn Phi Công",
+    "phone": "0987654321",
+    "password": "Password123@",
+    "roles": ["Inspector"]
+  }
+  ```
+
+#### [PUT] `/api/v1/users/{id:guid}`
+- **Mô tả**: Cập nhật thông tin người dùng và phân quyền vai trò.
+- **Phân quyền**: `SystemAdmin`
+
+#### [POST] `/api/v1/users/{id:guid}/suspend`
+- **Mô tả**: Tạm khóa hoặc mở khóa tài khoản người dùng.
+- **Phân quyền**: `SystemAdmin`
+
+#### [POST] `/api/v1/users/change-password`
+- **Mô tả**: Đổi mật khẩu tài khoản hiện tại (yêu cầu Step-Up Token).
+- **Request Body**: `{ "newPassword": "NewStrongPassword123@" }`
+
+---
+
+### MODULE 4.3: HẠ TẦNG LƯỚI ĐIỆN & GIS (INFRASTRUCTURE & GIS)
+
+#### [GET] `/api/v1/gis/infrastructure`
+- **Mô tả**: Truy vấn toàn bộ dữ liệu đối tượng địa lý hạ tầng lưới điện (Trạm, Tuyến dây, Cột điện) để vẽ lên bản đồ Leaflet/Mapbox.
+- **Query Parameters**:
+  - `administrativeAreaId` (guid, optional)
+  - `managementUnitId` (guid, optional)
+  - `powerLineId` (guid, optional)
+  - `voltageLevel` (string, optional, ví dụ: "220kV", "500kV")
+  - `assetType` (string, optional)
+  - `status` (string, optional)
+
+#### [GET] `/api/v1/regions`
+- **Mô tả**: Danh sách khu vực quản lý / vùng miền (North, Central, South).
+- **Phân quyền**: Mọi vai trò đã đăng nhập
+- **Hỗ trợ CRUD**: `GET /{id:guid}`, `POST /`, `PUT /{id:guid}`, `DELETE /{id:guid}` (Yêu cầu `SystemAdmin` hoặc `Manager`).
+
+#### [GET] `/api/v1/substations`
+- **Mô tả**: Danh sách trạm biến áp.
+- **Query Parameters**: `page`, `pageSize`, `regionAssetId` (guid), `search`.
+- **Hỗ trợ CRUD**: `GET /{id:guid}`, `POST /`, `PUT /{id:guid}`, `DELETE /{id:guid}`.
+
+#### [GET] `/api/v1/lines`
+- **Mô tả**: Danh sách đường dây truyền tải điện.
+- **Query Parameters**: `page`, `pageSize`, `substationAssetId` (guid), `search`.
+- **Hỗ trợ CRUD**: `GET /{id:guid}`, `POST /`, `PUT /{id:guid}`, `DELETE /{id:guid}`.
+
+#### [GET] `/api/v1/towers`
+- **Mô tả**: Danh sách cột điện truyền tải.
+- **Query Parameters**: `page`, `pageSize`, `lineAssetId` (guid).
+- **Hỗ trợ CRUD**:
+  - `GET /{id:guid}`: Chi tiết cột điện
+  - `POST /`: Tạo cột mới (`lineAssetId`, `towerCode`, `latitude`, `longitude`)
+  - `PUT /{id:guid}`: Sửa cột điện
+  - `DELETE /{id:guid}`: Xóa cột điện
+  - `POST /import`: Import danh sách cột hàng loạt từ Excel (`multipart/form-data`)
+
+#### [GET] `/api/v1/assets`
+- **Mô tả**: Danh sách thiết bị gắn trên cột/lưới điện (Cách điện, chống sét, chuỗi sứ, thanh xà, dây dẫn...).
+- **Query Parameters**:
+  - `page`, `pageSize`
+  - `towerId` (guid, optional)
+  - `assetType` (string, optional)
+  - `status` (string, optional)
+  - `riskLevel` (string[], optional: `Low`, `Medium`, `High`, `Critical`)
+  - `minHealthScore`, `maxHealthScore` (double)
+  - `regionId`, `lineId` (guid)
+  - `sortBy`, `sortOrder`
+- **Hỗ trợ CRUD**: `GET /{id:guid}`, `POST /`, `PUT /{id:guid}`, `DELETE /{id:guid}`.
+
+#### [GET] `/api/v1/assets/health-summary`
+- **Mô tả**: Lấy thống kê tổng quan sức khỏe thiết bị (tỷ lệ an toàn, cảnh báo, hỏng hóc).
+
+#### [POST] `/api/v1/assets/spatial-query`
+- **Mô tả**: Tìm kiếm tất cả thiết bị nằm trong đa giác không gian địa lý GeoJSON Polygon.
+- **Request Body**:
+  ```json
+  {
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[[105.7, 21.0], [105.9, 21.0], [105.9, 21.2], [105.7, 21.2], [105.7, 21.0]]]
+    },
+    "filters": {
+      "powerLineId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "assetType": "Insulator"
     }
-  ]
+  }
   ```
 
-#### [POST] `/towers`
-- **Mô tả**: Tạo một cột điện mới, tự động khởi tạo đối tượng địa lý Point (PostGIS SRID 4326).
-- **Yêu cầu phân quyền**: `Manager`
+---
+
+### MODULE 4.4: QUẢN LÝ NHIỆM VỤ BAY - VÒNG ĐỜI TOÀN DIỆN (MF01 & MF02)
+
+Toàn bộ các thao tác điều phối, bàn giao, cất cánh, xử lý sự cố và nghiệm thu chuyến bay.
+
+#### [GET] `/api/v1/missions`
+- **Mô tả**: Lấy danh sách nhiệm vụ bay có lọc và phân trang.
+- **Query Parameters**:
+  - `page` (int, default: 1)
+  - `pageSize` (int, default: 10)
+  - `search` (string, optional)
+  - `status` (string, optional: `DRAFT`, `PLANNED`, `DISPATCHED`, `CONFIRMED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `SUSPENDED`)
+  - `sortBy` (string, default: "createdAt")
+  - `sortDescending` (bool, default: true)
+
+#### [GET] `/api/v1/missions/{id:guid}`
+- **Mô tả**: Lấy đầy đủ thông tin chi tiết một nhiệm vụ bay kèm danh sách phi công, thiết bị mục tiêu, drone được gán.
+- **Lưu ý**: `{id}` bắt buộc là GUID.
+
+#### [GET] `/api/v1/missions/my`
+- **Mô tả**: Lấy danh sách các nhiệm vụ bay được phân công cho người dùng đang đăng nhập.
+
+#### [POST] `/api/v1/missions`
+- **Mô tả**: Tạo mới kế hoạch nhiệm vụ bay (MF01).
+- **Phân quyền**: `Manager`, `SystemAdmin`
 - **Request Body**:
   ```json
   {
-    "lineAssetId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
-    "towerCode": "TOW-N1-06",
-    "latitude": 21.0095,
-    "longitude": 105.7955
-  }
-  ```
-- **Response `201 Created`**
-
-#### [POST] `/towers/import`
-- **Mô tả**: Import danh sách cột điện truyền tải hàng loạt từ file Excel. Tự động tạo mặc định các loại thiết bị (`Assets`) gắn kèm cho mỗi cột.
-- **Yêu cầu phân quyền**: `Manager`
-- **Request Body**: `multipart/form-data` chứa file Excel.
-- **Response `200 OK`**:
-  ```json
-  {
-    "success": true,
-    "importedCount": 45,
-    "createdAssetsCount": 180
-  }
-  ```
-
-#### [GET] `/assets/{id}`
-- **Mô tả**: Xem thông tin chi tiết một thiết bị kèm theo Điểm sức khỏe (`Health Score`), Nhãn rủi ro (`Risk Level`) và danh sách sự cố liên kết.
-- **Yêu cầu phân quyền**: Đăng nhập (Mọi vai trò)
-- **Response `200 OK`**:
-  ```json
-  {
-    "id": "b0f81d8a-6b58-45b7-a3c3-63023e3e2b2a",
-    "towerId": "c7a8b9f0-d1e2-3456-789a-bcdef0123456",
-    "assetType": "Insulator",
-    "assetCode": "INS-TOW05-01",
-    "status": "Operational",
-    "currentHealthScore": 72.5,
-    "riskLevel": "Medium Risk",
-    "lastInspectedAt": "2026-06-15T08:00:00Z",
-    "towerCode": "TOW-N1-05",
-    "activeAnomalies": [
+    "title": "Kiểm tra định kỳ tuyến Hòa Bình - Hà Đông đợt 1",
+    "regionId": "e1f2a3b4-5678-90ab-cdef-1234567890ab",
+    "missionType": "SCHEDULED", // hoặc "AD_HOC"
+    "plannedStart": "2026-10-01T08:00:00Z",
+    "plannedEnd": "2026-10-01T17:00:00Z",
+    "confirmationDeadline": "2026-09-30T17:00:00Z",
+    "description": "Bay rà soát chuỗi cách điện và hành lang an toàn",
+    "managerInstructions": "Chú ý khu vực khoảng cột 45-50 gió to",
+    "droneId": "d186b4a3-7649-43a9-a9a3-5c742f8c5cf3",
+    "assignedToUserId": "f186b4a3-7649-43a9-a9a3-5c742f8c5cf2",
+    "assignments": [
       {
-        "id": "f5b81d8a-6e58-41b9-a9c3-7303e3e2a2ba",
-        "categoryName": "Insulator Damage",
-        "confidenceScore": 0.89,
-        "validationStatus": "Confirmed",
-        "createdAt": "2026-06-16T14:30:00Z"
+        "userId": "f186b4a3-7649-43a9-a9a3-5c742f8c5cf2",
+        "assignmentRole": "PilotInCommand",
+        "isRequired": true
       }
     ]
   }
   ```
 
----
+#### [PUT] `/api/v1/missions/{id:guid}`
+- **Mô tả**: Cập nhật thông tin cơ bản của nhiệm vụ bay (chỉ khi ở trạng thái cho phép).
 
-### MODULE 3.3: QUẢN LÝ CHUYẾN BAY & NẠP DỮ LIỆU HIỆN TRƯỜNG (MISSION)
+#### [DELETE] `/api/v1/missions/{id:guid}`
+- **Mô tả**: Xóa mềm nhiệm vụ bay.
 
-#### [POST] `/missions`
-- **Mô tả**: Manager tạo kế hoạch chuyến bay, phân công Inspector, chỉ định thiết bị UAV và các tuyến dây cần kiểm tra.
-- **Yêu cầu phân quyền**: `Manager`
+#### [POST] `/api/v1/missions/{id:guid}/scope/resolve`
+- **Mô tả**: Xác định phạm vi bay dựa trên chuỗi WKT ranh giới polygon (`BoundaryWkt`).
+
+#### [PUT] `/api/v1/missions/{id:guid}/assets`
+- **Mô tả**: Xác nhận danh sách các thiết bị/cột điện nằm trong mục tiêu kiểm tra của chuyến bay.
 - **Request Body**:
   ```json
   {
-    "missionCode": "MIS-20260617-01",
-    "managerId": "e586b4a3-7649-43a9-a9a3-5c742f8c5cf1",
-    "inspectorId": "f186b4a3-7649-43a9-a9a3-5c742f8c5cf2",
-    "uavId": "d186b4a3-7649-43a9-a9a3-5c742f8c5cf3",
-    "scheduledStartAt": "2026-06-18T08:00:00Z",
-    "description": "Bay kiểm tra định kỳ tuyến dây Hòa Bình - Hà Đông",
-    "targetLineIds": [
-      "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+    "boundaryWkt": "POLYGON((...))",
+    "assetIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"]
+  }
+  ```
+
+#### [GET] `/api/v1/missions/{id:guid}/assignments`
+- **Mô tả**: Lấy tổng quan danh sách nhân sự tham gia nhiệm vụ bay, vai trò và trạng thái phản hồi (Accepted, Postponed, Pending).
+
+#### [POST] `/api/v1/missions/{id:guid}/assignments`
+- **Mô tả**: Thêm nhân sự vào danh sách phân công nhiệm vụ bay.
+- **Request Body**:
+  ```json
+  {
+    "userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "assignmentRole": "Observer" // hoặc "PilotInCommand", "PayloadOperator"
+  }
+  ```
+
+#### [DELETE] `/api/v1/missions/{id:guid}/assignments/{assignmentId:guid}`
+- **Mô tả**: Hủy gán nhân sự khỏi nhiệm vụ.
+
+#### [PUT] `/api/v1/missions/{id:guid}/drone`
+- **Mô tả**: Gán thiết bị UAV vào nhiệm vụ bay.
+- **Request Body**: `{ "droneId": "3fa85f64-5717-4562-b3fc-2c963f66afa6" }`
+
+#### [POST] `/api/v1/missions/{id:guid}/drone-handover`
+- **Mô tả**: Xác nhận biên bản bàn giao drone giữa kho/kỹ thuật và phi công trước/sau chuyến bay.
+- **Request Body**:
+  ```json
+  {
+    "droneId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "receivedBy": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "condition": "Tốt, 2 pin đầy, camera hoạt động bình thường",
+    "accepted": true
+  }
+  ```
+
+#### [POST] `/api/v1/missions/{id:guid}/check-in`
+- **Mô tả**: Phi công check-in hiện trường bằng GPS khi đến vị trí xuất phát.
+
+#### [POST] `/api/v1/missions/{id:guid}/assignments/accept`
+- **Mô tả**: Phi công xác nhận chấp nhận nhiệm vụ bay được điều phối.
+
+#### [POST] `/api/v1/missions/{id:guid}/assignments/postpone`
+- **Mô tả**: Phi công xin hoãn/từ chối nhiệm vụ kèm lý do chính đáng.
+- **Request Body**: `{ "reason": "Thời tiết mưa dông, sức gió cấp 6 không đủ điều kiện an toàn bay" }`
+
+#### [POST] `/api/v1/missions/{id:guid}/start`
+- **Mô tả**: Bắt đầu thực hiện chuyến bay (`IN_PROGRESS`).
+
+#### [POST] `/api/v1/missions/{id:guid}/complete`
+- **Mô tả**: Kết thúc chuyến bay kiểm tra (`COMPLETED`).
+
+#### [POST] `/api/v1/missions/{id:guid}/cancel`
+- **Mô tả**: Hủy nhiệm vụ bay (`CANCELLED`).
+- **Request Body**: `{ "reason": "Hủy theo lệnh điều độ điện lực" }`
+
+#### [POST] `/api/v1/missions/{id:guid}/confirm`
+- **Mô tả**: Quản lý nghiệm thu và chốt hoàn thành nhiệm vụ.
+
+#### [POST] `/api/v1/missions/{id:guid}/suspend`
+- **Mô tả**: Tạm đình chỉ nhiệm vụ do sự cố khẩn cấp.
+- **Request Body**: `{ "reason": "Sự cố mất tín hiệu định vị GPS" }`
+
+#### [POST] `/api/v1/missions/{id:guid}/resume`
+- **Mô tả**: Khôi phục nhiệm vụ sau khi đình chỉ.
+
+#### [POST] `/api/v1/missions/{id:guid}/remind`
+- **Mô tả**: Gửi thông báo nhắc nhở nhân sự xác nhận nhiệm vụ.
+
+#### [GET] & [POST] `/api/v1/missions/{id:guid}/communications`
+- **Mô tả**: Nhật ký trao đổi / chat liên lạc nội bộ giữa Manager và Inspector trong suốt chuyến bay.
+- **POST Body**: `{ "message": "Đã bay xong khoảng néo 10-15, đang tiến về điểm cột 16." }`
+
+#### [GET] & [POST] `/api/v1/missions/{id:guid}/activities`
+- **Mô tả**: Nhật ký các mốc sự kiện hoạt động (Timeline activity log) của nhiệm vụ.
+
+#### [GET] `/api/v1/missions/{id:guid}/detections`
+- **Mô tả**: Danh sách toàn bộ các lỗi/bất thường do AI phát hiện trong khuôn khổ nhiệm vụ này.
+- **Query Parameters**: `status` (Pending, Confirmed, Rejected), `mediaType` (Image, Video), `isEmergency` (bool).
+
+#### [PUT] `/api/v1/missions/{missionId:guid}/detections/{detectionId:guid}/review`
+- **Mô tả**: Thẩm định lỗi do AI phát hiện (Duyệt hoặc Bác bỏ).
+- **Request Body**:
+  ```json
+  {
+    "decision": "Confirmed", // hoặc "Rejected"
+    "notes": "Vết nứt bề mặt bát sứ rõ ràng, đề xuất thay thế"
+  }
+  ```
+
+#### [GET] `/api/v1/missions/{id:guid}/maintenance-tasks`
+- **Mô tả**: Lấy danh sách phiếu đề xuất sửa chữa/bảo trì phát sinh từ nhiệm vụ bay này.
+
+---
+
+### MODULE 4.5: ĐÁNH GIÁ TIỀN KHẢ THI CHUYẾN BAY (PRE-MISSION ASSESSMENT V2)
+
+Áp dụng cho quy trình thẩm định rủi ro trước bay (Thời tiết, địa hình, tình trạng kỹ thuật thiết bị, năng lực phi công).
+
+- **Base Route**: `/api/v2/pre-mission-assessments`
+
+#### [POST] `/api/v2/pre-mission-assessments`
+- **Mô tả**: Tạo hồ sơ đánh giá tiền khả thi.
+- **Request Body**:
+  ```json
+  {
+    "regionId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "plannedStart": "2026-10-05T08:00:00Z",
+    "plannedEnd": "2026-10-05T16:00:00Z",
+    "assetIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"],
+    "boundaryWkt": "POLYGON((...))",
+    "idempotencyKey": "unique-uuid-key"
+  }
+  ```
+
+#### [GET] `/api/v2/pre-mission-assessments`
+- **Mô tả**: Danh sách hồ sơ đánh giá (`status`: Draft, Evaluated, Ready, Rejected).
+
+#### [GET] `/api/v2/pre-mission-assessments/{id:guid}`
+- **Mô tả**: Lấy chi tiết hồ sơ thẩm định và điểm số rủi ro.
+
+#### [POST] `/api/v2/pre-mission-assessments/{id:guid}/evaluate`
+- **Mô tả**: Kích hoạt động cơ tự động tính toán ma trận rủi ro tiền khả thi (AI / Quy tắc an toàn).
+
+#### [POST] `/api/v2/pre-mission-assessments/{id:guid}/create-mission`
+- **Mô tả**: Khởi tạo nhiệm vụ bay chính thức từ hồ sơ thẩm định đạt tiêu chuẩn.
+- **Request Body**:
+  ```json
+  {
+    "assessmentId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "title": "Chuyến bay được duyệt từ đánh giá PMA-2026-001",
+    "inspectorId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "droneId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+  }
+  ```
+
+---
+
+### MODULE 4.6: QUẢN LÝ THIẾT BỊ DRONE & KIỂM ĐỊNH KỸ THUẬT
+
+#### [GET] `/api/v1/drones`
+- **Mô tả**: Lấy danh sách toàn bộ thiết bị Drone trong hệ thống.
+
+#### [GET] `/api/v1/drones/available`
+- **Mô tả**: Lấy danh sách Drone đang rảnh rỗi (sẵn sàng phân công).
+
+#### [GET] `/api/v1/drones/{id:guid}` & `/api/v1/drones/{id:guid}/status`
+- **Mô tả**: Lấy trạng thái hoạt động, pin, firmware và vị trí gần nhất của drone.
+
+#### [POST] `/api/v1/drone-technical-inspections`
+- **Mô tả**: Kỹ thuật viên nộp phiếu kiểm tra kỹ thuật định kỳ / trước bay cho Drone.
+- **Phân quyền**: `MaintenanceTechnician`, `Technician`, `Manager`, `SystemAdmin`.
+- **Request Body**:
+  ```json
+  {
+    "droneId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "passed": true,
+    "inspectorNotes": "Cánh quạt mới thay, gimbal cân bằng tốt, cảm biến va chạm hoạt động chuẩn.",
+    "metrics": [
+      { "metricName": "BatteryCycles", "metricValue": "24", "unit": "cycles" },
+      { "metricName": "PropellerWear", "metricValue": "0.02", "unit": "mm" }
     ]
   }
   ```
-- **Response `201 Created`**
 
-#### [PUT] `/missions/{id}/status`
-- **Mô tả**: Cập nhật trạng thái vòng đời chuyến bay: `Scheduled` -> `InProgress` (Khi Inspector cất cánh) -> `Completed` (Khi kết thúc bay).
-- **Yêu cầu phân quyền**: `Inspector` hoặc `Manager`
-- **Request Body**:
-  ```json
-  {
-    "status": "InProgress"
-  }
-  ```
-- **Response `204 No Content`**
+#### [GET] `/api/v1/drone-technical-inspections/drone/{droneId:guid}/latest`
+- **Mô tả**: Lấy kết quả kiểm định kỹ thuật gần nhất của drone để kiểm tra điều kiện an toàn cất cánh.
 
-#### [POST] `/missions/{id}/flight-log`
-- **Mô tả**: Tải lên log chuyến bay từ drone (chứa tệp chuỗi GPS track định dạng JSONB để vẽ đường bay trên bản đồ).
-- **Yêu cầu phân quyền**: `Inspector`
-- **Request Body**:
-  ```json
-  {
-    "gpsTrack": "[{\"lat\": 21.0084, \"lng\": 105.7942, \"alt\": 120, \"bat\": 95}, ...]",
-    "minBatteryRecorded": 22.5,
-    "maxAltitudeM": 150.0,
-    "flightDurationSeconds": 1800,
-    "connectionStatus": "Good"
-  }
-  ```
-- **Response `200 OK`**
-
-#### [POST] `/missions/{id}/media`
-- **Mô tả**: Tải lên hình ảnh chụp từ UAV kiểm tra. File ảnh sẽ được tự động phân tích EXIF để trích xuất tọa độ GPS và gắn liên kết tự động tới `AssetId` nằm gần nhất trên bản đồ.
-- **Yêu cầu phân quyền**: `Inspector`
-- **Request Body**: `multipart/form-data`
-  - `file` (File): Ảnh độ phân giải cao
-  - `assetId` (Guid, optional): Chọn tay thiết bị nếu ảnh không chứa tọa độ GPS.
-- **Response `200 OK`**:
-  ```json
-  {
-    "mediaId": "d586b4a3-7649-43a9-a9a3-5c742f8c5cf9",
-    "fileUrl": "/uav_storage/images/20260617/img_0942.jpg",
-    "latitude": 21.00845,
-    "longitude": 105.79425,
-    "matchedAssetId": "b0f81d8a-6b58-45b7-a3c3-63023e3e2b2a",
-    "triggerAiInspection": true
-  }
-  ```
+#### [POST] `/api/v1/devices/register` & `[POST] /api/v1/devices/heartbeat`
+- **Mô tả**: Đăng ký thiết bị phần cứng / gửi nhịp tim định kỳ duy trì trạng thái online.
 
 ---
 
-### MODULE 3.4: DUYỆT LỖI AI & THẨM ĐỊNH (AI ANOMALY DETECTION)
+### MODULE 4.7: NẠP DỮ LIỆU ẢNH KIỂM TRA HIỆN TRƯỜNG (INSPECTION DATA)
 
-#### [GET] `/anomalies/pending`
-- **Mô tả**: Lấy danh sách lỗi do AI (YOLOv8) phát hiện đang ở trạng thái `Pending` chờ Analyst thẩm định lại.
-- **Yêu cầu phân quyền**: `Analyst`
-- **Query Parameters**: Phân trang (`pageIndex`, `pageSize`).
-- **Response `200 OK`**:
-  ```json
-  {
-    "totalCount": 12,
-    "items": [
-      {
-        "id": "f5b81d8a-6e58-41b9-a9c3-7303e3e2a2ba",
-        "mediaUrl": "/uav_storage/images/20260617/img_0942.jpg",
-        "assetCode": "INS-TOW05-01",
-        "categoryName": "Insulator Damage",
-        "boundingBox": "{\"x\": 120, \"y\": 80, \"w\": 45, \"h\": 60}",
-        "confidenceScore": 0.89,
-        "validationStatus": "Pending",
-        "createdAt": "2026-06-17T14:30:00Z"
-      }
-    ]
-  }
-  ```
+#### [POST] `/api/v1/inspections/upload`
+- **Mô tả**: Tải lên hình ảnh chụp từ UAV kiểm tra hiện trường. Hệ thống lưu trữ ảnh và tự động bắn event kích hoạt worker AI phân tích.
+- **Phân quyền**: `Inspector`
+- **Content-Type**: `multipart/form-data`
+- **Form Fields**:
+  - `file` (File, binary): Tệp hình ảnh JPG/PNG độ phân giải cao
+  - `missionId` (Guid, required): GUID của nhiệm vụ bay
+  - `assetId` (Guid, required): GUID của thiết bị lưới điện tương ứng
+  - `capturedAt` (DateTime, required): Thời điểm chụp ảnh
+  - `latitude` (double, optional): Tọa độ vĩ độ
+  - `longitude` (double, optional): Tọa độ kinh độ
 
-#### [GET] `/anomalies/geojson`
-- **Mô tả**: Lấy danh sách toàn bộ các lỗi đang có hiệu lực (`Confirmed` và chưa được `Resolved`) dưới định dạng GeoJSON để vẽ marker cluster / heatmap lên bản đồ.
-- **Yêu cầu phân quyền**: Đăng nhập (Mọi vai trò)
-- **Response `200 OK`**:
-  ```json
-  {
-    "type": "FeatureCollection",
-    "features": [
-      {
-        "type": "Feature",
-        "geometry": {
-          "type": "Point",
-          "coordinates": [105.7942, 21.0084]
-        },
-        "properties": {
-          "anomalyId": "f5b81d8a-6e58-41b9-a9c3-7303e3e2a2ba",
-          "assetCode": "INS-TOW05-01",
-          "category": "Insulator Damage",
-          "severity": 0.8,
-          "towerCode": "TOW-N1-05"
-        }
-      }
-    ]
-  }
-  ```
+#### [GET] `/api/v1/inspections/report/{id:guid}`
+- **Mô tả**: Lấy chi tiết báo cáo kết quả ảnh kiểm tra theo GUID.
 
-#### [PUT] `/anomalies/{id}/validate`
-- **Mô tả**: Analyst duyệt kết quả lỗi của AI.
-  - Nếu `Confirmed`: Xác nhận lỗi chính xác, tự động làm giảm điểm sức khỏe của thiết bị và đề xuất phiếu bảo trì.
-  - Nếu `Rejected`: Đánh dấu là nhận diện sai, điểm sức khỏe thiết bị giữ nguyên.
-- **Yêu cầu phân quyền**: `Analyst`
-- **Request Body**:
-  ```json
-  {
-    "status": "Confirmed", // Hoặc "Rejected"
-    "analystNotes": "Bát sứ bị mẻ cạnh lớn ở mặt dưới, cần thay thế sớm."
-  }
-  ```
-- **Response `204 No Content`**
+#### [GET] `/api/v1/inspections/mission/{missionId:guid}`
+- **Mô tả**: Lấy danh sách toàn bộ ảnh và kết quả kiểm tra của một nhiệm vụ bay.
+
+#### [GET] `/images/{fileName}`
+- **Mô tả**: Truy xuất trực tiếp ảnh kiểm tra tĩnh được lưu trên máy chủ / volume.
 
 ---
 
-### MODULE 3.5: CẢNH BÁO KHẨN CẤP REAL-TIME (EMERGENCY ALERT)
+### MODULE 4.8: PHÂN TÍCH AI & EDGE VISION BRIDGE
 
-#### [GET] `/alerts/active`
-- **Mô tả**: Xem danh sách các cảnh báo khẩn cấp đang diễn ra (do Edge AI/Cloud AI phát hiện các lỗi nguy hại trực tiếp như cháy nổ, đổ cột điện).
-- **Yêu cầu phân quyền**: Đăng nhập (`Manager`, `Analyst`)
-- **Response `200 OK`**:
-  ```json
-  [
-    {
-      "id": "a9b81d8a-6e58-41b9-a9c3-7303e3e2a2ba",
-      "anomalyId": "f5b81d8a-6e58-41b9-a9c3-7303e3e2a2ba",
-      "assetCode": "INS-TOW05-01",
-      "status": "Active",
-      "priority": "Critical",
-      "triggeredAt": "2026-06-17T15:00:00Z"
-    }
-  ]
-  ```
+#### [GET] `/api/v1/missions/{missionId:guid}/ai-analysis/detections`
+- **Mô tả**: Lấy toàn bộ danh sách bounding box và nhãn lỗi AI phát hiện trên các ảnh thuộc nhiệm vụ.
 
-#### [PUT] `/alerts/{id}/review`
-- **Mô tả**: Cho phép Analyst xác nhận nhanh sự cố khẩn cấp (xác nhận lỗi nghiêm trọng hoặc bác bỏ báo cáo giả).
-- **Yêu cầu phân quyền**: `Analyst`
-- **Request Body**:
-  ```json
-  {
-    "status": "Confirmed", // Hoặc "Dismissed"
-    "notes": "Xác nhận cháy rừng gần hành lang lưới điện."
-  }
-  ```
-- **Response `204 No Content`**
+#### [POST] `/api/v1/missions/{missionId:guid}/ai-analysis/from-media/{mediaId:guid}`
+- **Mô tả**: Yêu cầu AI phân tích lại một ảnh kiểm tra đã có.
+- **Query Parameters**: `analysisType` (General, Thermal, Defect), `preferredModel` (SERVER / EDGE).
 
-#### [POST] `/alerts/{id}/escalate`
-- **Mô tả**: Analyst leo thang cảnh báo khẩn cấp lên các cấp Manager liên quan để điều phối khắc phục lập tức.
-- **Yêu cầu phân quyền**: `Analyst`
-- **Request Body**:
-  ```json
-  {
-    "escalatedToUserId": "e586b4a3-7649-43a9-a9a3-5c742f8c5cf1",
-    "reason": "Độ trễ xử lý quá lâu, khu vực cháy lan rộng sát trạm biến áp."
-  }
-  ```
-- **Response `201 Created`**
+#### [PUT] `/api/v1/missions/{missionId:guid}/ai-analysis/detections/{detectionId:guid}/review`
+- **Mô tả**: Analyst duyệt hoặc từ chối một bounding box phát hiện của AI.
+
+#### [POST] `/api/v1/vision/detections` & `[POST] /api/v1/vision/detections/json`
+- **Mô tả**: Endpoint dành riêng cho thiết bị Edge AI trên drone gửi kết quả suy luận real-time kèm tọa độ về backend qua HTTP/Gateway.
 
 ---
 
-### MODULE 3.6: PHIẾU BẢO TRÌ & LOG VẬT TƯ (MAINTENANCE)
+### MODULE 4.9: DASHBOARD GIÁM SÁT & CẢNH BÁO (MONITOR)
 
-#### [POST] `/maintenance/tickets`
-- **Mô tả**: Manager tạo phiếu sửa chữa bảo trì, gán cho Technician phụ trách xử lý thiết bị gặp lỗi.
-- **Yêu cầu phân quyền**: `Manager`
+- **Base Route**: `/api/v1/monitor`
+
+| Method | Endpoint | Quyền hạn | Mô tả |
+|---|---|---|---|
+| `GET` | `/summary` | Admin, Manager | Tổng quan số liệu dashboard: tổng nhiệm vụ, tổng sự cố, tỷ lệ hoàn thành |
+| `GET` | `/recent-defects` | Admin, Manager, Analyst | Danh sách các khuyết tật thiết bị mới phát hiện gần nhất |
+| `GET` | `/defects-statistics` | Admin, Manager, Analyst | Thống kê số lượng khuyết tật theo phân loại (Sứ, dây, cột...) |
+| `GET` | `/mission-status` | Admin, Manager | Biểu đồ trạng thái nhiệm vụ bay (Planned, Running, Done) |
+| `GET` | `/inspections` | Admin, Manager, Analyst | Lịch sử kiểm tra ảnh kèm bộ lọc ngày và tình trạng có lỗi hay không |
+| `GET` | `/alerts` | Admin, Manager, Analyst | Danh sách các cảnh báo khẩn cấp (Emergency Alerts) đang kích hoạt |
+
+---
+
+### MODULE 4.10: BÁO CÁO QUẢN TRỊ (MANAGEMENT REPORTS)
+
+Quản lý chu trình soạn thảo, phê duyệt và xuất bản báo cáo kỹ thuật.
+
+- **Base Route**: `/api/v1/reports`
+
+#### [GET] `/api/v1/reports`
+- **Mô tả**: Danh sách báo cáo có phân trang.
+- **Query Parameters**: `page`, `pageSize`, `type`, `status` (draft, pending, approved, rejected), `transmissionLineId`, `substationId`, `search`.
+
+#### [POST] `/api/v1/reports`
+- **Mô tả**: Tạo mới bản thảo báo cáo quản trị.
 - **Request Body**:
   ```json
   {
-    "anomalyId": "f5b81d8a-6e58-41b9-a9c3-7303e3e2a2ba",
-    "assetId": "b0f81d8a-6b58-45b7-a3c3-63023e3e2b2a",
-    "technicianId": "a186b4a3-7649-43a9-a9a3-5c742f8c5cf5",
-    "priority": "High",
-    "description": "Thay thế bát cách điện bị hỏng theo khuyến nghị của phân tích AI",
-    "dueDate": "2026-06-20T17:00:00Z"
+    "title": "Báo cáo kiểm định sự cố tuyến dây 220kV tháng 10",
+    "type": "InspectionSummary",
+    "transmissionLineId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "missionIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"],
+    "description": "Tổng hợp kết quả bay 5 đợt trong tuần qua",
+    "dateFrom": "2026-10-01T00:00:00Z",
+    "dateTo": "2026-10-07T23:59:59Z"
   }
   ```
-- **Response `201 Created`**: Trả về Ticket vừa tạo chứa `ticketCode` tự động sinh (ví dụ: `TCK-20260617-001`).
 
-#### [PUT] `/maintenance/tickets/{id}/status`
-- **Mô tả**: Cập nhật trạng thái phiếu bảo trì từ phía Technician: `Assigned` -> `InProgress` (Bắt đầu sửa chữa tại cột) -> `PendingVerification` (Chờ nghiệm thu sau khi nạp minh chứng).
-- **Yêu cầu phân quyền**: `Technician`
-- **Request Body**:
-  ```json
-  {
-    "status": "InProgress"
-  }
+#### [PUT] `/api/v1/reports/{id:guid}/submit`
+- **Mô tả**: Trình báo cáo lên cấp quản lý phê duyệt (`draft` -> `pending`).
+
+#### [PUT] `/api/v1/reports/{id:guid}/approve`
+- **Mô tả**: Quản lý phê duyệt báo cáo (`pending` -> `approved`).
+
+#### [PUT] `/api/v1/reports/{id:guid}/reject`
+- **Mô tả**: Từ chối báo cáo kèm lý do cần sửa đổi.
+- **Request Body**: `{ "reason": "Cần bổ sung số liệu phân tích ảnh nhiệt ở khoảng néo 12" }`
+
+#### [POST] `/api/v1/reports/{id:guid}/generate`
+- **Mô tả**: Yêu cầu hệ thống sinh file PDF hoặc Excel.
+- **Query Parameter**: `format` (`pdf` hoặc `excel`).
+
+#### [GET] `/api/v1/reports/{id:guid}/download`
+- **Mô tả**: Tải về tệp báo cáo PDF/Excel đã được sinh.
+
+---
+
+### MODULE 4.11: NHẬT KÝ KIỂM TOÁN HỆ THỐNG (AUDIT LOGS)
+
+#### [GET] `/api/v1/audit-logs`
+- **Mô tả**: Xem lịch sử truy vết thay đổi dữ liệu của hệ thống (Ai đã thêm, sửa, xóa bản ghi nào, IP nào, thời điểm nào, chi tiết giá trị cũ/mới).
+- **Phân quyền**: `SystemAdmin`, `Manager`
+- **Query Parameters**:
+  - `page` (int, default: 1)
+  - `pageSize` (int, default: 10)
+  - `search` (string, optional)
+  - `tableName` (string, optional, ví dụ: "Missions", "Assets")
+  - `actionType` (string, optional: "Added", "Modified", "Deleted")
+
+---
+
+### MODULE 4.12: THÔNG BÁO & SIGNALR REAL-TIME (NOTIFICATIONS)
+
+#### [GET] `/api/v1/notifications` hoặc `/api/v1/notifications/history`
+- **Mô tả**: Lấy danh sách thông báo của người dùng hiện tại (hỗ trợ param `limit`).
+- **Phân quyền**: Tất cả vai trò đã đăng nhập
+
+#### [PUT] `/api/v1/notifications/{id:guid}/read`
+- **Mô tả**: Đánh dấu thông báo là đã đọc.
+
+#### [POST] `/api/v1/notifications/schedule`
+- **Mô tả**: Lên lịch gửi thông báo qua Hangfire (`DelaySeconds` hoặc `ScheduleTime`).
+
+#### [POST] `/api/v1/notifications/enqueue-email`
+- **Mô tả**: Đưa tác vụ gửi email vào hàng đợi nền Hangfire.
+
+#### SignalR Hub: `/hubs/notifications`
+- **Mô tả**: Kết nối WebSocket nhận thông báo đẩy tức thì.
+- **Cách kết nối từ Frontend**:
+  ```typescript
+  import * as signalR from '@microsoft/signalr';
+
+  const connection = new signalR.HubConnectionBuilder()
+    .withUrl('https://uavpms.ddns.net/hubs/notifications', {
+      accessTokenFactory: () => authService.getAccessToken()
+    })
+    .withAutomaticReconnect()
+    .build();
+
+  // Nhận thông báo chung
+  connection.on('ReceiveNotification', (notification) => {
+    console.log('Thông báo mới:', notification);
+  });
+
+  // Nhận sự kiện vòng đời chuyến bay
+  connection.on('MissionLifecycleEvent', (event) => {
+    console.log('Sự kiện chuyến bay:', event);
+  });
   ```
-- **Response `204 No Content`**
-
-#### [POST] `/maintenance/tickets/{id}/proof`
-- **Mô tả**: Technician tải lên ảnh chụp thiết bị sau khi đã thay thế/sửa chữa xong kèm theo ghi chú báo cáo hiện trường.
-- **Yêu cầu phân quyền**: `Technician`
-- **Request Body**: `multipart/form-data`
-  - `file` (File): Ảnh minh chứng sau sửa chữa
-  - `technicianNotes` (string): Báo cáo công việc
-- **Response `200 OK`**
-
-#### [POST] `/maintenance/tickets/{id}/materials`
-- **Mô tả**: Technician khai báo danh sách vật tư kỹ thuật đã tiêu hao trong quá trình sửa chữa thiết bị.
-- **Yêu cầu phân quyền**: `Technician`
-- **Request Body**:
-  ```json
-  {
-    "componentName": "Bát sứ cách điện 220kV",
-    "componentCode": "VTS-220-BS",
-    "quantityUsed": 1,
-    "unit": "Cái",
-    "fieldObservations": "Đã thay thế bát sứ bị mẻ, kiểm tra dòng rò an toàn."
-  }
-  ```
-- **Response `200 OK`**
-
-#### [PUT] `/maintenance/tickets/{id}/close`
-- **Mô tả**: Manager xem xét minh chứng hình ảnh và vật tư đã sử dụng. Nếu đạt yêu cầu, phê duyệt đóng phiếu (Trạng thái chuyển sang `Resolved`), lỗi liên quan tự động chuyển sang `Resolved`, và hệ thống tự động chạy ngầm dịch vụ tính toán lại điểm sức khỏe thiết bị để khôi phục chỉ số sức khỏe của `Asset` đó.
-- **Yêu cầu phân quyền**: `Manager`
-- **Response `204 No Content`**
