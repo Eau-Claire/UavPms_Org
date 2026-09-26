@@ -87,17 +87,26 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         {
             foreach (var a in request.Assignments)
             {
-                if (a.UserId != Guid.Empty && !mission.Assignments.Any(x => x.UserId == a.UserId))
+                if (a.UserId != Guid.Empty)
                 {
-                    mission.Assignments.Add(new MissionAssignment
+                    var existing = mission.Assignments.FirstOrDefault(x => x.UserId == a.UserId);
+                    if (existing != null)
                     {
-                        MissionId = mission.Id,
-                        UserId = a.UserId,
-                        AssignmentRole = !string.IsNullOrWhiteSpace(a.Role) ? a.Role : "PILOT",
-                        AssignedByUserId = _current.UserId,
-                        IsRequired = a.IsRequired ?? true,
-                        ResponseStatus = MissionAssignmentResponse.Pending
-                    });
+                        if (!string.IsNullOrWhiteSpace(a.Role)) existing.AssignmentRole = a.Role;
+                        if (a.IsRequired.HasValue) existing.IsRequired = a.IsRequired.Value;
+                    }
+                    else
+                    {
+                        mission.Assignments.Add(new MissionAssignment
+                        {
+                            MissionId = mission.Id,
+                            UserId = a.UserId,
+                            AssignmentRole = !string.IsNullOrWhiteSpace(a.Role) ? a.Role : "PILOT",
+                            AssignedByUserId = _current.UserId,
+                            IsRequired = a.IsRequired ?? true,
+                            ResponseStatus = MissionAssignmentResponse.Pending
+                        });
+                    }
                 }
             }
         }
@@ -1339,6 +1348,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             AssignmentRole = a.AssignmentRole,
             Status = a.Status.ToString(),
             ResponseStatus = a.ResponseStatus.ToString(),
+            IsRequired = a.IsRequired,
             AssignedAt = a.AssignedAt,
             RespondedAt = a.RespondedAt,
             ResponseReason = a.ResponseReason

@@ -95,6 +95,7 @@ public class MissionAssignmentItemDto
     public string AssignmentRole { get; set; } = string.Empty;
     public string Status { get; set; } = "Active";
     public string ResponseStatus { get; set; } = "Pending"; // "Pending" | "Accepted" | "Postponed" | "Replaced"
+    public bool IsRequired { get; set; } = true;
     public DateTime AssignedAt { get; set; }
     public DateTime? RespondedAt { get; set; }
     public string? ResponseReason { get; set; }
