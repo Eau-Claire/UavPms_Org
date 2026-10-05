@@ -33,20 +33,20 @@ public class AuditLogRepository : GenericRepository<AuditLog>, IAuditLogReposito
         {
             var lowerSearch = search.ToLower();
             query = query.Where(x =>
-                x.IpAddress.ToLower().Contains(lowerSearch) || x.UserAgent.ToLower().Contains(lowerSearch)
-                                                            || x.OldValues.ToLower().Contains(lowerSearch) || x
-                                                                .NewValues.ToLower().Contains(lowerSearch)
-                                                                    || (x.User != null && x.User.Email.ToLower()
-                                                                        .Contains(lowerSearch)));
+                (x.TableName != null && x.TableName.ToLower().Contains(lowerSearch))
+                || (x.ActionType != null && x.ActionType.ToLower().Contains(lowerSearch))
+                || (x.IpAddress != null && x.IpAddress.ToLower().Contains(lowerSearch))
+                || (x.UserAgent != null && x.UserAgent.ToLower().Contains(lowerSearch))
+                || (x.User != null && x.User.Email.ToLower().Contains(lowerSearch)));
         }
         
-        var totalCaount = await query.CountAsync();
+        var totalCount = await query.CountAsync();
         var items = await query
             .OrderByDescending(x => x.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
         
-        return (items, totalCaount);
+        return (items, totalCount);
     }
 }
