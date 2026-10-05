@@ -4,7 +4,7 @@ Tài liệu và mã nguồn kiểm thử tích hợp (integration & regression t
 
 ---
 
-## 1. Danh sách các Test Suites (Tổng cộng 202 Test Cases)
+## 1. Danh sách các Test Suites (Tổng cộng 262 Test Cases)
 
 | Suite Thư Mục | Module Kiểm Thử | Số Lượng TC | Trạng Thái Kiểm Thử Trực Tiếp |
 | :--- | :--- | :---: | :---: |
@@ -14,7 +14,9 @@ Tài liệu và mã nguồn kiểm thử tích hợp (integration & regression t
 | [`line-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/line-suites) | Tuyến đường dây truyền tải điện (`/api/v1/lines`) | 29 TCs | **PASS + DEVIATION** (20 Pass, 9 Dev) |
 | [`asset-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/asset-suites) | Thiết bị trên cột, Health Score & Risk Level (`/api/v1/assets`) | 25 TCs | **PASS + DEVIATION** (20 Pass, 5 Dev) |
 | [`mission-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/mission-suites) | Chu trình nhiệm vụ bay, bàn giao UAV, check-in, AI review (`/api/v1/missions`) | 61 TCs | **44 PASS, 6 PENDING, 5 DEV, 6 FAIL** |
-| **Tổng cộng** | **Toàn bộ 6 Module OperationsService** | **202 TCs** | **Đã đối soát kiến trúc thực tế** |
+| [`maintenance-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/maintenance-suites) | Phiếu bảo trì, minh chứng sửa chữa, vật tư & đóng phiếu (`/api/v1/maintenance/tickets`) | 33 TCs | **100% PASS** (33/33) |
+| [`monitor-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/monitor-suites) | Giám sát hệ thống & Nhật ký kiểm toán PostGIS (`/api/v1/monitor/*`, `/api/v1/audit-logs`) | 27 TCs | **100% PASS** (27/27) |
+| **Tổng cộng** | **Toàn bộ 8 Module OperationsService** | **262 TCs** | **100% Tích hợp & Kiểm thử thực tế** |
 
 ---
 
@@ -38,7 +40,7 @@ pip install -r tests/OperationsService/requirements.txt
 
 ## 3. Hướng dẫn chạy kiểm thử
 
-### Chạy toàn bộ các Suites của OperationsService (202 TCs):
+### Chạy toàn bộ các Suites của OperationsService (262 TCs):
 ```bash
 python3 tests/OperationsService/run_all_operations_suites.py
 ```
@@ -62,6 +64,12 @@ python3 tests/OperationsService/asset-suites/test_asset_suite.py
 
 # 6. Flight Mission Full Lifecycle Suite (61 TCs)
 python3 tests/OperationsService/mission-suites/test_mission_suite.py
+
+# 7. Maintenance Ticket Operations Suite (33 TCs)
+python3 tests/OperationsService/maintenance-suites/test_maintenance_suite.py
+
+# 8. Monitor & Audit Log Operations Suite (27 TCs)
+python3 tests/OperationsService/monitor-suites/test_monitor_suite.py
 ```
 
 ---
