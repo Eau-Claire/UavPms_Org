@@ -13,6 +13,7 @@ using UavPms.AIInspectionService.Infrastructure.Services;
 using UavPms.Grpc.InspectionEvaluation;
 using UavPms.AIInspectionService.Application.Common.Options;
 using UavPms.OperationsService.Application.Common.Options;
+using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.AIInspectionService.Infrastructure;
 
@@ -72,6 +73,7 @@ public static class DependencyInjection
         services.AddSingleton(sp =>
             new InspectionEvaluation.InspectionEvaluationClient(sp.GetRequiredService<GrpcChannel>()));
         services.AddScoped<IInspectionEvaluationClient, GrpcInspectionEvaluationClient>();
+        services.AddScoped<ISystemSettingService, SystemSettingService>();
 
         // Đăng ký Unit of Work và Generic Repository
         services.AddScoped<IUnitOfWork, UnitOfWork>();

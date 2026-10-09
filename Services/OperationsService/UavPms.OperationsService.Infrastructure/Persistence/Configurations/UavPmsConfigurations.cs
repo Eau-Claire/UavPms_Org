@@ -933,3 +933,20 @@ public class ReportMissionConfiguration : IEntityTypeConfiguration<ReportMission
     }
 }
 
+public class SystemSettingConfiguration : IEntityTypeConfiguration<SystemSetting>
+{
+    public void Configure(EntityTypeBuilder<SystemSetting> builder)
+    {
+        builder.ToTable("SystemSettings");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Key).HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Value).HasMaxLength(2000).IsRequired();
+        builder.Property(e => e.Description).HasMaxLength(500);
+        builder.Property(e => e.Category).HasMaxLength(50);
+        builder.Property(e => e.DataType).HasMaxLength(20);
+        builder.HasIndex(e => e.Key).IsUnique();
+        builder.HasIndex(e => e.Category);
+    }
+}
+
+

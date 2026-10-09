@@ -48,7 +48,18 @@ public static class DroneTechnicalHealthEvaluationPolicy
     public static DroneTechnicalEvaluationResult Evaluate(
         IReadOnlyList<DroneMetricSubmitDto>? requestedMetrics,
         double droneBatteryLevel)
+        => Evaluate(requestedMetrics, droneBatteryLevel, new UavPms.Shared.Contracts.Settings.DroneThresholdSettingsDto());
+
+    public static DroneTechnicalEvaluationResult Evaluate(
+        IReadOnlyList<DroneMetricSubmitDto>? requestedMetrics,
+        double droneBatteryLevel,
+        UavPms.Shared.Contracts.Settings.DroneThresholdSettingsDto? settings)
     {
+        settings ??= new UavPms.Shared.Contracts.Settings.DroneThresholdSettingsDto();
+        var criticalBatteryThreshold = (decimal)settings.CriticalBatteryThreshold;
+        var warningBatteryThreshold = (decimal)settings.WarningBatteryThreshold;
+        var minRfLinkThreshold = (decimal)settings.MinRfLinkThreshold;
+
         if (requestedMetrics == null || requestedMetrics.Count == 0)
         {
             throw new BusinessRuleException(
@@ -83,13 +94,13 @@ public static class DroneTechnicalHealthEvaluationPolicy
                 m.MetricCode.Equals("BATTERY", StringComparison.OrdinalIgnoreCase))
             {
                 var batteryVal = m.NumericValue ?? (decimal)droneBatteryLevel;
-                if (batteryVal < 30.0m)
+                if (batteryVal < criticalBatteryThreshold)
                 {
                     passed = false;
                     critical = true;
                     severity = "Critical";
                 }
-                else if (batteryVal < 50.0m)
+                else if (batteryVal < warningBatteryThreshold)
                 {
                     passed = true;
                     critical = false;
@@ -138,7 +149,7 @@ public static class DroneTechnicalHealthEvaluationPolicy
                      m.MetricCode.Equals("TELEMETRY", StringComparison.OrdinalIgnoreCase))
             {
                 critical = true;
-                if (m.NumericValue.HasValue && m.NumericValue.Value < 50.0m)
+                if (m.NumericValue.HasValue && m.NumericValue.Value < minRfLinkThreshold)
                 {
                     passed = false;
                     severity = "Critical";

@@ -9,6 +9,8 @@ using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.Shared.Contracts.Constants;
+using UavPms.Shared.Contracts.Interfaces;
+using UavPms.Shared.Contracts.Settings;
 
 namespace UavPms.OperationsService.Infrastructure.Services;
 
@@ -16,11 +18,16 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 {
     private readonly ApplicationDbContext _db;
     private readonly ICurrentUserServices _current;
+    private readonly ISystemSettingService? _systemSettingService;
 
-    public DroneTechnicalInspectionService(ApplicationDbContext db, ICurrentUserServices current)
+    public DroneTechnicalInspectionService(
+        ApplicationDbContext db, 
+        ICurrentUserServices current, 
+        ISystemSettingService? systemSettingService = null)
     {
         _db = db;
         _current = current;
+        _systemSettingService = systemSettingService;
     }
 
     public async Task<DroneTechnicalInspection> SubmitInspectionAsync(DroneInspectionSubmitRequest request, CancellationToken ct)
@@ -32,7 +39,11 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 
         await EnsureCallerHasDroneAccessAsync(drone.Id, ct);
 
-        var evalResult = DroneTechnicalHealthEvaluationPolicy.Evaluate(request.Metrics, drone.BatteryLevel);
+        var droneSettings = _systemSettingService != null
+            ? await _systemSettingService.GetDroneThresholdSettingsAsync(ct)
+            : new DroneThresholdSettingsDto();
+
+        var evalResult = DroneTechnicalHealthEvaluationPolicy.Evaluate(request.Metrics, drone.BatteryLevel, droneSettings);
 
         var inspection = new DroneTechnicalInspection
         {
@@ -40,7 +51,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             TechnicianUserId = _current.UserId,
             StartedAt = DateTime.UtcNow,
             CompletedAt = DateTime.UtcNow,
-            ValidUntil = DateTime.UtcNow.AddDays(7),
+            ValidUntil = DateTime.UtcNow.AddDays(droneSettings.InspectionValidityDays),
             PolicyVersion = request.PolicyVersion ?? "v2.0",
             Notes = request.Notes ?? "Kiểm định kỹ thuật tự động trước khi bay (BIST/Telemetry)",
             SourceType = "bist",

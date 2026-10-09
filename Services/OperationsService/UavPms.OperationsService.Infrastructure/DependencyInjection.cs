@@ -14,6 +14,7 @@ using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Application.Features.Missions;
 using UavPms.OperationsService.Application.Features.Assessments;
 using UavPms.OperationsService.Application.Features.Maintenance;
+using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.OperationsService.Infrastructure;
 
@@ -151,6 +152,8 @@ public static class DependencyInjection
         {
             services.AddScoped<IFileStorageService, LocalFileStorageService>();
         }
+
+        services.AddScoped<ISystemSettingService, SystemSettingService>();
 
         return services;
     }

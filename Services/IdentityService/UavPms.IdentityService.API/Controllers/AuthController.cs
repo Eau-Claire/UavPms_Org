@@ -16,16 +16,19 @@ namespace UavPms.IdentityService.API.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly ISender _mediator;
+    private readonly UavPms.Shared.Contracts.Interfaces.ISystemSettingService _systemSettingService;
 
-    public AuthController(ISender mediator)
+    public AuthController(ISender mediator, UavPms.Shared.Contracts.Interfaces.ISystemSettingService systemSettingService)
     {
         _mediator = mediator;
+        _systemSettingService = systemSettingService;
     }
     
-    private void AppendDeviceTrustCookie(string? deviceTrustToken)
+    private async Task AppendDeviceTrustCookieAsync(string? deviceTrustToken)
     {
         if (string.IsNullOrEmpty(deviceTrustToken)) return;
 
+        var tokenSettings = await _systemSettingService.GetTokenSettingsAsync();
         var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
         var isDev = string.IsNullOrEmpty(env) || env.Equals("Development", StringComparison.OrdinalIgnoreCase);
 
@@ -34,7 +37,7 @@ public class AuthController : ControllerBase
             HttpOnly = true,
             Secure = !isDev,
             SameSite = isDev ? SameSiteMode.Lax : SameSiteMode.None,
-            Expires = DateTime.UtcNow.AddDays(30)
+            Expires = DateTime.UtcNow.AddDays(tokenSettings.DeviceTrustDays)
         };
         Response.Cookies.Append("device_trust_token", deviceTrustToken, cookieOptions);
     }
@@ -53,7 +56,7 @@ public class AuthController : ControllerBase
             return Ok(new ApiResponse(true, "OTP required", new { result.Email }));
         }
 
-        AppendDeviceTrustCookie(result.DeviceTrustToken);
+        await AppendDeviceTrustCookieAsync(result.DeviceTrustToken);
 
         return Ok(new ApiResponse(true, "Success", new
         {
@@ -83,7 +86,7 @@ public class AuthController : ControllerBase
         
         if (result.Success && result.AuthResult != null)
         {
-            AppendDeviceTrustCookie(result.AuthResult.DeviceTrustToken);
+            await AppendDeviceTrustCookieAsync(result.AuthResult.DeviceTrustToken);
         }
         
         return Ok(new ApiResponse(true, "Verification success.", result));

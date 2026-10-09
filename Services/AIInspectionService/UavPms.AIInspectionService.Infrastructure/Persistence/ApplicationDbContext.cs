@@ -42,6 +42,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
     public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
