@@ -1,14 +1,17 @@
 using Asp.Versioning;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.OperationsService.Application.Features.Drones.Queries.GetDrones;
 using UavPms.OperationsService.Application.Features.Drones.Queries.GetDroneStatus;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/drones")]
 [ApiVersion("1.0")]
+[Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
 public class DronesController : ControllerBase
 {
     private readonly ISender _mediator;

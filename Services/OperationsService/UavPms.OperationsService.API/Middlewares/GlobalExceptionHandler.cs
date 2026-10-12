@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 using System.Net;
 using UavPms.OperationsService.API.Controllers;
 using UavPms.OperationsService.Application.Common.Exceptions;
@@ -78,15 +79,49 @@ public class GlobalExceptionHandler : IExceptionHandler
                 , ErrorCode: keyNotFoundException.Message.StartsWith("Mission", StringComparison.OrdinalIgnoreCase) ? "MISSION_NOT_FOUND" : "ASSET_NOT_FOUND"
             );
         }
+        else if (exception is DbUpdateConcurrencyException concurrencyException)
+        {
+            httpContext.Response.StatusCode = (int)HttpStatusCode.Conflict;
+            apiResponse = new ApiResponse(
+                Success: false,
+                Message: "A concurrency conflict occurred. The resource was modified by another operation.",
+                Data: null,
+                Errors: null,
+                ErrorCode: "CONCURRENCY_CONFLICT"
+            );
+        }
         else if (exception is BusinessRuleException businessRuleException)
         {
-            httpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            var code = !string.IsNullOrWhiteSpace(businessRuleException.Code)
+                ? businessRuleException.Code
+                : (businessRuleException.Message.Contains("mission inspection scope", StringComparison.OrdinalIgnoreCase)
+                    ? "INVALID_MISSION_ASSET"
+                    : "BUSINESS_RULE_VIOLATION");
+
+            var isConflict = code is "INVALID_MISSION_STATE"
+                or "RESOURCE_BOOKING_CONFLICT"
+                or "MISSION_CONCURRENCY_CONFLICT"
+                or "ASSESSMENT_CONCURRENCY_CONFLICT"
+                or "IDEMPOTENCY_CONFLICT";
+
+            httpContext.Response.StatusCode = isConflict ? (int)HttpStatusCode.Conflict : (int)HttpStatusCode.BadRequest;
             apiResponse = new ApiResponse(
                 Success: false,
                 Message: businessRuleException.Message,
                 Data: null,
-                Errors: null
-                , ErrorCode: businessRuleException.Message.Contains("mission inspection scope", StringComparison.OrdinalIgnoreCase) ? "INVALID_MISSION_ASSET" : "BUSINESS_RULE_VIOLATION"
+                Errors: null,
+                ErrorCode: code
+            );
+        }
+        else if (exception is InvalidOperationException invalidOperationException)
+        {
+            httpContext.Response.StatusCode = (int)HttpStatusCode.Conflict;
+            apiResponse = new ApiResponse(
+                Success: false,
+                Message: invalidOperationException.Message,
+                Data: null,
+                Errors: null,
+                ErrorCode: "INVALID_MISSION_STATE"
             );
         }
         else if (exception is InfrastructureOperationException infrastructureException)

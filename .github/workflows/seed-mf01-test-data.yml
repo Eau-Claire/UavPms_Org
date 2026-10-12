@@ -27,9 +27,9 @@ jobs:
     name: Seed regional MF01 fixtures on server
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Reuse the existing server secrets and required reviewers. All remote
-    # operations are steps of this protected job, after environment approval.
-    environment: production
+    # Restricted to staging/pre-production environments only. Test fixture seeding
+    # is strictly prohibited on production hosts and production databases (OPS-01).
+    environment: staging
     env:
       MF01_DATABASE: ${{ inputs.database }}
       MF01_TOWERS: ${{ inputs.towers_per_line }}
@@ -45,7 +45,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$MF01_DATABASE" =~ ^mf01_test[a-zA-Z0-9_]*$ ]] || { echo 'Invalid test database name'; exit 1; }
+          # OPS-01: Strictly block any production database names or substrings
+          if [[ "$MF01_DATABASE" =~ (prod|production|uavpms_prod|^uavpms$) ]]; then
+            echo "FATAL: Test fixtures must not be seeded into production databases."
+            exit 1
+          fi
+          [[ "$MF01_DATABASE" =~ ^mf01_test[a-zA-Z0-9_]*$ ]] || { echo 'Invalid test database name. Must start with mf01_test'; exit 1; }
           [[ "$MF01_TOWERS" =~ ^(30|100|500)$ ]] || { echo 'Invalid fixture volume'; exit 1; }
           python -m unittest discover -s api-test/fixtures/mf01
           python api-test/scripts/generate_mf01_mock.py --output mf01-payload --towers-per-line "$MF01_TOWERS"

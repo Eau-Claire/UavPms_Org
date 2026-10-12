@@ -18,6 +18,7 @@ public class Uav : BaseEntity
     public double BatteryLevel { get; set; }
     public Point? CurrentLocation { get; set; }
     public DateTime? LastMaintenanceAt { get; set; }
+    public uint Version { get; set; }
 
     public virtual ICollection<Mission> Missions { get; set; } = new List<Mission>();
     public virtual ICollection<DroneTechnicalInspection> TechnicalInspections { get; set; } = new List<DroneTechnicalInspection>();
@@ -27,6 +28,7 @@ public class Uav : BaseEntity
     public void UpdateStatus(DroneStatus status)
     {
         Status = status;
+        Version++;
     }
 
     public void UpdateBatteryLevel(double batteryLevel)
@@ -35,11 +37,13 @@ public class Uav : BaseEntity
             throw new ArgumentOutOfRangeException(nameof(batteryLevel), "Battery level must be between 0 and 100.");
         
         BatteryLevel = batteryLevel;
+        Version++;
     }
     
     public void UpdateCurrentLocation(Point location)
     {
         CurrentLocation = location ?? throw new ArgumentNullException(nameof(location));
+        Version++;
     }
     #endregion
 }

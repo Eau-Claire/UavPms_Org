@@ -61,10 +61,11 @@ public class ApplicationDbContext : DbContext
     public DbSet<DroneTechnicalMetric> DroneTechnicalMetrics => Set<DroneTechnicalMetric>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<ReportMission> ReportMissions => Set<ReportMission>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
-        ICurrentUserServices? currentUserServices) : base(options)
+        ICurrentUserServices? currentUserServices = null) : base(options)
     {
         _currentUserServices = currentUserServices;
     }
@@ -117,6 +118,15 @@ public class ApplicationDbContext : DbContext
                     break;
                 case EntityState.Modified:
                     entry.Entity.UpdatedAt = DateTime.UtcNow;
+                    var versionProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "Version");
+                    if (versionProp != null && versionProp.CurrentValue is uint currentVer)
+                    {
+                        var origVer = versionProp.OriginalValue is uint orig ? orig : currentVer;
+                        if (currentVer == origVer)
+                        {
+                            versionProp.CurrentValue = currentVer + 1;
+                        }
+                    }
                     break;
             }
         }

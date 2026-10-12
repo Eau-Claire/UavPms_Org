@@ -3,6 +3,8 @@ using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Missions.DTOs;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
+using UavPms.OperationsService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.Application.Features.Missions.Commands.UpdateMission;
 
@@ -12,17 +14,20 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
     private readonly IUserRepository _userRepository;
     private readonly IUavRepository _uavRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUserServices? _currentUserServices;
 
     public UpdateMissionCommandHandler(
         IMissionRepository missionRepository,
         IUserRepository userRepository,
         IUavRepository uavRepository,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ICurrentUserServices? currentUserServices = null)
     {
         _missionRepository = missionRepository;
         _userRepository = userRepository;
         _uavRepository = uavRepository;
         _unitOfWork = unitOfWork;
+        _currentUserServices = currentUserServices;
     }
     
     public async Task<MissionDto> Handle(UpdateMissionCommand request, CancellationToken cancellationToken)
@@ -31,6 +36,16 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
         if (misison == null)
         {
             throw new NotFoundException("Mission", request.Id);
+        }
+
+        if (_currentUserServices is { IsAuthenticated: true } && _currentUserServices.UserId != Guid.Empty)
+        {
+            var isGlobal = _currentUserServices.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
+            var canManage = await _missionRepository.UserCanManageAsync(request.Id, _currentUserServices.UserId, isGlobal, cancellationToken);
+            if (!canManage)
+            {
+                throw new ForbiddenException("REGION_MANAGEMENT_SCOPE_REQUIRED");
+            }
         }
 
         if (misison.Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled)
@@ -63,6 +78,13 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
             Description = misison.Description,
             ManagerId = misison.ManagerId,
             ManagerEmail = manager?.Email ?? string.Empty,
+            Priority = misison.Priority.ToString(),
+            Objective = misison.Objective.ToString(),
+            PriorityDefects = !string.IsNullOrWhiteSpace(misison.PriorityDefectsJson)
+                ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(misison.PriorityDefectsJson) ?? new List<string>()
+                : new List<string>(),
+            EmergencyReason = misison.EmergencyReason,
+            IsImmediate = misison.IsImmediate,
             CreatedAt = misison.CreatedAt,
             UpdatedAt = misison.UpdatedAt
         };

@@ -10,10 +10,13 @@ public interface IMissionRepository : IGenericRepository<Mission>
         string? search,
         string? status,
         string? sortBy = "createdAt",
-        bool sortDescending = true);
+        bool sortDescending = true,
+        string? priority = null,
+        IReadOnlyList<Guid?>? allowedRegionIds = null);
     
     Task<IReadOnlyList<Mission>> GetMissionsByAssignedUserAsync(Guid userId);
     
     Task<Mission?> GetMissionDetailsByIdAsync(Guid id);
     Task<bool> UserCanAccessAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken);
+    Task<bool> UserCanManageAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken);
 }

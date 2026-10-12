@@ -42,7 +42,7 @@ public class MissionConfirmationOverdueJob
                     && !m.IsOverdueNotified
                     && m.ConfirmationDeadline != null
                     && m.ConfirmationDeadline <= now
-                    && (m.Status == "PENDING_CONFIRMATION" || m.Status == "PendingAcceptance" || m.Status == "Pending" || m.Status == "Draft"))
+                    && (m.Status == "PENDING_CONFIRMATION" || m.Status == "PendingAcceptance" || m.Status == "Pending"))
                 .ToListAsync();
 
             if (overdueMissions.Count == 0)
@@ -53,9 +53,12 @@ public class MissionConfirmationOverdueJob
 
             _logger.LogWarning("Found {Count} overdue missions requiring notification.", overdueMissions.Count);
 
+            var eventsToBroadcast = new System.Collections.Generic.List<(string MissionGroup, Guid ManagerId, MissionLifecycleEventDto EventDto)>();
+
             foreach (var mission in overdueMissions)
             {
                 mission.IsOverdueNotified = true;
+                mission.UpdatedAt = now;
 
                 // 1. Create urgent Notification for Manager
                 if (mission.ManagerId != Guid.Empty)
@@ -88,7 +91,7 @@ public class MissionConfirmationOverdueJob
                 };
                 db.MissionCommunicationLogs.Add(commLog);
 
-                // 3. Broadcast SignalR Real-time Event
+                // Prepare SignalR Real-time Event
                 var eventDto = new MissionLifecycleEventDto
                 {
                     MissionId = mission.Id.ToString(),
@@ -111,18 +114,32 @@ public class MissionConfirmationOverdueJob
                     }
                 };
 
-                var missionGroup = NotificationHub.MissionGroupName(mission.Id.ToString());
-                await hubContext.Clients.Group(missionGroup).SendAsync("MissionConfirmationOverdue", eventDto);
-                await hubContext.Clients.Group(missionGroup).SendAsync("MissionLifecycleEvent", eventDto);
-
-                if (mission.ManagerId != Guid.Empty)
-                {
-                    await hubContext.Clients.Group(NotificationHub.UserGroupName(mission.ManagerId))
-                        .SendAsync("MissionConfirmationOverdue", eventDto);
-                }
+                eventsToBroadcast.Add((NotificationHub.MissionGroupName(mission.Id.ToString()), mission.ManagerId, eventDto));
             }
 
+            // Save database changes BEFORE broadcasting realtime events
             await db.SaveChangesAsync();
+            _logger.LogInformation("Successfully processed {Count} overdue missions in database. Now broadcasting realtime notifications...", overdueMissions.Count);
+
+            // 3. Broadcast SignalR Real-time Events after DB commit
+            foreach (var (missionGroup, mgrId, eventDto) in eventsToBroadcast)
+            {
+                try
+                {
+                    await hubContext.Clients.Group(missionGroup).SendAsync("MissionConfirmationOverdue", eventDto);
+                    await hubContext.Clients.Group(missionGroup).SendAsync("MissionLifecycleEvent", eventDto);
+
+                    if (mgrId != Guid.Empty)
+                    {
+                        await hubContext.Clients.Group(NotificationHub.UserGroupName(mgrId))
+                            .SendAsync("MissionConfirmationOverdue", eventDto);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to broadcast overdue notification via SignalR for mission {MissionId}", eventDto.MissionId);
+                }
+            }
             _logger.LogInformation("Successfully processed {Count} overdue missions.", overdueMissions.Count);
         }
         catch (Exception ex)

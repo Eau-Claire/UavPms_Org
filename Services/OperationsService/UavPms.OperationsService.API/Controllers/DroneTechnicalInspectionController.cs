@@ -26,7 +26,7 @@ public sealed class DroneTechnicalInspectionController : ControllerBase
     public async Task<IActionResult> SubmitInspection([FromBody] DroneInspectionSubmitRequest request, CancellationToken ct)
     {
         var inspection = await _inspectionService.SubmitInspectionAsync(request, ct);
-        return Ok(inspection);
+        return Ok(inspection.ToDto());
     }
 
     [HttpGet("drone/{droneId:guid}/latest")]
@@ -36,6 +36,6 @@ public sealed class DroneTechnicalInspectionController : ControllerBase
         if (inspection == null)
             return NotFound(new { message = $"No technical inspection found for drone {droneId}." });
 
-        return Ok(inspection);
+        return Ok(inspection.ToDto());
     }
 }

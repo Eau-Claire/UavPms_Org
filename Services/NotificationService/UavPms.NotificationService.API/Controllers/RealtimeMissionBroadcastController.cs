@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using UavPms.NotificationService.API.Hubs;
 using UavPms.NotificationService.Domain.Entities;
 using UavPms.NotificationService.Infrastructure.Persistence;
+using UavPms.Shared.Contracts.Constants;
 using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.NotificationService.API.Controllers;
@@ -35,7 +36,7 @@ public class RealtimeMissionBroadcastController : ControllerBase
     }
 
     [HttpPost("mission-event")]
-    [AllowAnonymous] // Internal communication between microservices
+    [Authorize(Roles = UserRoles.SystemAdmin)]
     public async Task<IActionResult> BroadcastMissionEvent(
         [FromBody] MissionLifecycleEventDto evt,
         CancellationToken cancellationToken = default)

@@ -8,6 +8,8 @@ using UavPms.IdentityService.Domain.Enums;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 using UavPms.IdentityService.Infrastructure.Services.Helpers;
 
+using UavPms.Shared.Contracts.Interfaces;
+
 namespace UavPms.IdentityService.Infrastructure.Services;
 
 public class RedisOtpService : IOtpService
@@ -15,18 +17,25 @@ public class RedisOtpService : IOtpService
     private readonly IConnectionMultiplexer _redis;
     private readonly IEmailService _emailService;
     private readonly IEventPublisher _eventPublisher;
+    private readonly ISystemSettingService _systemSettingService;
 
-    public RedisOtpService(IConnectionMultiplexer redis, IEmailService emailService, IEventPublisher eventPublisher)
+    public RedisOtpService(
+        IConnectionMultiplexer redis,
+        IEmailService emailService,
+        IEventPublisher eventPublisher,
+        ISystemSettingService systemSettingService)
     {
         _redis = redis;
         _emailService = emailService;
         _eventPublisher = eventPublisher;
+        _systemSettingService = systemSettingService;
     }
 
     private IDatabase GetDb() => _redis.GetDatabase();
 
     public async Task<(bool Success, string Message)> GenerateAndSendOtpAsync(string email, OtpPurpose purpose, bool isResend = false)
     {
+        var otpSettings = await _systemSettingService.GetOtpSettingsAsync();
         var db = GetDb();
         var otpKey = RedisKeyBuilder.OtpKey(purpose, email);
         var attemptsKey = RedisKeyBuilder.AttemptsKey(purpose, email);
@@ -34,17 +43,22 @@ public class RedisOtpService : IOtpService
         if (isResend)
         {
             var ttl = await db.KeyTimeToLiveAsync(otpKey);
-            var (isCooldownActive, remainingSeconds) = OtpCalculations.CalculateCooldown(ttl);
+            var (isCooldownActive, remainingSeconds) = OtpCalculations.CalculateCooldown(
+                ttl,
+                totalTtlSeconds: otpSettings.ExpiryMinutes * 60,
+                cooldownSeconds: otpSettings.CooldownSeconds);
             if (isCooldownActive)
             {
                 return (false, $"Please wait {remainingSeconds} seconds before requesting a new OTP.");
             }
         }
 
-        // Tạm thời cố định mã OTP mặc định là "123456" cho author và authen (thuận tiện cho việc test)
-        var code = "123456";
+        // Sinh mã OTP: ưu tiên mã bypass nếu được cấu hình (ví dụ '123456' cho dev/test), ngược lại sinh ngẫu nhiên 6 chữ số bảo mật
+        var code = !string.IsNullOrEmpty(otpSettings.BypassCode)
+            ? otpSettings.BypassCode
+            : RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
         var hashedCode = TokenHasher.Hash(code);
-        var expiryTime = DateTime.UtcNow.AddMinutes(15);
+        var expiryTime = DateTime.UtcNow.AddMinutes(otpSettings.ExpiryMinutes);
 
         try
         {
@@ -55,9 +69,9 @@ public class RedisOtpService : IOtpService
             // Bỏ qua lỗi gửi email (như thiếu SendGrid / Brevo API key) để không chặn luồng dev/test
         }
 
-        // Save hashed OTP in Redis with 15 minutes TTL
-        await db.StringSetAsync(otpKey, hashedCode, TimeSpan.FromMinutes(15));
-        // Reset attempts count when a new OTP is generated
+        // Lưu mã OTP đã băm vào Redis với TTL cấu hình động từ database
+        await db.StringSetAsync(otpKey, hashedCode, TimeSpan.FromMinutes(otpSettings.ExpiryMinutes));
+        // Reset số lần thử khi mã OTP mới được tạo
         await db.KeyDeleteAsync(attemptsKey);
 
         await _eventPublisher.PublishAsync(new OtpGenerated
@@ -71,8 +85,10 @@ public class RedisOtpService : IOtpService
 
     public async Task<(bool IsValid, string Message)> VerifyOtpAsync(string email, string code, OtpPurpose purpose)
     {
-        // 1. Cho phép OTP mặc định "123456" luôn hợp lệ để thuận tiện cho việc dev/test (author & authen)
-        if (code == "123456")
+        var otpSettings = await _systemSettingService.GetOtpSettingsAsync();
+
+        // 1. Kiểm tra mã bypass cấu hình từ database (nếu có)
+        if (!string.IsNullOrEmpty(otpSettings.BypassCode) && code == otpSettings.BypassCode)
         {
             var dbTest = GetDb();
             var testOtpKey = RedisKeyBuilder.OtpKey(purpose, email);
@@ -119,10 +135,10 @@ public class RedisOtpService : IOtpService
                 await db.KeyExpireAsync(attemptsKey, ttl.Value);
             }
 
-            var (exceeded, remainingAttempts) = OtpCalculations.EvaluateAttempts(attempts);
+            var (exceeded, remainingAttempts) = OtpCalculations.EvaluateAttempts(attempts, otpSettings.MaxAttempts);
             if (exceeded)
             {
-                // Reached 5 attempts -> delete both keys
+                // Vượt quá số lần thử cấu hình từ database -> xóa key
                 await db.KeyDeleteAsync(new RedisKey[] { otpKey, attemptsKey });
                 return (false, "Maximum verification attempts exceeded. Please request a new OTP.");
             }

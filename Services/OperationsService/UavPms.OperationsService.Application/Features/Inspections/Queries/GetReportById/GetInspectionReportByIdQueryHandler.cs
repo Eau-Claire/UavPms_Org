@@ -1,9 +1,12 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Inspections.DTOs;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
+using UavPms.OperationsService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.Application.Features.Inspections.Queries.GetReportById;
 
@@ -11,10 +14,17 @@ public class GetInspectionReportByIdQueryHandler
     : IRequestHandler<GetInspectionReportByIdQuery, InspectionReportDto>
 {
     private readonly IInspectionMediaRepository _inspectionMediaRepository;
+    private readonly IMissionRepository? _missionRepository;
+    private readonly ICurrentUserServices? _currentUser;
 
-    public GetInspectionReportByIdQueryHandler(IInspectionMediaRepository inspectionMediaRepository)
+    public GetInspectionReportByIdQueryHandler(
+        IInspectionMediaRepository inspectionMediaRepository,
+        IMissionRepository? missionRepository = null,
+        ICurrentUserServices? currentUser = null)
     {
         _inspectionMediaRepository = inspectionMediaRepository;
+        _missionRepository = missionRepository;
+        _currentUser = currentUser;
     }
 
     public async Task<InspectionReportDto> Handle(
@@ -30,6 +40,21 @@ public class GetInspectionReportByIdQueryHandler
         if (media == null)
         {
             throw new NotFoundException("InspectionMedia", request.Id);
+        }
+
+        if (_currentUser is { IsAuthenticated: true } && _missionRepository != null)
+        {
+            var isGlobal = _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
+            var canAccess = await _missionRepository.UserCanAccessAsync(
+                media.MissionId,
+                _currentUser.UserId,
+                isGlobal,
+                cancellationToken);
+
+            if (!canAccess)
+            {
+                throw new ForbiddenException("MISSION_ACCESS_DENIED");
+            }
         }
 
         return new InspectionReportDto

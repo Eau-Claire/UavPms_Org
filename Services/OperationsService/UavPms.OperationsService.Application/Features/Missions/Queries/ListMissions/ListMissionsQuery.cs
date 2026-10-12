@@ -9,4 +9,5 @@ public record ListMissionsQuery(
     string? Search,
     string? Status,
     string? SortBy = "createdAt",
-    bool SortDescending = true) : IRequest<PaginatedMissionsResponse>;
+    bool SortDescending = true,
+    string? Priority = null) : IRequest<PaginatedMissionsResponse>;

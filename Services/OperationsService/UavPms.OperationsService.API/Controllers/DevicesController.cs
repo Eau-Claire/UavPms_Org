@@ -29,6 +29,7 @@ public class DevicesController : ControllerBase
     }
 
     [HttpPost("heartbeat")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> SendHeartbeat([FromBody] HeartbeatCommand command)
     {
         var result = await _mediator.Send(command);

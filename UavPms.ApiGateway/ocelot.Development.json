@@ -101,6 +101,14 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
+      "DownstreamPathTemplate": "/api/v{version}/notifications/realtime/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
+      "UpstreamPathTemplate": "/api/v{version}/notifications/realtime/{everything}",
+      "UpstreamHttpMethod": [],
+      "Priority": 100
+    },
+    {
       "DownstreamPathTemplate": "/api/v{version}/notifications/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
@@ -116,14 +124,14 @@
     },
     {
       "DownstreamPathTemplate": "/hubs/notifications/{everything}",
-      "DownstreamScheme": "http",
+      "DownstreamScheme": "ws",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
       "UpstreamPathTemplate": "/hubs/notifications/{everything}",
       "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
     },
     {
       "DownstreamPathTemplate": "/hubs/notifications",
-      "DownstreamScheme": "http",
+      "DownstreamScheme": "ws",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
       "UpstreamPathTemplate": "/hubs/notifications",
       "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
@@ -245,28 +253,56 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
       "UpstreamPathTemplate": "/api/v{version}/pre-mission-assessments/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 60
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v{version}/pre-mission-assessments",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
       "UpstreamPathTemplate": "/api/v{version}/pre-mission-assessments",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 60
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v{version}/drone-technical-inspections/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
       "UpstreamPathTemplate": "/api/v{version}/drone-technical-inspections/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 60
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v{version}/drone-technical-inspections",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
       "UpstreamPathTemplate": "/api/v{version}/drone-technical-inspections",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 60
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v{version}/devices/{everything}",
@@ -333,6 +369,11 @@
     }
   ],
   "GlobalConfiguration": {
-    "BaseUrl": "http://localhost:5194"
+    "BaseUrl": "http://localhost:5194",
+    "RateLimitOptions": {
+      "DisableRateLimitHeaders": false,
+      "QuotaExceededMessage": "Rate limit exceeded. Please try again later.",
+      "HttpStatusCode": 429
+    }
   }
 }

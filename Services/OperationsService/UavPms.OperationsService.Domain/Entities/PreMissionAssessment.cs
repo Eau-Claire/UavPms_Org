@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Domain.Common;
 using UavPms.OperationsService.Domain.Enums;
@@ -12,6 +13,7 @@ public class PreMissionAssessment : BaseEntity
     public DateTime PlannedEnd { get; set; }
     public Geometry? ProposedBoundary { get; set; }
     public ReadinessCheckStatus SiteFeasibilityStatus { get; set; } = ReadinessCheckStatus.Pending;
+
     public PreMissionAssessmentStatus Status { get; set; } = PreMissionAssessmentStatus.Draft;
     public TechnicalHealth OverallTechnicalHealth { get; set; } = TechnicalHealth.Unknown;
     public DateTime? ValidUntil { get; set; }
@@ -48,6 +50,54 @@ public sealed class PreMissionAssessmentPersonnel : BaseEntity
     public string Findings { get; set; } = "{}";
     public PreMissionAssessment? Assessment { get; set; }
     public User? User { get; set; }
+
+    [NotMapped]
+    public string Role
+    {
+        get
+        {
+            var opRole = User?.UserRoles?
+                .Select(ur => ur.Role?.RoleName)
+                .FirstOrDefault(name => name != null && (
+                    name.Equals("Inspector", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("Pilot", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("Analyst", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("Technician", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("MaintenanceTechnician", StringComparison.OrdinalIgnoreCase)
+                ));
+
+            if (!string.IsNullOrEmpty(opRole))
+            {
+                if (opRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase) || opRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
+                    return "Inspector";
+                if (opRole.Equals("Analyst", StringComparison.OrdinalIgnoreCase))
+                    return "Analyst";
+                if (opRole.Equals("Technician", StringComparison.OrdinalIgnoreCase) || opRole.Equals("MaintenanceTechnician", StringComparison.OrdinalIgnoreCase))
+                    return "Technician";
+                return opRole;
+            }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(Findings) && Findings.Contains("\"role\""))
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(Findings);
+                    if (doc.RootElement.TryGetProperty("role", out var el))
+                    {
+                        var found = el.GetString();
+                        if (!string.IsNullOrEmpty(found) &&
+                            !found.Equals("SystemAdmin", StringComparison.OrdinalIgnoreCase) &&
+                            !found.Equals("Manager", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return found;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return "Inspector";
+        }
+    }
 }
 
 public sealed class PreMissionAssessmentDrone : BaseEntity

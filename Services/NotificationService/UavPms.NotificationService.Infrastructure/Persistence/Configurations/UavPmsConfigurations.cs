@@ -199,6 +199,27 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
     }
 }
 
+public class MissionAssignmentConfiguration : IEntityTypeConfiguration<MissionAssignment>
+{
+    public void Configure(EntityTypeBuilder<MissionAssignment> builder)
+    {
+        builder.ToTable("MissionAssignments");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.AssignmentRole).HasMaxLength(50).IsRequired();
+        builder.HasIndex(e => new { e.MissionId, e.UserId });
+
+        builder.HasOne(e => e.Mission)
+            .WithMany(m => m.Assignments)
+            .HasForeignKey(e => e.MissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.User)
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public class MissionCommunicationLogConfiguration : IEntityTypeConfiguration<MissionCommunicationLog>
 {
     public void Configure(EntityTypeBuilder<MissionCommunicationLog> builder)

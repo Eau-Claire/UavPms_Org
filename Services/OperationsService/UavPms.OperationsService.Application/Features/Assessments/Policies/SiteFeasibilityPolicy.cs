@@ -16,16 +16,33 @@ public record SiteFeasibilityResult(
 
 public static class SiteFeasibilityPolicy
 {
+    public const int MaxWktLength = 65536; // 64 KB
+    public const int MaxVertices = 1000;
+
     public static Geometry ParseBoundary(string wkt)
     {
+        if (string.IsNullOrWhiteSpace(wkt))
+            throw new BusinessRuleException("INVALID_GEOMETRY", "Boundary WKT cannot be empty.");
+
+        if (wkt.Length > MaxWktLength)
+            throw new BusinessRuleException("INVALID_GEOMETRY", $"Boundary WKT length exceeds maximum limit of {MaxWktLength} characters.");
+
         try
         {
             var reader = new WKTReader();
             var g = reader.Read(wkt);
             if (!g.IsValid || g.IsEmpty || g is not (Polygon or MultiPolygon))
                 throw new Exception("Geometry must be a non-empty, valid Polygon or MultiPolygon.");
+
+            if (g.NumPoints > MaxVertices)
+                throw new Exception($"Boundary exceeds maximum allowed vertices limit ({MaxVertices}). Actual: {g.NumPoints}.");
+
             g.SRID = 4326;
             return g;
+        }
+        catch (BusinessRuleException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

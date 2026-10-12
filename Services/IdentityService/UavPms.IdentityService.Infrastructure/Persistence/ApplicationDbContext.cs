@@ -40,6 +40,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
     public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,

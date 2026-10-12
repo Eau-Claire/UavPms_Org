@@ -25,16 +25,13 @@ public sealed class OutboxDispatcher : BackgroundService
                 using var scope = _scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
-                var messages = await db.OutboxMessages.Where(x => x.PublishedAt == null && !x.IsDeleted &&
-                        x.MessageType == nameof(InspectionMediaUploadedEvent))
+                var messages = await db.OutboxMessages.Where(x => x.PublishedAt == null && !x.IsDeleted)
                     .OrderBy(x => x.OccurredAt).Take(20).ToListAsync(stoppingToken);
                 foreach (var message in messages)
                 {
                     try
                     {
-                        var payload = JsonSerializer.Deserialize<InspectionMediaUploadedEvent>(message.Payload)
-                            ?? throw new JsonException("Invalid inspection media outbox payload.");
-                        await publisher.PublishAsync(payload);
+                        await PublishAsync(publisher, message.MessageType, message.Payload);
                         message.PublishedAt = DateTime.UtcNow;
                         message.UpdatedAt = DateTime.UtcNow;
                     }
@@ -46,7 +43,7 @@ public sealed class OutboxDispatcher : BackgroundService
                     {
                         message.Attempts++;
                         message.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
-                        _logger.LogWarning(ex, "Failed to publish outbox message {MessageId}", message.Id);
+                        _logger.LogWarning(ex, "Failed to publish outbox message {MessageId} of type {MessageType}", message.Id, message.MessageType);
                     }
                 }
 
@@ -73,4 +70,23 @@ public sealed class OutboxDispatcher : BackgroundService
             }
         }
     }
+
+    private static Task PublishAsync(IEventPublisher publisher, string messageType, string payload) => messageType switch
+    {
+        nameof(InspectionMediaUploadedEvent) => publisher.PublishAsync(
+            JsonSerializer.Deserialize<InspectionMediaUploadedEvent>(payload)
+            ?? throw new JsonException("Invalid inspection media outbox payload.")),
+
+        "MissionCreatedFromAssessment" or nameof(MissionCreatedFromAssessmentEvent) => publisher.PublishAsync(
+            JsonSerializer.Deserialize<MissionCreatedFromAssessmentEvent>(payload)
+            ?? throw new JsonException("Invalid mission created from assessment outbox payload.")),
+
+        nameof(MissionCreatedEvent) => publisher.PublishAsync(
+            JsonSerializer.Deserialize<MissionCreatedEvent>(payload)
+            ?? throw new JsonException("Invalid mission created outbox payload.")),
+
+        _ => publisher.PublishAsync(
+            JsonSerializer.Deserialize<Dictionary<string, object>>(payload)
+            ?? new Dictionary<string, object>())
+    };
 }

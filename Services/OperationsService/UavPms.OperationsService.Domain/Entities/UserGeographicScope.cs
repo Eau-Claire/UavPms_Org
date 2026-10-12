@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using UavPms.OperationsService.Domain.Common;
 
 namespace UavPms.OperationsService.Domain.Entities;
@@ -14,5 +15,6 @@ public class UserGeographicScope : BaseEntity
     public Guid? TransmissionLineId { get; set; }
     public Guid? ManagementUnitId { get; set; }
 
+    [JsonIgnore]
     public virtual User? User { get; set; }
 }

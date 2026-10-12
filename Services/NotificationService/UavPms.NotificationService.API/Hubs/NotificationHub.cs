@@ -1,7 +1,15 @@
+using System;
+using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using UavPms.NotificationService.API.Services;
+using UavPms.NotificationService.Infrastructure.Persistence;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.NotificationService.API.Hubs;
 
@@ -10,13 +18,16 @@ public class NotificationHub : Hub
 {
     private readonly ILogger<NotificationHub> _logger;
     private readonly INotificationConnectionRegistry _connectionRegistry;
+    private readonly IServiceScopeFactory? _scopeFactory;
 
     public NotificationHub(
         ILogger<NotificationHub> logger,
-        INotificationConnectionRegistry connectionRegistry)
+        INotificationConnectionRegistry connectionRegistry,
+        IServiceScopeFactory? scopeFactory = null)
     {
         _logger = logger;
         _connectionRegistry = connectionRegistry;
+        _scopeFactory = scopeFactory;
     }
 
     public override async Task OnConnectedAsync()
@@ -87,15 +98,49 @@ public class NotificationHub : Hub
 
     public async Task JoinMissionGroup(string missionId)
     {
-        if (!string.IsNullOrWhiteSpace(missionId))
+        if (string.IsNullOrWhiteSpace(missionId) || !Guid.TryParse(missionId, out var missionGuid))
         {
-            var groupName = MissionGroupName(missionId);
-            await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
-            _connectionRegistry.AddToGroup(groupName, Context.ConnectionId);
-            _logger.LogInformation(
-                "Connection joined mission group. MissionId={MissionId}, ConnectionId={ConnectionId}",
-                missionId, Context.ConnectionId);
+            return;
         }
+
+        var userId = GetCurrentUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning(
+                "Unauthenticated connection attempted to join mission group. ConnectionId={ConnectionId}",
+                Context.ConnectionId);
+            return;
+        }
+
+        var roles = Context.User?.FindAll(ClaimTypes.Role).Select(c => c.Value).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var isGlobal = roles.Contains(UserRoles.SystemAdmin);
+        if (!isGlobal && _scopeFactory != null)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var hasAccess = await db.Missions.AnyAsync(m => m.Id == missionGuid && !m.IsDeleted && (
+                m.ManagerId == userId.Value ||
+                m.InspectorId == userId.Value ||
+                m.AssignedToUserId == userId.Value
+            )) || await db.MissionAssignments.AnyAsync(a => a.MissionId == missionGuid && a.UserId == userId.Value && a.Status == 1 && !a.IsDeleted);
+
+            if (!hasAccess)
+            {
+                _logger.LogWarning(
+                    "Forbidden attempt to join mission group. UserId={UserId}, MissionId={MissionId}, ConnectionId={ConnectionId}",
+                    userId, missionId, Context.ConnectionId);
+                return;
+            }
+        }
+
+        var groupName = MissionGroupName(missionId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+        _connectionRegistry.AddToGroup(groupName, Context.ConnectionId);
+        _logger.LogInformation(
+            "Connection joined mission group. MissionId={MissionId}, ConnectionId={ConnectionId}",
+            missionId, Context.ConnectionId);
     }
 
     public async Task LeaveMissionGroup(string missionId)
@@ -111,76 +156,11 @@ public class NotificationHub : Hub
         }
     }
 
-    public async Task SendMissionEvent(UavPms.Shared.Contracts.Events.MissionLifecycleEventDto evt)
-    {
-        if (evt == null || string.IsNullOrWhiteSpace(evt.MissionId)) return;
-
-        var missionGroup = MissionGroupName(evt.MissionId);
-
-        // 1. Broadcast aggregate event to mission room
-        await Clients.Group(missionGroup).SendAsync("MissionLifecycleEvent", evt);
-
-        // 2. Broadcast specific lifecycle events
-        switch (evt.Type?.ToUpperInvariant())
-        {
-            case "CONFIRMED":
-                await Clients.Group(missionGroup).SendAsync("MissionConfirmed", evt);
-                break;
-            case "SUSPENDED":
-                await Clients.Group(missionGroup).SendAsync("MissionSuspended", evt);
-                break;
-            case "POSTPONED":
-                await Clients.Group(missionGroup).SendAsync("MissionPostponed", evt);
-                break;
-            case "RESUMED":
-                await Clients.Group(missionGroup).SendAsync("MissionResumed", evt);
-                break;
-            case "CANCELLED":
-                await Clients.Group(missionGroup).SendAsync("MissionCancelled", evt);
-                break;
-            case "REMINDER":
-                await Clients.Group(missionGroup).SendAsync("MissionReminderSent", evt);
-                if (!string.IsNullOrWhiteSpace(evt.TargetUserId) && Guid.TryParse(evt.TargetUserId, out var reminderTargetGuid))
-                {
-                    await Clients.Group(UserGroupName(reminderTargetGuid)).SendAsync("MissionReminderSent", evt);
-                }
-                break;
-            case "COMMUNICATION":
-                await Clients.Group(missionGroup).SendAsync("MissionCommunicationReceived", evt);
-                break;
-            case "DISPATCHED":
-                await Clients.Group(missionGroup).SendAsync("MissionDispatched", evt);
-                var dispatchedTargets = new HashSet<Guid>();
-                if (!string.IsNullOrWhiteSpace(evt.InspectorId) && Guid.TryParse(evt.InspectorId, out var inspectorGuid))
-                {
-                    dispatchedTargets.Add(inspectorGuid);
-                }
-                if (evt.AssignedUserIds != null)
-                {
-                    foreach (var uid in evt.AssignedUserIds)
-                    {
-                        if (Guid.TryParse(uid, out var g)) dispatchedTargets.Add(g);
-                    }
-                }
-                foreach (var targetId in dispatchedTargets)
-                {
-                    var targetGroup = UserGroupName(targetId);
-                    await Clients.Group(targetGroup).SendAsync("MissionDispatched", evt);
-                }
-                break;
-            case "OVERDUE":
-                await Clients.Group(missionGroup).SendAsync("MissionConfirmationOverdue", evt);
-                if (!string.IsNullOrWhiteSpace(evt.ManagerId) && Guid.TryParse(evt.ManagerId, out var managerGuid))
-                {
-                    await Clients.Group(UserGroupName(managerGuid)).SendAsync("MissionConfirmationOverdue", evt);
-                }
-                break;
-        }
-    }
-
     private Guid? GetCurrentUserId()
     {
-        var userIdClaim = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userIdClaim = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? Context.User?.FindFirstValue("sub")
+            ?? Context.User?.FindFirstValue("uid");
         return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
     }
 }
@@ -189,8 +169,9 @@ public class NotificationsHub : NotificationHub
 {
     public NotificationsHub(
         ILogger<NotificationHub> logger,
-        INotificationConnectionRegistry connectionRegistry)
-        : base(logger, connectionRegistry)
+        INotificationConnectionRegistry connectionRegistry,
+        IServiceScopeFactory? scopeFactory = null)
+        : base(logger, connectionRegistry, scopeFactory)
     {
     }
 }

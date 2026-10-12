@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Moq;
+using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Application.Features.Missions.DTOs;
 using UavPms.OperationsService.Domain.Entities;
@@ -694,4 +695,87 @@ public class MissionLinearWorkflowTests
             It.Is<MissionLifecycleEventDto>(e => e.MissionId == mission.Id.ToString() && e.Type == "CONFIRMED"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task AddActivityAsync_WhenInspectorAttemptsToSpoofManagerRole_ShouldFallbackToActualRole()
+    {
+        // Arrange
+        var inspectorId = Guid.NewGuid();
+        var userInspectorMock = CreateUserMock(inspectorId, UserRoles.Inspector, "pilot_tuan");
+        await using var db = CreateContext(userInspectorMock.Object);
+
+        var managerId = Guid.NewGuid();
+        db.Users.AddRange(
+            new User { Id = inspectorId, FullName = "Nguyễn Văn Tuấn", Status = "Active" },
+            new User { Id = managerId, FullName = "Quản lý", Status = "Active" });
+
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-ACT-SPOOF",
+            Title = "Mission Spoof Test",
+            ManagerId = managerId,
+            Status = MissionStatus.Assigned
+        };
+        mission.Assignments.Add(new MissionAssignment
+        {
+            MissionId = mission.Id,
+            UserId = inspectorId,
+            AssignmentRole = "INSPECTOR",
+            Status = MissionAssignmentStatus.Active,
+            ResponseStatus = MissionAssignmentResponse.Accepted
+        });
+        db.Missions.Add(mission);
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, userInspectorMock.Object);
+
+        // Act: Inspector attempts to send SenderRole: "MANAGER"
+        var request = new CreateMissionActivityRequest(
+            Content: "Thông báo điều phối khẩn cấp",
+            SenderRole: "MANAGER");
+
+        var result = await service.AddActivityAsync(mission.Id, request, CancellationToken.None);
+
+        // Assert: SenderRole is normalized to "INSPECTOR", preventing spoofing
+        result.SenderRole.Should().Be("INSPECTOR");
+
+        var savedLog = await db.MissionCommunicationLogs.FirstOrDefaultAsync(l => l.MissionId == mission.Id);
+        savedLog.Should().NotBeNull();
+        savedLog!.SenderRole.Should().Be("INSPECTOR");
+    }
+
+    [Fact]
+    public async Task GetAssignmentsOverviewAsync_WhenCallerHasNoAccess_ShouldThrowForbiddenException()
+    {
+        // Arrange
+        var unauthorizedUserId = Guid.NewGuid();
+        var userMock = CreateUserMock(unauthorizedUserId, UserRoles.Inspector, "stranger_pilot");
+        await using var db = CreateContext(userMock.Object);
+
+        var managerId = Guid.NewGuid();
+        db.Users.AddRange(
+            new User { Id = unauthorizedUserId, FullName = "Người ngoài", Status = "Active" },
+            new User { Id = managerId, FullName = "Quản lý", Status = "Active" });
+
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-FORBIDDEN-OVERVIEW",
+            Title = "Mission Private",
+            ManagerId = managerId,
+            Status = MissionStatus.Assigned
+        };
+        db.Missions.Add(mission);
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, userMock.Object);
+
+        // Act
+        Func<Task> act = async () => await service.GetAssignmentsOverviewAsync(mission.Id, CancellationToken.None);
+
+        // Assert: Access denied with ForbiddenException
+        await act.Should().ThrowAsync<ForbiddenException>();
+    }
 }
+

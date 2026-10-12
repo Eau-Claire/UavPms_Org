@@ -89,4 +89,57 @@ public class GetMyMissionsQueryHandlerTests
         dto.DroneId.Should().Be(droneId);
         dto.AssignedToUsername.Should().Be("Inspector John");
     }
+
+    [Fact]
+    public async Task Handle_ShouldFilterOutRevokedAssignmentsFromTeam()
+    {
+        // Arrange
+        var currentUserId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+        _currentUserMock.Setup(x => x.UserId).Returns(currentUserId);
+
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MSN-FILTER",
+            Title = "Mission With Assignments",
+            ManagerId = Guid.NewGuid(),
+            Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Assigned
+        };
+
+        var activeAssignment = new MissionAssignment
+        {
+            Id = Guid.NewGuid(),
+            UserId = currentUserId,
+            AssignmentRole = "PILOT",
+            Status = UavPms.OperationsService.Domain.Enums.MissionAssignmentStatus.Active,
+            ResponseStatus = UavPms.OperationsService.Domain.Enums.MissionAssignmentResponse.Accepted,
+            User = new User { Id = currentUserId, FullName = "Active Pilot" }
+        };
+
+        var revokedAssignment = new MissionAssignment
+        {
+            Id = Guid.NewGuid(),
+            UserId = otherUserId,
+            AssignmentRole = "OBSERVER",
+            Status = UavPms.OperationsService.Domain.Enums.MissionAssignmentStatus.Revoked,
+            ResponseStatus = UavPms.OperationsService.Domain.Enums.MissionAssignmentResponse.Pending,
+            User = new User { Id = otherUserId, FullName = "Revoked Observer" }
+        };
+
+        mission.Assignments.Add(activeAssignment);
+        mission.Assignments.Add(revokedAssignment);
+
+        _missionRepoMock.Setup(x => x.GetMissionsByAssignedUserAsync(currentUserId))
+            .ReturnsAsync(new List<Mission> { mission });
+
+        // Act
+        var result = await _handler.Handle(new GetMyMissionsQuery(), CancellationToken.None);
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Team.Should().HaveCount(1);
+        result[0].Team[0].UserId.Should().Be(currentUserId);
+        result[0].Team[0].Status.Should().Be("Active");
+    }
 }

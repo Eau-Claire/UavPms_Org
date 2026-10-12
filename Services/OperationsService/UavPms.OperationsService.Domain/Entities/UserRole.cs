@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace UavPms.OperationsService.Domain.Entities;
 
@@ -8,6 +9,7 @@ public class UserRole
     public int RoleId { get; set; }
     public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
 
+    [JsonIgnore]
     public virtual User? User { get; set; }
     public virtual Role? Role { get; set; }
 }

@@ -26,6 +26,7 @@ public class UploadInspectionImageCommandHandler
     private readonly IFileStorageService _fileStorageService;
     private readonly IEventPublisher _eventPublisher;
     private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
+    private readonly IGenericRepository<MissionAssignment>? _assignmentRepository;
     private readonly ICurrentUserServices _currentUser;
     private readonly ILogger<UploadInspectionImageCommandHandler> _logger;
 
@@ -39,7 +40,8 @@ public class UploadInspectionImageCommandHandler
         IEventPublisher eventPublisher,
         IGenericRepository<OutboxMessage> outboxRepository,
         ICurrentUserServices currentUser,
-        ILogger<UploadInspectionImageCommandHandler> logger)
+        ILogger<UploadInspectionImageCommandHandler> logger,
+        IGenericRepository<MissionAssignment>? assignmentRepository = null)
     {
         _missionRepository = missionRepository;
         _assetRepository = assetRepository;
@@ -49,6 +51,7 @@ public class UploadInspectionImageCommandHandler
         _fileStorageService = fileStorageService;
         _eventPublisher = eventPublisher;
         _outboxRepository = outboxRepository;
+        _assignmentRepository = assignmentRepository;
         _currentUser = currentUser;
         _logger = logger;
     }
@@ -64,7 +67,7 @@ public class UploadInspectionImageCommandHandler
         ICurrentUserServices currentUser,
         ILogger<UploadInspectionImageCommandHandler> logger)
         : this(missionRepository, assetRepository, mediaRepository, missionTargetRepository, unitOfWork,
-            fileStorageService, eventPublisher, null!, currentUser, logger) { }
+            fileStorageService, eventPublisher, null!, currentUser, logger, null) { }
 
     public async Task<UploadInspectionImageResult> Handle(
         UploadInspectionImageCommand request,
@@ -97,7 +100,18 @@ public class UploadInspectionImageCommandHandler
 
         // 2. Kiểm tra quyền: chỉ Inspector được giao mới có quyền upload
         var currentUserId = _currentUser.UserId;
-        if (mission.InspectorId != currentUserId)
+        var isAssigned = mission.InspectorId == currentUserId;
+        if (!isAssigned && _assignmentRepository != null)
+        {
+            var activeAssignments = await _assignmentRepository.FindAsync(
+                a => a.MissionId == request.MissionId &&
+                     a.UserId == currentUserId &&
+                     a.Status == MissionAssignmentStatus.Active,
+                track: false);
+            isAssigned = activeAssignments.Count > 0;
+        }
+
+        if (!isAssigned)
         {
             throw new ForbiddenException("You are not assigned to this mission.");
         }
@@ -110,6 +124,22 @@ public class UploadInspectionImageCommandHandler
             throw new BusinessRuleException("The asset is not included in the mission inspection scope.");
         }
 
+        // 2b. Auto-extract EXIF GPS & timestamp if missing
+        double? effectiveLat = request.Latitude;
+        double? effectiveLng = request.Longitude;
+        DateTime effectiveCapturedAt = request.CapturedAt;
+
+        if (!effectiveLat.HasValue || !effectiveLng.HasValue || effectiveCapturedAt == default)
+        {
+            var exif = UavPms.OperationsService.Application.Common.Utilities.ExifMetadataExtractor.Extract(request.FileStream);
+            effectiveLat ??= exif.Latitude;
+            effectiveLng ??= exif.Longitude;
+            if (effectiveCapturedAt == default && exif.CapturedAt.HasValue)
+            {
+                effectiveCapturedAt = exif.CapturedAt.Value;
+            }
+        }
+        if (effectiveCapturedAt == default) effectiveCapturedAt = DateTime.UtcNow;
 
         // 3. Lưu file ảnh vào hệ thống
         string fileUrl;
@@ -134,14 +164,14 @@ public class UploadInspectionImageCommandHandler
             MissionId = request.MissionId,
             AssetId = request.AssetId,
             UploadedBy = currentUserId,
-            CaptureLocation = request.Latitude.HasValue
-                ? new Point(request.Longitude!.Value, request.Latitude.Value) { SRID = 4326 }
+            CaptureLocation = effectiveLat.HasValue && effectiveLng.HasValue
+                ? new Point(effectiveLng.Value, effectiveLat.Value) { SRID = 4326 }
                 : null,
             MediaType = mediaType,
             FileUrl = fileUrl,
             AiSource = string.Empty,
             ValidationStatus = "Pending",
-            CapturedAt = request.CapturedAt,
+            CapturedAt = effectiveCapturedAt,
             CreatedBy = currentUserId
         };
 
@@ -155,8 +185,8 @@ public class UploadInspectionImageCommandHandler
             MediaType = media.MediaType,
             UploadedBy = currentUserId,
             CapturedAt = media.CapturedAt,
-            Latitude = request.Latitude,
-            Longitude = request.Longitude
+            Latitude = effectiveLat,
+            Longitude = effectiveLng
         };
 
         await _mediaRepository.AddAsync(media);

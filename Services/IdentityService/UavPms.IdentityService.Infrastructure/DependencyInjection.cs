@@ -8,6 +8,7 @@ using UavPms.IdentityService.Infrastructure.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 using UavPms.IdentityService.Infrastructure.Services;
 using UavPms.IdentityService.Application.Common.Options;
+using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.IdentityService.Infrastructure;
 
@@ -76,6 +77,7 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
         services.AddScoped<IJwtProvider, JwtProvider>();
+        services.AddScoped<ISystemSettingService, SystemSettingService>();
 
         // Đăng ký Monitor Repository
         services.AddScoped<IMonitorRepository, MonitorRepository>();

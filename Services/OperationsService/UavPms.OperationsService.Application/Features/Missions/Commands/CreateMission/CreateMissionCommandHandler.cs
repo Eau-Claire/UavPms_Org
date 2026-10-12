@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MediatR;
 using UavPms.Shared.Contracts.Events;
 using UavPms.OperationsService.Application.Common.Exceptions;
@@ -10,6 +11,7 @@ using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.Application.Features.Missions.Commands.CreateMission;
 
+[Obsolete("Direct mission creation via CreateMissionCommandHandler is deprecated. Missions must be created through PreMissionAssessment workflow.")]
 public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand, MissionDto>
 {
     private readonly IMissionRepository _missionRepository;
@@ -101,6 +103,14 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
 
         var missionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmss}";
 
+        if (request.Priority == MissionPriority.Emergency)
+        {
+            if (string.IsNullOrWhiteSpace(request.EmergencyReason) || request.EmergencyReason.Trim().Length < 10)
+            {
+                throw new BusinessRuleException("EMERGENCY_REASON_REQUIRED", "EmergencyReason is required (min 10 characters) when Priority is EMERGENCY.");
+            }
+        }
+
         var mission = new Mission
         {
             Id = Guid.NewGuid(),
@@ -110,6 +120,11 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             AssignedToUserId = inspectorId,
             DroneCode = uav.UavCode,
             Status = MissionStatus.Draft,
+            Priority = request.Priority,
+            Objective = request.Objective,
+            PriorityDefectsJson = JsonSerializer.Serialize(request.PriorityDefects ?? (IEnumerable<string>)Array.Empty<string>()),
+            EmergencyReason = request.EmergencyReason,
+            IsImmediate = request.IsImmediate,
             Description = request.Description ?? string.Empty,
             ManagerId = _currentUserServices.UserId != Guid.Empty ? _currentUserServices.UserId : Guid.Empty,
             InspectorId = inspectorId,
@@ -174,7 +189,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             MissionCode = mission.MissionCode,
             Title = mission.Title,
             RouteData = string.Empty,
-            AssignedToUserId = mission.InspectorId,
+            AssignedToUserId = mission.InspectorId ?? Guid.Empty,
             ManagerId = mission.ManagerId,
             DroneCode = uav.UavCode,
             Status = mission.Status.ToString(),
@@ -190,7 +205,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             MissionCode = mission.MissionCode,
             Title = mission.Title,
             RouteData = string.Empty,
-            AssignedToUserId = mission.InspectorId,
+            AssignedToUserId = mission.InspectorId ?? Guid.Empty,
             AssignedToEmail = assignedUser.Email,
             DroneCode = uav.UavCode,
             Status = mission.Status.ToString(),
@@ -201,6 +216,13 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             InspectorId = inspectorId,
             InspectorEmail = assignedUser.Email,
             UavId = uav.Id,
+            Priority = mission.Priority.ToString(),
+            Objective = mission.Objective.ToString(),
+            PriorityDefects = !string.IsNullOrWhiteSpace(mission.PriorityDefectsJson)
+                ? JsonSerializer.Deserialize<List<string>>(mission.PriorityDefectsJson) ?? new List<string>()
+                : new List<string>(),
+            EmergencyReason = mission.EmergencyReason,
+            IsImmediate = mission.IsImmediate,
             Targets = mission.MissionTargets.OrderBy(x => x.Sequence).Select(target =>
             {
                 var asset = orderedTargetAssets.First(a => a.Id == target.AssetId);

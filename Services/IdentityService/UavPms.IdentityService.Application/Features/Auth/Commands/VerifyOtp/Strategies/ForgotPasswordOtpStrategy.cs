@@ -10,10 +10,14 @@ namespace UavPms.IdentityService.Application.Features.Auth.Commands.VerifyOtp.St
 public class ForgotPasswordOtpStrategy : IOtpVerificationStrategy
 {
     private readonly IOtpService _otpService;
+    private readonly UavPms.Shared.Contracts.Interfaces.ISystemSettingService? _systemSettingService;
 
-    public ForgotPasswordOtpStrategy(IOtpService otpService)
+    public ForgotPasswordOtpStrategy(
+        IOtpService otpService,
+        UavPms.Shared.Contracts.Interfaces.ISystemSettingService? systemSettingService = null)
     {
         _otpService = otpService;
+        _systemSettingService = systemSettingService;
     }
 
     public bool CanHandle(OtpPurpose purpose)
@@ -24,7 +28,11 @@ public class ForgotPasswordOtpStrategy : IOtpVerificationStrategy
         var token = Guid.NewGuid().ToString();
         var hash = TokenHasher.Hash(token);
         
-        await _otpService.SaveVerificationTokenAsync(hash, user.Email, TimeSpan.FromMinutes(10));
+        var expiryMinutes = _systemSettingService != null
+            ? (await _systemSettingService.GetTokenSettingsAsync(cancellationToken)).VerificationTokenExpiryMinutes
+            : 10;
+
+        await _otpService.SaveVerificationTokenAsync(hash, user.Email, TimeSpan.FromMinutes(expiryMinutes));
 
         return new OtpVerifyResultDto
         {

@@ -13,6 +13,8 @@ using UavPms.OperationsService.Application.Features.Gis.Infrastructure;
 using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Application.Features.Missions;
 using UavPms.OperationsService.Application.Features.Assessments;
+using UavPms.OperationsService.Application.Features.Maintenance;
+using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.OperationsService.Infrastructure;
 
@@ -93,6 +95,7 @@ public static class DependencyInjection
         services.AddScoped<IGisRepository, GisRepository>();
         services.AddScoped<IAnomalyRepository, AnomalyRepository>();
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
+        services.AddScoped<IMaintenanceTicketService, MaintenanceTicketService>();
         services.AddScoped<IMissionRepository, MissionRepository>();
         services.AddScoped<IMissionLifecycleService, MissionLifecycleService>();
         services.AddScoped<IMissionRealtimeNotifier, MissionRealtimeNotifier>();
@@ -119,6 +122,8 @@ public static class DependencyInjection
         {
             services.AddHostedService<MqttDroneConsumer>();
         }
+
+        services.AddHostedService<PreMissionAssessmentExpiryJob>();
 
         // Đăng ký HttpContextAccessor và CurrentUserServices
         services.AddHttpContextAccessor();
@@ -147,6 +152,8 @@ public static class DependencyInjection
         {
             services.AddScoped<IFileStorageService, LocalFileStorageService>();
         }
+
+        services.AddScoped<ISystemSettingService, SystemSettingService>();
 
         return services;
     }

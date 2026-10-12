@@ -110,3 +110,132 @@ public class MissionAssignmentsOverviewDto
     public DateTime? ConfirmationDeadline { get; set; }
     public List<MissionAssignmentItemDto> Assignments { get; set; } = new();
 }
+
+public class MissionOperationResultDto
+{
+    public Guid Id { get; set; }
+    public string MissionCode { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Priority { get; set; } = string.Empty;
+    public Guid? RegionId { get; set; }
+    public Guid? InspectorId { get; set; }
+    public Guid? UavId { get; set; }
+    public Guid? ManagerId { get; set; }
+    public DateTime? PlannedStart { get; set; }
+    public DateTime? PlannedEnd { get; set; }
+    public DateTime? ConfirmationDeadline { get; set; }
+    public DateTime? AcceptedAt { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? EndedAt { get; set; }
+    public DateTime? PostponedAt { get; set; }
+    public string? ManagerInstructions { get; set; }
+    public uint Version { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
+public class MissionAssignmentResponseDto
+{
+    public Guid Id { get; set; }
+    public Guid MissionId { get; set; }
+    public Guid UserId { get; set; }
+    public string AssignmentRole { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string ResponseStatus { get; set; } = string.Empty;
+    public bool IsRequired { get; set; }
+    public DateTime AssignedAt { get; set; }
+    public DateTime? RespondedAt { get; set; }
+    public string? ResponseReason { get; set; }
+    public uint Version { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
+public class DroneHandoverResponseDto
+{
+    public Guid Id { get; set; }
+    public Guid MissionId { get; set; }
+    public Guid DroneId { get; set; }
+    public Guid HandedOverBy { get; set; }
+    public Guid ReceivedBy { get; set; }
+    public string Condition { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime ReceivedAt { get; set; }
+    public DateTime? ReturnedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class MissionCheckInResponseDto
+{
+    public Guid Id { get; set; }
+    public Guid MissionId { get; set; }
+    public Guid UserId { get; set; }
+    public DateTime CheckedInAt { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
+
+public class MissionScopeAssetDto
+{
+    public Guid Id { get; set; }
+    public string AssetCode { get; set; } = string.Empty;
+    public string AssetType { get; set; } = string.Empty;
+    public Guid TowerId { get; set; }
+    public Guid? PowerLineId { get; set; }
+    public Guid? ManagementUnitId { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+}
+
+public class MissionFlightLogDto
+{
+    public Guid Id { get; set; }
+    public Guid MissionId { get; set; }
+    public string GpsTrack { get; set; } = string.Empty;
+    public double MinBatteryRecorded { get; set; }
+    public double MaxAltitudeM { get; set; }
+    public int FlightDurationSeconds { get; set; }
+    public string ConnectionStatus { get; set; } = string.Empty;
+    public DateTime RecordedAt { get; set; }
+}
+
+public record UploadFlightLogRequest(
+    string GpsTrack,
+    double MinBatteryRecorded,
+    double MaxAltitudeM,
+    int FlightDurationSeconds,
+    string ConnectionStatus);
+
+public class IncidentReportDto
+{
+    public Guid Id { get; set; }
+    public Guid MissionId { get; set; }
+    public Guid ReportedBy { get; set; }
+    public string ReporterName { get; set; } = string.Empty;
+    public Guid AssetId { get; set; }
+    public string IncidentType { get; set; } = string.Empty;
+    public string Severity { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime ReportedAt { get; set; }
+}
+
+public record SubmitIncidentReportRequest(
+    string IncidentType,
+    string Severity,
+    string Description,
+    Guid? AssetId = null,
+    string? FileUrl = null);
+
+public record ReturnDroneHandoverRequest(
+    Guid DroneId,
+    string Condition);
+
+public record MissionCheckInRequest(
+    double? Latitude = null,
+    double? Longitude = null,
+    string? Notes = null);
+
+

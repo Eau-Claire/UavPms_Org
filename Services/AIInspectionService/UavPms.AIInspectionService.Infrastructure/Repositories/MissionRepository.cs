@@ -14,7 +14,7 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     public async Task<(IReadOnlyList<Mission> Items, int TotalCount)> GetMissionsPagedAsync(int page, int pageSize, string? search, string? status)
     {
         var query = _context.Missions
-            .Include(m => m.AssignedToUser)
+            .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
             .AsQueryable();
@@ -33,7 +33,7 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         
         var totalCount = await query.CountAsync();
         var items = await query
-            .OrderByDescending(m  =>m.CreatedAt)
+            .OrderByDescending(m => m.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
@@ -44,10 +44,11 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     public async Task<IReadOnlyList<Mission>> GetMissionsByAssignedUserAsync(Guid userId)
     {
         return await _context.Missions
-            .Include(m => m.AssignedToUser)
+            .AsNoTracking()
+            .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
-            .Where(m => m.AssignedToUserId == userId)
+            .Where(m => (m.InspectorId != Guid.Empty && m.InspectorId == userId) || m.ManagerId == userId || m.AssignedToUserId == userId)
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync();
     }
@@ -55,7 +56,7 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     public async Task<Mission?> GetMissionDetailsByIdAsync(Guid id)
     {
         return await _context.Missions
-            .Include(m => m.AssignedToUser)
+            .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
             .FirstOrDefaultAsync(m => m.Id == id);

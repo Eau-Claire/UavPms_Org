@@ -59,6 +59,9 @@ public class JwtProvider : IJwtProvider
     }
 
     public string GenerateStepUpToken(User user, string purpose)
+        => GenerateStepUpToken(user, purpose, 5);
+
+    public string GenerateStepUpToken(User user, string purpose, int expiryMinutes)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.SecretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -74,7 +77,7 @@ public class JwtProvider : IJwtProvider
                 issuer: _jwtOptions.Issuer,
                 audience: _jwtOptions.Audience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(5),
+                expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
                 signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

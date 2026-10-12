@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using UavPms.OperationsService.Application.Features.Assessments;
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.Shared.Contracts.Constants;
@@ -31,35 +32,35 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
             request.BoundaryWkt,
             request.IdempotencyKey,
             ct);
-        return Ok(assessment);
+        return Ok(assessment.ToDto());
     }
 
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] string? status, CancellationToken ct)
     {
         var list = await _service.ListAsync(status, ct);
-        return Ok(list);
+        return Ok(list.Select(a => a.ToDto()));
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     {
         var assessment = await _service.GetAsync(id, ct);
-        return Ok(assessment);
+        return Ok(assessment.ToDto());
     }
 
     [HttpPost("{id:guid}/evaluate")]
     public async Task<IActionResult> Evaluate(Guid id, CancellationToken ct)
     {
         var assessment = await _service.EvaluateAsync(id, ct);
-        return Ok(assessment);
+        return Ok(assessment.ToDto());
     }
 
     [HttpPost("{id:guid}/re-evaluate")]
     public async Task<IActionResult> ReEvaluate(Guid id, CancellationToken ct)
     {
         var assessment = await _service.EvaluateAsync(id, ct);
-        return Ok(assessment);
+        return Ok(assessment.ToDto());
     }
 
     [HttpPost("{id:guid}/create-mission")]
@@ -77,13 +78,13 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     public async Task<IActionResult> MarkCompleted(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
     {
         var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
-        return Ok(assessment);
+        return Ok(assessment.ToDto());
     }
 
     [HttpPost("{id:guid}/consume")]
     public async Task<IActionResult> Consume(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
     {
         var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
-        return Ok(assessment);
+        return Ok(assessment.ToDto());
     }
 }

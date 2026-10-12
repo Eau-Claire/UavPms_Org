@@ -26,6 +26,7 @@ public class MissionCreatedConsumer : BackgroundService
     private const string ExchangeName = "identity-exchange";
     private const string QueueName = "notification.mission-created";
     private const string RoutingKey = "identity.event.missioncreatedevent";
+    private const string AssessmentRoutingKey = "identity.event.missioncreatedfromassessmentevent";
 
     public MissionCreatedConsumer(
         ILogger<MissionCreatedConsumer> logger,
@@ -66,6 +67,12 @@ public class MissionCreatedConsumer : BackgroundService
                 routingKey: RoutingKey,
                 cancellationToken: stoppingToken);
 
+            await _channel.QueueBindAsync(
+                queue: QueueName,
+                exchange: ExchangeName,
+                routingKey: AssessmentRoutingKey,
+                cancellationToken: stoppingToken);
+
             var consumer = new AsyncEventingBasicConsumer(_channel);
             consumer.ReceivedAsync += async (sender, ea) =>
             {
@@ -73,36 +80,63 @@ public class MissionCreatedConsumer : BackgroundService
                 {
                     var body = ea.Body.ToArray();
                     var json = Encoding.UTF8.GetString(body);
-                    var missionEvent = JsonSerializer.Deserialize<MissionCreatedEvent>(json);
 
-                    if (missionEvent != null)
+                    if (ea.RoutingKey.Equals(AssessmentRoutingKey, StringComparison.OrdinalIgnoreCase))
                     {
-                        _logger.LogInformation("Received MissionCreatedEvent for mission {MissionId}", missionEvent.MissionId);
-
-                        using var scope = _scopeFactory.CreateScope();
-                        var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
-
-                        // Notify the assigned inspector
-                        await mediator.Send(new CreateNotificationCommand(
-                            missionEvent.AssignedToUserId,
-                            "MissionAssigned",
-                            "Mission",
-                            missionEvent.MissionId,
-                            "Nhiệm vụ mới được giao",
-                            $"Bạn đã được giao nhiệm vụ bay kiểm tra '{missionEvent.MissionCode}'. {missionEvent.Description}"
-                        ));
-
-                        // Notify the manager
-                        if (missionEvent.ManagerId != Guid.Empty && missionEvent.ManagerId != missionEvent.AssignedToUserId)
+                        var assessmentEvent = JsonSerializer.Deserialize<MissionCreatedFromAssessmentEvent>(json);
+                        if (assessmentEvent != null)
                         {
+                            _logger.LogInformation("Received MissionCreatedFromAssessmentEvent for mission {MissionId}", assessmentEvent.MissionId);
+
+                            using var scope = _scopeFactory.CreateScope();
+                            var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+
+                            if (assessmentEvent.ManagerId != Guid.Empty)
+                            {
+                                await mediator.Send(new CreateNotificationCommand(
+                                    assessmentEvent.ManagerId,
+                                    "MissionCreated",
+                                    "Mission",
+                                    assessmentEvent.MissionId,
+                                    "Nhiệm vụ mới đã tạo từ thẩm định",
+                                    $"Nhiệm vụ '{assessmentEvent.Title}' đã được tạo từ thẩm định {assessmentEvent.AssessmentId} và phân công thành công."
+                                ));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var missionEvent = JsonSerializer.Deserialize<MissionCreatedEvent>(json);
+
+                        if (missionEvent != null)
+                        {
+                            _logger.LogInformation("Received MissionCreatedEvent for mission {MissionId}", missionEvent.MissionId);
+
+                            using var scope = _scopeFactory.CreateScope();
+                            var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+
+                            // Notify the assigned inspector
                             await mediator.Send(new CreateNotificationCommand(
-                                missionEvent.ManagerId,
-                                "MissionCreated",
+                                missionEvent.AssignedToUserId,
+                                "MissionAssigned",
                                 "Mission",
                                 missionEvent.MissionId,
-                                "Nhiệm vụ mới đã tạo",
-                                $"Nhiệm vụ '{missionEvent.MissionCode}' đã được tạo và phân công thành công."
+                                "Nhiệm vụ mới được giao",
+                                $"Bạn đã được giao nhiệm vụ bay kiểm tra '{missionEvent.MissionCode}'. {missionEvent.Description}"
                             ));
+
+                            // Notify the manager
+                            if (missionEvent.ManagerId != Guid.Empty && missionEvent.ManagerId != missionEvent.AssignedToUserId)
+                            {
+                                await mediator.Send(new CreateNotificationCommand(
+                                    missionEvent.ManagerId,
+                                    "MissionCreated",
+                                    "Mission",
+                                    missionEvent.MissionId,
+                                    "Nhiệm vụ mới đã tạo",
+                                    $"Nhiệm vụ '{missionEvent.MissionCode}' đã được tạo và phân công thành công."
+                                ));
+                            }
                         }
                     }
 
@@ -110,8 +144,8 @@ public class MissionCreatedConsumer : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing MissionCreatedEvent");
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, true);
+                    _logger.LogError(ex, "Error processing MissionCreatedEvent / MissionCreatedFromAssessmentEvent");
+                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
                 }
             };
 

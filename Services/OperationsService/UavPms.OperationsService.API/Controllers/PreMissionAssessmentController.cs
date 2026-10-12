@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using UavPms.OperationsService.Application.Features.Assessments;
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.Shared.Contracts.Constants;
@@ -19,35 +20,40 @@ public sealed class PreMissionAssessmentController : ControllerBase
     public async Task<IActionResult> Create(V1CreateAssessmentRequest request, CancellationToken ct)
     {
         AddSunsetHeader();
-        return Ok(await _service.CreateAsync(request.RegionId, request.PlannedStart, request.PlannedEnd, request.AssetIds, ct));
+        var assessment = await _service.CreateAsync(request.RegionId, request.PlannedStart, request.PlannedEnd, request.AssetIds, ct);
+        return Ok(assessment.ToDto());
     }
 
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] string? status, CancellationToken ct)
     {
         AddSunsetHeader();
-        return Ok(await _service.ListAsync(status, ct));
+        var list = await _service.ListAsync(status, ct);
+        return Ok(list.Select(a => a.ToDto()));
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     {
         AddSunsetHeader();
-        return Ok(await _service.GetAsync(id, ct));
+        var assessment = await _service.GetAsync(id, ct);
+        return Ok(assessment.ToDto());
     }
 
     [HttpPost("{id:guid}/evaluate")]
     public async Task<IActionResult> Evaluate(Guid id, CancellationToken ct)
     {
         AddSunsetHeader();
-        return Ok(await _service.EvaluateAsync(id, ct));
+        var assessment = await _service.EvaluateAsync(id, ct);
+        return Ok(assessment.ToDto());
     }
 
     [HttpPost("{id:guid}/re-evaluate")]
     public async Task<IActionResult> ReEvaluate(Guid id, CancellationToken ct)
     {
         AddSunsetHeader();
-        return Ok(await _service.EvaluateAsync(id, ct));
+        var assessment = await _service.EvaluateAsync(id, ct);
+        return Ok(assessment.ToDto());
     }
 
     [HttpPost("{id:guid}/create-mission")]
@@ -61,14 +67,16 @@ public sealed class PreMissionAssessmentController : ControllerBase
     public async Task<IActionResult> MarkCompleted(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
     {
         AddSunsetHeader();
-        return Ok(await _service.MarkCompletedAsync(id, request?.MissionId, ct));
+        var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
+        return Ok(assessment.ToDto());
     }
 
     [HttpPost("{id:guid}/consume")]
     public async Task<IActionResult> Consume(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
     {
         AddSunsetHeader();
-        return Ok(await _service.MarkCompletedAsync(id, request?.MissionId, ct));
+        var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
+        return Ok(assessment.ToDto());
     }
 
     private void AddSunsetHeader()

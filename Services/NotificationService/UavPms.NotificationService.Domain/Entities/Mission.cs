@@ -34,4 +34,5 @@ public class Mission : BaseEntity
     public virtual ICollection<InspectionMedia> InspectionMedias { get; set; } = new List<InspectionMedia>();
     public virtual ICollection<IncidentReport> IncidentReports { get; set; } = new List<IncidentReport>();
     public virtual ICollection<EmergencyAlert> EmergencyAlerts { get; set; } = new List<EmergencyAlert>();
+    public virtual ICollection<MissionAssignment> Assignments { get; set; } = new List<MissionAssignment>();
 }

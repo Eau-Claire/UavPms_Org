@@ -27,5 +27,10 @@ public class CreateMissionCommandValidator  : AbstractValidator<CreateMissionCom
                             status == "In Progress" ||
                             status == "Completed")
             .WithMessage("Status is required");
+
+        RuleFor(command => command.EmergencyReason)
+            .NotEmpty().WithMessage("EmergencyReason is required when Priority is EMERGENCY.")
+            .MinimumLength(10).WithMessage("EmergencyReason must be at least 10 characters.")
+            .When(command => command.Priority == UavPms.OperationsService.Domain.Enums.MissionPriority.Emergency);
     }
 }

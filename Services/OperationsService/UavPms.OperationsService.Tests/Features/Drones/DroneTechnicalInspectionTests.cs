@@ -133,4 +133,154 @@ public class DroneTechnicalInspectionTests
         latest.Should().NotBeNull();
         latest!.Id.Should().Be(newer.Id);
     }
+
+    [Fact]
+    public async Task SubmitInspection_EmptyMetrics_ThrowsBusinessRuleException()
+    {
+        var techId = Guid.NewGuid();
+        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = techId, Status = "Active" });
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-04", OperationalStatus = DroneOperationalStatus.Available };
+        db.Uavs.Add(drone);
+        await db.SaveChangesAsync();
+
+        var service = new DroneTechnicalInspectionService(db, user.Object);
+        var request = new DroneInspectionSubmitRequest(drone.Id, "No metrics", new List<DroneMetricSubmitDto>());
+
+        var act = () => service.SubmitInspectionAsync(request, CancellationToken.None);
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*METRICS_REQUIRED*");
+    }
+
+    [Fact]
+    public async Task SubmitInspection_DuplicateMetricInSameSubsystem_ThrowsBusinessRuleException()
+    {
+        var techId = Guid.NewGuid();
+        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = techId, Status = "Active" });
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-05", OperationalStatus = DroneOperationalStatus.Available };
+        db.Uavs.Add(drone);
+        await db.SaveChangesAsync();
+
+        var service = new DroneTechnicalInspectionService(db, user.Object);
+        var request = new DroneInspectionSubmitRequest(
+            drone.Id,
+            "Duplicate metric",
+            new List<DroneMetricSubmitDto>
+            {
+                new("BATTERY_HEALTH", "Power", 90),
+                new("BATTERY_HEALTH", "Power", 85)
+            }
+        );
+
+        var act = () => service.SubmitInspectionAsync(request, CancellationToken.None);
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*DUPLICATE_METRIC*");
+    }
+
+    [Fact]
+    public async Task SubmitInspection_LowBatteryLevel_SetsCriticalFailedEvenIfClientSaysPassed()
+    {
+        var techId = Guid.NewGuid();
+        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = techId, Status = "Active" });
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-06", OperationalStatus = DroneOperationalStatus.Available, BatteryLevel = 15 };
+        db.Uavs.Add(drone);
+        await db.SaveChangesAsync();
+
+        var service = new DroneTechnicalInspectionService(db, user.Object);
+        var request = new DroneInspectionSubmitRequest(
+            drone.Id,
+            "Low battery",
+            new List<DroneMetricSubmitDto>
+            {
+                new("BATTERY_HEALTH", "Power", 15, Passed: true, Critical: false)
+            }
+        );
+
+        var result = await service.SubmitInspectionAsync(request, CancellationToken.None);
+        result.Status.Should().Be(DroneTechnicalInspectionStatus.Failed);
+        result.Health.Should().Be(TechnicalHealth.Critical);
+    }
+
+    [Fact]
+    public async Task GetLatestInspection_UnauthorizedCallerRole_ThrowsForbiddenException()
+    {
+        var viewerId = Guid.NewGuid();
+        var user = CreateUserMock(viewerId, "Viewer");
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = viewerId, Status = "Active" });
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-07", OperationalStatus = DroneOperationalStatus.Available };
+        db.Uavs.Add(drone);
+        await db.SaveChangesAsync();
+
+        var service = new DroneTechnicalInspectionService(db, user.Object);
+        var act = () => service.GetLatestInspectionAsync(drone.Id, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ForbiddenException>().WithMessage("*DRONE_ACCESS_DENIED*");
+    }
+
+    [Fact]
+    public async Task GetLatestInspection_UserFromDifferentRegion_ThrowsForbiddenException()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var userRegion = Guid.NewGuid();
+        var droneRegion = Guid.NewGuid();
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = userRegion });
+
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-SCOPE-01", OperationalStatus = DroneOperationalStatus.Available };
+        db.Uavs.Add(drone);
+
+        db.Missions.Add(new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-SCOPE-01",
+            Title = "Mission in other region",
+            RegionId = droneRegion,
+            UavId = drone.Id
+        });
+        await db.SaveChangesAsync();
+
+        var service = new DroneTechnicalInspectionService(db, user.Object);
+        var act = () => service.GetLatestInspectionAsync(drone.Id, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ForbiddenException>().WithMessage("*DRONE_ACCESS_DENIED*");
+    }
+
+    [Fact]
+    public async Task SubmitInspection_IncrementsDroneVersion()
+    {
+        var techId = Guid.NewGuid();
+        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = techId, Status = "Active" });
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-VER-01", OperationalStatus = DroneOperationalStatus.Available, Version = 1 };
+        db.Uavs.Add(drone);
+        await db.SaveChangesAsync();
+
+        var service = new DroneTechnicalInspectionService(db, user.Object);
+        var request = new DroneInspectionSubmitRequest(
+            drone.Id,
+            "Version test",
+            new List<DroneMetricSubmitDto>
+            {
+                new("BATTERY_HEALTH", "Power", 90, Passed: true)
+            }
+        );
+
+        await service.SubmitInspectionAsync(request, CancellationToken.None);
+
+        var updatedDrone = await db.Uavs.FindAsync(drone.Id);
+        updatedDrone!.Version.Should().Be(2);
+    }
 }

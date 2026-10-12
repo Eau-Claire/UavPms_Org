@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
@@ -114,8 +115,26 @@ public sealed class PreMissionAssessmentService
 
         _db.PreMissionAssessments.Add(assessment);
         Audit(assessment.Id, "ASSESSMENT_CREATED");
-        await SaveWithConcurrency(ct);
-        return assessment;
+        try
+        {
+            await SaveWithConcurrency(ct);
+        }
+        catch (DbUpdateException) when (!string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            var existing = await _db.PreMissionAssessments
+                .AsNoTracking()
+                .Include(x => x.Assets)
+                .Include(x => x.PersonnelCandidates)
+                .Include(x => x.DroneCandidates)
+                .SingleOrDefaultAsync(x => x.IdempotencyKey == idempotencyKey, ct);
+
+            if (existing != null)
+                return existing;
+
+            throw new BusinessRuleException("IDEMPOTENCY_CONFLICT", "An assessment with the same idempotency key is currently being processed.");
+        }
+
+        return await EvaluateAsync(assessment.Id, ct);
     }
 
     public async Task<PreMissionAssessment> GetAsync(Guid id, CancellationToken ct)
@@ -130,8 +149,7 @@ public sealed class PreMissionAssessmentService
             .SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new NotFoundException("PreMissionAssessment", id);
 
-        if (assessment.ManagerId != _current.UserId && !_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
-            throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
+        await EnsureManagerHasAssessmentAccessAsync(assessment, ct);
 
         if (AssessmentExpiryPolicy.CheckAndApplyExpiry(assessment))
         {
@@ -151,9 +169,27 @@ public sealed class PreMissionAssessmentService
     {
         await RequireManager(ct);
 
+        var isGlobal = _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
+        List<Guid?>? userScopes = null;
+        if (!isGlobal)
+        {
+            userScopes = await _db.UserGeographicScopes
+                .Where(x => x.UserId == _current.UserId)
+                .Select(x => x.RegionId)
+                .ToListAsync(ct);
+        }
+
+        var hasGlobalScope = userScopes != null && userScopes.Contains(null);
+
         var query = _db.PreMissionAssessments
             .Include(x => x.Assets)
-            .Where(x => x.ManagerId == _current.UserId || _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase));
+            .Include(x => x.PersonnelCandidates)
+            .Include(x => x.DroneCandidates)
+            .Include(x => x.Region)
+            .Where(x => isGlobal ||
+                        hasGlobalScope ||
+                        x.ManagerId == _current.UserId ||
+                        (userScopes != null && userScopes.Contains(x.RegionId)));
 
         if (!string.IsNullOrWhiteSpace(status))
         {
@@ -217,11 +253,22 @@ public sealed class PreMissionAssessmentService
             .SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new NotFoundException("PreMissionAssessment", id);
 
-        if (assessment.ManagerId != _current.UserId && !_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
-            throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
+        await EnsureManagerHasAssessmentAccessAsync(assessment, ct);
 
         if (assessment.Status == PreMissionAssessmentStatus.Completed)
-            throw new BusinessRuleException("ASSESSMENT_ALREADY_CONSUMED");
+            throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED", "Đánh giá tiền nhiệm vụ đã hoàn thành tạo nhiệm vụ bay.");
+
+        if (assessment.Status == PreMissionAssessmentStatus.Cancelled)
+            throw new BusinessRuleException("ASSESSMENT_CANCELLED", "Bản đánh giá đã bị hủy, không thể đánh giá lại.");
+
+        if (assessment.Status == PreMissionAssessmentStatus.Expired ||
+            assessment.PlannedEnd <= DateTime.UtcNow ||
+            AssessmentExpiryPolicy.CheckAndApplyExpiry(assessment))
+        {
+            assessment.Status = PreMissionAssessmentStatus.Expired;
+            await _db.SaveChangesAsync(ct);
+            throw new BusinessRuleException("ASSESSMENT_EXPIRED", "Khung giờ bay hoặc thời hạn của bản đánh giá đã hết hạn, không thể đánh giá lại.");
+        }
 
         // Step 1: Site Feasibility
         var assetIds = assessment.Assets.Select(x => x.AssetId).ToList();
@@ -248,32 +295,33 @@ public sealed class PreMissionAssessmentService
             assessment.DroneCandidates.Clear();
         }
 
-        // Step 3: Evaluate Personnel Candidates (Gap #3)
+        // Step 3: Evaluate Personnel Candidates (Gap #3 & INF-01 Optimization)
         var isGlobal = _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
-        var activeUsers = await _db.Users
+        var nonOperationalRoles = new[] { UserRoles.SystemAdmin, UserRoles.Manager, "SystemAdmin", "Manager" };
+        var operationalRoles = new[] { UserRoles.Inspector, UserRoles.Analyst, "Technician", UserRoles.MaintenanceTechnician, "Pilot" };
+
+        var candidateUsers = await _db.Users
             .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
             .Where(x => x.IsEmailVerified && (x.Status == "Active" || x.Status == "Enabled"))
+            .Where(x => !x.UserRoles.Any(r => r.Role != null && nonOperationalRoles.Contains(r.Role.RoleName)))
+            .Where(x => x.UserRoles.Any(r => r.Role != null && operationalRoles.Contains(r.Role.RoleName)))
             .ToListAsync(ct);
 
-        var inspectorUsers = activeUsers
-            .Where(x => x.UserRoles.Any(r => r.Role != null && r.Role.RoleName == UserRoles.Inspector))
-            .ToList();
-
-        var inspectorUserIds = inspectorUsers.Select(u => u.Id).ToList();
+        var candidateUserIds = candidateUsers.Select(u => u.Id).ToList();
 
         var userScopes = await _db.UserGeographicScopes
-            .Where(s => inspectorUserIds.Contains(s.UserId))
+            .Where(s => candidateUserIds.Contains(s.UserId))
             .ToListAsync(ct);
 
         var userBookings = await _db.ResourceBookings
             .Where(b => b.UserId.HasValue &&
-                        inspectorUserIds.Contains(b.UserId.Value) &&
+                        candidateUserIds.Contains(b.UserId.Value) &&
                         b.Status == ResourceBookingStatus.Active &&
                         b.StartAt < assessment.PlannedEnd &&
                         b.EndAt > assessment.PlannedStart)
             .ToListAsync(ct);
 
-        foreach (var user in inspectorUsers)
+        foreach (var user in candidateUsers)
         {
             var candidate = PersonnelEligibilityPolicy.EvaluatePersonnel(
                 user,
@@ -286,12 +334,14 @@ public sealed class PreMissionAssessmentService
 
             candidate.Assessment = assessment;
             candidate.AssessmentId = assessment.Id;
+            candidate.User = user;
             _db.PreMissionAssessmentPersonnel.Add(candidate);
         }
 
-        // Step 4: Evaluate Drone Candidates (Gap #5 & Gap #7)
+        // Step 4: Evaluate Drone Candidates (Gap #5, Gap #7 & INF-01 Optimization)
         var drones = await _db.Uavs
-            .Include(x => x.TechnicalInspections)
+            .Include(x => x.TechnicalInspections
+                .Where(t => !t.IsDeleted && t.Status == DroneTechnicalInspectionStatus.Passed && t.ValidUntil > assessment.PlannedStart))
             .Where(x => !x.IsDeleted)
             .ToListAsync(ct);
 
@@ -334,6 +384,7 @@ public sealed class PreMissionAssessmentService
             {
                 Assessment = assessment,
                 AssessmentId = assessment.Id,
+                Drone = drone,
                 DroneId = drone.Id,
                 IsEligible = isEligible,
                 OperationalAvailabilityStatus = isOpAvailable
@@ -353,12 +404,16 @@ public sealed class PreMissionAssessmentService
 
         // Step 5: Overall Status Calculation
         var isSiteFeasible = siteResult.Status == ReadinessCheckStatus.Passed;
-        var hasEligiblePersonnel = assessment.PersonnelCandidates.Any(x => x.IsEligible);
+        var hasEligibleInspector = assessment.PersonnelCandidates.Any(x => x.IsEligible && (x.Role.Contains("Inspector", StringComparison.OrdinalIgnoreCase) || x.Role.Contains("Pilot", StringComparison.OrdinalIgnoreCase)));
+        var hasEligibleAnalyst = assessment.PersonnelCandidates.Any(x => x.IsEligible && x.Role.Contains("Analyst", StringComparison.OrdinalIgnoreCase));
+        var hasEligibleTechnician = assessment.PersonnelCandidates.Any(x => x.IsEligible && (x.Role.Contains("Tech", StringComparison.OrdinalIgnoreCase) || x.Role.Contains("Maintenance", StringComparison.OrdinalIgnoreCase)));
+        var hasEligiblePersonnel = hasEligibleInspector && hasEligibleAnalyst && hasEligibleTechnician;
         var hasEligibleDrone = assessment.DroneCandidates.Any(x => x.IsEligible);
 
         var isReady = isSiteFeasible && hasEligiblePersonnel && hasEligibleDrone;
         assessment.Status = isReady ? PreMissionAssessmentStatus.Ready : PreMissionAssessmentStatus.NotReady;
-        assessment.ValidUntil = DateTime.UtcNow.AddHours(4);
+        var expiryCandidate = DateTime.UtcNow.AddHours(4);
+        assessment.ValidUntil = expiryCandidate < assessment.PlannedEnd ? expiryCandidate : assessment.PlannedEnd;
         assessment.Version++;
         assessment.EvaluationPolicyVersion = "v2.0";
 
@@ -366,7 +421,7 @@ public sealed class PreMissionAssessmentService
             .Where(x => x.IsEligible)
             .Select(x => x.TechnicalHealth)
             .FirstOrDefault();
-        assessment.OverallTechnicalHealth = bestDroneHealth != TechnicalHealth.Unknown ? bestDroneHealth : TechnicalHealth.Healthy;
+        assessment.OverallTechnicalHealth = bestDroneHealth != TechnicalHealth.Unknown ? bestDroneHealth : (hasEligibleDrone ? TechnicalHealth.Healthy : TechnicalHealth.Unknown);
 
         Audit(assessment.Id, "ASSESSMENT_EVALUATED");
         await SaveWithConcurrency(ct);
@@ -395,14 +450,13 @@ public sealed class PreMissionAssessmentService
             .SingleOrDefaultAsync(x => x.Id == request.AssessmentId, ct)
             ?? throw new NotFoundException("PreMissionAssessment", request.AssessmentId);
 
-        if (assessment.ManagerId != _current.UserId && !_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
-            throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
+        await EnsureManagerHasAssessmentAccessAsync(assessment, ct);
 
         if (assessment.Status == PreMissionAssessmentStatus.Completed ||
             assessment.ConsumedByMissionId.HasValue ||
             await _db.Missions.AnyAsync(x => x.PreMissionAssessmentId == request.AssessmentId, ct))
         {
-            throw new BusinessRuleException("ASSESSMENT_ALREADY_CONSUMED");
+            throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED", "Đánh giá tiền nhiệm vụ đã hoàn thành tạo nhiệm vụ bay.");
         }
 
         // Gap #9: Expiry on use
@@ -436,23 +490,43 @@ public sealed class PreMissionAssessmentService
                 throw new BusinessRuleException("RESOURCE_NOT_IN_ASSESSMENT", $"Drone {droneId} is not an eligible candidate in assessment.");
         }
 
-        // Gap #10: Check real-time resource bookings conflict
-        var assignedUserIds = request.Personnel.Select(p => p.UserId).ToList();
-        var hasUserConflict = await _db.ResourceBookings.AnyAsync(b =>
-            b.UserId.HasValue && assignedUserIds.Contains(b.UserId.Value) &&
-            b.Status == ResourceBookingStatus.Active &&
-            b.StartAt < assessment.PlannedEnd &&
-            b.EndAt > assessment.PlannedStart, ct);
-        if (hasUserConflict)
-            throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT", "One or more assigned personnel have a conflicting schedule.");
+        if (request.Priority == MissionPriority.Emergency)
+        {
+            if (string.IsNullOrWhiteSpace(request.EmergencyReason) || request.EmergencyReason.Trim().Length < 10)
+            {
+                throw new BusinessRuleException("EMERGENCY_REASON_REQUIRED", "EmergencyReason is required (min 10 characters) when Priority is EMERGENCY.");
+            }
+        }
 
-        var hasDroneConflict = await _db.ResourceBookings.AnyAsync(b =>
-            b.DroneId.HasValue && request.DroneIds.Contains(b.DroneId.Value) &&
-            b.Status == ResourceBookingStatus.Active &&
-            b.StartAt < assessment.PlannedEnd &&
-            b.EndAt > assessment.PlannedStart, ct);
-        if (hasDroneConflict)
-            throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT", "One or more assigned drones have a conflicting schedule.");
+        // Gap #10: Check real-time resource bookings conflict (BR-04, BR-07)
+        var assignedUserIds = request.Personnel.Select(p => p.UserId).ToList();
+        var conflictingUserBookings = await _db.ResourceBookings
+            .Include(b => b.Mission)
+            .Where(b => b.UserId.HasValue && assignedUserIds.Contains(b.UserId.Value) &&
+                        b.Status == ResourceBookingStatus.Active &&
+                        b.StartAt < assessment.PlannedEnd &&
+                        b.EndAt > assessment.PlannedStart)
+            .ToListAsync(ct);
+        if (conflictingUserBookings.Count > 0)
+        {
+            var conflictDetails = string.Join("; ", conflictingUserBookings.Select(b =>
+                $"Pilot {b.UserId} is scheduled for mission {b.Mission?.MissionCode ?? b.MissionId.ToString()} ({b.StartAt:yyyy-MM-dd HH:mm} - {b.EndAt:yyyy-MM-dd HH:mm})"));
+            throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT", $"One or more assigned personnel have a conflicting schedule. {conflictDetails}");
+        }
+
+        var conflictingDroneBookings = await _db.ResourceBookings
+            .Include(b => b.Mission)
+            .Where(b => b.DroneId.HasValue && request.DroneIds.Contains(b.DroneId.Value) &&
+                        b.Status == ResourceBookingStatus.Active &&
+                        b.StartAt < assessment.PlannedEnd &&
+                        b.EndAt > assessment.PlannedStart)
+            .ToListAsync(ct);
+        if (conflictingDroneBookings.Count > 0)
+        {
+            var conflictDetails = string.Join("; ", conflictingDroneBookings.Select(b =>
+                $"Drone {b.DroneId} is scheduled for mission {b.Mission?.MissionCode ?? b.MissionId.ToString()} ({b.StartAt:yyyy-MM-dd HH:mm} - {b.EndAt:yyyy-MM-dd HH:mm})"));
+            throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT", $"One or more assigned drones have a conflicting schedule. {conflictDetails}");
+        }
 
         var primaryDroneId = request.DroneIds.First();
         var primaryDrone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == primaryDroneId, ct)
@@ -460,12 +534,10 @@ public sealed class PreMissionAssessmentService
 
         var primaryInspectorId = request.Personnel.First().UserId;
 
-        await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(ct) : null;
-
         // Gap #11: Mission starts at PendingAcceptance
         var mission = new Mission
         {
-            MissionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
+            MissionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{RandomNumberGenerator.GetInt32(100, 1000)}",
             Title = request.Title,
             Description = request.Description ?? string.Empty,
             ManagerId = _current.UserId,
@@ -477,6 +549,11 @@ public sealed class PreMissionAssessmentService
             PlannedStart = assessment.PlannedStart,
             PlannedEnd = assessment.PlannedEnd,
             ScheduledStartAt = assessment.PlannedStart,
+            Priority = request.Priority,
+            Objective = request.Objective,
+            PriorityDefectsJson = JsonSerializer.Serialize(request.PriorityDefects ?? (IEnumerable<string>)Array.Empty<string>()),
+            EmergencyReason = request.EmergencyReason,
+            IsImmediate = request.IsImmediate,
             Status = MissionStatus.PendingAcceptance,
             PreMissionAssessmentId = assessment.Id,
             Boundary = assessment.ProposedBoundary,
@@ -545,13 +622,14 @@ public sealed class PreMissionAssessmentService
         _db.OutboxMessages.Add(new OutboxMessage
         {
             MessageType = "MissionCreatedFromAssessment",
-            Payload = JsonSerializer.Serialize(new
+            Payload = JsonSerializer.Serialize(new MissionCreatedFromAssessmentEvent
             {
                 MissionId = mission.Id,
                 AssessmentId = assessment.Id,
+                ManagerId = _current.UserId,
                 Title = mission.Title,
-                PlannedStart = mission.PlannedStart,
-                PlannedEnd = mission.PlannedEnd,
+                PlannedStart = mission.PlannedStart ?? assessment.PlannedStart,
+                PlannedEnd = mission.PlannedEnd ?? assessment.PlannedEnd,
                 PersonnelCount = request.Personnel.Count,
                 DroneCount = request.DroneIds.Count
             }),
@@ -559,14 +637,20 @@ public sealed class PreMissionAssessmentService
         });
 
         // Audit & Notification
-        Audit(mission.Id, "MISSION_CREATED_FROM_ASSESSMENT");
+        Audit(mission.Id, "MISSION_CREATED_FROM_ASSESSMENT", "{}", JsonSerializer.Serialize(new
+        {
+            Priority = mission.Priority.ToString(),
+            Objective = mission.Objective.ToString(),
+            PriorityDefects = request.PriorityDefects,
+            EmergencyReason = mission.EmergencyReason,
+            IsImmediate = mission.IsImmediate
+        }), "Missions");
         foreach (var p in request.Personnel)
         {
             Notify(p.UserId, mission, "MISSION_DISPATCH", p.Role);
         }
 
         await SaveWithConcurrency(ct);
-        if (tx != null) await tx.CommitAsync(ct);
         return mission;
     }
 
@@ -599,17 +683,26 @@ public sealed class PreMissionAssessmentService
             .SingleOrDefaultAsync(x => x.Id == assessmentId, ct)
             ?? throw new NotFoundException("PreMissionAssessment", assessmentId);
 
-        if (assessment.ManagerId != _current.UserId && !_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
-            throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
+        await EnsureManagerHasAssessmentAccessAsync(assessment, ct);
 
         if (assessment.Status == PreMissionAssessmentStatus.Completed || assessment.ConsumedByMissionId.HasValue)
             throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED");
 
-        if (missionId.HasValue && missionId.Value != Guid.Empty)
+        if (assessment.Status != PreMissionAssessmentStatus.Ready)
+            throw new BusinessRuleException("INVALID_ASSESSMENT_STATUS", "Chỉ bản đánh giá ở trạng thái READY mới có thể đánh dấu hoàn thành.");
+
+        if (!missionId.HasValue || missionId.Value == Guid.Empty)
+            throw new BusinessRuleException("MISSION_REQUIRED", "Cần cung cấp mã nhiệm vụ hợp lệ để hoàn tất bản đánh giá.");
+
+        var mission = await _db.Missions.SingleOrDefaultAsync(m => m.Id == missionId.Value, ct)
+            ?? throw new NotFoundException("Mission", missionId.Value);
+
+        if (mission.PreMissionAssessmentId != assessmentId)
         {
-            assessment.ConsumedByMissionId = missionId.Value;
+            throw new BusinessRuleException("INVALID_MISSION_REFERENCE", "Nhiệm vụ được tham chiếu không thuộc về bản đánh giá này.");
         }
 
+        assessment.ConsumedByMissionId = mission.Id;
         assessment.Status = PreMissionAssessmentStatus.Completed;
         assessment.Version++;
 
@@ -633,15 +726,36 @@ public sealed class PreMissionAssessmentService
             throw new ForbiddenException("ACTIVE_USER_REQUIRED");
     }
 
-    private void Audit(Guid id, string action) =>
+    private async Task EnsureManagerHasAssessmentAccessAsync(PreMissionAssessment assessment, CancellationToken ct)
+    {
+        if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
+            throw new ForbiddenException("AUTHENTICATION_REQUIRED");
+
+        if (_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        if (assessment.ManagerId == _current.UserId)
+            return;
+
+        var isManager = _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase);
+        if (isManager && await _db.UserGeographicScopes.AnyAsync(
+            s => s.UserId == _current.UserId && (s.RegionId == assessment.RegionId || s.RegionId == null), ct))
+        {
+            return;
+        }
+
+        throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
+    }
+
+    private void Audit(Guid id, string action, string oldValues = "{}", string newValues = "{}", string tableName = "PreMissionAssessments") =>
         _db.AuditLogs.Add(new AuditLog
         {
             UserId = _current.UserId,
-            TableName = "PreMissionAssessments",
+            TableName = tableName,
             RecordId = id,
             ActionType = action,
-            OldValues = "{}",
-            NewValues = "{}",
+            OldValues = oldValues,
+            NewValues = newValues,
             IpAddress = _current.IpAddress ?? "",
             UserAgent = _current.UserAgent ?? ""
         });

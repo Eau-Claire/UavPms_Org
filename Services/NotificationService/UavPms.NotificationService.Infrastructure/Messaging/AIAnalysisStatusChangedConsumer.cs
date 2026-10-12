@@ -108,7 +108,7 @@ public class AIAnalysisStatusChangedConsumer : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error processing AIAnalysisStatusChangedEvent");
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, true);
+                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
                 }
             };
 

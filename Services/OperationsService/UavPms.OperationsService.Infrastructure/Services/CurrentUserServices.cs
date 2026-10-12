@@ -17,21 +17,26 @@ public class CurrentUserServices : ICurrentUserServices
     {
         get
         {
-            var userIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? _httpContextAccessor.HttpContext?.User?.FindFirst("sub")?.Value
+                ?? _httpContextAccessor.HttpContext?.User?.FindFirst("nameid")?.Value;
             return Guid.TryParse(userIdClaim, out var userId) ? userId : Guid.Empty;
         }
     }
     
-    public string? Email => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Email)?.Value;
+    public string? Email => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Email)?.Value
+        ?? _httpContextAccessor.HttpContext?.User?.FindFirst("email")?.Value;
 
     public string? Username => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Name)?.Value
         ?? _httpContextAccessor.HttpContext?.User?.FindFirst("name")?.Value
         ?? _httpContextAccessor.HttpContext?.User?.FindFirst("username")?.Value
         ?? Email;
     
-    public IReadOnlyList<string> Roles => _httpContextAccessor.HttpContext?.User?.FindAll(ClaimTypes.Role)
+    public IReadOnlyList<string> Roles => (_httpContextAccessor.HttpContext?.User?.FindAll(ClaimTypes.Role) ?? Enumerable.Empty<Claim>())
+        .Concat(_httpContextAccessor.HttpContext?.User?.FindAll("role") ?? Enumerable.Empty<Claim>())
         .Select(x => x.Value)
-        .ToList() ?? new List<string>();
+        .Distinct()
+        .ToList();
     
     public bool IsAuthenticated =>  _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
 

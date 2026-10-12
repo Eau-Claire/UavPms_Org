@@ -10,11 +10,16 @@ public class StepUpOtpStrategy : IOtpVerificationStrategy
 {
     private readonly IJwtProvider _jwtProvider;
     private readonly IOtpService _otpService;
+    private readonly UavPms.Shared.Contracts.Interfaces.ISystemSettingService? _systemSettingService;
 
-    public StepUpOtpStrategy(IJwtProvider jwtProvider, IOtpService otpService)
+    public StepUpOtpStrategy(
+        IJwtProvider jwtProvider,
+        IOtpService otpService,
+        UavPms.Shared.Contracts.Interfaces.ISystemSettingService? systemSettingService = null)
     {
         _jwtProvider = jwtProvider;
         _otpService = otpService;
+        _systemSettingService = systemSettingService;
     }
 
     public bool CanHandle(OtpPurpose purpose)
@@ -29,12 +34,18 @@ public class StepUpOtpStrategy : IOtpVerificationStrategy
             throw new NotFoundException("User not found or inactive", user.Email);
         }
 
-        var token = _jwtProvider.GenerateStepUpToken(user, request.OtpPurpose.ToString());
+        var expiryMinutes = _systemSettingService != null
+            ? (await _systemSettingService.GetTokenSettingsAsync(cancellationToken)).StepUpTokenExpiryMinutes
+            : 5;
+
+        var token = _systemSettingService != null
+            ? _jwtProvider.GenerateStepUpToken(user, request.OtpPurpose.ToString(), expiryMinutes)
+            : _jwtProvider.GenerateStepUpToken(user, request.OtpPurpose.ToString());
         await _otpService.SaveStepUpTokenAsync(
             user.Id.ToString(),
             request.OtpPurpose.ToString(),
             token,
-            TimeSpan.FromMinutes(5));
+            TimeSpan.FromMinutes(expiryMinutes));
 
         return new OtpVerifyResultDto
         {

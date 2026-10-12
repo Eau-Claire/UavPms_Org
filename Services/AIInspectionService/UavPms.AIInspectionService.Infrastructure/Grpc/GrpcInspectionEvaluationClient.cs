@@ -2,12 +2,15 @@ using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using UavPms.AIInspectionService.Application.Interfaces;
 using UavPms.Grpc.InspectionEvaluation;
+using UavPms.Shared.Contracts.Interfaces;
+using UavPms.Shared.Contracts.Settings;
 
 namespace UavPms.AIInspectionService.Infrastructure.Grpc;
 
 public class GrpcInspectionEvaluationClient(
     InspectionEvaluation.InspectionEvaluationClient client,
-    ILogger<GrpcInspectionEvaluationClient> logger)
+    ILogger<GrpcInspectionEvaluationClient> logger,
+    ISystemSettingService? systemSettingService = null)
     : IInspectionEvaluationClient
 {
     public async Task<DetectionEvaluationResult> EvaluateAsync(
@@ -45,7 +48,7 @@ public class GrpcInspectionEvaluationClient(
                 "InspectionEvaluation gRPC service unavailable. Falling back to local critical-alert rule for Category={CategoryCode}",
                 request.CategoryCode);
 
-            return CreateFallbackResult(request);
+            return await CreateFallbackResultAsync(request, cancellationToken);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -53,13 +56,19 @@ public class GrpcInspectionEvaluationClient(
                 "InspectionEvaluation gRPC call timed out. Falling back to local critical-alert rule for Category={CategoryCode}",
                 request.CategoryCode);
 
-            return CreateFallbackResult(request);
+            return await CreateFallbackResultAsync(request, cancellationToken);
         }
     }
 
-    private static DetectionEvaluationResult CreateFallbackResult(DetectionEvaluationRequest request)
+    private async Task<DetectionEvaluationResult> CreateFallbackResultAsync(
+        DetectionEvaluationRequest request,
+        CancellationToken cancellationToken)
     {
-        var requiresImmediateAlert = request.IsEmergencyClass && request.Confidence >= 0.80;
+        var aiSettings = systemSettingService != null
+            ? await systemSettingService.GetAiEvaluationSettingsAsync(cancellationToken)
+            : new AiEvaluationSettingsDto();
+
+        var requiresImmediateAlert = request.IsEmergencyClass && request.Confidence >= aiSettings.EmergencyConfidenceThreshold;
         var severity = requiresImmediateAlert
             ? "Critical"
             : request.Confidence >= 0.75 ? "High" : request.Confidence >= 0.50 ? "Medium" : "Low";

@@ -11,9 +11,11 @@ using Moq;
 using UavPms.NotificationService.API.Hubs;
 using UavPms.NotificationService.API.Jobs;
 using UavPms.NotificationService.API.Services;
+using System.Security.Claims;
 using UavPms.NotificationService.Domain.Entities;
 using UavPms.NotificationService.Domain.Interfaces.Services;
 using UavPms.NotificationService.Infrastructure.Persistence;
+using UavPms.Shared.Contracts.Constants;
 using UavPms.Shared.Contracts.Events;
 using Xunit;
 
@@ -161,6 +163,16 @@ public class RealtimeMissionNotificationTests
         var mockContext = new Mock<HubCallerContext>();
         mockContext.Setup(c => c.ConnectionId).Returns("conn-123");
 
+        var userId = Guid.NewGuid();
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Role, UserRoles.SystemAdmin)
+        };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var claimsPrincipal = new ClaimsPrincipal(identity);
+        mockContext.Setup(c => c.User).Returns(claimsPrincipal);
+
         hub.Groups = mockGroups.Object;
         hub.Context = mockContext.Object;
 
@@ -173,6 +185,29 @@ public class RealtimeMissionNotificationTests
         // Assert
         mockGroups.Verify(g => g.AddToGroupAsync("conn-123", $"mission_{missionId}", default), Times.Once);
         mockGroups.Verify(g => g.RemoveFromGroupAsync("conn-123", $"mission_{missionId}", default), Times.Once);
+    }
+
+    [Fact]
+    public async Task NotificationHub_JoinMissionGroup_WhenUnauthenticated_ShouldReject()
+    {
+        // Arrange
+        var hubLoggerMock = new Mock<ILogger<NotificationHub>>();
+        var hub = new NotificationHub(hubLoggerMock.Object, _connectionRegistryMock.Object);
+        var mockGroups = new Mock<IGroupManager>();
+        var mockContext = new Mock<HubCallerContext>();
+        mockContext.Setup(c => c.ConnectionId).Returns("conn-123");
+        mockContext.Setup(c => c.User).Returns((ClaimsPrincipal?)null);
+
+        hub.Groups = mockGroups.Object;
+        hub.Context = mockContext.Object;
+
+        var missionId = Guid.NewGuid().ToString();
+
+        // Act
+        await hub.JoinMissionGroup(missionId);
+
+        // Assert
+        mockGroups.Verify(g => g.AddToGroupAsync(It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
     }
 
     [Fact]

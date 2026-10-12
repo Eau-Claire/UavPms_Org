@@ -1,10 +1,14 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Inspections.DTOs;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
+using UavPms.OperationsService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.Application.Features.Inspections.Queries.GetByMission;
 
@@ -12,16 +16,38 @@ public class GetInspectionsByMissionQueryHandler
     : IRequestHandler<GetInspectionsByMissionQuery, IReadOnlyList<InspectionReportDto>>
 {
     private readonly IInspectionMediaRepository _inspectionMediaRepository;
+    private readonly IMissionRepository? _missionRepository;
+    private readonly ICurrentUserServices? _currentUser;
 
-    public GetInspectionsByMissionQueryHandler(IInspectionMediaRepository inspectionMediaRepository)
+    public GetInspectionsByMissionQueryHandler(
+        IInspectionMediaRepository inspectionMediaRepository,
+        IMissionRepository? missionRepository = null,
+        ICurrentUserServices? currentUser = null)
     {
         _inspectionMediaRepository = inspectionMediaRepository;
+        _missionRepository = missionRepository;
+        _currentUser = currentUser;
     }
 
     public async Task<IReadOnlyList<InspectionReportDto>> Handle(
         GetInspectionsByMissionQuery request,
         CancellationToken cancellationToken)
     {
+        if (_currentUser is { IsAuthenticated: true } && _missionRepository != null)
+        {
+            var isGlobal = _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
+            var canAccess = await _missionRepository.UserCanAccessAsync(
+                request.MissionId,
+                _currentUser.UserId,
+                isGlobal,
+                cancellationToken);
+
+            if (!canAccess)
+            {
+                throw new ForbiddenException("MISSION_ACCESS_DENIED");
+            }
+        }
+
         var mediaList = await _inspectionMediaRepository.GetByMissionIdWithDetailsAsync(request.MissionId);
 
         return mediaList.Select(media => new InspectionReportDto

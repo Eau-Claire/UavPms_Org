@@ -189,6 +189,7 @@ public class UavConfiguration : IEntityTypeConfiguration<Uav>
         builder.Property(e => e.Status).HasConversion<string>();
         builder.Property(e => e.OperationalStatus).HasConversion<string>();
         builder.Property(e => e.TechnicalHealth).HasConversion<string>();
+        builder.Property(e => e.Version).IsConcurrencyToken();
     }
 }
 
@@ -217,6 +218,13 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.Ignore(e => e.DroneCode);
         builder.Ignore(e => e.AssignedToUser);
 
+        builder.Property(e => e.Priority).HasDefaultValue(MissionPriority.Normal);
+        builder.Property(e => e.Objective).HasConversion<string>().HasDefaultValue(InspectionObjective.PeriodicInspection);
+        builder.Property(e => e.PriorityDefectsJson).HasColumnType("text").HasDefaultValue("[]");
+        builder.Property(e => e.EmergencyReason).HasColumnType("text");
+        builder.Property(e => e.IsImmediate).HasDefaultValue(false);
+        builder.HasIndex(e => new { e.Priority, e.PlannedStart, e.CreatedAt });
+
         builder.Property(e => e.IsOverdueNotified).HasDefaultValue(false);
         builder.Property(e => e.ManagerInstructions).HasColumnType("text");
         builder.Property(e => e.ConfirmationDeadline);
@@ -229,10 +237,12 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.HasOne(e => e.Inspector)
             .WithMany()
             .HasForeignKey(e => e.InspectorId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Uav)
             .WithMany(u => u.Missions)
             .HasForeignKey(e => e.UavId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Region).WithMany().HasForeignKey(e => e.RegionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Schedule).WithMany().HasForeignKey(e => e.ScheduleId).OnDelete(DeleteBehavior.Restrict);
@@ -302,6 +312,7 @@ public class PreMissionAssessmentConfiguration : IEntityTypeConfiguration<PreMis
         builder.Property(x => x.OverallTechnicalHealth).HasConversion<string>();
         builder.Property(x => x.Findings).HasColumnType("jsonb");
         builder.Property(x => x.ProposedBoundary).HasColumnType("geometry(Geometry,4326)");
+        builder.HasIndex(x => x.ProposedBoundary).HasMethod("gist");
         builder.Property(x => x.Version).IsConcurrencyToken();
         builder.HasIndex(x => new { x.ManagerId, x.Status });
         builder.HasIndex(x => x.IdempotencyKey).IsUnique().HasFilter("\"IdempotencyKey\" IS NOT NULL AND NOT \"IsDeleted\"");
@@ -921,4 +932,21 @@ public class ReportMissionConfiguration : IEntityTypeConfiguration<ReportMission
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class SystemSettingConfiguration : IEntityTypeConfiguration<SystemSetting>
+{
+    public void Configure(EntityTypeBuilder<SystemSetting> builder)
+    {
+        builder.ToTable("SystemSettings");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Key).HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Value).HasMaxLength(2000).IsRequired();
+        builder.Property(e => e.Description).HasMaxLength(500);
+        builder.Property(e => e.Category).HasMaxLength(50);
+        builder.Property(e => e.DataType).HasMaxLength(20);
+        builder.HasIndex(e => e.Key).IsUnique();
+        builder.HasIndex(e => e.Category);
+    }
+}
+
 

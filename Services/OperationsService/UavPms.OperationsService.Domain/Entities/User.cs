@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using UavPms.OperationsService.Domain.Common;
 
 namespace UavPms.OperationsService.Domain.Entities;
@@ -12,5 +13,7 @@ public class User : BaseEntity
     public bool IsEmailVerified { get; set; }
 
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+
+    [JsonIgnore]
     public virtual ICollection<UserGeographicScope> GeographicScopes { get; set; } = new List<UserGeographicScope>();
 }

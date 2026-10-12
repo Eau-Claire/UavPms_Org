@@ -7,6 +7,15 @@ namespace UavPms.OperationsService.Application.Features.Assessments.Policies;
 
 public static class PersonnelEligibilityPolicy
 {
+    private static readonly string[] AllowedOperationalRoles = new[]
+    {
+        UserRoles.Inspector,
+        UserRoles.Analyst,
+        "Technician",
+        UserRoles.MaintenanceTechnician,
+        "Pilot"
+    };
+
     public static PreMissionAssessmentPersonnel EvaluatePersonnel(
         User user,
         Guid regionId,
@@ -16,30 +25,35 @@ public static class PersonnelEligibilityPolicy
         IReadOnlyList<ResourceBooking> userBookings,
         bool isGlobalAdmin = false)
     {
-        var findings = new Dictionary<string, object>
-        {
-            ["userId"] = user.Id,
-            ["fullName"] = user.FullName ?? string.Empty
-        };
+        var roleNames = user.UserRoles
+            .Where(r => r.Role != null)
+            .Select(r => r.Role!.RoleName)
+            .ToList();
 
-        var hasInspectorRole = user.UserRoles.Any(r => r.Role != null && r.Role.RoleName == UserRoles.Inspector);
-        findings["hasInspectorRole"] = hasInspectorRole;
+        var primaryRole = roleNames.FirstOrDefault(r => AllowedOperationalRoles.Contains(r, StringComparer.OrdinalIgnoreCase));
+        if (primaryRole != null)
+        {
+            if (primaryRole.Equals(UserRoles.Inspector, StringComparison.OrdinalIgnoreCase) || primaryRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
+                primaryRole = UserRoles.Inspector;
+            else if (primaryRole.Equals(UserRoles.Analyst, StringComparison.OrdinalIgnoreCase))
+                primaryRole = UserRoles.Analyst;
+            else if (primaryRole.Equals("Technician", StringComparison.OrdinalIgnoreCase) || primaryRole.Equals(UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase))
+                primaryRole = "Technician";
+        }
+        var hasValidRole = primaryRole != null;
 
         var isActive = user.IsEmailVerified && (user.Status == "Active" || user.Status == "Enabled");
-        findings["isActive"] = isActive;
 
         var inScope = isGlobalAdmin || userScopes.Any(s => s.UserId == user.Id && (s.RegionId == regionId || s.RegionId == null));
-        findings["inScope"] = inScope;
 
         var hasBookingConflict = userBookings.Any(b =>
             b.UserId == user.Id &&
             b.Status == ResourceBookingStatus.Active &&
             b.StartAt < plannedEnd &&
             b.EndAt > plannedStart);
-        findings["hasBookingConflict"] = hasBookingConflict;
 
-        var isEligible = hasInspectorRole && isActive && inScope && !hasBookingConflict;
-        var eligibilityStatus = (hasInspectorRole && isActive && inScope)
+        var isEligible = hasValidRole && isActive && inScope && !hasBookingConflict;
+        var eligibilityStatus = (hasValidRole && isActive && inScope)
             ? ResourceEligibilityStatus.Eligible
             : ResourceEligibilityStatus.Ineligible;
 
@@ -52,14 +66,27 @@ public static class PersonnelEligibilityPolicy
             reasonCode = "OUTSIDE_MANAGEMENT_SCOPE";
         else if (hasBookingConflict)
             reasonCode = "SCHEDULE_CONFLICT";
-        else if (!hasInspectorRole)
+        else if (!hasValidRole)
             reasonCode = "INVALID_ROLE";
         else if (!isActive)
             reasonCode = "USER_INACTIVE";
 
+        var findings = new Dictionary<string, object>
+        {
+            ["userId"] = user.Id,
+            ["fullName"] = user.FullName ?? string.Empty,
+            ["role"] = primaryRole ?? UserRoles.Inspector,
+            ["hasInspectorRole"] = roleNames.Any(r => r.Equals(UserRoles.Inspector, StringComparison.OrdinalIgnoreCase)),
+            ["hasValidRole"] = hasValidRole,
+            ["isActive"] = isActive,
+            ["inScope"] = inScope,
+            ["hasBookingConflict"] = hasBookingConflict
+        };
+
         return new PreMissionAssessmentPersonnel
         {
             UserId = user.Id,
+            User = user,
             IsEligible = isEligible,
             EligibilityStatus = eligibilityStatus,
             AvailabilityStatus = availabilityStatus,

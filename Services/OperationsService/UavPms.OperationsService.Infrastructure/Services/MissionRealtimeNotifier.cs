@@ -36,6 +36,7 @@ public class MissionRealtimeNotifier : IMissionRealtimeNotifier
         if (evt == null || string.IsNullOrWhiteSpace(evt.MissionId)) return;
 
         // 1. Publish to RabbitMQ Event Bus
+        var rabbitMqSuccess = false;
         try
         {
             var realtimeEvent = new MissionLifecycleRealtimeEvent
@@ -45,41 +46,45 @@ public class MissionRealtimeNotifier : IMissionRealtimeNotifier
             };
             await _eventPublisher.PublishAsync(realtimeEvent);
             _logger.LogInformation("Published MissionLifecycleRealtimeEvent to event bus for mission {MissionId}, type {Type}", evt.MissionId, evt.Type);
+            rabbitMqSuccess = true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to publish MissionLifecycleRealtimeEvent to event bus. Attempting HTTP direct broadcast fallback.");
         }
 
-        // 2. Direct HTTP broadcast fallback to NotificationService
-        try
+        // 2. Direct HTTP broadcast fallback to NotificationService (only if RabbitMQ failed)
+        if (!rabbitMqSuccess)
         {
-            var baseUrl = _configuration["Services:NotificationServiceUrl"]
-                ?? _configuration["NotificationService:BaseUrl"]
-                ?? "http://notificationservice:8080";
-
-            var endpoint = $"{baseUrl.TrimEnd('/')}/api/v1/notifications/realtime/mission-event";
-
-            using var httpClient = _httpClientFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(3);
-
-            var json = JsonSerializer.Serialize(evt);
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            var response = await httpClient.PostAsync(endpoint, content, cancellationToken);
-            if (response.IsSuccessStatusCode)
+            try
             {
-                _logger.LogDebug("Successfully dispatched direct HTTP realtime event for mission {MissionId}", evt.MissionId);
+                var baseUrl = _configuration["Services:NotificationServiceUrl"]
+                    ?? _configuration["NotificationService:BaseUrl"]
+                    ?? "http://notificationservice:8080";
+
+                var endpoint = $"{baseUrl.TrimEnd('/')}/api/v1/notifications/realtime/mission-event";
+
+                using var httpClient = _httpClientFactory.CreateClient();
+                httpClient.Timeout = TimeSpan.FromSeconds(3);
+
+                var json = JsonSerializer.Serialize(evt);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await httpClient.PostAsync(endpoint, content, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogDebug("Successfully dispatched direct HTTP realtime event for mission {MissionId}", evt.MissionId);
+                }
+                else
+                {
+                    _logger.LogDebug("NotificationService direct HTTP dispatch returned status {StatusCode}", response.StatusCode);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                _logger.LogDebug("NotificationService direct HTTP dispatch returned status {StatusCode}", response.StatusCode);
+                // Do not fail user action if notification service HTTP endpoint is unreachable
+                _logger.LogDebug(ex, "Direct HTTP realtime dispatch skipped/failed for mission {MissionId}", evt.MissionId);
             }
-        }
-        catch (Exception ex)
-        {
-            // Do not fail user action if notification service HTTP endpoint is unreachable
-            _logger.LogDebug(ex, "Direct HTTP realtime dispatch skipped/failed for mission {MissionId}", evt.MissionId);
         }
     }
 }

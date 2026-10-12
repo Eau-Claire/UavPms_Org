@@ -11,6 +11,7 @@ namespace UavPms.AIInspectionService.API.Controllers;
 [ApiController]
 [Route("api/v{version:apiVersion}/vision")]
 [ApiVersion("1.0")]
+[Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
 public class VisionBridgeController : ControllerBase
 {
     private readonly ISender _mediator;

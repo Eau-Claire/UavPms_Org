@@ -122,7 +122,7 @@ public class NotificationPushConsumer : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error processing NotificationPushEvent");
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, true);
+                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
                 }
             };
 

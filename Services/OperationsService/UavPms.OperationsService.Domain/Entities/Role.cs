@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace UavPms.OperationsService.Domain.Entities;
 
 public class Role
@@ -6,5 +8,6 @@ public class Role
     public string RoleName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
 
+    [JsonIgnore]
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }

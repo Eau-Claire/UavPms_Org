@@ -14,18 +14,21 @@ public class LoginOtpStrategy : IOtpVerificationStrategy
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserTokenService _userTokenService;
     private readonly IGenericRepository<TrustedDevice> _trustedDeviceRepository;
+    private readonly UavPms.Shared.Contracts.Interfaces.ISystemSettingService? _systemSettingService;
 
     public LoginOtpStrategy(
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
         IUserTokenService userTokenService,
-        IGenericRepository<TrustedDevice> trustedDeviceRepository
+        IGenericRepository<TrustedDevice> trustedDeviceRepository,
+        UavPms.Shared.Contracts.Interfaces.ISystemSettingService? systemSettingService = null
     )
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _userTokenService = userTokenService;
         _trustedDeviceRepository = trustedDeviceRepository;
+        _systemSettingService = systemSettingService;
     }
     
     public bool CanHandle(OtpPurpose purpose)
@@ -48,12 +51,16 @@ public class LoginOtpStrategy : IOtpVerificationStrategy
         var deviceTrustToken = Guid.NewGuid().ToString("N");
         var authResult = await _userTokenService.IssueTokensAsync(user, request.UserAgent, deviceTrustToken, cancellationToken);
         
-        // 2.Lưu TrustedDevice
+        // 2. Lưu TrustedDevice với hạn động từ database
+        var deviceTrustDays = _systemSettingService != null
+            ? (await _systemSettingService.GetTokenSettingsAsync(cancellationToken)).DeviceTrustDays
+            : 30;
+
         await _trustedDeviceRepository.AddAsync(new TrustedDevice
         {
             UserId = user.Id,
             DeviceTokenHash = TokenHasher.Hash(deviceTrustToken),
-            ExpiresAt = DateTime.UtcNow.AddDays(30),
+            ExpiresAt = DateTime.UtcNow.AddDays(deviceTrustDays),
             LastUsedAt = DateTime.UtcNow,
             UserAgent = request.UserAgent ?? string.Empty
         });

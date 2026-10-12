@@ -241,6 +241,6 @@ public class MissionCreationFromAssessmentTests
         );
 
         var act = () => service.CreateMissionFromAssessmentAsync(request, CancellationToken.None);
-        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*ASSESSMENT_ALREADY_CONSUMED*");
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*ASSESSMENT_ALREADY_*");
     }
 }

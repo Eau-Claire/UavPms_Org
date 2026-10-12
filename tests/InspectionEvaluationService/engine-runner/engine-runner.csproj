@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Services\InspectionEvaluationService\UavPms.InspectionEvaluationService.Application\UavPms.InspectionEvaluationService.Application.csproj" />
+    <ProjectReference Include="..\..\..\Services\InspectionEvaluationService\UavPms.InspectionEvaluationService.Domain\UavPms.InspectionEvaluationService.Domain.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>engine_runner</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
