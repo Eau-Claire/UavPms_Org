@@ -138,4 +138,36 @@ public class RealtimeMissionBroadcastController : ControllerBase
 
         return Ok(new { success = true, broadcastGroup = missionGroup, type = evt.Type });
     }
+
+    [HttpPost("assessment-event")]
+    public async Task<IActionResult> BroadcastAssessmentEvent(
+        [FromBody] AssessmentRealtimeEventDto evt,
+        CancellationToken cancellationToken = default)
+    {
+        if (evt == null || string.IsNullOrWhiteSpace(evt.AssessmentId))
+        {
+            return BadRequest("Invalid event payload or missing assessment id.");
+        }
+
+        var assessmentGroup = NotificationHub.AssessmentGroupName(evt.AssessmentId);
+        var listGroup = NotificationHub.AssessmentsListGroupName;
+        var managerGroup = NotificationHub.RoleGroupName(UserRoles.Manager);
+
+        _logger.LogInformation(
+            "Broadcasting assessment event: AssessmentId={AssessmentId}, Type={Type}, Status={Status}",
+            evt.AssessmentId, evt.Type, evt.Status);
+
+        await _hubContext.Clients.Group(assessmentGroup).SendAsync("AssessmentRealtimeEvent", evt, cancellationToken);
+        await _hubContext.Clients.Group(listGroup).SendAsync("AssessmentRealtimeEvent", evt, cancellationToken);
+        await _hubContext.Clients.Group(managerGroup).SendAsync("AssessmentRealtimeEvent", evt, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(evt.Type))
+        {
+            await _hubContext.Clients.Group(assessmentGroup).SendAsync(evt.Type, evt, cancellationToken);
+            await _hubContext.Clients.Group(listGroup).SendAsync(evt.Type, evt, cancellationToken);
+            await _hubContext.Clients.Group(managerGroup).SendAsync(evt.Type, evt, cancellationToken);
+        }
+
+        return Ok(new { success = true, broadcastGroup = assessmentGroup, type = evt.Type });
+    }
 }

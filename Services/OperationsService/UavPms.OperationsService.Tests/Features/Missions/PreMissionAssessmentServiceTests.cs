@@ -754,4 +754,43 @@ public class PreMissionAssessmentServiceTests
         var result = PreMissionAssessmentService.NormalizeAssessmentStatusFilter("INVALID_STATUS");
         result.Should().BeNull();
     }
+
+    [Fact]
+    public async Task EvaluateAsync_ShouldTriggerRealtimeAssessmentStatusChanged()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-REALTIME" };
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+
+        var assessment = new PreMissionAssessment
+        {
+            Id = Guid.NewGuid(),
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Region = region,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(3),
+            Status = PreMissionAssessmentStatus.Draft
+        };
+        db.PreMissionAssessments.Add(assessment);
+        await db.SaveChangesAsync();
+
+        var notifierMock = new Mock<UavPms.OperationsService.Application.Common.Interfaces.IMissionRealtimeNotifier>();
+        var service = new PreMissionAssessmentService(db, user.Object, notifierMock.Object);
+
+        var result = await service.EvaluateAsync(assessment.Id, CancellationToken.None);
+
+        result.Status.Should().Be(PreMissionAssessmentStatus.NotReady);
+        notifierMock.Verify(n => n.NotifyAssessmentAsync(
+            It.Is<UavPms.Shared.Contracts.Events.AssessmentRealtimeEventDto>(e =>
+                e.AssessmentId == assessment.Id.ToString() &&
+                e.Type == "AssessmentStatusChanged" &&
+                e.Status == "NOTREADY"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

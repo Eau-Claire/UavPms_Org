@@ -8,7 +8,9 @@ using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Persistence;
+using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.Shared.Contracts.Constants;
+using UavPms.Shared.Contracts.Events;
 using UavPms.Shared.Contracts.Interfaces;
 using UavPms.Shared.Contracts.Settings;
 
@@ -19,15 +21,18 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
     private readonly ApplicationDbContext _db;
     private readonly ICurrentUserServices _current;
     private readonly ISystemSettingService? _systemSettingService;
+    private readonly IMissionRealtimeNotifier? _notifier;
 
     public DroneTechnicalInspectionService(
         ApplicationDbContext db, 
         ICurrentUserServices current, 
-        ISystemSettingService? systemSettingService = null)
+        ISystemSettingService? systemSettingService = null,
+        IMissionRealtimeNotifier? notifier = null)
     {
         _db = db;
         _current = current;
         _systemSettingService = systemSettingService;
+        _notifier = notifier;
     }
 
     public async Task<DroneTechnicalInspection> SubmitInspectionAsync(DroneInspectionSubmitRequest request, CancellationToken ct)
@@ -112,6 +117,63 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         });
 
         await _db.SaveChangesAsync(ct);
+
+        if (_notifier != null)
+        {
+            var isPass = evalResult.Status == DroneTechnicalInspectionStatus.Passed;
+            var activeAssessments = await _db.PreMissionAssessmentDrones
+                .Include(pad => pad.Assessment)
+                .Where(pad => pad.DroneId == drone.Id &&
+                              pad.Assessment.Status != PreMissionAssessmentStatus.Completed &&
+                              pad.Assessment.Status != PreMissionAssessmentStatus.Cancelled &&
+                              pad.Assessment.Status != PreMissionAssessmentStatus.Expired)
+                .Select(pad => new { pad.AssessmentId })
+                .Distinct()
+                .ToListAsync(ct);
+
+            var droneDisplayName = !string.IsNullOrWhiteSpace(drone.Model) ? $"{drone.Model} ({drone.UavCode})" : drone.UavCode;
+
+            if (activeAssessments.Count > 0)
+            {
+                foreach (var a in activeAssessments)
+                {
+                    await _notifier.NotifyAssessmentAsync(new AssessmentRealtimeEventDto
+                    {
+                        AssessmentId = a.AssessmentId.ToString(),
+                        Type = "DroneInspectionCompleted",
+                        Status = isPass ? "PASS" : "FAIL",
+                        DroneId = drone.Id.ToString(),
+                        DroneCode = droneDisplayName,
+                        TechnicalHealth = inspection.Health.ToString(),
+                        TechnicalStatus = isPass ? "Passed" : "Failed",
+                        ActorId = _current.UserId.ToString(),
+                        ActorName = _current.Username ?? "Technician",
+                        ActorRole = "TECHNICIAN",
+                        Timestamp = DateTime.UtcNow,
+                        Message = $"Kỹ thuật viên đã hoàn tất chẩn đoán thiết bị UAV {droneDisplayName}: {(isPass ? "ĐẠT" : "KHÔNG ĐẠT")}."
+                    }, ct);
+                }
+            }
+            else
+            {
+                await _notifier.NotifyAssessmentAsync(new AssessmentRealtimeEventDto
+                {
+                    AssessmentId = string.Empty,
+                    Type = "DroneInspectionCompleted",
+                    Status = isPass ? "PASS" : "FAIL",
+                    DroneId = drone.Id.ToString(),
+                    DroneCode = droneDisplayName,
+                    TechnicalHealth = inspection.Health.ToString(),
+                    TechnicalStatus = isPass ? "Passed" : "Failed",
+                    ActorId = _current.UserId.ToString(),
+                    ActorName = _current.Username ?? "Technician",
+                    ActorRole = "TECHNICIAN",
+                    Timestamp = DateTime.UtcNow,
+                    Message = $"Kỹ thuật viên đã hoàn tất chẩn đoán thiết bị UAV {droneDisplayName}: {(isPass ? "ĐẠT" : "KHÔNG ĐẠT")}."
+                }, ct);
+            }
+        }
+
         return inspection;
     }
 

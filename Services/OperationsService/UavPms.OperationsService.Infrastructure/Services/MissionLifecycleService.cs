@@ -1506,6 +1506,37 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         Audit(mission.Id, isApproved ? "DETECTION_APPROVED" : "DETECTION_REJECTED");
         await _db.SaveChangesAsync(ct);
 
+        if (_notifier != null)
+        {
+            try
+            {
+                await _notifier.NotifyAsync(new MissionLifecycleEventDto
+                {
+                    MissionId = missionId.ToString(),
+                    Type = "DETECTION_REVIEWED",
+                    Status = isApproved ? "Approved" : "Rejected",
+                    Reason = request.ReviewNotes ?? anomaly.AnalystNotes,
+                    Timestamp = anomaly.ValidatedAt ?? DateTime.UtcNow
+                }, ct);
+
+                if (createdTaskId != null)
+                {
+                    await _notifier.NotifyAsync(new MissionLifecycleEventDto
+                    {
+                        MissionId = missionId.ToString(),
+                        Type = "MAINTENANCE_TASK_CREATED",
+                        Status = "Open",
+                        Reason = $"Phiếu bảo trì {createdTaskId} được tạo cho khuyết tật {anomaly.Id}",
+                        Timestamp = DateTime.UtcNow
+                    }, ct);
+                }
+            }
+            catch
+            {
+                // Non-blocking realtime notification
+            }
+        }
+
         return new ReviewDetectionResultDto
         {
             DetectionId = anomaly.Id.ToString(),

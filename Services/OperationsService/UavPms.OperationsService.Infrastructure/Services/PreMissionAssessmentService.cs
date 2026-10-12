@@ -9,6 +9,7 @@ using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Persistence;
+using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.Shared.Contracts.Constants;
 using UavPms.Shared.Contracts.Events;
 
@@ -18,11 +19,16 @@ public sealed class PreMissionAssessmentService
 {
     private readonly ApplicationDbContext _db;
     private readonly ICurrentUserServices _current;
+    private readonly IMissionRealtimeNotifier? _notifier;
 
-    public PreMissionAssessmentService(ApplicationDbContext db, ICurrentUserServices current)
+    public PreMissionAssessmentService(
+        ApplicationDbContext db, 
+        ICurrentUserServices current,
+        IMissionRealtimeNotifier? notifier = null)
     {
         _db = db;
         _current = current;
+        _notifier = notifier;
     }
 
     public async Task<PreMissionAssessment> CreateAsync(
@@ -425,6 +431,23 @@ public sealed class PreMissionAssessmentService
 
         Audit(assessment.Id, "ASSESSMENT_EVALUATED");
         await SaveWithConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAssessmentAsync(new AssessmentRealtimeEventDto
+            {
+                AssessmentId = assessment.Id.ToString(),
+                Type = "AssessmentStatusChanged",
+                Status = assessment.Status.ToString().ToUpperInvariant(),
+                TechnicalHealth = assessment.OverallTechnicalHealth.ToString(),
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                ActorRole = "MANAGER",
+                Timestamp = DateTime.UtcNow,
+                Message = $"Thẩm định tiền nhiệm vụ {assessment.Id} đã được đánh giá lại: {assessment.Status}"
+            }, ct);
+        }
+
         return assessment;
     }
 
@@ -651,6 +674,24 @@ public sealed class PreMissionAssessmentService
         }
 
         await SaveWithConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAssessmentAsync(new AssessmentRealtimeEventDto
+            {
+                AssessmentId = assessment.Id.ToString(),
+                Type = "AssessmentCompleted",
+                Status = "COMPLETED",
+                ConsumedMissionId = mission.Id.ToString(),
+                ConsumedMissionCode = mission.MissionCode,
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                ActorRole = "MANAGER",
+                Timestamp = DateTime.UtcNow,
+                Message = $"Bản thẩm định {assessment.Id} đã hoàn tất và tạo nhiệm vụ {mission.MissionCode ?? mission.Id.ToString()}."
+            }, ct);
+        }
+
         return mission;
     }
 
@@ -708,6 +749,24 @@ public sealed class PreMissionAssessmentService
 
         Audit(assessment.Id, "ASSESSMENT_MARKED_COMPLETED");
         await SaveWithConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAssessmentAsync(new AssessmentRealtimeEventDto
+            {
+                AssessmentId = assessment.Id.ToString(),
+                Type = "AssessmentCompleted",
+                Status = "COMPLETED",
+                ConsumedMissionId = mission.Id.ToString(),
+                ConsumedMissionCode = mission.MissionCode,
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                ActorRole = "MANAGER",
+                Timestamp = DateTime.UtcNow,
+                Message = $"Bản thẩm định {assessment.Id} đã được đánh dấu hoàn tất cho nhiệm vụ {mission.MissionCode ?? mission.Id.ToString()}."
+            }, ct);
+        }
+
         return assessment;
     }
 

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using UavPms.NotificationService.API.Services;
 using UavPms.NotificationService.Infrastructure.Persistence;
 using UavPms.Shared.Contracts.Constants;
+using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.NotificationService.API.Hubs;
 
@@ -154,6 +155,96 @@ public class NotificationHub : Hub
                 "Connection left mission group. MissionId={MissionId}, ConnectionId={ConnectionId}",
                 missionId, Context.ConnectionId);
         }
+    }
+
+    public async Task SendMissionEvent(MissionLifecycleEventDto evt)
+    {
+        if (evt == null || string.IsNullOrWhiteSpace(evt.MissionId)) return;
+        var missionGroup = MissionGroupName(evt.MissionId);
+        await Clients.Group(missionGroup).SendAsync("MissionLifecycleEvent", evt);
+        if (!string.IsNullOrWhiteSpace(evt.Type))
+        {
+            await Clients.Group(missionGroup).SendAsync(evt.Type, evt);
+        }
+    }
+
+    public async Task BroadcastMissionLifecycle(MissionLifecycleEventDto evt)
+    {
+        await SendMissionEvent(evt);
+    }
+
+    public static string AssessmentGroupName(string assessmentId) => $"assessment_{assessmentId}";
+    public const string AssessmentsListGroupName = "assessments";
+
+    public async Task JoinAssessmentGroup(string assessmentId)
+    {
+        if (string.IsNullOrWhiteSpace(assessmentId)) return;
+        var groupName = AssessmentGroupName(assessmentId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+        _connectionRegistry.AddToGroup(groupName, Context.ConnectionId);
+        _logger.LogInformation(
+            "Connection joined assessment group. AssessmentId={AssessmentId}, ConnectionId={ConnectionId}",
+            assessmentId, Context.ConnectionId);
+    }
+
+    public async Task LeaveAssessmentGroup(string assessmentId)
+    {
+        if (!string.IsNullOrWhiteSpace(assessmentId))
+        {
+            var groupName = AssessmentGroupName(assessmentId);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
+            _connectionRegistry.RemoveFromGroup(groupName, Context.ConnectionId);
+            _logger.LogInformation(
+                "Connection left assessment group. AssessmentId={AssessmentId}, ConnectionId={ConnectionId}",
+                assessmentId, Context.ConnectionId);
+        }
+    }
+
+    public async Task JoinAssessmentsListGroup()
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, AssessmentsListGroupName);
+        _connectionRegistry.AddToGroup(AssessmentsListGroupName, Context.ConnectionId);
+        _logger.LogInformation(
+            "Connection joined assessments list group. ConnectionId={ConnectionId}",
+            Context.ConnectionId);
+    }
+
+    public async Task LeaveAssessmentsListGroup()
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, AssessmentsListGroupName);
+        _connectionRegistry.RemoveFromGroup(AssessmentsListGroupName, Context.ConnectionId);
+        _logger.LogInformation(
+            "Connection left assessments list group. ConnectionId={ConnectionId}",
+            Context.ConnectionId);
+    }
+
+    public async Task SendAssessmentEvent(AssessmentRealtimeEventDto evt)
+    {
+        if (evt == null || string.IsNullOrWhiteSpace(evt.AssessmentId)) return;
+        var assessmentGroup = AssessmentGroupName(evt.AssessmentId);
+        var listGroup = AssessmentsListGroupName;
+        var managerGroup = RoleGroupName(UserRoles.Manager);
+
+        await Clients.Group(assessmentGroup).SendAsync("AssessmentRealtimeEvent", evt);
+        await Clients.Group(listGroup).SendAsync("AssessmentRealtimeEvent", evt);
+        await Clients.Group(managerGroup).SendAsync("AssessmentRealtimeEvent", evt);
+
+        if (!string.IsNullOrWhiteSpace(evt.Type))
+        {
+            await Clients.Group(assessmentGroup).SendAsync(evt.Type, evt);
+            await Clients.Group(listGroup).SendAsync(evt.Type, evt);
+            await Clients.Group(managerGroup).SendAsync(evt.Type, evt);
+        }
+    }
+
+    public async Task BroadcastAssessmentEvent(AssessmentRealtimeEventDto evt)
+    {
+        await SendAssessmentEvent(evt);
+    }
+
+    public async Task BroadcastEvent(MissionLifecycleEventDto evt)
+    {
+        await SendMissionEvent(evt);
     }
 
     private Guid? GetCurrentUserId()
