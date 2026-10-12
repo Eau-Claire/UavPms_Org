@@ -14,6 +14,7 @@ using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Application.Features.Missions;
 using UavPms.OperationsService.Application.Features.Assessments;
 using UavPms.OperationsService.Application.Features.Maintenance;
+using UavPms.OperationsService.Application.Features.Alerts;
 using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.OperationsService.Infrastructure;
@@ -154,6 +155,7 @@ public static class DependencyInjection
         }
 
         services.AddScoped<ISystemSettingService, SystemSettingService>();
+        services.AddScoped<IEmergencyAlertService, EmergencyAlertService>();
 
         return services;
     }

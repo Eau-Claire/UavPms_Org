@@ -15,10 +15,13 @@ public class EmergencyAlert : BaseEntity
     public DateTime TriggeredAt { get; set; } = DateTime.UtcNow;
     public DateTime? ReceivedAt { get; set; }
     public DateTime? ResolvedAt { get; set; }
+    public Guid? ReviewedByUserId { get; set; }
+    public string? Notes { get; set; }
 
     public virtual DetectedAnomaly? Anomaly { get; set; }
     public virtual Asset? Asset { get; set; }
     public virtual Mission? Mission { get; set; }
+    public virtual User? ReviewedByUser { get; set; }
 
     public virtual ICollection<AlertEscalation> AlertEscalations { get; set; } = new List<AlertEscalation>();
 }

@@ -652,17 +652,25 @@ public class EmergencyAlertConfiguration : IEntityTypeConfiguration<EmergencyAle
         builder.HasOne(e => e.Anomaly)
             .WithMany(a => a.EmergencyAlerts)
             .HasForeignKey(e => e.AnomalyId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(e => e.Asset)
             .WithMany(a => a.EmergencyAlerts)
             .HasForeignKey(e => e.AssetId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Mission)
             .WithMany(m => m.EmergencyAlerts)
             .HasForeignKey(e => e.MissionId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.ReviewedByUser)
+            .WithMany()
+            .HasForeignKey(e => e.ReviewedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 
