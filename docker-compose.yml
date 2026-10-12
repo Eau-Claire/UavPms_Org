@@ -111,7 +111,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.gateway
-      network: host
 
     ports:
       - "127.0.0.1:${GATEWAY_HTTP_PORT:-5194}:8080"
@@ -143,7 +142,6 @@ services:
     build:
       context: .
       dockerfile: Services/InspectionEvaluationService/UavPms.InspectionEvaluationService.API/Dockerfile
-      network: host
 
     expose:
       - "8080"
@@ -164,7 +162,6 @@ services:
     build:
       context: .
       dockerfile: Services/IdentityService/UavPms.IdentityService.API/Dockerfile
-      network: host
 
     expose:
       - "8080"
@@ -195,7 +192,6 @@ services:
     build:
       context: .
       dockerfile: Services/OperationsService/UavPms.OperationsService.API/Dockerfile
-      network: host
 
     expose:
       - "8080"
@@ -237,7 +233,6 @@ services:
     build:
       context: .
       dockerfile: Services/AIInspectionService/UavPms.AIInspectionService.API/Dockerfile
-      network: host
 
     expose:
       - "8080"
@@ -286,7 +281,6 @@ services:
     build:
       context: .
       dockerfile: Services/NotificationService/UavPms.NotificationService.API/Dockerfile
-      network: host
 
     expose:
       - "8080"
