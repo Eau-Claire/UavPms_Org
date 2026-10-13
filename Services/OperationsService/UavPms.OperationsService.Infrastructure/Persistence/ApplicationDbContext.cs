@@ -59,6 +59,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<PreMissionAssessmentDrone> PreMissionAssessmentDrones => Set<PreMissionAssessmentDrone>();
     public DbSet<DroneTechnicalInspection> DroneTechnicalInspections => Set<DroneTechnicalInspection>();
     public DbSet<DroneTechnicalMetric> DroneTechnicalMetrics => Set<DroneTechnicalMetric>();
+    public DbSet<DroneFlightController> DroneFlightControllers => Set<DroneFlightController>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<ReportMission> ReportMissions => Set<ReportMission>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();

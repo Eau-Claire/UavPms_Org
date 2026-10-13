@@ -15,6 +15,8 @@ using UavPms.OperationsService.Application.Features.Missions;
 using UavPms.OperationsService.Application.Features.Assessments;
 using UavPms.OperationsService.Application.Features.Maintenance;
 using UavPms.OperationsService.Application.Features.Alerts;
+using UavPms.OperationsService.Application.Features.FlightControllers;
+using UavPms.OperationsService.Application.Features.Drones;
 using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.OperationsService.Infrastructure;
@@ -103,6 +105,8 @@ public static class DependencyInjection
         services.AddHttpClient();
         services.AddScoped<PreMissionAssessmentService>();
         services.AddScoped<IDroneTechnicalInspectionService, DroneTechnicalInspectionService>();
+        services.AddScoped<IFlightControllerService, FlightControllerService>();
+        services.AddScoped<IUavManagementService, UavManagementService>();
         services.AddScoped<IUavRepository, UavRepository>();
         services.AddScoped<IReportRepository, ReportRepository>();
         services.AddScoped<IReportExportService, ReportExportService>();
