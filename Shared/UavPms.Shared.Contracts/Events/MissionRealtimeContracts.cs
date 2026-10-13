@@ -65,6 +65,8 @@ public class AssessmentRealtimeEventDto
     public string? TechnicalStatus { get; set; }
     public string? ConsumedMissionId { get; set; }
     public string? ConsumedMissionCode { get; set; }
+    public string? CompletedMissionId { get => ConsumedMissionId; set => ConsumedMissionId = value; }
+    public string? CompletedMissionCode { get => ConsumedMissionCode; set => ConsumedMissionCode = value; }
     public double? WindSpeed { get; set; }
     public double? WindGust { get; set; }
     public bool? IsMeteoSafe { get; set; }

@@ -371,20 +371,62 @@ public sealed class PreMissionAssessmentService
                 .OrderByDescending(x => x.CompletedAt)
                 .FirstOrDefault();
 
-            var isTechEligible = latestInspection != null &&
-                                 (latestInspection.Health is TechnicalHealth.Healthy or TechnicalHealth.Warning);
+            var currentHealth = latestInspection?.Health ?? drone.TechnicalHealth;
+            var isTechEligible = currentHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning;
 
-            var isEligible = isOpAvailable && isTechEligible;
+            // Suitability & GIS scope estimation
+            var assetCount = assessment.Assets.Count > 0 ? assessment.Assets.Count : 10;
+            var corridorKm = Math.Round(assetCount * 0.35, 2);
+            var endurance = drone.FlightEnduranceMinutes > 0 ? drone.FlightEnduranceMinutes : 30.0;
+            var effectiveFlightMinutes = endurance * 0.8;
+            var missionMinutes = (corridorKm / 36.0 * 60.0) + (assetCount * 3.0);
+            var flightsNeeded = (int)Math.Max(1, Math.Ceiling(missionMinutes / effectiveFlightMinutes));
+            var coverageDistanceKm = Math.Round((effectiveFlightMinutes / 60.0) * 36.0, 2);
+
+            UavScopeSuitability suitability;
+            string? suitabilityReason;
+
+            if (!isTechEligible || currentHealth == TechnicalHealth.Critical)
+            {
+                suitability = UavScopeSuitability.Unsuitable;
+                suitabilityReason = $"Sức khỏe kỹ thuật {currentHealth} không đảm bảo an toàn bay.";
+            }
+            else if (!isOpAvailable)
+            {
+                suitability = UavScopeSuitability.Unsuitable;
+                suitabilityReason = $"Thiết bị ở trạng thái {drone.OperationalStatus}, không sẵn sàng.";
+            }
+            else if (flightsNeeded == 1 && corridorKm <= drone.OperationalRangeKm)
+            {
+                suitability = UavScopeSuitability.Suitable;
+                suitabilityReason = "Khả năng bay đáp ứng trọn vẹn toàn bộ phạm vi đo kiểm trong 1 chuyến bay.";
+            }
+            else if (flightsNeeded <= 4)
+            {
+                suitability = UavScopeSuitability.SuitableWithSplit;
+                suitabilityReason = $"Phạm vi đo kiểm vượt quá 1 lần bay. Đề xuất phân tách thành {flightsNeeded} đợt bay.";
+            }
+            else
+            {
+                suitability = UavScopeSuitability.Unsuitable;
+                suitabilityReason = $"Phạm vi đo kiểm ({corridorKm} km) vượt quá năng lực vận hành tối đa.";
+            }
+
+            var isEligible = isOpAvailable && isTechEligible && suitability != UavScopeSuitability.Unsuitable;
 
             string? reasonCode = null;
             if (drone.OperationalStatus != DroneOperationalStatus.Available)
                 reasonCode = "DRONE_NOT_AVAILABLE";
             else if (hasConflict)
                 reasonCode = "SCHEDULE_CONFLICT";
+            else if (currentHealth == TechnicalHealth.Critical)
+                reasonCode = "TECHNICAL_HEALTH_CRITICAL";
             else if (latestInspection == null)
                 reasonCode = "NO_VALID_TECHNICAL_INSPECTION";
             else if (!isTechEligible)
                 reasonCode = "TECHNICAL_HEALTH_DEGRADED";
+            else if (suitability == UavScopeSuitability.Unsuitable)
+                reasonCode = "SCOPE_EXCEEDS_CAPABILITY";
 
             var droneCandidate = new PreMissionAssessmentDrone
             {
@@ -399,7 +441,11 @@ public sealed class PreMissionAssessmentService
                 TechnicalEligibilityStatus = isTechEligible
                     ? ResourceEligibilityStatus.Eligible
                     : ResourceEligibilityStatus.Ineligible,
-                TechnicalHealth = latestInspection?.Health ?? drone.TechnicalHealth,
+                Suitability = suitability,
+                EstimatedFlightsNeeded = flightsNeeded,
+                CoverageDistanceKm = coverageDistanceKm,
+                SuitabilityReason = suitabilityReason,
+                TechnicalHealth = currentHealth,
                 TechnicalInspectionId = latestInspection?.Id,
                 ReasonCode = reasonCode,
                 SnapshotAt = DateTime.UtcNow
@@ -555,6 +601,16 @@ public sealed class PreMissionAssessmentService
         var primaryDrone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == primaryDroneId, ct)
             ?? throw new NotFoundException("Drone", primaryDroneId);
 
+        if (primaryDrone.OperationalStatus != DroneOperationalStatus.Available)
+        {
+            throw new BusinessRuleException("DRONE_NOT_AVAILABLE", $"Drone {primaryDrone.UavCode} hiện không ở trạng thái sẵn sàng (trạng thái: {primaryDrone.OperationalStatus}).");
+        }
+
+        if (primaryDrone.TechnicalHealth == TechnicalHealth.Critical)
+        {
+            throw new BusinessRuleException("DRONE_CRITICAL_HEALTH", $"Drone {primaryDrone.UavCode} có sức khỏe kỹ thuật báo động CRITICAL, không đủ điều kiện thực hiện nhiệm vụ bay.");
+        }
+
         var primaryInspectorId = request.Personnel.First().UserId;
 
         // Gap #11: Mission starts at PendingAcceptance
@@ -634,7 +690,7 @@ public sealed class PreMissionAssessmentService
             });
         }
 
-        // Consume assessment
+        // Complete assessment and link mission
         assessment.Status = PreMissionAssessmentStatus.Completed;
         assessment.ConsumedByMissionId = mission.Id;
         assessment.Version++;

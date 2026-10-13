@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Moq;
 using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Application.Common.Exceptions;
+using UavPms.OperationsService.Application.Features.Assessments;
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
@@ -452,7 +453,15 @@ public class PreMissionAssessmentServiceTests
         result.Should().NotBeNull();
         result.Status.Should().Be(PreMissionAssessmentStatus.Completed);
         result.ConsumedByMissionId.Should().Be(missionId);
+        result.CompletedMissionId.Should().Be(missionId);
+        result.CompletedByMissionId.Should().Be(missionId);
         result.Version.Should().Be(2);
+
+        var dto = result.ToDto();
+        dto.Status.Should().Be("COMPLETED");
+        dto.ConsumedByMissionId.Should().Be(missionId);
+        dto.CompletedMissionId.Should().Be(missionId);
+        dto.CompletedByMissionId.Should().Be(missionId);
     }
 
     [Fact]

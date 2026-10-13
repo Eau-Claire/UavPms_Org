@@ -44,6 +44,42 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 
         await EnsureCallerHasDroneAccessAsync(drone.Id, ct);
 
+        // BR-05: Hardware UID verification and assessment drone match
+        if (!string.IsNullOrWhiteSpace(request.FlightControllerUid))
+        {
+            var cleanUid = request.FlightControllerUid.Trim().ToUpperInvariant();
+            var activeBinding = await _db.DroneFlightControllers
+                .FirstOrDefaultAsync(x => x.FlightControllerUid == cleanUid && x.IsActive && !x.IsDeleted, ct);
+
+            if (activeBinding == null)
+            {
+                throw new BusinessRuleException("FC_NOT_REGISTERED", $"Flight Controller {cleanUid} chưa được đăng ký với bất kỳ UAV nào.");
+            }
+
+            if (activeBinding.DroneId != drone.Id)
+            {
+                var pairedDrone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == activeBinding.DroneId, ct);
+                var pairedCode = pairedDrone?.UavCode ?? activeBinding.DroneId.ToString();
+                throw new BusinessRuleException("FC_DRONE_MISMATCH", $"Connected Flight Controller belongs to {pairedCode}, but this inspection requires {drone.UavCode}.");
+            }
+
+            activeBinding.LastSeenAt = DateTime.UtcNow;
+        }
+
+        if (request.PreMissionAssessmentId.HasValue && request.PreMissionAssessmentId.Value != Guid.Empty)
+        {
+            var assessment = await _db.PreMissionAssessments
+                .Include(x => x.DroneCandidates)
+                .SingleOrDefaultAsync(x => x.Id == request.PreMissionAssessmentId.Value && !x.IsDeleted, ct)
+                ?? throw new NotFoundException("PreMissionAssessment", request.PreMissionAssessmentId.Value);
+
+            var isCandidate = assessment.DroneCandidates.Any(x => x.DroneId == drone.Id);
+            if (!isCandidate)
+            {
+                throw new BusinessRuleException("ASSESSMENT_DRONE_MISMATCH", $"Drone {drone.UavCode} không thuộc danh sách UAV được chỉ định trong thẩm định tiền bay {assessment.Id}.");
+            }
+        }
+
         var droneSettings = _systemSettingService != null
             ? await _systemSettingService.GetDroneThresholdSettingsAsync(ct)
             : new DroneThresholdSettingsDto();

@@ -48,7 +48,9 @@ public record DroneInspectionSubmitRequest(
     Guid DroneId,
     string? Notes,
     List<DroneMetricSubmitDto>? Metrics = null,
-    string? PolicyVersion = "v2.0"
+    string? PolicyVersion = "v2.0",
+    string? FlightControllerUid = null,
+    Guid? PreMissionAssessmentId = null
 );
 
 public record PostponeAssignmentRequest(
@@ -96,7 +98,11 @@ public record PreMissionAssessmentDroneDto(
     string TechnicalHealth,
     Guid? TechnicalInspectionId,
     string? ReasonCode,
-    double BatteryLevel
+    double BatteryLevel,
+    string? Suitability = null,
+    int? EstimatedFlightsNeeded = null,
+    double? CoverageDistanceKm = null,
+    string? SuitabilityReason = null
 );
 
 public record PreMissionAssessmentDto(
@@ -126,7 +132,11 @@ public record PreMissionAssessmentDto(
     AssessmentCheckResultDto Personnel,
     DateTime CreatedAt,
     DateTime? UpdatedAt
-);
+)
+{
+    public Guid? CompletedMissionId => ConsumedByMissionId;
+    public Guid? CompletedByMissionId => ConsumedByMissionId;
+}
 
 public record DroneTechnicalMetricDto(
     Guid Id,
