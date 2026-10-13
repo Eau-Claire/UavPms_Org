@@ -802,4 +802,48 @@ public class PreMissionAssessmentServiceTests
                 e.Status == "NOTREADY"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task CancelAsync_ShouldSetCancelledStatus_AndBroadcastEvent()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-CANCEL" };
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+
+        var assessment = new PreMissionAssessment
+        {
+            Id = Guid.NewGuid(),
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Region = region,
+            PlannedStart = DateTime.UtcNow.AddDays(1),
+            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(3),
+            Status = PreMissionAssessmentStatus.Ready
+        };
+        db.PreMissionAssessments.Add(assessment);
+        await db.SaveChangesAsync();
+
+        var notifierMock = new Mock<UavPms.OperationsService.Application.Common.Interfaces.IMissionRealtimeNotifier>();
+        var service = new PreMissionAssessmentService(db, user.Object, notifierMock.Object);
+
+        var result = await service.CancelAsync(assessment.Id, "Bad weather forecast", CancellationToken.None);
+
+        result.Status.Should().Be(PreMissionAssessmentStatus.Cancelled);
+        var inDb = await db.PreMissionAssessments.FindAsync(assessment.Id);
+        inDb.Should().NotBeNull();
+        inDb!.Status.Should().Be(PreMissionAssessmentStatus.Cancelled);
+
+        notifierMock.Verify(n => n.NotifyAssessmentAsync(
+            It.Is<UavPms.Shared.Contracts.Events.AssessmentRealtimeEventDto>(e =>
+                e.AssessmentId == assessment.Id.ToString() &&
+                e.Type == "AssessmentCancelled" &&
+                e.Status == "CANCELLED"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }
+

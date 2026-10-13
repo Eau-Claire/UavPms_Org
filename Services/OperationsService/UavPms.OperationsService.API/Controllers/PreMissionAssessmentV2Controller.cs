@@ -87,4 +87,11 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
         var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
         return Ok(assessment.ToDto());
     }
+
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelAssessmentRequest? request, CancellationToken ct)
+    {
+        var assessment = await _service.CancelAsync(id, request?.Reason, ct);
+        return Ok(assessment.ToDto());
+    }
 }

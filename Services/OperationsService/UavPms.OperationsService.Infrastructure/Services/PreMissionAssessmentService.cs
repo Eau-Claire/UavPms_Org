@@ -826,6 +826,50 @@ public sealed class PreMissionAssessmentService
         return assessment;
     }
 
+    public async Task<PreMissionAssessment> CancelAsync(Guid id, string? reason, CancellationToken ct)
+    {
+        await RequireManager(ct);
+
+        var assessment = await _db.PreMissionAssessments
+            .Include(x => x.Assets)
+            .Include(x => x.PersonnelCandidates)
+            .Include(x => x.DroneCandidates)
+            .Include(x => x.Region)
+            .SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new NotFoundException("PreMissionAssessment", id);
+
+        await EnsureManagerHasAssessmentAccessAsync(assessment, ct);
+
+        if (assessment.Status == PreMissionAssessmentStatus.Completed)
+            throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED", "Bản đánh giá đã hoàn thành tạo nhiệm vụ bay, không thể hủy.");
+
+        if (assessment.Status == PreMissionAssessmentStatus.Cancelled)
+            return assessment;
+
+        assessment.Status = PreMissionAssessmentStatus.Cancelled;
+        assessment.Version++;
+
+        Audit(assessment.Id, "ASSESSMENT_CANCELLED");
+        await SaveWithConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAssessmentAsync(new AssessmentRealtimeEventDto
+            {
+                AssessmentId = assessment.Id.ToString(),
+                Type = "AssessmentCancelled",
+                Status = "CANCELLED",
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                ActorRole = "MANAGER",
+                Timestamp = DateTime.UtcNow,
+                Message = $"Bản thẩm định {assessment.Id} đã bị hủy bởi Quản lý. Lý do: {reason ?? "Không có"}"
+            }, ct);
+        }
+
+        return assessment;
+    }
+
     private async Task RequireManager(CancellationToken ct)
     {
         if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)

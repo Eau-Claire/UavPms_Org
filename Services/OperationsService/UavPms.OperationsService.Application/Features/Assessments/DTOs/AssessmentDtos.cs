@@ -61,6 +61,10 @@ public record MarkAssessmentCompletedRequest(
     Guid? MissionId = null
 );
 
+public record CancelAssessmentRequest(
+    string? Reason = null
+);
+
 public record AssessmentCheckResultDto(
     string Status,
     string? Reason,

@@ -216,4 +216,171 @@ public class AssignmentAcceptPostponeTests
         var bookings = await db.ResourceBookings.Where(b => b.MissionId == mission.Id).ToListAsync();
         bookings.Should().OnlyContain(b => b.Status == ResourceBookingStatus.Cancelled);
     }
+
+    [Fact]
+    public async Task ReassignAsync_WhenReplacementHasConflictingBooking_ThrowsConflictException()
+    {
+        var managerId = Guid.NewGuid();
+        var originalInspectorId = Guid.NewGuid();
+        var replacementInspectorId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        db.Users.Add(new User { Id = originalInspectorId, Status = "Active" });
+        db.Users.Add(new User { Id = replacementInspectorId, Status = "Active" });
+
+        var region = new Region { Id = Guid.NewGuid() };
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+
+        var start = DateTime.UtcNow.AddDays(1);
+        var end = start.AddHours(4);
+
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            Title = "Mission Reassign Conflict Test",
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Status = MissionStatus.Assigned,
+            PlannedStart = start,
+            PlannedEnd = end
+        };
+        var assignment = new MissionAssignment
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            UserId = originalInspectorId,
+            AssignmentRole = "INSPECTOR",
+            Status = MissionAssignmentStatus.Active,
+            ResponseStatus = MissionAssignmentResponse.Accepted,
+            IsRequired = true
+        };
+        mission.Assignments.Add(assignment);
+        db.Missions.Add(mission);
+
+        // Add conflicting mission and booking for replacement inspector
+        var conflictingMission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MSN-CONFLICT",
+            Title = "Conflicting Mission",
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Status = MissionStatus.Assigned,
+            PlannedStart = start.AddHours(-1),
+            PlannedEnd = start.AddHours(2)
+        };
+        db.Missions.Add(conflictingMission);
+
+        db.ResourceBookings.Add(new ResourceBooking
+        {
+            MissionId = conflictingMission.Id,
+            UserId = replacementInspectorId,
+            StartAt = start.AddHours(-1),
+            EndAt = start.AddHours(2),
+            Status = ResourceBookingStatus.Active
+        });
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, user.Object);
+
+        var req = new UavPms.OperationsService.Application.Features.Missions.ReassignAssignmentRequest(
+            assignment.Id,
+            replacementInspectorId,
+            "INSPECTOR",
+            "Emergency reassignment");
+
+        var act = async () => await service.ReassignAsync(mission.Id, req, CancellationToken.None);
+
+        await act.Should().ThrowAsync<BusinessRuleException>();
+    }
+
+    [Fact]
+    public async Task ReassignAsync_ValidReplacement_UpdatesAssignmentAndResourceBookings()
+    {
+        var managerId = Guid.NewGuid();
+        var originalInspectorId = Guid.NewGuid();
+        var replacementInspectorId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        db.Users.Add(new User { Id = originalInspectorId, Status = "Active" });
+        db.Users.Add(new User { Id = replacementInspectorId, Status = "Active" });
+
+        var region = new Region { Id = Guid.NewGuid() };
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+
+        var start = DateTime.UtcNow.AddDays(1);
+        var end = start.AddHours(4);
+
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            Title = "Mission Reassign Success Test",
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Status = MissionStatus.Assigned,
+            PlannedStart = start,
+            PlannedEnd = end,
+            AssignedToUserId = originalInspectorId,
+            InspectorId = originalInspectorId
+        };
+        var assignment = new MissionAssignment
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            UserId = originalInspectorId,
+            AssignmentRole = "INSPECTOR",
+            Status = MissionAssignmentStatus.Active,
+            ResponseStatus = MissionAssignmentResponse.Accepted,
+            IsRequired = true
+        };
+        mission.Assignments.Add(assignment);
+        db.Missions.Add(mission);
+
+        // Booking for original inspector
+        db.ResourceBookings.Add(new ResourceBooking
+        {
+            MissionId = mission.Id,
+            UserId = originalInspectorId,
+            StartAt = start,
+            EndAt = end,
+            Status = ResourceBookingStatus.Active
+        });
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, user.Object);
+
+        var req = new UavPms.OperationsService.Application.Features.Missions.ReassignAssignmentRequest(
+            assignment.Id,
+            replacementInspectorId,
+            "INSPECTOR",
+            "Inspector reported sickness");
+
+        var reassigned = await service.ReassignAsync(mission.Id, req, CancellationToken.None);
+
+        reassigned.UserId.Should().Be(replacementInspectorId);
+        reassigned.ResponseStatus.Should().Be(MissionAssignmentResponse.Pending);
+
+        var updatedMission = await db.Missions.FindAsync(mission.Id);
+        updatedMission!.Status.Should().Be(MissionStatus.PendingAcceptance);
+        updatedMission.AssignedToUserId.Should().Be(replacementInspectorId);
+        updatedMission.InspectorId.Should().Be(replacementInspectorId);
+
+        // Check old booking was released
+        var oldBooking = await db.ResourceBookings.FirstOrDefaultAsync(b => b.MissionId == mission.Id && b.UserId == originalInspectorId);
+        oldBooking.Should().NotBeNull();
+        oldBooking!.Status.Should().Be(ResourceBookingStatus.Released);
+
+        // Check new active booking was created for replacement inspector
+        var activeBooking = await db.ResourceBookings.FirstOrDefaultAsync(b => b.MissionId == mission.Id && b.UserId == replacementInspectorId);
+        activeBooking.Should().NotBeNull();
+        activeBooking!.Status.Should().Be(ResourceBookingStatus.Active);
+    }
 }
+
+

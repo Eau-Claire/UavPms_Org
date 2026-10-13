@@ -1038,6 +1038,153 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         return mission;
     }
 
+    public Task<MissionAssignment> ReassignAsync(Guid missionId, ReassignAssignmentRequest request, CancellationToken ct = default)
+        => ReassignAsync(missionId, request.AssignmentId, request.NewUserId, request.Role, request.Reason, ct);
+
+    public async Task<MissionAssignment> ReassignAsync(Guid missionId, Guid? assignmentId, Guid newUserId, string? role, string? reason, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await ManagedMission(missionId, ct, true);
+        RequirePreExecution(mission);
+
+        var newUser = await _db.Users.SingleOrDefaultAsync(x => x.Id == newUserId, ct)
+            ?? throw new NotFoundException("User", newUserId);
+        if (!IsActive(newUser.Status)) throw new BusinessRuleException("ASSIGNEE_INACTIVE");
+
+        // BR-07: Personnel availability and schedule conflict revalidation
+        var plannedStart = mission.PlannedStart ?? mission.ScheduledStartAt;
+        var plannedEnd = mission.PlannedEnd ?? (plannedStart.HasValue ? plannedStart.Value.AddHours(2) : (DateTime?)null);
+        if (plannedStart.HasValue && plannedEnd.HasValue)
+        {
+            var conflictingUserBooking = await _db.ResourceBookings
+                .Include(b => b.Mission)
+                .Where(b => b.UserId == newUserId &&
+                            b.MissionId != missionId &&
+                            b.Status == ResourceBookingStatus.Active &&
+                            b.StartAt < plannedEnd.Value &&
+                            b.EndAt > plannedStart.Value)
+                .FirstOrDefaultAsync(ct);
+            if (conflictingUserBooking != null)
+            {
+                throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT",
+                    $"Personnel {newUserId} is already booked in mission '{conflictingUserBooking.Mission?.MissionCode ?? conflictingUserBooking.MissionId.ToString()}' ({conflictingUserBooking.StartAt:yyyy-MM-dd HH:mm} - {conflictingUserBooking.EndAt:yyyy-MM-dd HH:mm}).");
+            }
+        }
+
+        // Find existing assignment to replace
+        MissionAssignment? targetAssignment = null;
+        if (assignmentId.HasValue && assignmentId.Value != Guid.Empty)
+        {
+            targetAssignment = mission.Assignments.FirstOrDefault(x => x.Id == assignmentId.Value && x.Status == MissionAssignmentStatus.Active);
+        }
+
+        if (targetAssignment == null && !string.IsNullOrWhiteSpace(role))
+        {
+            targetAssignment = mission.Assignments.FirstOrDefault(x =>
+                string.Equals(x.AssignmentRole, role, StringComparison.OrdinalIgnoreCase) &&
+                x.Status == MissionAssignmentStatus.Active);
+        }
+
+        var oldUserId = targetAssignment?.UserId;
+
+        if (targetAssignment != null)
+        {
+            // Release existing booking for old user if present
+            if (oldUserId.HasValue)
+            {
+                var oldBooking = await _db.ResourceBookings
+                    .FirstOrDefaultAsync(b => b.MissionId == missionId && b.UserId == oldUserId.Value && b.Status == ResourceBookingStatus.Active, ct);
+                if (oldBooking != null)
+                {
+                    oldBooking.Status = ResourceBookingStatus.Released;
+                }
+            }
+
+            targetAssignment.UserId = newUserId;
+            targetAssignment.ResponseStatus = MissionAssignmentResponse.Pending;
+            targetAssignment.ResponseReason = reason;
+            targetAssignment.RespondedAt = null;
+            targetAssignment.AssignedByUserId = _current.UserId;
+            if (!string.IsNullOrWhiteSpace(role))
+            {
+                targetAssignment.AssignmentRole = role;
+            }
+            targetAssignment.Version++;
+        }
+        else
+        {
+            targetAssignment = new MissionAssignment
+            {
+                MissionId = mission.Id,
+                UserId = newUserId,
+                AssignmentRole = !string.IsNullOrWhiteSpace(role) ? role : "INSPECTOR",
+                AssignedByUserId = _current.UserId,
+                IsRequired = true,
+                ResponseStatus = MissionAssignmentResponse.Pending
+            };
+            mission.Assignments.Add(targetAssignment);
+        }
+
+        // Maintain primary inspector link if applicable
+        var effectiveRole = targetAssignment.AssignmentRole;
+        if (string.Equals(effectiveRole, "INSPECTOR", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(effectiveRole, "PILOT", StringComparison.OrdinalIgnoreCase) ||
+            (oldUserId.HasValue && mission.InspectorId == oldUserId.Value))
+        {
+            mission.InspectorId = newUserId;
+            mission.AssignedToUserId = newUserId;
+        }
+
+        // Add/update ResourceBooking for new user
+        if (plannedStart.HasValue && plannedEnd.HasValue)
+        {
+            var existingNewUserBooking = await _db.ResourceBookings
+                .FirstOrDefaultAsync(b => b.MissionId == missionId && b.UserId == newUserId && b.Status == ResourceBookingStatus.Active, ct);
+            if (existingNewUserBooking == null)
+            {
+                _db.ResourceBookings.Add(new ResourceBooking
+                {
+                    MissionId = missionId,
+                    UserId = newUserId,
+                    StartAt = plannedStart.Value,
+                    EndAt = plannedEnd.Value,
+                    Status = ResourceBookingStatus.Active
+                });
+            }
+        }
+
+        // Revert status to PendingAcceptance if it was ready/confirmed
+        if (mission.Status == MissionStatus.Confirmed || mission.Status == MissionStatus.Ready)
+        {
+            mission.Status = MissionStatus.PendingAcceptance;
+        }
+        mission.Version++;
+        mission.UpdatedAt = DateTime.UtcNow;
+
+        Audit(mission.Id, "ASSIGNMENT_REASSIGNED");
+        await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAsync(new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                MissionCode = mission.MissionCode,
+                MissionTitle = mission.Title,
+                Type = "REASSIGNED",
+                Status = mission.Status.ToString(),
+                TargetUserId = targetAssignment.UserId.ToString(),
+                ActorRole = "MANAGER",
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                Reason = reason,
+                Timestamp = DateTime.UtcNow
+            }, ct);
+        }
+
+        return targetAssignment;
+    }
+
     public async Task<Mission> PostponeMissionAsync(Guid missionId, string reason, CancellationToken ct)
     {
         await RequireActiveCaller(ct);

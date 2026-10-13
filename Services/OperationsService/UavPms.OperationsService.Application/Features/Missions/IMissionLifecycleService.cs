@@ -39,6 +39,8 @@ public interface IMissionLifecycleService
     Task<Mission> PostponeMissionAsync(Guid missionId, string reason, CancellationToken ct);
     Task<Mission> CancelMissionAsync(Guid missionId, string? reason, CancellationToken ct);
     Task RemindMissionAsync(Guid missionId, string? reason, CancellationToken ct);
+    Task<MissionAssignment> ReassignAsync(Guid missionId, Guid? assignmentId, Guid newUserId, string? role, string? reason, CancellationToken ct);
+    Task<MissionAssignment> ReassignAsync(Guid missionId, ReassignAssignmentRequest request, CancellationToken ct = default);
     Task<MissionCommunicationLogDto> AddCommunicationAsync(Guid missionId, string message, CancellationToken ct);
     Task<IReadOnlyList<MissionCommunicationLogDto>> GetCommunicationsAsync(Guid missionId, CancellationToken ct);
 
@@ -97,3 +99,9 @@ public record CheckResourceConflictsResponse(
     bool HasConflict,
     IReadOnlyList<ResourceConflictItemDto> Conflicts,
     IReadOnlyList<ResourceAvailabilityWarningDto> Warnings);
+
+public record ReassignAssignmentRequest(
+    Guid? AssignmentId,
+    Guid NewUserId,
+    string? Role = null,
+    string? Reason = null);
