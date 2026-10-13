@@ -56,5 +56,44 @@ public interface IMissionLifecycleService
     Task<IReadOnlyList<MissionFlightLog>> GetFlightLogsAsync(Guid missionId, CancellationToken ct);
     Task<IncidentReport> SubmitIncidentReportAsync(Guid missionId, UavPms.OperationsService.Application.Features.Missions.DTOs.SubmitIncidentReportRequest request, CancellationToken ct);
     Task<IReadOnlyList<IncidentReport>> GetIncidentReportsAsync(Guid missionId, CancellationToken ct);
+
+    // MF02 Mission Priority & Scheduling Rules
+    Task<Mission> UpdatePriorityAsync(Guid missionId, UpdateMissionPriorityRequest request, CancellationToken ct);
+    Task<CheckResourceConflictsResponse> CheckResourceConflictsAsync(CheckResourceConflictsRequest request, CancellationToken ct);
 }
 
+public record UpdateMissionPriorityRequest(
+    MissionPriority Priority,
+    InspectionObjective? Objective = null,
+    IReadOnlyList<string>? PriorityDefects = null,
+    string? EmergencyReason = null);
+
+public record CheckResourceConflictsRequest(
+    DateTime StartAt,
+    DateTime EndAt,
+    IReadOnlyList<Guid>? UserIds = null,
+    IReadOnlyList<Guid>? DroneIds = null,
+    Guid? ExcludeMissionId = null);
+
+public record ResourceConflictItemDto(
+    string ResourceType,
+    Guid ResourceId,
+    string? ResourceName,
+    Guid ConflictingMissionId,
+    string ConflictingMissionCode,
+    string ConflictingMissionTitle,
+    DateTime ConflictStart,
+    DateTime ConflictEnd,
+    MissionPriority ConflictingMissionPriority);
+
+public record ResourceAvailabilityWarningDto(
+    Guid ResourceId,
+    string ResourceType,
+    string ResourceName,
+    string WarningType,
+    string Message);
+
+public record CheckResourceConflictsResponse(
+    bool HasConflict,
+    IReadOnlyList<ResourceConflictItemDto> Conflicts,
+    IReadOnlyList<ResourceAvailabilityWarningDto> Warnings);

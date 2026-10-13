@@ -360,4 +360,381 @@ public class MissionPriorityAndSchedulingTests
         orderedCodes[3].Should().Be("MIS-010"); // Normal, plannedStart = 1d
         orderedCodes[4].Should().Be("MIS-008"); // Normal, plannedStart = 2d
     }
+
+    [Fact]
+    public async Task ConfirmAssetsAsync_ShouldRequireReassessment_WhenScopeDeviatesFromMF01()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
+        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
+        var tower = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
+        var asset1 = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
+        var asset2 = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
+        var newUnassessedAsset = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+        db.Assets.AddRange(asset1, asset2, newUnassessedAsset);
+
+        var assessment = new PreMissionAssessment
+        {
+            Id = Guid.NewGuid(),
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddHours(1),
+            PlannedEnd = DateTime.UtcNow.AddHours(3),
+            Status = PreMissionAssessmentStatus.Completed
+        };
+        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset1.Id, Sequence = 1 });
+        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset2.Id, Sequence = 2 });
+        db.PreMissionAssessments.Add(assessment);
+
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-SCOPE-001",
+            Title = "Mission Scope Test",
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Status = MissionStatus.Draft,
+            PreMissionAssessmentId = assessment.Id
+        };
+        db.Missions.Add(mission);
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, user.Object);
+
+        // Attempt to confirm scope with an asset not present in assessment
+        var act = async () => await service.ConfirmAssetsAsync(
+            mission.Id,
+            "POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))",
+            new[] { asset1.Id, newUnassessedAsset.Id },
+            CancellationToken.None);
+
+        var ex = await act.Should().ThrowAsync<BusinessRuleException>();
+        ex.Which.Message.Should().Contain("SCOPE_REASSESSMENT_REQUIRED");
+    }
+
+    [Fact]
+    public async Task ConfirmAssetsAsync_ShouldSucceed_WhenAssetsMatchMF01Assessment()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
+        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
+        var tower = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
+        var asset1 = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
+        var asset2 = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+        db.Assets.AddRange(asset1, asset2);
+
+        var assessment = new PreMissionAssessment
+        {
+            Id = Guid.NewGuid(),
+            ManagerId = managerId,
+            RegionId = region.Id,
+            PlannedStart = DateTime.UtcNow.AddHours(1),
+            PlannedEnd = DateTime.UtcNow.AddHours(3),
+            Status = PreMissionAssessmentStatus.Completed
+        };
+        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset1.Id, Sequence = 1 });
+        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset2.Id, Sequence = 2 });
+        db.PreMissionAssessments.Add(assessment);
+
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-SCOPE-002",
+            Title = "Mission Scope Match Test",
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Status = MissionStatus.Draft,
+            PreMissionAssessmentId = assessment.Id
+        };
+        db.Missions.Add(mission);
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, user.Object);
+
+        await service.ConfirmAssetsAsync(
+            mission.Id,
+            "POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))",
+            new[] { asset1.Id, asset2.Id },
+            CancellationToken.None);
+
+        var targets = await db.MissionTargets.Where(t => t.MissionId == mission.Id).ToListAsync();
+        targets.Count.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task UpdatePriority_ShouldRequireEmergencyReason_WhenEmergency()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-PRIORITY-001",
+            Title = "Priority Test Mission",
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Status = MissionStatus.Draft,
+            Priority = MissionPriority.Normal
+        };
+        db.Missions.Add(mission);
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, user.Object);
+
+        // Emergency without reason
+        var actMissing = async () => await service.UpdatePriorityAsync(
+            mission.Id,
+            new UpdateMissionPriorityRequest(MissionPriority.Emergency, EmergencyReason: ""),
+            CancellationToken.None);
+        await actMissing.Should().ThrowAsync<BusinessRuleException>()
+            .WithMessage("*EMERGENCY_REASON_REQUIRED*");
+
+        // Emergency with reason < 10 characters
+        var actTooShort = async () => await service.UpdatePriorityAsync(
+            mission.Id,
+            new UpdateMissionPriorityRequest(MissionPriority.Emergency, EmergencyReason: "Short"),
+            CancellationToken.None);
+        await actTooShort.Should().ThrowAsync<BusinessRuleException>()
+            .WithMessage("*EMERGENCY_REASON_REQUIRED*");
+    }
+
+    [Fact]
+    public async Task UpdatePriority_ShouldUpdateAndRecordAuditLog()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-PRIORITY-002",
+            Title = "Priority Audit Test Mission",
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Status = MissionStatus.Draft,
+            Priority = MissionPriority.Normal,
+            Objective = InspectionObjective.PeriodicInspection
+        };
+        db.Missions.Add(mission);
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, user.Object);
+
+        var updated = await service.UpdatePriorityAsync(
+            mission.Id,
+            new UpdateMissionPriorityRequest(
+                Priority: MissionPriority.Emergency,
+                Objective: InspectionObjective.IncidentFollowUp,
+                PriorityDefects: new[] { PriorityDefectCategories.Insulator, PriorityDefectCategories.Conductor },
+                EmergencyReason: "Severe line damage following storm report."
+            ),
+            CancellationToken.None);
+
+        updated.Priority.Should().Be(MissionPriority.Emergency);
+        updated.Objective.Should().Be(InspectionObjective.IncidentFollowUp);
+        updated.EmergencyReason.Should().Be("Severe line damage following storm report.");
+        updated.PriorityDefectsJson.Should().Contain(PriorityDefectCategories.Insulator);
+
+        var audit = await db.AuditLogs.FirstOrDefaultAsync(a => a.RecordId == mission.Id && a.ActionType == "MISSION_PRIORITY_UPDATED");
+        audit.Should().NotBeNull();
+        audit!.OldValues.Should().Contain("Normal");
+        audit.NewValues.Should().Contain("Emergency");
+        audit.NewValues.Should().Contain("Severe line damage following storm report.");
+    }
+
+    [Fact]
+    public async Task CheckResourceConflicts_ShouldDetectConflictsAndWarnings_WithoutPreemption()
+    {
+        var managerId = Guid.NewGuid();
+        var inspectorId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        var drone1 = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
+        var drone2 = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-02", OperationalStatus = DroneOperationalStatus.Maintenance, TechnicalHealth = TechnicalHealth.Critical };
+        db.Users.Add(new User { Id = managerId, FullName = "Manager User", Status = "Active" });
+        var inspector = new User { Id = inspectorId, FullName = "Pilot John", Status = "Active" };
+        db.Users.Add(inspector);
+        db.Uavs.AddRange(drone1, drone2);
+
+        var existingMission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-CONFLICT-001",
+            Title = "Ongoing Mission",
+            Priority = MissionPriority.Normal
+        };
+        db.Missions.Add(existingMission);
+
+        var start = DateTime.UtcNow.AddHours(2);
+        var end = DateTime.UtcNow.AddHours(5);
+
+        db.ResourceBookings.Add(new ResourceBooking
+        {
+            MissionId = existingMission.Id,
+            UserId = inspectorId,
+            DroneId = drone1.Id,
+            StartAt = start,
+            EndAt = end,
+            Status = ResourceBookingStatus.Active
+        });
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, user.Object);
+
+        var result = await service.CheckResourceConflictsAsync(new CheckResourceConflictsRequest(
+            StartAt: start.AddMinutes(30),
+            EndAt: end.AddMinutes(-30),
+            UserIds: new[] { inspectorId },
+            DroneIds: new[] { drone1.Id, drone2.Id }
+        ), CancellationToken.None);
+
+        result.HasConflict.Should().BeTrue();
+        result.Conflicts.Count.Should().Be(2); // 1 pilot conflict, 1 drone conflict
+        result.Conflicts.Should().Contain(c => c.ResourceType == "Personnel" && c.ResourceId == inspectorId);
+        result.Conflicts.Should().Contain(c => c.ResourceType == "Drone" && c.ResourceId == drone1.Id);
+
+        // Warnings for drone2 (under maintenance & critical health)
+        result.Warnings.Count.Should().Be(2);
+        result.Warnings.Should().Contain(w => w.WarningType == "OPERATIONAL_STATUS");
+        result.Warnings.Should().Contain(w => w.WarningType == "TECHNICAL_HEALTH_CRITICAL");
+
+        // Verify existing booking is NOT preempted or modified (BR-04)
+        var booking = await db.ResourceBookings.SingleAsync(b => b.MissionId == existingMission.Id);
+        booking.Status.Should().Be(ResourceBookingStatus.Active);
+    }
+
+    [Fact]
+    public async Task AssignDroneAsync_ShouldRejectNonAvailableOrCriticalDrone()
+    {
+        var managerId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-DRONE-REVAL",
+            Title = "Drone Revalidation Test",
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Status = MissionStatus.Draft
+        };
+        db.Missions.Add(mission);
+
+        var droneUnavailable = new Uav
+        {
+            Id = Guid.NewGuid(),
+            UavCode = "DRONE-MAINT",
+            OperationalStatus = DroneOperationalStatus.Maintenance
+        };
+        var droneCritical = new Uav
+        {
+            Id = Guid.NewGuid(),
+            UavCode = "DRONE-CRIT",
+            OperationalStatus = DroneOperationalStatus.Available,
+            TechnicalHealth = TechnicalHealth.Critical
+        };
+        db.Uavs.AddRange(droneUnavailable, droneCritical);
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, user.Object);
+
+        var act1 = async () => await service.AssignDroneAsync(mission.Id, droneUnavailable.Id, CancellationToken.None);
+        await act1.Should().ThrowAsync<BusinessRuleException>().WithMessage("*DRONE_NOT_AVAILABLE*");
+
+        var act2 = async () => await service.AssignDroneAsync(mission.Id, droneCritical.Id, CancellationToken.None);
+        await act2.Should().ThrowAsync<BusinessRuleException>().WithMessage("*DRONE_CRITICAL_HEALTH*");
+    }
+
+    [Fact]
+    public async Task AssignAsync_ShouldRejectConflictingPersonnelSchedule()
+    {
+        var managerId = Guid.NewGuid();
+        var inspectorId = Guid.NewGuid();
+        var user = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(user.Object);
+
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
+        db.Users.Add(new User { Id = managerId, Status = "Active" });
+        db.Users.Add(new User { Id = inspectorId, Status = "Active" });
+        db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+
+        var start = DateTime.UtcNow.AddHours(1);
+        var end = DateTime.UtcNow.AddHours(4);
+
+        var existingMission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-EXISTING-PILOT",
+            Title = "First Mission"
+        };
+        db.Missions.Add(existingMission);
+
+        db.ResourceBookings.Add(new ResourceBooking
+        {
+            MissionId = existingMission.Id,
+            UserId = inspectorId,
+            StartAt = start,
+            EndAt = end,
+            Status = ResourceBookingStatus.Active
+        });
+
+        var newMission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-NEW-PILOT",
+            Title = "Second Mission",
+            ManagerId = managerId,
+            RegionId = region.Id,
+            Status = MissionStatus.Draft,
+            PlannedStart = start.AddHours(1),
+            PlannedEnd = end.AddHours(1)
+        };
+        db.Missions.Add(newMission);
+        await db.SaveChangesAsync();
+
+        var service = new MissionLifecycleService(db, user.Object);
+
+        var act = async () => await service.AssignAsync(
+            newMission.Id,
+            new Mf01Assignment(inspectorId, "Pilot"),
+            CancellationToken.None);
+
+        var ex = await act.Should().ThrowAsync<BusinessRuleException>();
+        ex.Which.Message.Should().Contain("RESOURCE_BOOKING_CONFLICT");
+    }
 }

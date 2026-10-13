@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -406,6 +407,40 @@ public class MissionController : ControllerBase
     {
         await _mediator.Send(new DeleteMissionCommand(id), cancellationToken);
         return Ok(new ApiResponse(true, "Mission deleted successfully"));
+    }
+
+    [HttpPost("check-resource-conflicts")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> CheckResourceConflicts(
+        [FromBody] CheckResourceConflictsRequest request,
+        CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var result = await _lifecycle.CheckResourceConflictsAsync(request, ct);
+        return Ok(new ApiResponse(true, "Resource conflict check completed", result));
+    }
+
+    [HttpPatch("{id:guid}/priority")]
+    [HttpPut("{id:guid}/priority")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> UpdatePriority(
+        Guid id,
+        [FromBody] UpdateMissionPriorityRequest request,
+        CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var mission = await _lifecycle.UpdatePriorityAsync(id, request, ct);
+        return Ok(new ApiResponse(true, "Mission priority updated successfully", new
+        {
+            mission.Id,
+            mission.MissionCode,
+            Priority = mission.Priority.ToString(),
+            Objective = mission.Objective.ToString(),
+            mission.EmergencyReason,
+            PriorityDefects = !string.IsNullOrWhiteSpace(mission.PriorityDefectsJson)
+                ? JsonSerializer.Deserialize<List<string>>(mission.PriorityDefectsJson)
+                : new List<string>()
+        }));
     }
 
     [HttpGet]
