@@ -139,7 +139,7 @@ public class MissionDroneExecutionTests
             RegionId = _regionId,
             InspectorId = _userId,
             UavId = _droneId,
-            Status = MissionStatus.Assigned // not Ready
+            Status = MissionStatus.Pending // Pending cannot be started directly
         };
         _db.Missions.Add(mission);
         await _db.SaveChangesAsync();

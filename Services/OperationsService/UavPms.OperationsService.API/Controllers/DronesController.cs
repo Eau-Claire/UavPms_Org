@@ -41,17 +41,20 @@ public class DronesController : ControllerBase
     public async Task<IActionResult> GetDrones(
         [FromQuery] string? search,
         [FromQuery] string? operationalStatus,
+        [FromQuery] string? status,
         [FromQuery] string? technicalHealth,
         [FromQuery] Guid? regionId,
         [FromQuery] bool? availableOnly,
         [FromQuery] bool detailed = false,
         CancellationToken ct = default)
     {
-        if (detailed || !string.IsNullOrWhiteSpace(search) || !string.IsNullOrWhiteSpace(operationalStatus) ||
+        var opStatus = !string.IsNullOrWhiteSpace(operationalStatus) ? operationalStatus : status;
+
+        if (detailed || !string.IsNullOrWhiteSpace(search) || !string.IsNullOrWhiteSpace(opStatus) ||
             !string.IsNullOrWhiteSpace(technicalHealth) || regionId.HasValue)
         {
             var detailedDrones = await _uavManagementService.GetDronesAsync(
-                search, operationalStatus, technicalHealth, regionId, availableOnly, ct);
+                search, opStatus, technicalHealth, regionId, availableOnly, ct);
             return Ok(detailedDrones);
         }
 

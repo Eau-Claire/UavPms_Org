@@ -39,13 +39,25 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
             throw new ArgumentException("Email already exists.");
         }
 
-        var rolesInDb = await _roleRepository.FindAsync(r => request.Roles.Contains(r.RoleName));
+        var requestedRoles = (request.Roles ?? new List<string>())
+            .Select(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase) ? "SystemAdmin" : r)
+            .ToList();
+        if (requestedRoles.Count == 0) requestedRoles.Add("SystemAdmin");
+
+        var rolesInDb = await _roleRepository.FindAsync(r => requestedRoles.Contains(r.RoleName));
+        if (rolesInDb.Count == 0)
+        {
+            var defaultRole = await _roleRepository.FindAsync(r => r.RoleName == "SystemAdmin" || r.RoleName == "Manager");
+            rolesInDb = defaultRole.Take(1).ToList();
+        }
         
+        var password = string.IsNullOrWhiteSpace(request.Password) ? "Pms@2026!" : request.Password;
+
         var user = new User
         {
             Id = Guid.NewGuid(),
             Email = normalizedEmail,
-            PasswordHash = _passwordHasher.Hash(request.Password),
+            PasswordHash = _passwordHasher.Hash(password),
             FullName = request.FullName,
             Phone = request.Phone,
             CreatedAt = DateTime.UtcNow,

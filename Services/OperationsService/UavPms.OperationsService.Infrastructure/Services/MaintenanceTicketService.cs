@@ -202,6 +202,29 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             }
             ticket.Status = TicketStatus.Closed;
             ticket.ResolvedAt = DateTime.UtcNow;
+
+            // Closed-Loop Recovery: Restore Asset Health Score after repair verification
+            if (ticket.AssetId != Guid.Empty)
+            {
+                var asset = await _db.Assets.FirstOrDefaultAsync(a => a.Id == ticket.AssetId, ct);
+                if (asset != null)
+                {
+                    double recoveredPoints = ticket.Priority == TicketPriority.Emergency ? 25 : (ticket.Priority == TicketPriority.High ? 20 : 15);
+                    asset.CurrentHealthScore = Math.Min(100.0, Math.Round(asset.CurrentHealthScore + recoveredPoints, 1));
+                    asset.LastInspectedAt = DateTime.UtcNow;
+
+                    var healthHistory = new AssetHealthHistory
+                    {
+                        Id = Guid.NewGuid(),
+                        AssetId = asset.Id,
+                        HealthScore = asset.CurrentHealthScore,
+                        CalculatedAt = DateTime.UtcNow,
+                        CalculationLog = $"{{\"recovered\": {recoveredPoints}, \"action\": \"MAINTENANCE_TICKET_CLOSED\", \"ticketCode\": \"{ticket.TicketCode}\"}}",
+                        RiskLevel = asset.CurrentHealthScore < 40 ? "Critical" : (asset.CurrentHealthScore < 70 ? "Medium" : "Low")
+                    };
+                    _db.AssetHealthHistories.Add(healthHistory);
+                }
+            }
         }
         else
         {

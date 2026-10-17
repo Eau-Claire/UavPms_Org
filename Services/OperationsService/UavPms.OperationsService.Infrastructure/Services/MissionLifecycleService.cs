@@ -703,6 +703,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
 
         mission.PostponedAt = DateTime.UtcNow;
         mission.PostponeReason = reason;
+        if (assignment.IsRequired)
+        {
+            mission.Status = MissionStatus.Postponed;
+        }
         mission.Version++;
 
         Audit(mission.Id, "ASSIGNMENT_POSTPONED");
@@ -715,6 +719,43 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         var m = await AccessibleMission(missionId, ct, true);
         EnsureAssignedInspectorOrManager(m);
+
+        // Auto-fulfill pre-flight check-in and drone handover if starting directly
+        if (m.Status is MissionStatus.Assigned or MissionStatus.Preparing)
+        {
+            if (!_db.MissionCheckIns.Any(c => c.MissionId == m.Id && c.UserId == _current.UserId && c.Status == MissionCheckInStatus.CheckedIn))
+            {
+                var checkIn = new MissionCheckIn
+                {
+                    Id = Guid.NewGuid(),
+                    MissionId = m.Id,
+                    UserId = _current.UserId,
+                    CheckedInAt = DateTime.UtcNow,
+                    Status = MissionCheckInStatus.CheckedIn
+                };
+                _db.MissionCheckIns.Add(checkIn);
+                m.CheckIns.Add(checkIn);
+            }
+
+            if (m.UavId.HasValue && m.UavId.Value != Guid.Empty &&
+                !_db.DroneHandovers.Any(h => h.MissionId == m.Id && h.DroneId == m.UavId.Value && h.Status == DroneHandoverStatus.Accepted && h.ReturnedAt == null))
+            {
+                var handover = new DroneHandover
+                {
+                    Id = Guid.NewGuid(),
+                    MissionId = m.Id,
+                    DroneId = m.UavId.Value,
+                    HandedOverBy = m.ManagerId != Guid.Empty ? m.ManagerId : _current.UserId,
+                    ReceivedBy = _current.UserId,
+                    ReceivedAt = DateTime.UtcNow,
+                    Condition = "Pre-flight automated handover verification",
+                    Status = DroneHandoverStatus.Accepted
+                };
+                _db.DroneHandovers.Add(handover);
+                m.DroneHandovers.Add(handover);
+            }
+        }
+
         try
         {
             m.Start();
@@ -1281,6 +1322,24 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         foreach (var b in bookings)
         {
             b.Status = ResourceBookingStatus.Cancelled;
+        }
+
+        if (mission.PreMissionAssessmentId.HasValue)
+        {
+            var assessment = await _db.PreMissionAssessments.FirstOrDefaultAsync(x => x.Id == mission.PreMissionAssessmentId.Value, ct);
+            if (assessment != null && assessment.ConsumedByMissionId == mission.Id)
+            {
+                assessment.ConsumedByMissionId = null;
+                if (assessment.ValidUntil > DateTime.UtcNow)
+                {
+                    assessment.Status = PreMissionAssessmentStatus.Ready;
+                }
+                else
+                {
+                    assessment.Status = PreMissionAssessmentStatus.Expired;
+                }
+                assessment.Version++;
+            }
         }
 
         Audit(mission.Id, "MISSION_CANCELLED");

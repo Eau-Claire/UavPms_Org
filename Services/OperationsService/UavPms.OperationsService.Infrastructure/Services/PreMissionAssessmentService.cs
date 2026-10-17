@@ -145,7 +145,7 @@ public sealed class PreMissionAssessmentService
 
     public async Task<PreMissionAssessment> GetAsync(Guid id, CancellationToken ct)
     {
-        await RequireManager(ct);
+        await RequireManagerOrInspector(ct);
 
         var assessment = await _db.PreMissionAssessments
             .Include(x => x.Assets).ThenInclude(a => a.Asset)
@@ -173,9 +173,10 @@ public sealed class PreMissionAssessmentService
 
     public async Task<IReadOnlyList<PreMissionAssessment>> ListAsync(string? status, CancellationToken ct)
     {
-        await RequireManager(ct);
+        await RequireManagerOrInspector(ct);
 
         var isGlobal = _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
+        var isInspector = _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase);
         List<Guid?>? userScopes = null;
         if (!isGlobal)
         {
@@ -194,6 +195,7 @@ public sealed class PreMissionAssessmentService
             .Include(x => x.Region)
             .Where(x => isGlobal ||
                         hasGlobalScope ||
+                        isInspector ||
                         x.ManagerId == _current.UserId ||
                         (userScopes != null && userScopes.Contains(x.RegionId)));
 
@@ -870,6 +872,22 @@ public sealed class PreMissionAssessmentService
         return assessment;
     }
 
+    private async Task RequireManagerOrInspector(CancellationToken ct)
+    {
+        if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
+            throw new ForbiddenException("AUTHENTICATION_REQUIRED");
+
+        var hasRole = _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) ||
+                      _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
+                      _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase);
+
+        if (!hasRole)
+            throw new ForbiddenException("ASSESSMENT_PERMISSION_REQUIRED");
+
+        if (!await _db.Users.AnyAsync(x => x.Id == _current.UserId && (x.Status == "Active" || x.Status == "Enabled"), ct))
+            throw new ForbiddenException("ACTIVE_USER_REQUIRED");
+    }
+
     private async Task RequireManager(CancellationToken ct)
     {
         if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
@@ -896,9 +914,16 @@ public sealed class PreMissionAssessmentService
         if (assessment.ManagerId == _current.UserId)
             return;
 
-        var isManager = _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase);
-        if (isManager && await _db.UserGeographicScopes.AnyAsync(
+        var isManagerOrInspector = _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) ||
+                                  _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase);
+
+        if (isManagerOrInspector && await _db.UserGeographicScopes.AnyAsync(
             s => s.UserId == _current.UserId && (s.RegionId == assessment.RegionId || s.RegionId == null), ct))
+        {
+            return;
+        }
+
+        if (_current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase))
         {
             return;
         }

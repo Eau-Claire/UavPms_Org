@@ -1,4 +1,4 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.OperationsService.Application.Features.Monitor.Queries.GetActiveAlerts;
@@ -26,7 +26,7 @@ public class MonitorController : ControllerBase
     }
 
     [HttpGet("summary")]
-    [Authorize(Roles = UserRoles.AdminAndManager)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetSummary()
     {
         var result = await _mediator.Send(new GetDashboardSummaryQuery());
@@ -34,7 +34,7 @@ public class MonitorController : ControllerBase
     }
 
     [HttpGet("recent-defects")]
-    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetRecentDefects([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         var result = await _mediator.Send(new GetRecentDefectsQuery(page, pageSize));
@@ -42,7 +42,7 @@ public class MonitorController : ControllerBase
     }
 
     [HttpGet("defects-statistics")]
-    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetDefectStatistics()
     {
         var result = await _mediator.Send(new GetDefectStatisticsQuery());
@@ -50,7 +50,7 @@ public class MonitorController : ControllerBase
     }
 
     [HttpGet("mission-status")]
-    [Authorize(Roles = UserRoles.AdminAndManager)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetMissionStatus()
     {
         var result = await _mediator.Send(new GetMissionStatusQuery());
@@ -58,7 +58,7 @@ public class MonitorController : ControllerBase
     }
 
     [HttpGet("inspections")]
-    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetInspections(
         [FromQuery] Guid? missionId,
         [FromQuery] bool? isDefect,
@@ -72,7 +72,7 @@ public class MonitorController : ControllerBase
     }
 
     [HttpGet("alerts")]
-    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetActiveAlerts()
     {
         var result = await _mediator.Send(new GetActiveAlertsQuery());

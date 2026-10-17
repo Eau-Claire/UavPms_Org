@@ -432,6 +432,20 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
+      "DownstreamPathTemplate": "/api/v{version}/anomalies/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/anomalies/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/anomalies",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/anomalies",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
       "DownstreamPathTemplate": "/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "fastapi-ai", "Port": 8000 }],

@@ -259,6 +259,28 @@ public class EmergencyAlertService : IEmergencyAlertService
 
         _logger.LogInformation("EmergencyAlert {AlertId} triggered successfully by Edge AI / Drone", alert.Id);
 
+        // Fail-Safe: Record safety warning communication log on the active flight mission
+        if (missionId != Guid.Empty)
+        {
+            var activeMission = await _db.Missions.FirstOrDefaultAsync(m => m.Id == missionId, ct);
+            if (activeMission != null)
+            {
+                var commLog = new MissionCommunicationLog
+                {
+                    Id = Guid.NewGuid(),
+                    MissionId = activeMission.Id,
+                    SenderId = Guid.Empty,
+                    SenderName = "Edge AI Safety Guard",
+                    SenderRole = "SYSTEM",
+                    Type = "EMERGENCY_ALERT",
+                    Content = $"[CẢNH BÁO NGUY HIỂM] {request.AlertType ?? "Sự cố khẩn cấp"} tại {request.TowerCode ?? "vùng bay"}. Khuyến nghị phi công rà soát an toàn hoặc kích hoạt chế độ RTH quay về.",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.MissionCommunicationLogs.Add(commLog);
+                await _db.SaveChangesAsync(ct);
+            }
+        }
+
         // Notify all online Analysts & Managers
         try
         {

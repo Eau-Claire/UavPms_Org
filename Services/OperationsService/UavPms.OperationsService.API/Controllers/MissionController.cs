@@ -460,18 +460,9 @@ public class MissionController : ControllerBase
         CancellationToken ct)
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
-        var mission = await _lifecycle.UpdatePriorityAsync(id, request, ct);
-        return Ok(new ApiResponse(true, "Mission priority updated successfully", new
-        {
-            mission.Id,
-            mission.MissionCode,
-            Priority = mission.Priority.ToString(),
-            Objective = mission.Objective.ToString(),
-            mission.EmergencyReason,
-            PriorityDefects = !string.IsNullOrWhiteSpace(mission.PriorityDefectsJson)
-                ? JsonSerializer.Deserialize<List<string>>(mission.PriorityDefectsJson)
-                : new List<string>()
-        }));
+        await _lifecycle.UpdatePriorityAsync(id, request, ct);
+        var details = await _mediator.Send(new GetMissionDetailsQuery(id), ct);
+        return Ok(new ApiResponse(true, "Mission priority updated successfully", details));
     }
 
     [HttpGet]

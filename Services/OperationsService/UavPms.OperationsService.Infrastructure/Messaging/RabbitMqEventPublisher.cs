@@ -25,7 +25,11 @@ public class RabbitMqEventPublisher : IEventPublisher
         var baseRoutingKey = $"identity.event.{eventName.ToLowerInvariant()}";
         if (@event is AIAnalysisRequestedEvent aiAnalysisRequestedEvent)
         {
-            return $"{baseRoutingKey}.{ResolveAiRuntime(aiAnalysisRequestedEvent.PreferredModel)}";
+            var runtime = ResolveAiRuntime(aiAnalysisRequestedEvent.PreferredModel);
+            var media = string.Equals(aiAnalysisRequestedEvent.MediaType, "Video", StringComparison.OrdinalIgnoreCase)
+                ? "video"
+                : "image";
+            return $"{baseRoutingKey}.{runtime}.{media}";
         }
 
         return baseRoutingKey;

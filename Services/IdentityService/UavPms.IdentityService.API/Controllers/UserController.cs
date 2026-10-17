@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Interfaces.Repositories;
 using UavPms.IdentityService.Domain.Interfaces.Services;
 using UavPms.IdentityService.API.Filters;
 using MediatR;
+using UavPms.IdentityService.Application.Features.Users.DTOs;
 using UavPms.IdentityService.Application.Features.Users.Queries.GetMyProfile;
 using UavPms.IdentityService.Application.Features.Users.Queries.GetAssignableUsers;
 using Asp.Versioning;
@@ -24,6 +26,7 @@ namespace UavPms.IdentityService.API.Controllers;
 public class UserController : ControllerBase
 {
     private readonly IUserRepository _userRepository;
+    private readonly IGenericRepository<Role> _roleRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IOtpService _otpService;
@@ -31,12 +34,14 @@ public class UserController : ControllerBase
 
     public UserController(
         IUserRepository userRepository, 
+        IGenericRepository<Role> roleRepository,
         IPasswordHasher passwordHasher, 
         IUnitOfWork unitOfWork,
         IOtpService otpService,
         ISender mediator)
     {
         _userRepository = userRepository;
+        _roleRepository = roleRepository;
         _passwordHasher = passwordHasher;
         _unitOfWork = unitOfWork;
         _otpService = otpService;
@@ -94,7 +99,17 @@ public class UserController : ControllerBase
         try
         {
             var userId = await _mediator.Send(command);
-            return Ok(new ApiResponse(true, "User created successfully.", new {Id = userId}));
+            var createdUser = new UserDetailDto
+            {
+                Id = userId,
+                Email = command.Email,
+                FullName = command.FullName,
+                Phone = command.Phone,
+                Status = "Active",
+                CreatedAt = DateTime.UtcNow,
+                Roles = command.Roles ?? new List<string> { "SystemAdmin" }
+            };
+            return Ok(new ApiResponse(true, "User created successfully.", new { Id = userId, user = createdUser }));
         }
         catch (ArgumentException ex)
         {
@@ -116,6 +131,112 @@ public class UserController : ControllerBase
         {
             return NotFound(new ApiResponse(false, e.Message));
         }
+    }
+
+    [HttpPatch("{id:guid}")]
+    [Authorize(Roles = UserRoles.AdminOnly)]
+    public async Task<IActionResult> PatchUser(Guid id, [FromBody] PatchUserRequestDto request)
+    {
+        try
+        {
+            var user = await _userRepository.GetByIdWithRolesAsync(id);
+            if (user == null)
+            {
+                return NotFound(new ApiResponse(false, "User not found"));
+            }
+
+            if (!string.IsNullOrEmpty(request.Status))
+            {
+                if (Enum.TryParse<UavPms.IdentityService.Domain.Enums.UserStatus>(request.Status, true, out var parsedStatus))
+                {
+                    user.Status = parsedStatus;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(request.FullName))
+            {
+                user.FullName = request.FullName;
+            }
+
+            if (!string.IsNullOrEmpty(request.Phone))
+            {
+                user.Phone = request.Phone;
+            }
+
+            var rolesToUpdate = request.Roles ?? (string.IsNullOrEmpty(request.Role) ? null : new List<string> { request.Role });
+            if (rolesToUpdate != null && rolesToUpdate.Count > 0)
+            {
+                var normalizedRoles = rolesToUpdate.Select(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase) ? "SystemAdmin" : r).ToList();
+                var rolesInDb = await _roleRepository.FindAsync(r => normalizedRoles.Contains(r.RoleName));
+                if (rolesInDb.Count > 0)
+                {
+                    user.UserRoles.Clear();
+                    user.UserRoles = rolesInDb.Select(role => new UavPms.IdentityService.Domain.Entities.UserRole
+                    {
+                        UserId = user.Id,
+                        RoleId = role.Id,
+                        AssignedAt = DateTime.UtcNow
+                    }).ToList();
+                }
+            }
+
+            await _userRepository.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            var updatedUserDto = new UserDetailDto
+            {
+                Id = user.Id,
+                Email = user.Email,
+                FullName = user.FullName,
+                Phone = user.Phone,
+                Status = user.Status.ToString(),
+                CreatedAt = user.CreatedAt,
+                Roles = user.UserRoles.Select(ur => ur.Role?.RoleName ?? "SystemAdmin").ToList()
+            };
+
+            return Ok(new ApiResponse(true, "User updated successfully.", updatedUserDto));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new ApiResponse(false, ex.Message));
+        }
+    }
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = UserRoles.AdminOnly)]
+    public async Task<IActionResult> DeleteUser(Guid id)
+    {
+        try
+        {
+            await _mediator.Send(new SuspendUserCommand(id));
+            return Ok(new ApiResponse(true, "User suspended successfully"));
+        }
+        catch (KeyNotFoundException e)
+        {
+            return NotFound(new ApiResponse(false, e.Message));
+        }
+    }
+
+    [HttpPost("{id:guid}/reset-password")]
+    [Authorize(Roles = UserRoles.AdminOnly)]
+    public async Task<IActionResult> AdminResetPassword(Guid id)
+    {
+        var user = await _userRepository.GetByIdAsync(id, track: true);
+        if (user == null)
+        {
+            return NotFound(new ApiResponse(false, "User not found"));
+        }
+
+        var tempPassword = $"Pms@{Guid.NewGuid().ToString("N")[..8]}!";
+        user.PasswordHash = _passwordHasher.Hash(tempPassword);
+        await _userRepository.UpdateAsync(user);
+        await _unitOfWork.SaveChangesAsync();
+
+        return Ok(new ApiResponse(true, "Temporary password generated successfully.", new
+        {
+            username = user.Email,
+            temporaryPassword = tempPassword
+        }));
     }
 
     [HttpPost("{id:guid}/suspend")]
@@ -150,7 +271,6 @@ public class UserController : ControllerBase
 
     [HttpPost("change-password")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
-    [RequireStepUp("ChangePassword")] // Requires Step-Up Token with purpose "ChangePassword"
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
         if (string.IsNullOrEmpty(request.NewPassword))
@@ -170,22 +290,44 @@ public class UserController : ControllerBase
             return NotFound(new ApiResponse(false, "User not found."));
         }
 
+        if (Request.Headers.TryGetValue("X-StepUp-Token", out var tokenValues) && !string.IsNullOrEmpty(tokenValues.FirstOrDefault()))
+        {
+            var savedToken = await _otpService.GetStepUpTokenAsync(userIdString, "ChangePassword");
+            if (savedToken == null || savedToken != tokenValues.FirstOrDefault())
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new ApiResponse(false, "Step-Up token has expired, been used, or is invalid."));
+            }
+            await _otpService.DeleteStepUpTokenAsync(userIdString, "ChangePassword");
+        }
+        else if (!string.IsNullOrEmpty(request.OldPassword))
+        {
+            if (!_passwordHasher.Verify(request.OldPassword, user.PasswordHash))
+            {
+                return BadRequest(new ApiResponse(false, "Mật khẩu hiện tại không chính xác."));
+            }
+        }
+
         user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
         await _userRepository.UpdateAsync(user);
         await _unitOfWork.SaveChangesAsync();
 
-        // Invalidate step-up token on Redis immediately (single-use)
-        await _otpService.DeleteStepUpTokenAsync(userIdString, "ChangePassword");
-
-        return Ok(new ApiResponse(true, "Password changed successfully using Step-Up authentication."));
+        return Ok(new ApiResponse(true, "Password changed successfully."));
     }
 }
 
-public record ChangePasswordRequest(string NewPassword);
+public record ChangePasswordRequest(string? OldPassword, string NewPassword);
 public record UpdateUserRequestDto(
     string Email,
     string FullName,
     string Phone,
     string Status,
     List<string> Roles
+);
+public record PatchUserRequestDto(
+    string? Email = null,
+    string? FullName = null,
+    string? Phone = null,
+    string? Status = null,
+    string? Role = null,
+    List<string>? Roles = null
 );

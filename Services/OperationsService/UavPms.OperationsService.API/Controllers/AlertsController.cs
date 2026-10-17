@@ -77,10 +77,10 @@ public class AlertsController : ControllerBase
     }
 
     /// <summary>
-    /// Thẩm định cảnh báo khẩn cấp (Chỉ Analyst) - Xác nhận hoặc Bác bỏ cảnh báo
+    /// Thẩm định cảnh báo khẩn cấp (Analyst, Manager, Admin) - Xác nhận hoặc Bác bỏ cảnh báo
     /// </summary>
     [HttpPut("{id:guid}/review")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReviewAlert(
@@ -99,10 +99,10 @@ public class AlertsController : ControllerBase
     }
 
     /// <summary>
-    /// Chuyển cấp cảnh báo khẩn cấp lên Manager chỉ định (Chỉ Analyst)
+    /// Chuyển cấp cảnh báo khẩn cấp lên Manager chỉ định (Analyst, Admin)
     /// </summary>
     [HttpPost("{id:guid}/escalate")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     [ProducesResponseType(typeof(AlertEscalationDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> EscalateAlert(
