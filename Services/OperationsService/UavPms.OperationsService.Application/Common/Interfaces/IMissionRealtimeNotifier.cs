@@ -7,4 +7,5 @@ namespace UavPms.OperationsService.Application.Common.Interfaces;
 public interface IMissionRealtimeNotifier
 {
     Task NotifyAsync(MissionLifecycleEventDto evt, CancellationToken cancellationToken = default);
+    Task NotifyAssessmentAsync(AssessmentRealtimeEventDto evt, CancellationToken cancellationToken = default);
 }

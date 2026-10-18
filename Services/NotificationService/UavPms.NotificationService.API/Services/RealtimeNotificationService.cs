@@ -3,6 +3,9 @@ using UavPms.NotificationService.Domain.Contracts;
 using UavPms.NotificationService.Domain.Entities;
 using UavPms.NotificationService.Domain.Interfaces.Services;
 using UavPms.NotificationService.API.Hubs;
+using UavPms.Shared.Contracts.Constants;
+using UavPms.Shared.Contracts.Events;
+using AIAnalysisStatusChangedEvent = UavPms.NotificationService.Domain.Contracts.AIAnalysisStatusChangedEvent;
 
 namespace UavPms.NotificationService.API.Services;
 
@@ -92,9 +95,17 @@ public class RealtimeNotificationService : IRealtimeNotificationService
                 .Group(groupName)
                 .SendAsync(RealtimeNotificationEvents.AiAnalysisStatusChanged, statusChanged, cancellationToken);
 
+            if (statusChanged.MissionId.HasValue && statusChanged.MissionId.Value != Guid.Empty)
+            {
+                var missionGroup = NotificationHub.MissionGroupName(statusChanged.MissionId.Value.ToString());
+                await _hubContext.Clients
+                    .Group(missionGroup)
+                    .SendAsync(RealtimeNotificationEvents.AiAnalysisStatusChanged, statusChanged, cancellationToken);
+            }
+
             _logger.LogInformation(
-                "AI analysis status pushed to user. UserId={UserId}, RequestId={RequestId}, Status={Status}, ConnectionIds={ConnectionIds}",
-                userId, statusChanged.RequestId, statusChanged.Status, connectionIds);
+                "AI analysis status pushed. UserId={UserId}, MissionId={MissionId}, RequestId={RequestId}, Status={Status}, ConnectionIds={ConnectionIds}",
+                userId, statusChanged.MissionId, statusChanged.RequestId, statusChanged.Status, connectionIds);
         }
         catch (Exception ex)
         {
@@ -121,7 +132,13 @@ public class RealtimeNotificationService : IRealtimeNotificationService
             // 1. Aggregate event to mission room
             await _hubContext.Clients.Group(missionGroup).SendAsync("MissionLifecycleEvent", evt, cancellationToken);
 
-            // 2. Specific event broadcast
+            // 2. Broadcast specific custom type if specified
+            if (!string.IsNullOrWhiteSpace(evt.Type))
+            {
+                await _hubContext.Clients.Group(missionGroup).SendAsync(evt.Type, evt, cancellationToken);
+            }
+
+            // 3. Specific event broadcast
             switch (evt.Type?.ToUpperInvariant())
             {
                 case "CONFIRMED":
@@ -185,6 +202,34 @@ public class RealtimeNotificationService : IRealtimeNotificationService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to broadcast realtime mission event. MissionId={MissionId}, Type={Type}", evt.MissionId, evt.Type);
+        }
+    }
+
+    public async Task SendAssessmentEventAsync(AssessmentRealtimeEventDto evt, CancellationToken cancellationToken = default)
+    {
+        if (evt == null || string.IsNullOrWhiteSpace(evt.AssessmentId)) return;
+        try
+        {
+            var assessmentGroup = NotificationHub.AssessmentGroupName(evt.AssessmentId);
+            var listGroup = NotificationHub.AssessmentsListGroupName;
+            var managerGroup = NotificationHub.RoleGroupName(UserRoles.Manager);
+
+            await _hubContext.Clients.Group(assessmentGroup).SendAsync("AssessmentRealtimeEvent", evt, cancellationToken);
+            await _hubContext.Clients.Group(listGroup).SendAsync("AssessmentRealtimeEvent", evt, cancellationToken);
+            await _hubContext.Clients.Group(managerGroup).SendAsync("AssessmentRealtimeEvent", evt, cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(evt.Type))
+            {
+                await _hubContext.Clients.Group(assessmentGroup).SendAsync(evt.Type, evt, cancellationToken);
+                await _hubContext.Clients.Group(listGroup).SendAsync(evt.Type, evt, cancellationToken);
+                await _hubContext.Clients.Group(managerGroup).SendAsync(evt.Type, evt, cancellationToken);
+            }
+
+            _logger.LogInformation("Realtime assessment event broadcasted. AssessmentId={AssessmentId}, Type={Type}", evt.AssessmentId, evt.Type);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to broadcast realtime assessment event. AssessmentId={AssessmentId}, Type={Type}", evt.AssessmentId, evt.Type);
         }
     }
 

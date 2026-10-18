@@ -18,6 +18,21 @@ public class PreMissionAssessment : BaseEntity
     public TechnicalHealth OverallTechnicalHealth { get; set; } = TechnicalHealth.Unknown;
     public DateTime? ValidUntil { get; set; }
     public Guid? ConsumedByMissionId { get; set; }
+
+    [NotMapped]
+    public Guid? CompletedByMissionId
+    {
+        get => ConsumedByMissionId;
+        set => ConsumedByMissionId = value;
+    }
+
+    [NotMapped]
+    public Guid? CompletedMissionId
+    {
+        get => ConsumedByMissionId;
+        set => ConsumedByMissionId = value;
+    }
+
     public uint Version { get; set; } = 1;
     public string Findings { get; set; } = "{}";
     public string? EvaluationPolicyVersion { get; set; }
@@ -107,6 +122,10 @@ public sealed class PreMissionAssessmentDrone : BaseEntity
     public bool IsEligible { get; set; }
     public ResourceAvailabilityStatus OperationalAvailabilityStatus { get; set; } = ResourceAvailabilityStatus.Unknown;
     public ResourceEligibilityStatus TechnicalEligibilityStatus { get; set; } = ResourceEligibilityStatus.Unknown;
+    public UavScopeSuitability Suitability { get; set; } = UavScopeSuitability.Suitable;
+    public int EstimatedFlightsNeeded { get; set; } = 1;
+    public double CoverageDistanceKm { get; set; }
+    public string? SuitabilityReason { get; set; }
     public string? ReasonCode { get; set; }
     public DateTime SnapshotAt { get; set; }
     public TechnicalHealth TechnicalHealth { get; set; } = TechnicalHealth.Unknown;

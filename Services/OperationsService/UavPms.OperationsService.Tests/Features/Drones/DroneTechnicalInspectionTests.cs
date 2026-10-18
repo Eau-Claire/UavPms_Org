@@ -283,4 +283,55 @@ public class DroneTechnicalInspectionTests
         var updatedDrone = await db.Uavs.FindAsync(drone.Id);
         updatedDrone!.Version.Should().Be(2);
     }
+
+    [Fact]
+    public async Task SubmitInspection_ShouldTriggerRealtimeDroneInspectionCompleted()
+    {
+        var techId = Guid.NewGuid();
+        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        await using var db = CreateContext(user.Object);
+
+        db.Users.Add(new User { Id = techId, Status = "Active" });
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-REALTIME-01", Model = "Matrice 300 RTK", OperationalStatus = DroneOperationalStatus.Available };
+        db.Uavs.Add(drone);
+
+        var assessment = new PreMissionAssessment
+        {
+            Id = Guid.NewGuid(),
+            Status = PreMissionAssessmentStatus.Ready
+        };
+        db.PreMissionAssessments.Add(assessment);
+        db.PreMissionAssessmentDrones.Add(new PreMissionAssessmentDrone
+        {
+            AssessmentId = assessment.Id,
+            Assessment = assessment,
+            DroneId = drone.Id,
+            Drone = drone
+        });
+        await db.SaveChangesAsync();
+
+        var notifierMock = new Mock<UavPms.OperationsService.Application.Common.Interfaces.IMissionRealtimeNotifier>();
+        var service = new DroneTechnicalInspectionService(db, user.Object, null, notifierMock.Object);
+
+        var request = new DroneInspectionSubmitRequest(
+            drone.Id,
+            "Periodic BIST inspection passed",
+            new List<DroneMetricSubmitDto>
+            {
+                new("BATTERY_HEALTH", "Power", 95, Passed: true),
+                new("IMU_CALIBRATION", "Sensors", null, BoolValue: true, Passed: true)
+            }
+        );
+
+        var result = await service.SubmitInspectionAsync(request, CancellationToken.None);
+
+        result.Status.Should().Be(DroneTechnicalInspectionStatus.Passed);
+        notifierMock.Verify(n => n.NotifyAssessmentAsync(
+            It.Is<UavPms.Shared.Contracts.Events.AssessmentRealtimeEventDto>(e =>
+                e.AssessmentId == assessment.Id.ToString() &&
+                e.Type == "DroneInspectionCompleted" &&
+                e.Status == "PASS" &&
+                e.DroneId == drone.Id.ToString()),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

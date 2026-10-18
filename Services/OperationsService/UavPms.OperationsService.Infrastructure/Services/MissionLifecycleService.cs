@@ -388,6 +388,20 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var assets = await AssetsForRegion(regionId).Where(x => distinct.Contains(x.Id)).ToListAsync(ct);
         if (assets.Count != distinct.Length) throw new ForbiddenException("ASSET_OUTSIDE_REGION_OR_SCOPE");
 
+        // BR-08: Scope Consistency - Significant scope changes require MF01 reassessment
+        if (mission.PreMissionAssessmentId.HasValue)
+        {
+            var assessedAssetIds = await _db.PreMissionAssessmentAssets
+                .Where(a => a.AssessmentId == mission.PreMissionAssessmentId.Value)
+                .Select(a => a.AssetId)
+                .ToListAsync(ct);
+            if (assessedAssetIds.Count > 0 && distinct.Except(assessedAssetIds).Any())
+            {
+                throw new BusinessRuleException("SCOPE_REASSESSMENT_REQUIRED",
+                    "Significant scope changes detected (assets outside MF01 assessment). Reassessment via MF01 is required.");
+            }
+        }
+
         var boundary = ParseBoundarySafe(boundaryWkt) ?? mission.Boundary;
         if (boundary == null && assets.Any(x => x.Location != null))
         {
@@ -415,6 +429,41 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var mission = await ManagedMission(missionId, ct, true); RequirePreExecution(mission);
         var user = await _db.Users.SingleOrDefaultAsync(x => x.Id == request.UserId, ct) ?? throw new NotFoundException("User", request.UserId);
         if (!IsActive(user.Status)) throw new BusinessRuleException("ASSIGNEE_INACTIVE");
+
+        // BR-07: Personnel availability and schedule conflict revalidation
+        var plannedStart = mission.PlannedStart ?? mission.ScheduledStartAt;
+        var plannedEnd = mission.PlannedEnd ?? (plannedStart.HasValue ? plannedStart.Value.AddHours(2) : (DateTime?)null);
+        if (plannedStart.HasValue && plannedEnd.HasValue)
+        {
+            var conflictingUserBooking = await _db.ResourceBookings
+                .Include(b => b.Mission)
+                .Where(b => b.UserId == request.UserId &&
+                            b.MissionId != missionId &&
+                            b.Status == ResourceBookingStatus.Active &&
+                            b.StartAt < plannedEnd.Value &&
+                            b.EndAt > plannedStart.Value)
+                .FirstOrDefaultAsync(ct);
+            if (conflictingUserBooking != null)
+            {
+                throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT",
+                    $"Pilot/Personnel {request.UserId} is already booked in mission '{conflictingUserBooking.Mission?.MissionCode ?? conflictingUserBooking.MissionId.ToString()}' ({conflictingUserBooking.StartAt:yyyy-MM-dd HH:mm} - {conflictingUserBooking.EndAt:yyyy-MM-dd HH:mm}).");
+            }
+
+            var existingUserBooking = await _db.ResourceBookings
+                .FirstOrDefaultAsync(b => b.MissionId == missionId && b.UserId == request.UserId && b.Status == ResourceBookingStatus.Active, ct);
+            if (existingUserBooking == null)
+            {
+                _db.ResourceBookings.Add(new ResourceBooking
+                {
+                    MissionId = missionId,
+                    UserId = request.UserId,
+                    StartAt = plannedStart.Value,
+                    EndAt = plannedEnd.Value,
+                    Status = ResourceBookingStatus.Active
+                });
+            }
+        }
+
         var existing = await _db.MissionAssignments.FirstOrDefaultAsync(x => x.MissionId == missionId && x.UserId == request.UserId && x.Status == MissionAssignmentStatus.Active, ct);
         if (existing != null)
         {
@@ -454,6 +503,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var assignment = mission.Assignments.SingleOrDefault(x => x.Id == assignmentId && x.Status == MissionAssignmentStatus.Active)
             ?? throw new NotFoundException("MissionAssignment", assignmentId);
         assignment.Status = MissionAssignmentStatus.Revoked; assignment.EndedAt = DateTime.UtcNow; mission.RecalculateReadiness();
+        
+        var userBooking = await _db.ResourceBookings
+            .FirstOrDefaultAsync(b => b.MissionId == missionId && b.UserId == assignment.UserId && b.Status == ResourceBookingStatus.Active, ct);
+        if (userBooking != null)
+        {
+            userBooking.Status = ResourceBookingStatus.Cancelled;
+        }
+
         Notify(assignment.UserId, mission, "MISSION_ASSIGNMENT_REMOVED"); Audit(mission.Id, "MISSION_ASSIGNMENT_REMOVED");
         await _db.SaveChangesAsync(ct);
     }
@@ -463,6 +520,16 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var mission = await ManagedMission(missionId, ct, true); RequirePreExecution(mission);
         var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == droneId, ct) ?? throw new NotFoundException("Drone", droneId);
         if (drone.Status != DroneStatus.Idle && mission.UavId != droneId) throw new BusinessRuleException("DRONE_UNAVAILABLE");
+
+        // BR-07: UAV availability and technical health revalidation
+        if (drone.OperationalStatus != DroneOperationalStatus.Available)
+        {
+            throw new BusinessRuleException("DRONE_NOT_AVAILABLE", $"Drone {drone.UavCode} hiện không ở trạng thái sẵn sàng (trạng thái: {drone.OperationalStatus}).");
+        }
+        if (drone.TechnicalHealth == TechnicalHealth.Critical)
+        {
+            throw new BusinessRuleException("DRONE_CRITICAL_HEALTH", $"Drone {drone.UavCode} có sức khỏe kỹ thuật báo động CRITICAL, không đủ điều kiện thực hiện nhiệm vụ bay.");
+        }
 
         var plannedStart = mission.PlannedStart ?? mission.ScheduledStartAt;
         var plannedEnd = mission.PlannedEnd ?? (plannedStart.HasValue ? plannedStart.Value.AddHours(2) : (DateTime?)null);
@@ -636,6 +703,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
 
         mission.PostponedAt = DateTime.UtcNow;
         mission.PostponeReason = reason;
+        if (assignment.IsRequired)
+        {
+            mission.Status = MissionStatus.Postponed;
+        }
         mission.Version++;
 
         Audit(mission.Id, "ASSIGNMENT_POSTPONED");
@@ -648,6 +719,43 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         var m = await AccessibleMission(missionId, ct, true);
         EnsureAssignedInspectorOrManager(m);
+
+        // Auto-fulfill pre-flight check-in and drone handover if starting directly
+        if (m.Status is MissionStatus.Assigned or MissionStatus.Preparing)
+        {
+            if (!_db.MissionCheckIns.Any(c => c.MissionId == m.Id && c.UserId == _current.UserId && c.Status == MissionCheckInStatus.CheckedIn))
+            {
+                var checkIn = new MissionCheckIn
+                {
+                    Id = Guid.NewGuid(),
+                    MissionId = m.Id,
+                    UserId = _current.UserId,
+                    CheckedInAt = DateTime.UtcNow,
+                    Status = MissionCheckInStatus.CheckedIn
+                };
+                _db.MissionCheckIns.Add(checkIn);
+                m.CheckIns.Add(checkIn);
+            }
+
+            if (m.UavId.HasValue && m.UavId.Value != Guid.Empty &&
+                !_db.DroneHandovers.Any(h => h.MissionId == m.Id && h.DroneId == m.UavId.Value && h.Status == DroneHandoverStatus.Accepted && h.ReturnedAt == null))
+            {
+                var handover = new DroneHandover
+                {
+                    Id = Guid.NewGuid(),
+                    MissionId = m.Id,
+                    DroneId = m.UavId.Value,
+                    HandedOverBy = m.ManagerId != Guid.Empty ? m.ManagerId : _current.UserId,
+                    ReceivedBy = _current.UserId,
+                    ReceivedAt = DateTime.UtcNow,
+                    Condition = "Pre-flight automated handover verification",
+                    Status = DroneHandoverStatus.Accepted
+                };
+                _db.DroneHandovers.Add(handover);
+                m.DroneHandovers.Add(handover);
+            }
+        }
+
         try
         {
             m.Start();
@@ -971,6 +1079,153 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         return mission;
     }
 
+    public Task<MissionAssignment> ReassignAsync(Guid missionId, ReassignAssignmentRequest request, CancellationToken ct = default)
+        => ReassignAsync(missionId, request.AssignmentId, request.NewUserId, request.Role, request.Reason, ct);
+
+    public async Task<MissionAssignment> ReassignAsync(Guid missionId, Guid? assignmentId, Guid newUserId, string? role, string? reason, CancellationToken ct)
+    {
+        await RequireActiveCaller(ct);
+        var mission = await ManagedMission(missionId, ct, true);
+        RequirePreExecution(mission);
+
+        var newUser = await _db.Users.SingleOrDefaultAsync(x => x.Id == newUserId, ct)
+            ?? throw new NotFoundException("User", newUserId);
+        if (!IsActive(newUser.Status)) throw new BusinessRuleException("ASSIGNEE_INACTIVE");
+
+        // BR-07: Personnel availability and schedule conflict revalidation
+        var plannedStart = mission.PlannedStart ?? mission.ScheduledStartAt;
+        var plannedEnd = mission.PlannedEnd ?? (plannedStart.HasValue ? plannedStart.Value.AddHours(2) : (DateTime?)null);
+        if (plannedStart.HasValue && plannedEnd.HasValue)
+        {
+            var conflictingUserBooking = await _db.ResourceBookings
+                .Include(b => b.Mission)
+                .Where(b => b.UserId == newUserId &&
+                            b.MissionId != missionId &&
+                            b.Status == ResourceBookingStatus.Active &&
+                            b.StartAt < plannedEnd.Value &&
+                            b.EndAt > plannedStart.Value)
+                .FirstOrDefaultAsync(ct);
+            if (conflictingUserBooking != null)
+            {
+                throw new BusinessRuleException("RESOURCE_BOOKING_CONFLICT",
+                    $"Personnel {newUserId} is already booked in mission '{conflictingUserBooking.Mission?.MissionCode ?? conflictingUserBooking.MissionId.ToString()}' ({conflictingUserBooking.StartAt:yyyy-MM-dd HH:mm} - {conflictingUserBooking.EndAt:yyyy-MM-dd HH:mm}).");
+            }
+        }
+
+        // Find existing assignment to replace
+        MissionAssignment? targetAssignment = null;
+        if (assignmentId.HasValue && assignmentId.Value != Guid.Empty)
+        {
+            targetAssignment = mission.Assignments.FirstOrDefault(x => x.Id == assignmentId.Value && x.Status == MissionAssignmentStatus.Active);
+        }
+
+        if (targetAssignment == null && !string.IsNullOrWhiteSpace(role))
+        {
+            targetAssignment = mission.Assignments.FirstOrDefault(x =>
+                string.Equals(x.AssignmentRole, role, StringComparison.OrdinalIgnoreCase) &&
+                x.Status == MissionAssignmentStatus.Active);
+        }
+
+        var oldUserId = targetAssignment?.UserId;
+
+        if (targetAssignment != null)
+        {
+            // Release existing booking for old user if present
+            if (oldUserId.HasValue)
+            {
+                var oldBooking = await _db.ResourceBookings
+                    .FirstOrDefaultAsync(b => b.MissionId == missionId && b.UserId == oldUserId.Value && b.Status == ResourceBookingStatus.Active, ct);
+                if (oldBooking != null)
+                {
+                    oldBooking.Status = ResourceBookingStatus.Released;
+                }
+            }
+
+            targetAssignment.UserId = newUserId;
+            targetAssignment.ResponseStatus = MissionAssignmentResponse.Pending;
+            targetAssignment.ResponseReason = reason;
+            targetAssignment.RespondedAt = null;
+            targetAssignment.AssignedByUserId = _current.UserId;
+            if (!string.IsNullOrWhiteSpace(role))
+            {
+                targetAssignment.AssignmentRole = role;
+            }
+            targetAssignment.Version++;
+        }
+        else
+        {
+            targetAssignment = new MissionAssignment
+            {
+                MissionId = mission.Id,
+                UserId = newUserId,
+                AssignmentRole = !string.IsNullOrWhiteSpace(role) ? role : "INSPECTOR",
+                AssignedByUserId = _current.UserId,
+                IsRequired = true,
+                ResponseStatus = MissionAssignmentResponse.Pending
+            };
+            mission.Assignments.Add(targetAssignment);
+        }
+
+        // Maintain primary inspector link if applicable
+        var effectiveRole = targetAssignment.AssignmentRole;
+        if (string.Equals(effectiveRole, "INSPECTOR", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(effectiveRole, "PILOT", StringComparison.OrdinalIgnoreCase) ||
+            (oldUserId.HasValue && mission.InspectorId == oldUserId.Value))
+        {
+            mission.InspectorId = newUserId;
+            mission.AssignedToUserId = newUserId;
+        }
+
+        // Add/update ResourceBooking for new user
+        if (plannedStart.HasValue && plannedEnd.HasValue)
+        {
+            var existingNewUserBooking = await _db.ResourceBookings
+                .FirstOrDefaultAsync(b => b.MissionId == missionId && b.UserId == newUserId && b.Status == ResourceBookingStatus.Active, ct);
+            if (existingNewUserBooking == null)
+            {
+                _db.ResourceBookings.Add(new ResourceBooking
+                {
+                    MissionId = missionId,
+                    UserId = newUserId,
+                    StartAt = plannedStart.Value,
+                    EndAt = plannedEnd.Value,
+                    Status = ResourceBookingStatus.Active
+                });
+            }
+        }
+
+        // Revert status to PendingAcceptance if it was ready/confirmed
+        if (mission.Status == MissionStatus.Confirmed || mission.Status == MissionStatus.Ready)
+        {
+            mission.Status = MissionStatus.PendingAcceptance;
+        }
+        mission.Version++;
+        mission.UpdatedAt = DateTime.UtcNow;
+
+        Audit(mission.Id, "ASSIGNMENT_REASSIGNED");
+        await SaveConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAsync(new UavPms.Shared.Contracts.Events.MissionLifecycleEventDto
+            {
+                MissionId = mission.Id.ToString(),
+                MissionCode = mission.MissionCode,
+                MissionTitle = mission.Title,
+                Type = "REASSIGNED",
+                Status = mission.Status.ToString(),
+                TargetUserId = targetAssignment.UserId.ToString(),
+                ActorRole = "MANAGER",
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                Reason = reason,
+                Timestamp = DateTime.UtcNow
+            }, ct);
+        }
+
+        return targetAssignment;
+    }
+
     public async Task<Mission> PostponeMissionAsync(Guid missionId, string reason, CancellationToken ct)
     {
         await RequireActiveCaller(ct);
@@ -1067,6 +1322,24 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         foreach (var b in bookings)
         {
             b.Status = ResourceBookingStatus.Cancelled;
+        }
+
+        if (mission.PreMissionAssessmentId.HasValue)
+        {
+            var assessment = await _db.PreMissionAssessments.FirstOrDefaultAsync(x => x.Id == mission.PreMissionAssessmentId.Value, ct);
+            if (assessment != null && assessment.ConsumedByMissionId == mission.Id)
+            {
+                assessment.ConsumedByMissionId = null;
+                if (assessment.ValidUntil > DateTime.UtcNow)
+                {
+                    assessment.Status = PreMissionAssessmentStatus.Ready;
+                }
+                else
+                {
+                    assessment.Status = PreMissionAssessmentStatus.Expired;
+                }
+                assessment.Version++;
+            }
         }
 
         Audit(mission.Id, "MISSION_CANCELLED");
@@ -1505,6 +1778,37 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
 
         Audit(mission.Id, isApproved ? "DETECTION_APPROVED" : "DETECTION_REJECTED");
         await _db.SaveChangesAsync(ct);
+
+        if (_notifier != null)
+        {
+            try
+            {
+                await _notifier.NotifyAsync(new MissionLifecycleEventDto
+                {
+                    MissionId = missionId.ToString(),
+                    Type = "DETECTION_REVIEWED",
+                    Status = isApproved ? "Approved" : "Rejected",
+                    Reason = request.ReviewNotes ?? anomaly.AnalystNotes,
+                    Timestamp = anomaly.ValidatedAt ?? DateTime.UtcNow
+                }, ct);
+
+                if (createdTaskId != null)
+                {
+                    await _notifier.NotifyAsync(new MissionLifecycleEventDto
+                    {
+                        MissionId = missionId.ToString(),
+                        Type = "MAINTENANCE_TASK_CREATED",
+                        Status = "Open",
+                        Reason = $"Phiếu bảo trì {createdTaskId} được tạo cho khuyết tật {anomaly.Id}",
+                        Timestamp = DateTime.UtcNow
+                    }, ct);
+                }
+            }
+            catch
+            {
+                // Non-blocking realtime notification
+            }
+        }
 
         return new ReviewDetectionResultDto
         {
@@ -2132,6 +2436,151 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             SentAt = DateTime.UtcNow
         });
     }
+    public async Task<Mission> UpdatePriorityAsync(Guid missionId, UpdateMissionPriorityRequest request, CancellationToken ct)
+    {
+        var mission = await ManagedMission(missionId, ct);
+        RequirePreExecution(mission);
+
+        // BR-06: EmergencyReason is required when Priority is EMERGENCY
+        if (request.Priority == MissionPriority.Emergency)
+        {
+            if (string.IsNullOrWhiteSpace(request.EmergencyReason) || request.EmergencyReason.Trim().Length < 10)
+            {
+                throw new BusinessRuleException("EMERGENCY_REASON_REQUIRED", "EmergencyReason is required (min 10 characters) when Priority is EMERGENCY.");
+            }
+        }
+
+        var oldValues = JsonSerializer.Serialize(new
+        {
+            Priority = mission.Priority.ToString(),
+            Objective = mission.Objective.ToString(),
+            mission.PriorityDefectsJson,
+            mission.EmergencyReason
+        });
+
+        mission.Priority = request.Priority;
+        if (request.Objective.HasValue)
+        {
+            mission.Objective = request.Objective.Value;
+        }
+        if (request.PriorityDefects != null)
+        {
+            mission.PriorityDefectsJson = JsonSerializer.Serialize(request.PriorityDefects);
+        }
+        mission.EmergencyReason = request.Priority == MissionPriority.Emergency
+            ? request.EmergencyReason?.Trim()
+            : null;
+
+        var newValues = JsonSerializer.Serialize(new
+        {
+            Priority = mission.Priority.ToString(),
+            Objective = mission.Objective.ToString(),
+            mission.PriorityDefectsJson,
+            mission.EmergencyReason
+        });
+
+        // BR-09: Mission priority creation and changes must be recorded in Audit Log
+        Audit(mission.Id, "MISSION_PRIORITY_UPDATED", oldValues, newValues);
+        await _db.SaveChangesAsync(ct);
+        return mission;
+    }
+
+    public async Task<CheckResourceConflictsResponse> CheckResourceConflictsAsync(CheckResourceConflictsRequest request, CancellationToken ct)
+    {
+        if (request.StartAt >= request.EndAt)
+        {
+            throw new BusinessRuleException("INVALID_TIME_RANGE", "StartAt must be earlier than EndAt.");
+        }
+
+        var userList = (request.UserIds ?? Array.Empty<Guid>()).Distinct().ToList();
+        var droneList = (request.DroneIds ?? Array.Empty<Guid>()).Distinct().ToList();
+
+        var query = _db.ResourceBookings
+            .Include(b => b.Mission)
+            .Include(b => b.User)
+            .Include(b => b.Drone)
+            .Where(b => b.Status == ResourceBookingStatus.Active &&
+                        b.StartAt < request.EndAt &&
+                        b.EndAt > request.StartAt);
+
+        if (request.ExcludeMissionId.HasValue)
+        {
+            query = query.Where(b => b.MissionId != request.ExcludeMissionId.Value);
+        }
+
+        var overlappingBookings = await query.ToListAsync(ct);
+        var conflicts = new List<ResourceConflictItemDto>();
+
+        foreach (var b in overlappingBookings)
+        {
+            if (b.UserId.HasValue && userList.Contains(b.UserId.Value))
+            {
+                conflicts.Add(new ResourceConflictItemDto(
+                    ResourceType: "Personnel",
+                    ResourceId: b.UserId.Value,
+                    ResourceName: b.User?.FullName ?? b.UserId.ToString(),
+                    ConflictingMissionId: b.MissionId,
+                    ConflictingMissionCode: b.Mission?.MissionCode ?? b.MissionId.ToString(),
+                    ConflictingMissionTitle: b.Mission?.Title ?? string.Empty,
+                    ConflictStart: b.StartAt,
+                    ConflictEnd: b.EndAt,
+                    ConflictingMissionPriority: b.Mission?.Priority ?? MissionPriority.Normal
+                ));
+            }
+
+            if (b.DroneId.HasValue && droneList.Contains(b.DroneId.Value))
+            {
+                conflicts.Add(new ResourceConflictItemDto(
+                    ResourceType: "Drone",
+                    ResourceId: b.DroneId.Value,
+                    ResourceName: b.Drone?.UavCode ?? b.DroneId.ToString(),
+                    ConflictingMissionId: b.MissionId,
+                    ConflictingMissionCode: b.Mission?.MissionCode ?? b.MissionId.ToString(),
+                    ConflictingMissionTitle: b.Mission?.Title ?? string.Empty,
+                    ConflictStart: b.StartAt,
+                    ConflictEnd: b.EndAt,
+                    ConflictingMissionPriority: b.Mission?.Priority ?? MissionPriority.Normal
+                ));
+            }
+        }
+
+        // BR-07: Resource Revalidation - UAV availability & health warnings
+        var warnings = new List<ResourceAvailabilityWarningDto>();
+        if (droneList.Count > 0)
+        {
+            var drones = await _db.Uavs.Where(u => droneList.Contains(u.Id)).ToListAsync(ct);
+            foreach (var d in drones)
+            {
+                if (d.OperationalStatus != DroneOperationalStatus.Available)
+                {
+                    warnings.Add(new ResourceAvailabilityWarningDto(
+                        ResourceId: d.Id,
+                        ResourceType: "Drone",
+                        ResourceName: d.UavCode,
+                        WarningType: "OPERATIONAL_STATUS",
+                        Message: $"Drone {d.UavCode} hiện ở trạng thái '{d.OperationalStatus}', không sẵn sàng."
+                    ));
+                }
+                if (d.TechnicalHealth == TechnicalHealth.Critical)
+                {
+                    warnings.Add(new ResourceAvailabilityWarningDto(
+                        ResourceId: d.Id,
+                        ResourceType: "Drone",
+                        ResourceName: d.UavCode,
+                        WarningType: "TECHNICAL_HEALTH_CRITICAL",
+                        Message: $"Drone {d.UavCode} có sức khỏe kỹ thuật CRITICAL, không đủ điều kiện bay."
+                    ));
+                }
+            }
+        }
+
+        return new CheckResourceConflictsResponse(
+            HasConflict: conflicts.Count > 0,
+            Conflicts: conflicts,
+            Warnings: warnings
+        );
+    }
+
     private async Task SaveConcurrency(CancellationToken ct)
     {
         try
@@ -2145,3 +2594,4 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
     }
 }
+

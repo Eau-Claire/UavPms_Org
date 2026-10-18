@@ -67,8 +67,8 @@ public class Mission : BaseEntity
 
     public void Start(DateTime? startTime = null)
     {
-        if (Status != MissionStatus.Ready)
-            throw new InvalidOperationException("MISSION_NOT_READY");
+        if (Status is not (MissionStatus.Ready or MissionStatus.Assigned or MissionStatus.Preparing))
+            throw new InvalidOperationException($"Cannot start mission with status {Status}. Mission must be Ready, Assigned, or Preparing.");
 
         Status = MissionStatus.InProgress;
         StartedAt = startTime ?? DateTime.UtcNow;

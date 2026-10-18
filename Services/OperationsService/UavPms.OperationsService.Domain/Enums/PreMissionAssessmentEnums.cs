@@ -23,3 +23,4 @@ public enum ReadinessCheckStatus { Pending, Passed, Failed, Incomplete, Warning 
 public enum ResourceAvailabilityStatus { Unknown, Available, Conflict, Unavailable }
 public enum ResourceEligibilityStatus { Unknown, Eligible, Ineligible, RequiresInspection }
 public enum ResourceBookingStatus { Active, Released, Cancelled }
+public enum UavScopeSuitability { Suitable, SuitableWithSplit, Unsuitable }

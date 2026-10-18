@@ -320,6 +320,34 @@
       }
     },
     {
+      "DownstreamPathTemplate": "/api/v{version}/flight-controllers/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/flight-controllers/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/flight-controllers",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/flight-controllers",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/drones/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/drones/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/drones",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/drones",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
       "DownstreamPathTemplate": "/api/v{version}/devices/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
@@ -387,6 +415,34 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/api/v{version}/maintenance",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/alerts/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/alerts/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/alerts",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/alerts",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/anomalies/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/anomalies/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/anomalies",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/anomalies",
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {

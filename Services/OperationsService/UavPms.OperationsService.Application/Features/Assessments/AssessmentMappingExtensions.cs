@@ -57,7 +57,11 @@ public static class AssessmentMappingExtensions
                 d.TechnicalHealth.ToString(),
                 d.TechnicalInspectionId,
                 d.ReasonCode,
-                d.Drone?.BatteryLevel ?? 100
+                d.Drone?.BatteryLevel ?? 100,
+                d.Suitability.ToString().ToUpperInvariant(),
+                d.EstimatedFlightsNeeded,
+                d.CoverageDistanceKm,
+                d.SuitabilityReason
             ))
             .ToList();
 

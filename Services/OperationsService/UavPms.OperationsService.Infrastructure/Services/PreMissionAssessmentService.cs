@@ -9,6 +9,7 @@ using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Persistence;
+using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.Shared.Contracts.Constants;
 using UavPms.Shared.Contracts.Events;
 
@@ -18,11 +19,16 @@ public sealed class PreMissionAssessmentService
 {
     private readonly ApplicationDbContext _db;
     private readonly ICurrentUserServices _current;
+    private readonly IMissionRealtimeNotifier? _notifier;
 
-    public PreMissionAssessmentService(ApplicationDbContext db, ICurrentUserServices current)
+    public PreMissionAssessmentService(
+        ApplicationDbContext db, 
+        ICurrentUserServices current,
+        IMissionRealtimeNotifier? notifier = null)
     {
         _db = db;
         _current = current;
+        _notifier = notifier;
     }
 
     public async Task<PreMissionAssessment> CreateAsync(
@@ -139,7 +145,7 @@ public sealed class PreMissionAssessmentService
 
     public async Task<PreMissionAssessment> GetAsync(Guid id, CancellationToken ct)
     {
-        await RequireManager(ct);
+        await RequireManagerOrInspector(ct);
 
         var assessment = await _db.PreMissionAssessments
             .Include(x => x.Assets).ThenInclude(a => a.Asset)
@@ -167,9 +173,10 @@ public sealed class PreMissionAssessmentService
 
     public async Task<IReadOnlyList<PreMissionAssessment>> ListAsync(string? status, CancellationToken ct)
     {
-        await RequireManager(ct);
+        await RequireManagerOrInspector(ct);
 
         var isGlobal = _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
+        var isInspector = _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase);
         List<Guid?>? userScopes = null;
         if (!isGlobal)
         {
@@ -188,6 +195,7 @@ public sealed class PreMissionAssessmentService
             .Include(x => x.Region)
             .Where(x => isGlobal ||
                         hasGlobalScope ||
+                        isInspector ||
                         x.ManagerId == _current.UserId ||
                         (userScopes != null && userScopes.Contains(x.RegionId)));
 
@@ -365,20 +373,62 @@ public sealed class PreMissionAssessmentService
                 .OrderByDescending(x => x.CompletedAt)
                 .FirstOrDefault();
 
-            var isTechEligible = latestInspection != null &&
-                                 (latestInspection.Health is TechnicalHealth.Healthy or TechnicalHealth.Warning);
+            var currentHealth = latestInspection?.Health ?? drone.TechnicalHealth;
+            var isTechEligible = currentHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning;
 
-            var isEligible = isOpAvailable && isTechEligible;
+            // Suitability & GIS scope estimation
+            var assetCount = assessment.Assets.Count > 0 ? assessment.Assets.Count : 10;
+            var corridorKm = Math.Round(assetCount * 0.35, 2);
+            var endurance = drone.FlightEnduranceMinutes > 0 ? drone.FlightEnduranceMinutes : 30.0;
+            var effectiveFlightMinutes = endurance * 0.8;
+            var missionMinutes = (corridorKm / 36.0 * 60.0) + (assetCount * 3.0);
+            var flightsNeeded = (int)Math.Max(1, Math.Ceiling(missionMinutes / effectiveFlightMinutes));
+            var coverageDistanceKm = Math.Round((effectiveFlightMinutes / 60.0) * 36.0, 2);
+
+            UavScopeSuitability suitability;
+            string? suitabilityReason;
+
+            if (!isTechEligible || currentHealth == TechnicalHealth.Critical)
+            {
+                suitability = UavScopeSuitability.Unsuitable;
+                suitabilityReason = $"Sức khỏe kỹ thuật {currentHealth} không đảm bảo an toàn bay.";
+            }
+            else if (!isOpAvailable)
+            {
+                suitability = UavScopeSuitability.Unsuitable;
+                suitabilityReason = $"Thiết bị ở trạng thái {drone.OperationalStatus}, không sẵn sàng.";
+            }
+            else if (flightsNeeded == 1 && corridorKm <= drone.OperationalRangeKm)
+            {
+                suitability = UavScopeSuitability.Suitable;
+                suitabilityReason = "Khả năng bay đáp ứng trọn vẹn toàn bộ phạm vi đo kiểm trong 1 chuyến bay.";
+            }
+            else if (flightsNeeded <= 4)
+            {
+                suitability = UavScopeSuitability.SuitableWithSplit;
+                suitabilityReason = $"Phạm vi đo kiểm vượt quá 1 lần bay. Đề xuất phân tách thành {flightsNeeded} đợt bay.";
+            }
+            else
+            {
+                suitability = UavScopeSuitability.Unsuitable;
+                suitabilityReason = $"Phạm vi đo kiểm ({corridorKm} km) vượt quá năng lực vận hành tối đa.";
+            }
+
+            var isEligible = isOpAvailable && isTechEligible && suitability != UavScopeSuitability.Unsuitable;
 
             string? reasonCode = null;
             if (drone.OperationalStatus != DroneOperationalStatus.Available)
                 reasonCode = "DRONE_NOT_AVAILABLE";
             else if (hasConflict)
                 reasonCode = "SCHEDULE_CONFLICT";
+            else if (currentHealth == TechnicalHealth.Critical)
+                reasonCode = "TECHNICAL_HEALTH_CRITICAL";
             else if (latestInspection == null)
                 reasonCode = "NO_VALID_TECHNICAL_INSPECTION";
             else if (!isTechEligible)
                 reasonCode = "TECHNICAL_HEALTH_DEGRADED";
+            else if (suitability == UavScopeSuitability.Unsuitable)
+                reasonCode = "SCOPE_EXCEEDS_CAPABILITY";
 
             var droneCandidate = new PreMissionAssessmentDrone
             {
@@ -393,7 +443,11 @@ public sealed class PreMissionAssessmentService
                 TechnicalEligibilityStatus = isTechEligible
                     ? ResourceEligibilityStatus.Eligible
                     : ResourceEligibilityStatus.Ineligible,
-                TechnicalHealth = latestInspection?.Health ?? drone.TechnicalHealth,
+                Suitability = suitability,
+                EstimatedFlightsNeeded = flightsNeeded,
+                CoverageDistanceKm = coverageDistanceKm,
+                SuitabilityReason = suitabilityReason,
+                TechnicalHealth = currentHealth,
                 TechnicalInspectionId = latestInspection?.Id,
                 ReasonCode = reasonCode,
                 SnapshotAt = DateTime.UtcNow
@@ -425,6 +479,23 @@ public sealed class PreMissionAssessmentService
 
         Audit(assessment.Id, "ASSESSMENT_EVALUATED");
         await SaveWithConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAssessmentAsync(new AssessmentRealtimeEventDto
+            {
+                AssessmentId = assessment.Id.ToString(),
+                Type = "AssessmentStatusChanged",
+                Status = assessment.Status.ToString().ToUpperInvariant(),
+                TechnicalHealth = assessment.OverallTechnicalHealth.ToString(),
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                ActorRole = "MANAGER",
+                Timestamp = DateTime.UtcNow,
+                Message = $"Thẩm định tiền nhiệm vụ {assessment.Id} đã được đánh giá lại: {assessment.Status}"
+            }, ct);
+        }
+
         return assessment;
     }
 
@@ -532,6 +603,16 @@ public sealed class PreMissionAssessmentService
         var primaryDrone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == primaryDroneId, ct)
             ?? throw new NotFoundException("Drone", primaryDroneId);
 
+        if (primaryDrone.OperationalStatus != DroneOperationalStatus.Available)
+        {
+            throw new BusinessRuleException("DRONE_NOT_AVAILABLE", $"Drone {primaryDrone.UavCode} hiện không ở trạng thái sẵn sàng (trạng thái: {primaryDrone.OperationalStatus}).");
+        }
+
+        if (primaryDrone.TechnicalHealth == TechnicalHealth.Critical)
+        {
+            throw new BusinessRuleException("DRONE_CRITICAL_HEALTH", $"Drone {primaryDrone.UavCode} có sức khỏe kỹ thuật báo động CRITICAL, không đủ điều kiện thực hiện nhiệm vụ bay.");
+        }
+
         var primaryInspectorId = request.Personnel.First().UserId;
 
         // Gap #11: Mission starts at PendingAcceptance
@@ -611,7 +692,7 @@ public sealed class PreMissionAssessmentService
             });
         }
 
-        // Consume assessment
+        // Complete assessment and link mission
         assessment.Status = PreMissionAssessmentStatus.Completed;
         assessment.ConsumedByMissionId = mission.Id;
         assessment.Version++;
@@ -651,6 +732,24 @@ public sealed class PreMissionAssessmentService
         }
 
         await SaveWithConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAssessmentAsync(new AssessmentRealtimeEventDto
+            {
+                AssessmentId = assessment.Id.ToString(),
+                Type = "AssessmentCompleted",
+                Status = "COMPLETED",
+                ConsumedMissionId = mission.Id.ToString(),
+                ConsumedMissionCode = mission.MissionCode,
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                ActorRole = "MANAGER",
+                Timestamp = DateTime.UtcNow,
+                Message = $"Bản thẩm định {assessment.Id} đã hoàn tất và tạo nhiệm vụ {mission.MissionCode ?? mission.Id.ToString()}."
+            }, ct);
+        }
+
         return mission;
     }
 
@@ -708,7 +807,85 @@ public sealed class PreMissionAssessmentService
 
         Audit(assessment.Id, "ASSESSMENT_MARKED_COMPLETED");
         await SaveWithConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAssessmentAsync(new AssessmentRealtimeEventDto
+            {
+                AssessmentId = assessment.Id.ToString(),
+                Type = "AssessmentCompleted",
+                Status = "COMPLETED",
+                ConsumedMissionId = mission.Id.ToString(),
+                ConsumedMissionCode = mission.MissionCode,
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                ActorRole = "MANAGER",
+                Timestamp = DateTime.UtcNow,
+                Message = $"Bản thẩm định {assessment.Id} đã được đánh dấu hoàn tất cho nhiệm vụ {mission.MissionCode ?? mission.Id.ToString()}."
+            }, ct);
+        }
+
         return assessment;
+    }
+
+    public async Task<PreMissionAssessment> CancelAsync(Guid id, string? reason, CancellationToken ct)
+    {
+        await RequireManager(ct);
+
+        var assessment = await _db.PreMissionAssessments
+            .Include(x => x.Assets)
+            .Include(x => x.PersonnelCandidates)
+            .Include(x => x.DroneCandidates)
+            .Include(x => x.Region)
+            .SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new NotFoundException("PreMissionAssessment", id);
+
+        await EnsureManagerHasAssessmentAccessAsync(assessment, ct);
+
+        if (assessment.Status == PreMissionAssessmentStatus.Completed)
+            throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED", "Bản đánh giá đã hoàn thành tạo nhiệm vụ bay, không thể hủy.");
+
+        if (assessment.Status == PreMissionAssessmentStatus.Cancelled)
+            return assessment;
+
+        assessment.Status = PreMissionAssessmentStatus.Cancelled;
+        assessment.Version++;
+
+        Audit(assessment.Id, "ASSESSMENT_CANCELLED");
+        await SaveWithConcurrency(ct);
+
+        if (_notifier != null)
+        {
+            await _notifier.NotifyAssessmentAsync(new AssessmentRealtimeEventDto
+            {
+                AssessmentId = assessment.Id.ToString(),
+                Type = "AssessmentCancelled",
+                Status = "CANCELLED",
+                ActorId = _current.UserId.ToString(),
+                ActorName = _current.Username ?? "Manager",
+                ActorRole = "MANAGER",
+                Timestamp = DateTime.UtcNow,
+                Message = $"Bản thẩm định {assessment.Id} đã bị hủy bởi Quản lý. Lý do: {reason ?? "Không có"}"
+            }, ct);
+        }
+
+        return assessment;
+    }
+
+    private async Task RequireManagerOrInspector(CancellationToken ct)
+    {
+        if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
+            throw new ForbiddenException("AUTHENTICATION_REQUIRED");
+
+        var hasRole = _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) ||
+                      _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
+                      _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase);
+
+        if (!hasRole)
+            throw new ForbiddenException("ASSESSMENT_PERMISSION_REQUIRED");
+
+        if (!await _db.Users.AnyAsync(x => x.Id == _current.UserId && (x.Status == "Active" || x.Status == "Enabled"), ct))
+            throw new ForbiddenException("ACTIVE_USER_REQUIRED");
     }
 
     private async Task RequireManager(CancellationToken ct)
@@ -737,9 +914,16 @@ public sealed class PreMissionAssessmentService
         if (assessment.ManagerId == _current.UserId)
             return;
 
-        var isManager = _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase);
-        if (isManager && await _db.UserGeographicScopes.AnyAsync(
+        var isManagerOrInspector = _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) ||
+                                  _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase);
+
+        if (isManagerOrInspector && await _db.UserGeographicScopes.AnyAsync(
             s => s.UserId == _current.UserId && (s.RegionId == assessment.RegionId || s.RegionId == null), ct))
+        {
+            return;
+        }
+
+        if (_current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase))
         {
             return;
         }

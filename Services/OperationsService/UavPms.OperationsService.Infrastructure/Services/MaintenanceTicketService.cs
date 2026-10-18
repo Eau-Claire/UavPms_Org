@@ -14,8 +14,10 @@ using UavPms.OperationsService.Application.Features.Maintenance.DTOs;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Services;
+using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.Shared.Contracts.Constants;
+using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.OperationsService.Infrastructure.Services;
 
@@ -23,11 +25,16 @@ public class MaintenanceTicketService : IMaintenanceTicketService
 {
     private readonly ApplicationDbContext _db;
     private readonly ICurrentUserServices _currentUser;
+    private readonly IMissionRealtimeNotifier? _notifier;
 
-    public MaintenanceTicketService(ApplicationDbContext db, ICurrentUserServices currentUser)
+    public MaintenanceTicketService(
+        ApplicationDbContext db,
+        ICurrentUserServices currentUser,
+        IMissionRealtimeNotifier? notifier = null)
     {
         _db = db;
         _currentUser = currentUser;
+        _notifier = notifier;
     }
 
     public async Task<MaintenanceTicketDto> CreateTicketAsync(CreateMaintenanceTicketRequest request, CancellationToken ct = default)
@@ -195,6 +202,29 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             }
             ticket.Status = TicketStatus.Closed;
             ticket.ResolvedAt = DateTime.UtcNow;
+
+            // Closed-Loop Recovery: Restore Asset Health Score after repair verification
+            if (ticket.AssetId != Guid.Empty)
+            {
+                var asset = await _db.Assets.FirstOrDefaultAsync(a => a.Id == ticket.AssetId, ct);
+                if (asset != null)
+                {
+                    double recoveredPoints = ticket.Priority == TicketPriority.Emergency ? 25 : (ticket.Priority == TicketPriority.High ? 20 : 15);
+                    asset.CurrentHealthScore = Math.Min(100.0, Math.Round(asset.CurrentHealthScore + recoveredPoints, 1));
+                    asset.LastInspectedAt = DateTime.UtcNow;
+
+                    var healthHistory = new AssetHealthHistory
+                    {
+                        Id = Guid.NewGuid(),
+                        AssetId = asset.Id,
+                        HealthScore = asset.CurrentHealthScore,
+                        CalculatedAt = DateTime.UtcNow,
+                        CalculationLog = $"{{\"recovered\": {recoveredPoints}, \"action\": \"MAINTENANCE_TICKET_CLOSED\", \"ticketCode\": \"{ticket.TicketCode}\"}}",
+                        RiskLevel = asset.CurrentHealthScore < 40 ? "Critical" : (asset.CurrentHealthScore < 70 ? "Medium" : "Low")
+                    };
+                    _db.AssetHealthHistories.Add(healthHistory);
+                }
+            }
         }
         else
         {
@@ -203,6 +233,33 @@ public class MaintenanceTicketService : IMaintenanceTicketService
 
         ticket.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
+
+        if (_notifier != null && ticket.AnomalyId != Guid.Empty)
+        {
+            try
+            {
+                var missionId = await _db.DetectedAnomalies
+                    .Where(a => a.Id == ticket.AnomalyId)
+                    .Select(a => a.Media != null ? a.Media.MissionId : (Guid?)null)
+                    .FirstOrDefaultAsync(ct);
+
+                if (missionId.HasValue)
+                {
+                    await _notifier.NotifyAsync(new MissionLifecycleEventDto
+                    {
+                        MissionId = missionId.Value.ToString(),
+                        Type = "MAINTENANCE_TASK_STATUS_CHANGED",
+                        Status = ticket.Status.ToString(),
+                        Reason = $"Ticket {ticket.TicketCode} status updated to {ticket.Status}",
+                        Timestamp = DateTime.UtcNow
+                    }, ct);
+                }
+            }
+            catch
+            {
+                // Non-blocking realtime event
+            }
+        }
 
         return MapToDto(ticket);
     }
@@ -368,6 +425,33 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         });
 
         await _db.SaveChangesAsync(ct);
+
+        if (_notifier != null && ticket.AnomalyId != Guid.Empty)
+        {
+            try
+            {
+                var missionId = await _db.DetectedAnomalies
+                    .Where(a => a.Id == ticket.AnomalyId)
+                    .Select(a => a.Media != null ? a.Media.MissionId : (Guid?)null)
+                    .FirstOrDefaultAsync(ct);
+
+                if (missionId.HasValue)
+                {
+                    await _notifier.NotifyAsync(new MissionLifecycleEventDto
+                    {
+                        MissionId = missionId.Value.ToString(),
+                        Type = "MAINTENANCE_TASK_STATUS_CHANGED",
+                        Status = "Closed",
+                        Reason = $"Ticket {ticket.TicketCode} closed and resolved",
+                        Timestamp = DateTime.UtcNow
+                    }, ct);
+                }
+            }
+            catch
+            {
+                // Non-blocking realtime event
+            }
+        }
 
         return MapToDto(ticket);
     }

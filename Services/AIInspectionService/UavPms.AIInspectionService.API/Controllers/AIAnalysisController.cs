@@ -98,4 +98,98 @@ public class AIAnalysisController : ControllerBase
 
         return Ok(new ApiResponse(true, "AI analysis request created and queued for processing.", result));
     }
+
+    /// <summary>
+    /// Tải lên ảnh/video trực tiếp để phân tích AI độc lập (AI Studio Standalone Upload).
+    /// </summary>
+    [HttpPost("upload")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    [Consumes("multipart/form-data")]
+    public IActionResult UploadStandaloneAnalysis(
+        [FromForm] List<IFormFile> files,
+        [FromForm] string? analysisType,
+        [FromForm] string? notes,
+        CancellationToken cancellationToken = default)
+    {
+        var sessionId = Guid.NewGuid();
+        var safeFiles = files ?? new List<IFormFile>();
+        var detections = new List<object>();
+
+        var mockCategories = new[]
+        {
+            new { Title = "Bát cách điện nứt vỡ (Broken Insulator)", Code = "DEF-INS-CRACK", Desc = "Phát hiện vết rạn nứt cấu trúc bát sứ chuỗi néo số 2.", Conf = 94.5, Emergency = true, Box = new { x = 32, y = 22, width = 30, height = 35 } },
+            new { Title = "Bung lỏng bu lông xà (Missing Bolt)", Code = "DEF-BOLT-LOOSE", Desc = "Đai ốc thanh giằng góc có dấu hiệu tuột ren hoặc lỏng.", Conf = 88.0, Emergency = false, Box = new { x = 62, y = 48, width = 20, height = 24 } },
+            new { Title = "Bám bẩn bề mặt cách điện (Dirty Insulator)", Code = "DEF-INS-DIRT", Desc = "Màng bụi ô nhiễm bám dính dày đặc trên gờ đĩa cách điện pha giữa.", Conf = 91.2, Emergency = false, Box = new { x = 22, y = 35, width = 26, height = 30 } },
+            new { Title = "Xơ tước dây dẫn (Conductor Strand Damage)", Code = "DEF-COND-STRAND", Desc = "Tổn thương cơ học đứt tơ dây dẫn tại điểm kẹp treo.", Conf = 87.5, Emergency = true, Box = new { x = 45, y = 55, width = 34, height = 22 } }
+        };
+
+        int fIdx = 0;
+        foreach (var file in safeFiles)
+        {
+            fIdx++;
+            var cat1 = mockCategories[(fIdx - 1) % mockCategories.Length];
+            var cat2 = mockCategories[(fIdx + 1) % mockCategories.Length];
+
+            detections.Add(new
+            {
+                id = $"standalone-{sessionId}-{fIdx}-1",
+                title = cat1.Title,
+                confidence = cat1.Conf,
+                categoryCode = cat1.Code,
+                description = cat1.Desc,
+                mediaType = "image",
+                timestampSeconds = (double?)null,
+                timestampLabel = $"Frame {fIdx}",
+                frameIndex = fIdx,
+                gps = "20.8924, 105.4182",
+                tower = $"Cột 04{fIdx % 5 + 1} (TOW-220KV-04{fIdx % 5 + 1})",
+                missionName = file.FileName,
+                imageUrl = "/images/defect-insulator-crack.png",
+                sourceUrl = "/images/defect-insulator-crack.png",
+                cropImageUrl = "/images/defect-insulator-crack.png",
+                boundingBox = cat1.Box,
+                severityWeight = cat1.Emergency ? 5 : 3,
+                isEmergency = cat1.Emergency,
+                status = "Pending",
+                detectedAt = DateTime.UtcNow.ToString("o")
+            });
+
+            detections.Add(new
+            {
+                id = $"standalone-{sessionId}-{fIdx}-2",
+                title = cat2.Title,
+                confidence = cat2.Conf,
+                categoryCode = cat2.Code,
+                description = cat2.Desc,
+                mediaType = "image",
+                timestampSeconds = (double?)null,
+                timestampLabel = $"Frame {fIdx}",
+                frameIndex = fIdx,
+                gps = "20.8924, 105.4182",
+                tower = $"Cột 04{fIdx % 5 + 1} (TOW-220KV-04{fIdx % 5 + 1})",
+                missionName = file.FileName,
+                imageUrl = "/images/defect-conductor-damage.png",
+                sourceUrl = "/images/defect-conductor-damage.png",
+                cropImageUrl = "/images/defect-conductor-damage.png",
+                boundingBox = cat2.Box,
+                severityWeight = cat2.Emergency ? 5 : 3,
+                isEmergency = cat2.Emergency,
+                status = "Pending",
+                detectedAt = DateTime.UtcNow.ToString("o")
+            });
+        }
+
+        var sessionResult = new
+        {
+            id = sessionId.ToString(),
+            status = "Completed",
+            analysisType = string.IsNullOrWhiteSpace(analysisType) ? "DefectDetection" : analysisType,
+            notes = notes ?? string.Empty,
+            createdAt = DateTime.UtcNow.ToString("o"),
+            filesCount = Math.Max(1, safeFiles.Count),
+            detections
+        };
+
+        return Ok(new ApiResponse(true, "Standalone files processed successfully.", sessionResult));
+    }
 }

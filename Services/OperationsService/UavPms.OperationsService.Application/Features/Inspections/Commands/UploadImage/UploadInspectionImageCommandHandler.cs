@@ -10,6 +10,7 @@ using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Events;
 using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Application.Common.Exceptions;
+using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Domain.Enums;
 using System.Text.Json;
 
@@ -28,6 +29,7 @@ public class UploadInspectionImageCommandHandler
     private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
     private readonly IGenericRepository<MissionAssignment>? _assignmentRepository;
     private readonly ICurrentUserServices _currentUser;
+    private readonly IMissionRealtimeNotifier? _notifier;
     private readonly ILogger<UploadInspectionImageCommandHandler> _logger;
 
     public UploadInspectionImageCommandHandler(
@@ -41,7 +43,8 @@ public class UploadInspectionImageCommandHandler
         IGenericRepository<OutboxMessage> outboxRepository,
         ICurrentUserServices currentUser,
         ILogger<UploadInspectionImageCommandHandler> logger,
-        IGenericRepository<MissionAssignment>? assignmentRepository = null)
+        IGenericRepository<MissionAssignment>? assignmentRepository = null,
+        IMissionRealtimeNotifier? notifier = null)
     {
         _missionRepository = missionRepository;
         _assetRepository = assetRepository;
@@ -53,6 +56,7 @@ public class UploadInspectionImageCommandHandler
         _outboxRepository = outboxRepository;
         _assignmentRepository = assignmentRepository;
         _currentUser = currentUser;
+        _notifier = notifier;
         _logger = logger;
     }
 
@@ -67,7 +71,7 @@ public class UploadInspectionImageCommandHandler
         ICurrentUserServices currentUser,
         ILogger<UploadInspectionImageCommandHandler> logger)
         : this(missionRepository, assetRepository, mediaRepository, missionTargetRepository, unitOfWork,
-            fileStorageService, eventPublisher, null!, currentUser, logger, null) { }
+            fileStorageService, eventPublisher, null!, currentUser, logger, null, null) { }
 
     public async Task<UploadInspectionImageResult> Handle(
         UploadInspectionImageCommand request,
@@ -213,6 +217,25 @@ public class UploadInspectionImageCommandHandler
 
         if (_outboxRepository == null)
             await _eventPublisher.PublishAsync(integrationEvent);
+
+        if (_notifier != null)
+        {
+            try
+            {
+                await _notifier.NotifyAsync(new MissionLifecycleEventDto
+                {
+                    MissionId = request.MissionId.ToString(),
+                    Type = "MEDIA_UPLOADED",
+                    Status = media.MediaType,
+                    Reason = media.FileUrl,
+                    Timestamp = DateTime.UtcNow
+                }, cancellationToken);
+            }
+            catch
+            {
+                // Non-blocking realtime event
+            }
+        }
 
         _logger.LogInformation(
             "Inspection image uploaded: MediaId={MediaId}, MissionId={MissionId}, Url={FileUrl}",

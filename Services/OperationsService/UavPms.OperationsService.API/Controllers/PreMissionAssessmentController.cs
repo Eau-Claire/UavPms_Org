@@ -79,6 +79,14 @@ public sealed class PreMissionAssessmentController : ControllerBase
         return Ok(assessment.ToDto());
     }
 
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelAssessmentRequest? request, CancellationToken ct)
+    {
+        AddSunsetHeader();
+        var assessment = await _service.CancelAsync(id, request?.Reason, ct);
+        return Ok(assessment.ToDto());
+    }
+
     private void AddSunsetHeader()
     {
         Response.Headers.Append("Sunset", "true");

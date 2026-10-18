@@ -7,10 +7,10 @@ namespace UavPms.OperationsService.Tests.Features.Missions;
 public class MissionLifecycleTests
 {
     [Fact]
-    public void CannotStartUnlessReady()
+    public void CannotStartIfPending()
     {
-        var mission = new Mission { Status = MissionStatus.Preparing };
-        mission.Invoking(x => x.Start()).Should().Throw<InvalidOperationException>().WithMessage("MISSION_NOT_READY");
+        var mission = new Mission { Status = MissionStatus.Pending };
+        mission.Invoking(x => x.Start()).Should().Throw<InvalidOperationException>().WithMessage("*Mission must be Ready, Assigned, or Preparing*");
     }
 
     [Fact]

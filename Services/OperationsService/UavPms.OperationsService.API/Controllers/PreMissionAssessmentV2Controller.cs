@@ -11,7 +11,7 @@ namespace UavPms.OperationsService.API.Controllers;
 [ApiController]
 [ApiVersion("2.0")]
 [Route("api/v{version:apiVersion}/pre-mission-assessments")]
-[Authorize(Roles = UserRoles.AdminAndManager)]
+[Authorize(Roles = UserRoles.AdminManagerInspector)]
 public sealed class PreMissionAssessmentV2Controller : ControllerBase
 {
     private readonly PreMissionAssessmentService _service;
@@ -22,6 +22,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Create([FromBody] CreateAssessmentRequest request, CancellationToken ct)
     {
         var assessment = await _service.CreateAsync(
@@ -36,10 +37,25 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] string? status, CancellationToken ct)
+    public async Task<IActionResult> List(
+        [FromQuery] string? status,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        CancellationToken ct = default)
     {
         var list = await _service.ListAsync(status, ct);
-        return Ok(list.Select(a => a.ToDto()));
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLowerInvariant();
+            list = list.Where(a =>
+                (a.Findings != null && a.Findings.ToLowerInvariant().Contains(s)) ||
+                (a.EvaluationPolicyVersion != null && a.EvaluationPolicyVersion.ToLowerInvariant().Contains(s))
+            ).ToList();
+        }
+
+        var pagedList = list.Skip((Math.Max(1, page) - 1) * pageSize).Take(pageSize).ToList();
+        return Ok(pagedList.Select(a => a.ToDto()));
     }
 
     [HttpGet("{id:guid}")]
@@ -85,6 +101,13 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     public async Task<IActionResult> Consume(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
     {
         var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
+        return Ok(assessment.ToDto());
+    }
+
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelAssessmentRequest? request, CancellationToken ct)
+    {
+        var assessment = await _service.CancelAsync(id, request?.Reason, ct);
         return Ok(assessment.ToDto());
     }
 }

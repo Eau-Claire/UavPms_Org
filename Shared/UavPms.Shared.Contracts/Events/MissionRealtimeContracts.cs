@@ -53,3 +53,32 @@ public class MissionLifecycleRealtimeEvent
     public MissionLifecycleEventDto Event { get; set; } = new();
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class AssessmentRealtimeEventDto
+{
+    public string AssessmentId { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string? Status { get; set; }
+    public string? DroneId { get; set; }
+    public string? DroneCode { get; set; }
+    public string? TechnicalHealth { get; set; }
+    public string? TechnicalStatus { get; set; }
+    public string? ConsumedMissionId { get; set; }
+    public string? ConsumedMissionCode { get; set; }
+    public string? CompletedMissionId { get => ConsumedMissionId; set => ConsumedMissionId = value; }
+    public string? CompletedMissionCode { get => ConsumedMissionCode; set => ConsumedMissionCode = value; }
+    public double? WindSpeed { get; set; }
+    public double? WindGust { get; set; }
+    public bool? IsMeteoSafe { get; set; }
+    public string? Message { get; set; }
+    public string? ActorId { get; set; }
+    public string? ActorName { get; set; }
+    public string? ActorRole { get; set; }
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+}
+
+public class AssessmentRealtimeIntegrationEvent
+{
+    public AssessmentRealtimeEventDto Event { get; set; } = new();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}

@@ -117,6 +117,7 @@ if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
     builder.Services.AddHostedService<NotificationPushConsumer>();
     builder.Services.AddHostedService<AIAnalysisStatusChangedConsumer>();
     builder.Services.AddHostedService<MissionLifecycleRealtimeConsumer>();
+    builder.Services.AddHostedService<AssessmentRealtimeConsumer>();
 }
 
 // Register Hangfire background jobs in DI so Hangfire JobActivator can resolve them

@@ -41,6 +41,8 @@ public static class DroneTechnicalHealthEvaluationPolicy
         "PROPULSION",
         "MOTORS",
         "PROP_INTEGRITY",
+        "FRAME_BODY",
+        "FLIGHT_CONTROLLER",
         "RF_LINK_TELEMETRY",
         "TELEMETRY"
     };

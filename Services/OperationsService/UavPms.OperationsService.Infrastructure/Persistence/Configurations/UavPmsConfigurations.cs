@@ -189,6 +189,12 @@ public class UavConfiguration : IEntityTypeConfiguration<Uav>
         builder.Property(e => e.Status).HasConversion<string>();
         builder.Property(e => e.OperationalStatus).HasConversion<string>();
         builder.Property(e => e.TechnicalHealth).HasConversion<string>();
+        builder.Property(e => e.Name).HasMaxLength(256);
+        builder.Property(e => e.Model).HasMaxLength(256);
+        builder.Property(e => e.Category).HasMaxLength(100);
+        builder.Property(e => e.SerialNumber).HasMaxLength(256);
+        builder.Property(e => e.AssignedRegionName).HasMaxLength(256);
+        builder.Property(e => e.CameraPayloadInfo).HasMaxLength(512);
         builder.Property(e => e.Version).IsConcurrencyToken();
     }
 }
@@ -379,6 +385,7 @@ public class PreMissionAssessmentDroneConfiguration : IEntityTypeConfiguration<P
         builder.Property(x => x.TechnicalHealth).HasConversion<string>();
         builder.Property(x => x.OperationalAvailabilityStatus).HasConversion<string>();
         builder.Property(x => x.TechnicalEligibilityStatus).HasConversion<string>();
+        builder.Property(x => x.Suitability).HasConversion<string>();
         builder.HasOne(x => x.Assessment).WithMany(x => x.DroneCandidates).HasForeignKey(x => x.AssessmentId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.Drone).WithMany().HasForeignKey(x => x.DroneId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.TechnicalInspection).WithMany().HasForeignKey(x => x.TechnicalInspectionId).OnDelete(DeleteBehavior.Restrict);
@@ -652,17 +659,25 @@ public class EmergencyAlertConfiguration : IEntityTypeConfiguration<EmergencyAle
         builder.HasOne(e => e.Anomaly)
             .WithMany(a => a.EmergencyAlerts)
             .HasForeignKey(e => e.AnomalyId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(e => e.Asset)
             .WithMany(a => a.EmergencyAlerts)
             .HasForeignKey(e => e.AssetId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Mission)
             .WithMany(m => m.EmergencyAlerts)
             .HasForeignKey(e => e.MissionId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.ReviewedByUser)
+            .WithMany()
+            .HasForeignKey(e => e.ReviewedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 
@@ -946,6 +961,30 @@ public class SystemSettingConfiguration : IEntityTypeConfiguration<SystemSetting
         builder.Property(e => e.DataType).HasMaxLength(20);
         builder.HasIndex(e => e.Key).IsUnique();
         builder.HasIndex(e => e.Category);
+    }
+}
+
+public class DroneFlightControllerConfiguration : IEntityTypeConfiguration<DroneFlightController>
+{
+    public void Configure(EntityTypeBuilder<DroneFlightController> builder)
+    {
+        builder.ToTable("DroneFlightControllers");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.FlightControllerUid).IsRequired().HasMaxLength(128);
+        builder.Property(x => x.BoardIdentifier).HasMaxLength(100);
+        builder.Property(x => x.FirmwareName).HasMaxLength(100);
+        builder.Property(x => x.FirmwareVersion).HasMaxLength(100);
+
+        builder.HasIndex(x => new { x.FlightControllerUid, x.IsActive })
+            .HasFilter("\"IsActive\" AND NOT \"IsDeleted\"");
+
+        builder.HasIndex(x => new { x.DroneId, x.IsActive })
+            .HasFilter("\"IsActive\" AND NOT \"IsDeleted\"");
+
+        builder.HasOne(x => x.Drone)
+            .WithMany(x => x.FlightControllers)
+            .HasForeignKey(x => x.DroneId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 

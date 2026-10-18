@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -128,6 +129,18 @@ public class MissionController : ControllerBase
     [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> RemoveAssignment(Guid id, Guid assignmentId, CancellationToken ct) { await _lifecycle!.RemoveAssignmentAsync(id, assignmentId, ct); return Ok(new ApiResponse(true, "Mission assignment removed")); }
 
+    [HttpPost("{id:guid}/assignments/{assignmentId:guid}/reassign")]
+    [HttpPost("{id:guid}/assignments/reassign")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> Reassign(Guid id, [FromBody] ReassignAssignmentRequest request, [FromRoute] Guid? assignmentId = null, CancellationToken ct = default)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var targetAssignmentId = assignmentId ?? request.AssignmentId;
+        var updatedRequest = request with { AssignmentId = targetAssignmentId };
+        var assignment = await _lifecycle.ReassignAsync(id, updatedRequest, ct);
+        return Ok(new ApiResponse(true, "Mission assignment reassigned successfully", MapAssignment(assignment)));
+    }
+
     [HttpPut("{id:guid}/drone")]
     [HttpPost("{id:guid}/drone")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
@@ -226,7 +239,7 @@ public class MissionController : ControllerBase
     }
 
     [HttpPost("{id:guid}/media")]
-    [Authorize(Roles = UserRoles.InspectorOnly)]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadMedia(
         Guid id,
@@ -237,6 +250,25 @@ public class MissionController : ControllerBase
         IFormFile file,
         CancellationToken ct = default)
     {
+        if (assetId == Guid.Empty)
+        {
+            var missionDetails = await _mediator.Send(new GetMissionDetailsQuery(id), ct);
+            var firstTarget = missionDetails?.Targets.FirstOrDefault(t => t.AssetId.HasValue && t.AssetId.Value != Guid.Empty);
+            if (firstTarget?.AssetId != null)
+            {
+                assetId = firstTarget.AssetId.Value;
+            }
+            else if (missionDetails?.Targets.FirstOrDefault()?.TowerId is Guid towerId && towerId != Guid.Empty)
+            {
+                assetId = towerId;
+            }
+        }
+
+        if (capturedAt == default)
+        {
+            capturedAt = DateTime.UtcNow;
+        }
+
         await using var stream = file?.OpenReadStream() ?? Stream.Null;
 
         var command = new UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage.UploadInspectionImageCommand
@@ -406,6 +438,31 @@ public class MissionController : ControllerBase
     {
         await _mediator.Send(new DeleteMissionCommand(id), cancellationToken);
         return Ok(new ApiResponse(true, "Mission deleted successfully"));
+    }
+
+    [HttpPost("check-resource-conflicts")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> CheckResourceConflicts(
+        [FromBody] CheckResourceConflictsRequest request,
+        CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        var result = await _lifecycle.CheckResourceConflictsAsync(request, ct);
+        return Ok(new ApiResponse(true, "Resource conflict check completed", result));
+    }
+
+    [HttpPatch("{id:guid}/priority")]
+    [HttpPut("{id:guid}/priority")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> UpdatePriority(
+        Guid id,
+        [FromBody] UpdateMissionPriorityRequest request,
+        CancellationToken ct)
+    {
+        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
+        await _lifecycle.UpdatePriorityAsync(id, request, ct);
+        var details = await _mediator.Send(new GetMissionDetailsQuery(id), ct);
+        return Ok(new ApiResponse(true, "Mission priority updated successfully", details));
     }
 
     [HttpGet]

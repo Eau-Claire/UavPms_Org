@@ -305,6 +305,34 @@
       }
     },
     {
+      "DownstreamPathTemplate": "/api/v{version}/flight-controllers/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/flight-controllers/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/flight-controllers",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/flight-controllers",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/drones/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/drones/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/drones",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/drones",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
       "DownstreamPathTemplate": "/api/v{version}/devices/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
@@ -359,6 +387,62 @@
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
       "UpstreamPathTemplate": "/images/{everything}",
       "UpstreamHttpMethod": ["GET", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/alerts/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/alerts/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/alerts",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/alerts",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/reports/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/reports/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/reports",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/reports",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/maintenance/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/maintenance/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/maintenance",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
+      "UpstreamPathTemplate": "/api/v{version}/maintenance",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/anomalies/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5103 }],
+      "UpstreamPathTemplate": "/api/v{version}/anomalies/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/anomalies",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5103 }],
+      "UpstreamPathTemplate": "/api/v{version}/anomalies",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
       "DownstreamPathTemplate": "/{everything}",
