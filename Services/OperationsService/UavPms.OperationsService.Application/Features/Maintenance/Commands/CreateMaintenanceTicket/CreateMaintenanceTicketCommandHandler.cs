@@ -77,7 +77,10 @@ public class CreateMaintenanceTicketCommandHandler : IRequestHandler<CreateMaint
             var tower = await _towerRepository.GetByIdAsync(towerId.Value);
             if (tower != null)
             {
-                tower.ActiveDefectsCount++;
+                if (anomaly.ValidationStatus != "Confirmed")
+                {
+                    tower.ActiveDefectsCount++;
+                }
                 await _towerRepository.UpdateAsync(tower);
             }
         }
