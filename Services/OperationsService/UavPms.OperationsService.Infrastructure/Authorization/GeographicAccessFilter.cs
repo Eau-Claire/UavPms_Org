@@ -25,7 +25,7 @@ public sealed class GeographicAccessFilter
 
     private bool IsManagerWithoutRestrictions(Guid userId)
     {
-        if (_currentUser?.IsAuthenticated != true || !_currentUser.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))
+        if (_currentUser?.IsAuthenticated != true || _currentUser.Roles == null || !_currentUser.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))
             return false;
 
         var hasScopes = _context.UserGeographicScopes.Any(s => s.UserId == userId);
@@ -41,7 +41,7 @@ public sealed class GeographicAccessFilter
 
     public IQueryable<Asset> ApplyToAssets(IQueryable<Asset> assets)
     {
-        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return assets;
+        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles != null && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return assets;
         if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return assets.Where(_ => false);
 
         var userId = _currentUser.UserId;
@@ -74,7 +74,7 @@ public sealed class GeographicAccessFilter
 
     public IQueryable<TransmissionLine> ApplyToLines(IQueryable<TransmissionLine> lines)
     {
-        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return lines;
+        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles != null && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return lines;
         if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return lines.Where(_ => false);
 
         var userId = _currentUser.UserId;
@@ -90,7 +90,7 @@ public sealed class GeographicAccessFilter
 
     public IQueryable<Tower> ApplyToTowers(IQueryable<Tower> towers)
     {
-        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return towers;
+        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles != null && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return towers;
         if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return towers.Where(_ => false);
         var userId = _currentUser.UserId;
         if (IsManagerWithoutRestrictions(userId)) return towers;
@@ -105,7 +105,7 @@ public sealed class GeographicAccessFilter
 
     public IQueryable<Substation> ApplyToSubstations(IQueryable<Substation> substations)
     {
-        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return substations;
+        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles != null && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return substations;
         if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return substations.Where(_ => false);
         var userId = _currentUser.UserId;
         if (IsManagerWithoutRestrictions(userId)) return substations;

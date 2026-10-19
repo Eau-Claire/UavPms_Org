@@ -54,7 +54,32 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
 
     public Task UpdateAsync(T entity)
     {
-        _context.Entry(entity).State = EntityState.Modified;
+        var entry = _context.Entry(entity);
+        if (entry.State == EntityState.Detached)
+        {
+            var keyProperty = _context.Model.FindEntityType(typeof(T))?.FindPrimaryKey()?.Properties.FirstOrDefault();
+            if (keyProperty != null)
+            {
+                var keyValue = keyProperty.PropertyInfo?.GetValue(entity);
+                if (keyValue != null)
+                {
+                    var tracked = _context.ChangeTracker.Entries<T>()
+                        .FirstOrDefault(e => Equals(keyProperty.PropertyInfo?.GetValue(e.Entity), keyValue));
+                    if (tracked != null)
+                    {
+                        tracked.CurrentValues.SetValues(entity);
+                        tracked.State = EntityState.Modified;
+                        return Task.CompletedTask;
+                    }
+                }
+            }
+            _context.Set<T>().Attach(entity);
+            entry.State = EntityState.Modified;
+        }
+        else
+        {
+            entry.State = EntityState.Modified;
+        }
         return Task.CompletedTask;
     }
 

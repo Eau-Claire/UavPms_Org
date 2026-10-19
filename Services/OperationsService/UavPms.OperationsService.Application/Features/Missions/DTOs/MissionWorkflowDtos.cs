@@ -240,4 +240,15 @@ public record MissionCheckInRequest(
     double? Longitude = null,
     string? Notes = null);
 
+public record ResourceBookingDto(
+    Guid Id,
+    Guid MissionId,
+    Guid? UserId,
+    Guid? DroneId,
+    DateTime StartAt,
+    DateTime EndAt,
+    string Status,
+    DateTime CreatedAt
+);
+
 
