@@ -15,6 +15,7 @@ namespace UavPms.OperationsService.API.Controllers;
 [ApiController]
 [ApiVersion("2.0")]
 [Route("api/v{version:apiVersion}/pre-mission-assessments")]
+[Route("api/v{version:apiVersion}/assessments")]
 [Authorize(Roles = UserRoles.AdminManagerInspector)]
 public sealed class PreMissionAssessmentV2Controller : ControllerBase
 {
