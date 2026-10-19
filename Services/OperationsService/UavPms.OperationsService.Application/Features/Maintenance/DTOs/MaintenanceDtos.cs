@@ -32,7 +32,8 @@ public class MaintenanceTicketDto
     public Guid Id { get; set; }
     public string TicketCode { get; set; } = string.Empty;
     public Guid AnomalyId { get; set; }
-    public Guid AssetId { get; set; }
+    public Guid? AssetId { get; set; }
+    public Guid? TowerId { get; set; }
     public Guid ManagerId { get; set; }
     public Guid TechnicianId { get; set; }
     public string Status { get; set; } = string.Empty;
@@ -45,6 +46,7 @@ public class MaintenanceTicketDto
     public DateTime CreatedAt { get; set; }
 
     public object? Asset { get; set; }
+    public object? Tower { get; set; }
     public object? Anomaly { get; set; }
     public object? Manager { get; set; }
     public object? Technician { get; set; }
@@ -57,6 +59,7 @@ public class MaintenanceProofDto
     public Guid Id { get; set; }
     public Guid TicketId { get; set; }
     public Guid UploadedBy { get; set; }
+    public string ProofType { get; set; } = "After";
     public string FileUrl { get; set; } = string.Empty;
     public string AfterRepairImageUrl { get; set; } = string.Empty;
     public string TechnicianNotes { get; set; } = string.Empty;

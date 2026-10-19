@@ -1,3 +1,4 @@
+using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Domain.Common;
 using UavPms.OperationsService.Domain.Enums;
 
@@ -49,6 +50,7 @@ public class MissionCheckIn : BaseEntity
 {
     public Guid MissionId { get; set; }
     public Guid UserId { get; set; }
+    public Geometry? CheckInLocation { get; set; }
     public DateTime CheckedInAt { get; set; }
     public MissionCheckInStatus Status { get; set; } = MissionCheckInStatus.CheckedIn;
     public virtual Mission? Mission { get; set; }
@@ -63,8 +65,12 @@ public class DroneHandover : BaseEntity
     public Guid ReceivedBy { get; set; }
     public DateTime ReceivedAt { get; set; }
     public string Condition { get; set; } = string.Empty;
+    public string InitialChecklist { get; set; } = "{}";
+    public string? ReturnChecklist { get; set; }
     public DroneHandoverStatus Status { get; set; }
     public DateTime? ReturnedAt { get; set; }
     public virtual Mission? Mission { get; set; }
     public virtual Uav? Drone { get; set; }
+    public virtual User? HandedOverByUser { get; set; }
+    public virtual User? ReceivedByUser { get; set; }
 }

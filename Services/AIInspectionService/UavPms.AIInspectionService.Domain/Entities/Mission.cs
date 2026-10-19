@@ -25,9 +25,5 @@ public class Mission : BaseEntity
     public virtual User? AssignedToUser { get; set; }
     public virtual Uav? Uav { get; set; }
 
-    public virtual ICollection<MissionTargetLine> MissionTargetLines { get; set; } = new List<MissionTargetLine>();
-    public virtual ICollection<MissionFlightLog> MissionFlightLogs { get; set; } = new List<MissionFlightLog>();
     public virtual ICollection<InspectionMedia> InspectionMedias { get; set; } = new List<InspectionMedia>();
-    public virtual ICollection<IncidentReport> IncidentReports { get; set; } = new List<IncidentReport>();
-    public virtual ICollection<EmergencyAlert> EmergencyAlerts { get; set; } = new List<EmergencyAlert>();
 }

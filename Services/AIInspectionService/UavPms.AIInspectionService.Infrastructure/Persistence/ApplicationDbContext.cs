@@ -1,48 +1,35 @@
-using System.Runtime.Serialization;
+using System;
+using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using NetTopologySuite.Geometries;
 using UavPms.AIInspectionService.Domain.Common;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
-using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.AIInspectionService.Infrastructure.Persistence;
 
 public class ApplicationDbContext : DbContext
 {
     private readonly ICurrentUserServices? _currentUserServices;
+    public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
+    public DbSet<DetectedAnomaly> DetectedAnomalies => Set<DetectedAnomaly>();
+    public DbSet<DefectCategory> DefectCategories => Set<DefectCategory>();
+    public DbSet<InspectionMedia> InspectionMedia => Set<InspectionMedia>();
+    public DbSet<Tower> Towers => Set<Tower>();
+    public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<Mission> Missions => Set<Mission>();
+    public DbSet<Uav> Uavs => Set<Uav>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
-    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
-    public DbSet<Region> Regions => Set<Region>();
-    public DbSet<Substation> Substations => Set<Substation>();
-    public DbSet<TransmissionLine> TransmissionLines => Set<TransmissionLine>();
-    public DbSet<Tower> Towers => Set<Tower>();
-    public DbSet<Asset> Assets => Set<Asset>();
-    public DbSet<AssetHealthHistory> AssetHealthHistories => Set<AssetHealthHistory>();
-    public DbSet<Uav> Uavs => Set<Uav>();
-    public DbSet<Mission> Missions => Set<Mission>();
-    public DbSet<MissionTargetLine> MissionTargetLines => Set<MissionTargetLine>();
-    public DbSet<MissionFlightLog> MissionFlightLogs => Set<MissionFlightLog>();
-    public DbSet<InspectionMedia> InspectionMedia => Set<InspectionMedia>();
-    public DbSet<DefectCategory> DefectCategories => Set<DefectCategory>();
-    public DbSet<DetectedAnomaly> DetectedAnomalies => Set<DetectedAnomaly>();
-    public DbSet<EmergencyAlert> EmergencyAlerts => Set<EmergencyAlert>();
-    public DbSet<AlertEscalation> AlertEscalations => Set<AlertEscalation>();
-    public DbSet<IncidentReport> IncidentReports => Set<IncidentReport>();
-    public DbSet<MaintenanceTicket> MaintenanceTickets => Set<MaintenanceTicket>();
-    public DbSet<MaintenanceProof> MaintenanceProofs => Set<MaintenanceProof>();
-    public DbSet<MaterialLog> MaterialLogs => Set<MaterialLog>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
-    public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
-    public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
-    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+    public DbSet<UavPms.Shared.Contracts.Events.OutboxMessage> OutboxMessages => Set<UavPms.Shared.Contracts.Events.OutboxMessage>();
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
@@ -112,7 +99,6 @@ public class ApplicationDbContext : DbContext
         {
             if (entry.Entity is AuditLog || entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)
                 continue;
-            // Chỉ lưu log các lớp kế thừa từ BaseEntity (có primary key Guid Id)
             if (entry.Entity is not BaseEntity baseEntity)
                 continue;
             var auditEntry = new AuditEntry(entry)
@@ -129,7 +115,6 @@ public class ApplicationDbContext : DbContext
                 string propertyName = property.Metadata.Name;
                 if (property.Metadata.IsPrimaryKey())
                     continue;
-                // 1. Bảo mật: MASKED trường PasswordHash
                 if (propertyName == "PasswordHash")
                 {
                     if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
@@ -138,7 +123,6 @@ public class ApplicationDbContext : DbContext
                         auditEntry.OldValues[propertyName] = "[MASKED]";
                     continue;
                 }
-                // 2. Không gian địa lý: Chuyển dữ liệu NetTopologySuite Geometry sang WKT (Well-Known Text)
                 if (property.Metadata.ClrType.Namespace?.StartsWith("NetTopologySuite") == true)
                 {
                     if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
@@ -179,10 +163,8 @@ public class ApplicationDbContext : DbContext
                 }
             }
         }
-        // Chèn các bản ghi log vào db trước khi lưu
         foreach (var auditEntry in auditEntries)
         {
-            // Tránh sinh log rác nếu Modified nhưng không có thuộc tính nào thay đổi giá trị
             if (auditEntry.ActionType == "Modified" && auditEntry.OldValues.Count == 0 && auditEntry.NewValues.Count == 0)
                 continue;
             if (string.IsNullOrEmpty(auditEntry.ActionType))
@@ -190,7 +172,6 @@ public class ApplicationDbContext : DbContext
             AuditLogs.Add(auditEntry.ToAuditLog());
         }
     } 
-    
 }
 
 public class AuditEntry 

@@ -213,7 +213,8 @@ public class IncidentReportDto
     public Guid MissionId { get; set; }
     public Guid ReportedBy { get; set; }
     public string ReporterName { get; set; } = string.Empty;
-    public Guid AssetId { get; set; }
+    public Guid? AssetId { get; set; }
+    public Guid? TowerId { get; set; }
     public string IncidentType { get; set; } = string.Empty;
     public string Severity { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
@@ -227,6 +228,7 @@ public record SubmitIncidentReportRequest(
     string Severity,
     string Description,
     Guid? AssetId = null,
+    Guid? TowerId = null,
     string? FileUrl = null);
 
 public record ReturnDroneHandoverRequest(

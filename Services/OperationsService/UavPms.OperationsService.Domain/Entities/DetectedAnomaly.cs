@@ -26,6 +26,7 @@ public class DetectedAnomaly : BaseEntity
     public string ValidationStatus { get; set; } = string.Empty;
     public string AiSource { get; set; } = string.Empty;
     public string AnalystNotes { get; set; } = string.Empty;
+    public string? AnalystFeedback { get; set; } = "{}";
     public DateTime? ValidatedAt { get; set; }
 
     public virtual InspectionMedia? Media { get; set; }
