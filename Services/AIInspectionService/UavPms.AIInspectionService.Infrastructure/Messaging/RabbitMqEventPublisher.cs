@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using UavPms.AIInspectionService.Domain.Contracts;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.AIInspectionService.Infrastructure.Messaging;
 
@@ -22,6 +23,12 @@ public class RabbitMqEventPublisher : IEventPublisher
 
     private static string GetRoutingKey<T>(string eventName, T @event) where T : class
     {
+        if (@event is AiDetectionCompletedEvent)
+            return EventTopologyConstants.RoutingKeys.AiDetectionCompleted;
+
+        if (@event is DefectDetectedEvent)
+            return EventTopologyConstants.RoutingKeys.AiDetectionCompleted;
+
         var baseRoutingKey = $"identity.event.{eventName.ToLowerInvariant()}";
         if (@event is AIAnalysisRequestedEvent aiAnalysisRequestedEvent)
         {
@@ -40,7 +47,10 @@ public class RabbitMqEventPublisher : IEventPublisher
             using var connection = await _rabbitMqConnection.CreateConnectionAsync();
             using var channel = await connection.CreateChannelAsync();
 
-            var exchangeName = AIAnalysisRequestTopology.ExchangeName;
+            var exchangeName = (@event is AIAnalysisRequestedEvent)
+                ? AIAnalysisRequestTopology.ExchangeName
+                : EventTopologyConstants.Exchange;
+
             await channel.ExchangeDeclareAsync(
                 exchange: exchangeName,
                 type: ExchangeType.Topic,

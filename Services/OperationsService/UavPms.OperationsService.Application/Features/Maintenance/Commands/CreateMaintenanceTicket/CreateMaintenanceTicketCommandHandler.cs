@@ -10,6 +10,7 @@ using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Constants;
+using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.OperationsService.Application.Features.Maintenance.Commands.CreateMaintenanceTicket;
 
@@ -20,6 +21,7 @@ public class CreateMaintenanceTicketCommandHandler : IRequestHandler<CreateMaint
     private readonly IAnomalyRepository _anomalyRepository;
     private readonly IUserRepository _userRepository;
     private readonly ICurrentUserServices _currentUser;
+    private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     public CreateMaintenanceTicketCommandHandler(
@@ -28,7 +30,8 @@ public class CreateMaintenanceTicketCommandHandler : IRequestHandler<CreateMaint
         IAnomalyRepository anomalyRepository,
         IUserRepository userRepository,
         ICurrentUserServices currentUser,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IGenericRepository<OutboxMessage>? outboxRepository = null)
     {
         _ticketRepository = ticketRepository;
         _towerRepository = towerRepository;
@@ -36,6 +39,7 @@ public class CreateMaintenanceTicketCommandHandler : IRequestHandler<CreateMaint
         _userRepository = userRepository;
         _currentUser = currentUser;
         _unitOfWork = unitOfWork;
+        _outboxRepository = outboxRepository;
     }
 
     public async Task<MaintenanceTicketDto> Handle(CreateMaintenanceTicketCommand request, CancellationToken cancellationToken)
@@ -96,6 +100,33 @@ public class CreateMaintenanceTicketCommandHandler : IRequestHandler<CreateMaint
         };
 
         await _ticketRepository.AddAsync(ticket);
+
+        if (_outboxRepository != null)
+        {
+            var ticketAssignedEvent = new MaintenanceTicketAssignedEvent
+            {
+                EventId = Guid.NewGuid(),
+                TicketId = ticket.Id,
+                TicketCode = ticket.TicketCode,
+                Title = $"Phiếu bảo trì {ticket.TicketCode}",
+                TowerId = ticket.TowerId ?? Guid.Empty,
+                AssignedToUserId = ticket.TechnicianId,
+                Priority = ticket.Priority.ToString(),
+                AnomalyDescription = ticket.Description,
+                AssignedAt = ticket.AssignedAt ?? DateTime.UtcNow
+            };
+
+            await _outboxRepository.AddAsync(new OutboxMessage
+            {
+                Id = ticketAssignedEvent.EventId,
+                MessageType = nameof(MaintenanceTicketAssignedEvent),
+                Payload = System.Text.Json.JsonSerializer.Serialize(ticketAssignedEvent),
+                OccurredAt = ticketAssignedEvent.AssignedAt,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = ticket.ManagerId
+            });
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new MaintenanceTicketDto

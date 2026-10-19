@@ -113,7 +113,9 @@ builder.Services.AddProblemDetails();
 if (!string.IsNullOrEmpty(builder.Configuration["RabbitMQ:HostName"]))
 {
     builder.Services.AddHostedService<MissionCreatedConsumer>();
+    builder.Services.AddHostedService<MissionDispatchedConsumer>();
     builder.Services.AddHostedService<DefectDetectedConsumer>();
+    builder.Services.AddHostedService<MaintenanceTicketAssignedConsumer>();
     builder.Services.AddHostedService<NotificationPushConsumer>();
     builder.Services.AddHostedService<AIAnalysisStatusChangedConsumer>();
     builder.Services.AddHostedService<MissionLifecycleRealtimeConsumer>();

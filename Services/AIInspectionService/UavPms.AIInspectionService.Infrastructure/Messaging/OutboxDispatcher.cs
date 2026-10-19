@@ -27,6 +27,7 @@ public sealed class OutboxDispatcher : BackgroundService
             var messages = await db.OutboxMessages.Where(x => x.PublishedAt == null && !x.IsDeleted &&
                     (x.MessageType == nameof(AIAnalysisRequestedEvent) ||
                      x.MessageType == nameof(DefectDetectedEvent) ||
+                     x.MessageType == nameof(AiDetectionCompletedEvent) ||
                      x.MessageType == nameof(AIAnalysisStatusChangedEvent)))
                 .OrderBy(x => x.OccurredAt).Take(20).ToListAsync(stoppingToken);
             foreach (var message in messages)
@@ -55,6 +56,8 @@ public sealed class OutboxDispatcher : BackgroundService
             JsonSerializer.Deserialize<AIAnalysisRequestedEvent>(payload) ?? throw new JsonException("Invalid AI request outbox payload.")),
         nameof(DefectDetectedEvent) => publisher.PublishAsync(
             JsonSerializer.Deserialize<DefectDetectedEvent>(payload) ?? throw new JsonException("Invalid defect outbox payload.")),
+        nameof(AiDetectionCompletedEvent) => publisher.PublishAsync(
+            JsonSerializer.Deserialize<AiDetectionCompletedEvent>(payload) ?? throw new JsonException("Invalid AI detection completed outbox payload.")),
         nameof(AIAnalysisStatusChangedEvent) => publisher.PublishAsync(
             JsonSerializer.Deserialize<AIAnalysisStatusChangedEvent>(payload) ?? throw new JsonException("Invalid status outbox payload.")),
         _ => throw new InvalidOperationException($"Unsupported outbox message type {messageType}.")

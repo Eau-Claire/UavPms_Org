@@ -24,9 +24,10 @@ public class DefectDetectedConsumer : BackgroundService
     private IConnection? _connection;
     private IChannel? _channel;
 
-    private const string ExchangeName = "identity-exchange";
-    private const string QueueName = "notification.defect-detected";
-    private const string RoutingKey = "identity.event.defectdetectedevent";
+    private const string ExchangeName = EventTopologyConstants.Exchange;
+    private const string QueueName = EventTopologyConstants.Queues.NotificationsDefectAlert;
+    private const string RoutingKey = EventTopologyConstants.RoutingKeys.AiDetectionCompleted;
+    private const string LegacyRoutingKey = EventTopologyConstants.RoutingKeys.LegacyDefectDetected;
 
     public DefectDetectedConsumer(
         ILogger<DefectDetectedConsumer> logger,
@@ -67,6 +68,25 @@ public class DefectDetectedConsumer : BackgroundService
                 routingKey: RoutingKey,
                 cancellationToken: stoppingToken);
 
+            await _channel.QueueBindAsync(
+                queue: QueueName,
+                exchange: ExchangeName,
+                routingKey: LegacyRoutingKey,
+                cancellationToken: stoppingToken);
+
+            // Also support legacy exchange binding
+            await _channel.ExchangeDeclareAsync(
+                exchange: EventTopologyConstants.LegacyExchange,
+                type: ExchangeType.Topic,
+                durable: true,
+                autoDelete: false,
+                cancellationToken: stoppingToken);
+            await _channel.QueueBindAsync(
+                queue: QueueName,
+                exchange: EventTopologyConstants.LegacyExchange,
+                routingKey: LegacyRoutingKey,
+                cancellationToken: stoppingToken);
+
             var consumer = new AsyncEventingBasicConsumer(_channel);
             consumer.ReceivedAsync += async (sender, ea) =>
             {
@@ -74,12 +94,39 @@ public class DefectDetectedConsumer : BackgroundService
                 {
                     var body = ea.Body.ToArray();
                     var json = Encoding.UTF8.GetString(body);
-                    var defectEvent = JsonSerializer.Deserialize<DefectDetectedEvent>(json);
 
-                    if (defectEvent != null && defectEvent.IsDefect)
+                    Guid recordId = Guid.Empty;
+                    Guid missionId = Guid.Empty;
+                    string defectType = string.Empty;
+                    bool isDefect = false;
+
+                    if (ea.RoutingKey.Equals(RoutingKey, StringComparison.OrdinalIgnoreCase))
                     {
-                        _logger.LogWarning("Received DefectDetectedEvent: {DefectType} on mission {MissionId}",
-                            defectEvent.DefectType, defectEvent.MissionId);
+                        var aiEvent = JsonSerializer.Deserialize<AiDetectionCompletedEvent>(json);
+                        if (aiEvent != null)
+                        {
+                            recordId = aiEvent.AnomalyId;
+                            missionId = aiEvent.MissionId;
+                            defectType = aiEvent.DefectType;
+                            isDefect = aiEvent.IsDefect;
+                        }
+                    }
+                    else
+                    {
+                        var defectEvent = JsonSerializer.Deserialize<DefectDetectedEvent>(json);
+                        if (defectEvent != null)
+                        {
+                            recordId = defectEvent.RecordId;
+                            missionId = defectEvent.MissionId;
+                            defectType = defectEvent.DefectType;
+                            isDefect = defectEvent.IsDefect;
+                        }
+                    }
+
+                    if (isDefect)
+                    {
+                        _logger.LogWarning("Received defect notification: {DefectType} on mission {MissionId}",
+                            defectType, missionId);
 
                         using var scope = _scopeFactory.CreateScope();
                         var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
@@ -99,9 +146,9 @@ public class DefectDetectedConsumer : BackgroundService
                                 user.Id,
                                 "CriticalAlert",
                                 "DetectedAnomaly",
-                                defectEvent.RecordId,
+                                recordId,
                                 "⚠️ Phát hiện khuyết tật nghiêm trọng",
-                                $"Phát hiện khuyết tật '{defectEvent.DefectType}' trong nhiệm vụ bay kiểm tra. Cần xử lý ngay."
+                                $"Phát hiện khuyết tật '{defectType}' trong nhiệm vụ bay kiểm tra. Cần xử lý ngay."
                             ));
                         }
                     }
@@ -110,7 +157,7 @@ public class DefectDetectedConsumer : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing DefectDetectedEvent");
+                    _logger.LogError(ex, "Error processing DefectDetectedEvent / AiDetectionCompletedEvent");
                     await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
                 }
             };

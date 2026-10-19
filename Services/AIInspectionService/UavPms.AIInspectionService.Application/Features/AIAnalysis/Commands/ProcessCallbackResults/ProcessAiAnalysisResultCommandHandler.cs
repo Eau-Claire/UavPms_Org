@@ -201,6 +201,26 @@ public class ProcessAiAnalysisResultCommandHandler
                             ? anomaly.AnalystNotes
                             : $"AI evaluation: severity={evaluation.Severity}, risk={evaluation.RiskLevel}, score={evaluation.PriorityScore}. {evaluation.Reason}";
 
+                        await QueueEventAsync(new AiDetectionCompletedEvent
+                        {
+                            EventId = Guid.NewGuid(),
+                            RequestId = aiRequest.Id,
+                            InspectionId = media.MissionId,
+                            MissionId = media.MissionId,
+                            MediaId = media.Id,
+                            AssetId = media.AssetId.Value,
+                            TowerId = !string.IsNullOrWhiteSpace(anomaly.TowerId) && Guid.TryParse(anomaly.TowerId, out var parsedTower) ? parsedTower : null,
+                            AnomalyId = anomaly.Id,
+                            CategoryCode = detection.CategoryCode,
+                            DefectType = category.CategoryName,
+                            Confidence = Math.Round(detection.Confidence, 3),
+                            Severity = evaluation.Severity ?? "Medium",
+                            IsEmergencyClass = category.IsEmergencyClass,
+                            IsDefect = true,
+                            ImageUrl = anomaly.ImageUrl ?? media.FileUrl,
+                            CropUrl = anomaly.CropUrl,
+                            DetectedAt = anomaly.CreatedAt
+                        }, eventsToPublish);
                     }
                 }
 
@@ -308,6 +328,7 @@ public class ProcessAiAnalysisResultCommandHandler
 
     private Task PublishFallbackAsync(object integrationEvent) => integrationEvent switch
     {
+        AiDetectionCompletedEvent detection => _eventPublisher.PublishAsync(detection),
         DefectDetectedEvent defect => _eventPublisher.PublishAsync(defect),
         AIAnalysisStatusChangedEvent status => _eventPublisher.PublishAsync(status),
         _ => throw new InvalidOperationException($"Unsupported integration event {integrationEvent.GetType().Name}.")

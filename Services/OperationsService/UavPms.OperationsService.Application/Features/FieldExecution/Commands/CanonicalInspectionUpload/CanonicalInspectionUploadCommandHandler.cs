@@ -99,7 +99,7 @@ public class CanonicalInspectionUploadCommandHandler : IRequestHandler<Canonical
             CapturedAt = capturedAt,
             Latitude = lat,
             Longitude = lon,
-            FileStream = request.FileStream,
+            FileStream = request.FileStream ?? Stream.Null,
             FileName = request.FileName,
             ContentType = request.ContentType
         };

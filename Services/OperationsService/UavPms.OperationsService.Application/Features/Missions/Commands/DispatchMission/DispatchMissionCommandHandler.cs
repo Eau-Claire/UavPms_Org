@@ -19,6 +19,7 @@ public class DispatchMissionCommandHandler : IRequestHandler<DispatchMissionComm
     private readonly IUavRepository _uavRepository;
     private readonly IGenericRepository<DroneTechnicalInspection> _inspectionRepository;
     private readonly IGenericRepository<ResourceBooking> _bookingRepository;
+    private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMissionRealtimeNotifier? _notifier;
 
@@ -28,7 +29,8 @@ public class DispatchMissionCommandHandler : IRequestHandler<DispatchMissionComm
         IGenericRepository<DroneTechnicalInspection> inspectionRepository,
         IGenericRepository<ResourceBooking> bookingRepository,
         IUnitOfWork unitOfWork,
-        IMissionRealtimeNotifier? notifier = null)
+        IMissionRealtimeNotifier? notifier = null,
+        IGenericRepository<OutboxMessage>? outboxRepository = null)
     {
         _missionRepository = missionRepository;
         _uavRepository = uavRepository;
@@ -36,6 +38,7 @@ public class DispatchMissionCommandHandler : IRequestHandler<DispatchMissionComm
         _bookingRepository = bookingRepository;
         _unitOfWork = unitOfWork;
         _notifier = notifier;
+        _outboxRepository = outboxRepository;
     }
 
     public async Task<MissionOperationResultDto> Handle(DispatchMissionCommand request, CancellationToken cancellationToken)
@@ -134,6 +137,34 @@ public class DispatchMissionCommandHandler : IRequestHandler<DispatchMissionComm
         mission.UpdatedAt = DateTime.UtcNow;
 
         await _missionRepository.UpdateAsync(mission);
+
+        if (_outboxRepository != null)
+        {
+            var dispatchedEvent = new MissionDispatchedEvent
+            {
+                EventId = Guid.NewGuid(),
+                MissionId = mission.Id,
+                MissionCode = mission.MissionCode,
+                Title = mission.Title,
+                ManagerId = mission.ManagerId,
+                AssignedPilotIds = requiredAssignments.Select(a => a.UserId).ToList(),
+                UavId = mission.UavId,
+                ScheduledStart = startAt,
+                ScheduledEnd = endAt,
+                DispatchedAt = DateTime.UtcNow
+            };
+
+            await _outboxRepository.AddAsync(new OutboxMessage
+            {
+                Id = dispatchedEvent.EventId,
+                MessageType = nameof(MissionDispatchedEvent),
+                Payload = System.Text.Json.JsonSerializer.Serialize(dispatchedEvent),
+                OccurredAt = dispatchedEvent.DispatchedAt,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = mission.ManagerId
+            });
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         if (_notifier != null)
