@@ -1,0 +1,46 @@
+erDiagram
+    REGION ||--o{ SUBSTATION : contains
+    SUBSTATION ||--o{ TRANSMISSION_LINE : feeds
+    TRANSMISSION_LINE ||--o{ TOWER : carries
+    TOWER ||--o{ ASSET : holds
+
+    USER }o--o{ ROLE : holds
+    USER }o--o{ REGION : "is scoped to"
+
+    REGION ||--o{ PRE_MISSION_ASSESSMENT : covers
+    PRE_MISSION_ASSESSMENT }o--o{ ASSET : targets
+    PRE_MISSION_ASSESSMENT ||--o| MISSION : "creates"
+
+    MISSION }o--o{ ASSET : targets
+    MISSION ||--o{ MISSION_ASSIGNMENT : has
+    USER ||--o{ MISSION_ASSIGNMENT : receives
+    MISSION ||--o{ RESOURCE_BOOKING : reserves
+    UAV ||--o{ RESOURCE_BOOKING : "is booked by"
+    USER ||--o{ RESOURCE_BOOKING : "is booked by"
+    UAV ||--o{ MISSION : "is assigned to"
+
+    UAV ||--o{ TECHNICAL_INSPECTION : undergoes
+    TECHNICAL_INSPECTION ||--o{ TECHNICAL_METRIC : records
+    UAV ||--o{ FLIGHT_CONTROLLER_BINDING : "is paired by"
+
+    MISSION ||--o{ FIELD_CHECK_IN : records
+    MISSION ||--o{ DRONE_HANDOVER : records
+    MISSION ||--o{ FLIGHT_LOG : generates
+    MISSION ||--o{ INCIDENT_REPORT : records
+    MISSION ||--o{ COMMUNICATION_LOG : records
+
+    MISSION ||--o{ INSPECTION_MEDIA : produces
+    ASSET ||--o{ INSPECTION_MEDIA : "appears in"
+    INSPECTION_MEDIA ||--o{ AI_ANALYSIS_REQUEST : "is analysed by"
+    INSPECTION_MEDIA ||--o{ DETECTED_ANOMALY : contains
+    DEFECT_CATEGORY ||--o{ DETECTED_ANOMALY : classifies
+
+    DETECTED_ANOMALY ||--o{ EMERGENCY_ALERT : triggers
+    EMERGENCY_ALERT ||--o{ ALERT_ESCALATION : "is escalated by"
+    DETECTED_ANOMALY ||--o| MAINTENANCE_TICKET : requires
+    MAINTENANCE_TICKET ||--o{ MAINTENANCE_PROOF : "is documented by"
+    MAINTENANCE_TICKET ||--o{ MATERIAL_LOG : consumes
+
+    REPORT }o--o{ MISSION : summarises
+    USER ||--o{ NOTIFICATION : receives
+    USER ||--o{ AUDIT_LOG : generates

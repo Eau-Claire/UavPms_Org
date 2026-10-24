@@ -1,0 +1,50 @@
+```mermaid
+flowchart LR
+    classDef actorStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    classDef ucStyle fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,rx:20px,ry:20px;
+    classDef sysActor fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+
+    %% Actors
+    MANAGER["Mission Manager"]
+    INSPECTOR["Inspector<br/>(Pilot)"]
+    NOTIF["Notification Provider"]
+    class MANAGER,INSPECTOR actorStyle
+    class NOTIF sysActor
+
+    %% System Boundary
+    subgraph MF02Boundary ["UAV-PMS - MF02 Create and Assign Inspection Mission"]
+        UC_MF02_01(["UC-MF02-01: Create Mission from Assessment"])
+        UC_MF02_02(["UC-MF02-02: Assign Mission Personnel"])
+        UC_MF02_03(["UC-MF02-03: Assign UAVs to Mission"])
+        UC_MF02_04(["UC-MF02-04: Dispatch Mission"])
+        UC_MF02_05(["UC-MF02-05: View Mission Detail"])
+        UC_MF02_06(["UC-MF02-06: View My Missions"])
+        UC_MF02_07(["UC-MF02-07: Respond to Assignment"])
+        UC_MF02_08(["UC-MF02-08: Track Mission Status & Deadline"])
+        UC_MF02_09(["UC-MF02-09: Modify / Change Mission"])
+
+        %% Reused Use Cases from MF01
+        UC_MF01_03(["UC-MF01-03: Check Personnel Availability"])
+        UC_MF01_04(["UC-MF01-04: Check UAV Availability"])
+    end
+    class UC_MF02_01,UC_MF02_02,UC_MF02_03,UC_MF02_04,UC_MF02_05,UC_MF02_06,UC_MF02_07,UC_MF02_08,UC_MF02_09,UC_MF01_03,UC_MF01_04 ucStyle
+
+    %% Associations
+    MANAGER --- UC_MF02_01
+    MANAGER --- UC_MF02_02
+    MANAGER --- UC_MF02_03
+    MANAGER --- UC_MF02_04
+    MANAGER --- UC_MF02_05
+    MANAGER --- UC_MF02_08
+    MANAGER --- UC_MF02_09
+
+    INSPECTOR --- UC_MF02_05
+    INSPECTOR --- UC_MF02_06
+    INSPECTOR --- UC_MF02_07
+
+    UC_MF02_04 --- NOTIF
+
+    %% Includes relationships
+    UC_MF02_02 -.->|"<<include>>"| UC_MF01_03
+    UC_MF02_03 -.->|"<<include>>"| UC_MF01_04
+```

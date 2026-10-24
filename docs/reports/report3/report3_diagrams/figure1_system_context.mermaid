@@ -1,0 +1,63 @@
+```mermaid
+flowchart TB
+    classDef sysCore fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    classDef humanActor fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    classDef extSys fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+
+    UAV_PMS(("<b>UAV-PMS</b><br/>(Core Platform)"))
+    class UAV_PMS sysCore
+
+    %% Human Actors
+    subgraph HumanActors ["Human Actors"]
+        ADMIN["<b>System Administrator</b>"]
+        MANAGER["<b>Mission Manager</b>"]
+        INSPECTOR["<b>Inspector</b><br/>(Pilot)"]
+        ANALYST["<b>Analyst</b>"]
+        TECH["<b>UAV Technician</b>"]
+    end
+    class ADMIN,MANAGER,INSPECTOR,ANALYST,TECH humanActor
+
+    %% System Actors
+    subgraph SystemActors ["External System Actors"]
+        EDGE["<b>Edge Device</b><br/>(Onboard RPi / Camera / FC)"]
+        CLOUD_AI["<b>Cloud AI Service</b><br/>(FastAPI / GPU Worker)"]
+        MAP_SRV["<b>Map Service</b><br/>(Leaflet / OpenStreetMap)"]
+        NOTIF_PROV["<b>Notification Provider</b><br/>(SendGrid / Brevo)"]
+    end
+    class EDGE,CLOUD_AI,MAP_SRV,NOTIF_PROV extSys
+
+    %% Admin flows
+    ADMIN -->|"Accounts, roles, scopes, qualifications, settings"| UAV_PMS
+    UAV_PMS -->|"Account status, audit logs, configuration"| ADMIN
+
+    %% Manager flows
+    MANAGER -->|"Assets, UAV inventory, assessment scope, mission dispatch, changes, ticket closure"| UAV_PMS
+    UAV_PMS -->|"Readiness results, mission status, live UAV telemetry, alerts, defect reports"| MANAGER
+
+    %% Inspector flows
+    INSPECTOR -->|"Assignment response, check-in, handover, mission execution, media upload, flight logs, incident reports"| UAV_PMS
+    UAV_PMS -->|"Assigned missions, target map, notifications, AI processing status"| INSPECTOR
+
+    %% Analyst flows
+    ANALYST -->|"Detection review (confirm/reject), alert escalation, reanalysis request, report preparation"| UAV_PMS
+    UAV_PMS -->|"AI detections, inspection media, emergency alerts"| ANALYST
+
+    %% Technician flows
+    TECH -->|"UAV technical inspections, FC pairing, ticket progress, repair proofs, material logs"| UAV_PMS
+    UAV_PMS -->|"UAV records, inspection checklists, assigned maintenance tickets"| TECH
+
+    %% Edge Device flows
+    EDGE -->|"UAV status & telemetry (MQTT), edge detections + images (Vision Bridge)"| UAV_PMS
+
+    %% Cloud AI flows
+    UAV_PMS -->|"Analysis requests (RabbitMQ: media URL, model, type)"| CLOUD_AI
+    CLOUD_AI -->|"Processing status, defect detections, bounding boxes, model version"| UAV_PMS
+
+    %% Map Service flows
+    UAV_PMS -->|"Map tile requests"| MAP_SRV
+    MAP_SRV -->|"Map tile streams / layers"| UAV_PMS
+
+    %% Notification Provider flows
+    UAV_PMS -->|"Notification e-mails (SendGrid), OTP verification e-mails (Brevo)"| NOTIF_PROV
+    NOTIF_PROV -->|"Delivery confirmation / send results"| UAV_PMS
+```

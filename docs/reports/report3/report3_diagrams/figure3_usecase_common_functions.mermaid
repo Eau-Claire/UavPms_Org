@@ -1,0 +1,41 @@
+```mermaid
+flowchart LR
+    classDef actorStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    classDef ucStyle fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,rx:20px,ry:20px;
+
+    %% Actors
+    USER["User<br/>(Generic Human)"]
+    ADMIN["System Administrator"]
+    TECH["UAV Technician"]
+    MANAGER["Mission Manager"]
+    class USER,ADMIN,TECH,MANAGER actorStyle
+
+    %% System Boundary
+    subgraph CommonBoundary ["UAV-PMS - Common Functions"]
+        UC_CF01(["UC-CF-01: Login / OTP Verification"])
+        UC_CF02(["UC-CF-02: Manage User Accounts"])
+        UC_CF03(["UC-CF-03: Manage Personnel Qualifications"])
+        UC_CF04(["UC-CF-04: Manage Infrastructure Assets"])
+        UC_CF05(["UC-CF-05: Manage UAV Inventory & FC Pairing"])
+        UC_CF06(["UC-CF-06: View Notifications"])
+        UC_CF07(["UC-CF-07: View Audit Logs"])
+        UC_CF08(["UC-CF-08: Manage System Settings"])
+    end
+    class UC_CF01,UC_CF02,UC_CF03,UC_CF04,UC_CF05,UC_CF06,UC_CF07,UC_CF08 ucStyle
+
+    %% Associations
+    USER --- UC_CF01
+    USER --- UC_CF06
+
+    ADMIN --- UC_CF02
+    ADMIN --- UC_CF03
+    ADMIN --- UC_CF04
+    ADMIN --- UC_CF05
+    ADMIN --- UC_CF07
+    ADMIN --- UC_CF08
+
+    MANAGER --- UC_CF04
+    MANAGER --- UC_CF05
+
+    TECH --- UC_CF05
+```

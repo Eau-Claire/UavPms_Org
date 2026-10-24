@@ -1,0 +1,51 @@
+```mermaid
+flowchart LR
+    classDef actorStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    classDef ucStyle fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,rx:20px,ry:20px;
+    classDef sysActor fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+
+    %% Actors
+    ANALYST["Analyst"]
+    MANAGER["Mission Manager"]
+    TECH["UAV Technician"]
+    CLOUD_AI["Cloud AI Service"]
+    class ANALYST,MANAGER,TECH actorStyle
+    class CLOUD_AI sysActor
+
+    %% System Boundary
+    subgraph MF04Boundary ["UAV-PMS - MF04 AI Inspection & Defect Detection"]
+        UC_MF04_01(["UC-MF04-01: Publish AI Analysis Request"])
+        UC_MF04_02(["UC-MF04-02: Process AI Inference & Consume Results"])
+        UC_MF04_03(["UC-MF04-03: Track AI Job Processing Status"])
+        UC_MF04_04(["UC-MF04-04: View AI Detections & Bounding Boxes"])
+        UC_MF04_05(["UC-MF04-05: Review & Validate Detections"])
+        UC_MF04_06(["UC-MF04-06: Request Media Reanalysis"])
+        UC_MF04_07(["UC-MF04-07: Generate Defect & Inspection Reports"])
+        UC_MF04_08(["UC-MF04-08: Generate & Assign Maintenance Tickets"])
+        UC_MF04_09(["UC-MF04-09: Execute Ticket & Upload Repair Proofs"])
+    end
+    class UC_MF04_01,UC_MF04_02,UC_MF04_03,UC_MF04_04,UC_MF04_05,UC_MF04_06,UC_MF04_07,UC_MF04_08,UC_MF04_09 ucStyle
+
+    %% Associations
+    ANALYST --- UC_MF04_03
+    ANALYST --- UC_MF04_04
+    ANALYST --- UC_MF04_05
+    ANALYST --- UC_MF04_06
+    ANALYST --- UC_MF04_07
+
+    MANAGER --- UC_MF04_03
+    MANAGER --- UC_MF04_04
+    MANAGER --- UC_MF04_06
+    MANAGER --- UC_MF04_07
+    MANAGER --- UC_MF04_08
+
+    TECH --- UC_MF04_08
+    TECH --- UC_MF04_09
+
+    CLOUD_AI --- UC_MF04_01
+    CLOUD_AI --- UC_MF04_02
+
+    %% Internal workflow links
+    UC_MF04_01 -.->|"<<precedes>>"| UC_MF04_02
+    UC_MF04_05 -.->|"<<initiates ticket>>"| UC_MF04_08
+```

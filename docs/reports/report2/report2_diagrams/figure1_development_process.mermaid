@@ -1,0 +1,64 @@
+```mermaid
+flowchart TD
+    classDef iterStyle fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,rx:5px,ry:5px;
+    classDef transStyle fill:#ffffff,stroke:#757575,stroke-dasharray: 5 5,color:#424242;
+
+    subgraph I0 ["Iteration 0 - Plan and Baseline (05 Sep - 10 Oct)"]
+        direction TB
+        I0_F["Focus: Feature estimates, SRS draft, architecture, interfaces, dataset and hardware plans"]
+        I0_G["Exit Gate: Requirements and interface baseline approved for implementation"]
+    end
+    class I0 iterStyle
+
+    T1["↓ Review, evidence and controlled feedback ↓"]
+    class T1 transStyle
+
+    subgraph I1 ["Iteration 1 - Core Foundations (11 Oct - 25 Oct)"]
+        direction TB
+        I1_F["Focus: MF01-MF02, web/backend foundation, YOLO11s baseline and UAV bench assembly"]
+        I1_G["Exit Gate: MF01-MF02 integration candidate; reproducible AI baseline; powered UAV bench test"]
+    end
+    class I1 iterStyle
+
+    T2["↓ Review, evidence and controlled feedback ↓"]
+    class T2 transStyle
+
+    subgraph I2 ["Iteration 2 - Field and Research (26 Oct - 08 Nov)"]
+        direction TB
+        I2_F["Focus: MF03, camera/telemetry, controlled manual flight, SDI/SCI experiments and per-class diagnosis"]
+        I2_G["Exit Gate: Field-data path demonstrated; controlled flight and SDI/SCI evidence reviewed"]
+    end
+    class I2 iterStyle
+
+    T3["↓ Review, evidence and controlled feedback ↓"]
+    class T3 transStyle
+
+    subgraph I3 ["Iteration 3 - Advanced Integration (09 Nov - 15 Nov)"]
+        direction TB
+        I3_F["Focus: MF04, StructDETR candidate, analyst review, waypoint route and cross-system integration"]
+        I3_G["Exit Gate: Feature freeze on 15 November; all four flows integrated; waypoint-flight and AI candidate evidence available"]
+    end
+    class I3 iterStyle
+
+    T4["↓ Review, evidence and controlled feedback ↓"]
+    class T4 transStyle
+
+    subgraph I4 ["Iteration 4 - Test, Fix and Accept (16 Nov - 30 Nov)"]
+        direction TB
+        I4_F["Focus: MF01-MF04 system and regression testing, defect fixing, field re-validation, final AI evaluation, SRS finalization and release"]
+        I4_G["Exit Gate: Release frozen on 27 November; 30 November completion criteria accepted; no open Severity 1/2 defect"]
+    end
+    class I4 iterStyle
+
+    T5["↓ Review, evidence and controlled feedback ↓"]
+    class T5 transStyle
+
+    subgraph CD ["Contingency and Defense (01 Dec - Mar 2027)"]
+        direction TB
+        CD_F["Focus: Supervisor-requested changes, extended validation, reports, demo and defense rehearsal"]
+        CD_G["Exit Gate: Academic submission and defense package approved"]
+    end
+    class CD iterStyle
+
+    I0 --> T1 --> I1 --> T2 --> I2 --> T3 --> I3 --> T4 --> I4 --> T5 --> CD
+```

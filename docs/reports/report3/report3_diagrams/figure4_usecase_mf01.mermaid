@@ -1,0 +1,37 @@
+```mermaid
+flowchart LR
+    classDef actorStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    classDef ucStyle fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,rx:20px,ry:20px;
+    classDef sysActor fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+
+    %% Actors
+    MANAGER["Mission Manager"]
+    TECH["UAV Technician"]
+    MAP["Map Service"]
+    class MANAGER,TECH actorStyle
+    class MAP sysActor
+
+    %% System Boundary
+    subgraph MF01Boundary ["UAV-PMS - MF01 Pre-Mission Feasibility & Resource Readiness"]
+        UC_MF01_01(["UC-MF01-01: Create Readiness Assessment"])
+        UC_MF01_02(["UC-MF01-02: Evaluate Pre-Mission Readiness"])
+        UC_MF01_03(["UC-MF01-03: Check Personnel Availability & Eligibility"])
+        UC_MF01_04(["UC-MF01-04: Check UAV Availability & Technical Health"])
+        UC_MF01_05(["UC-MF01-05: Record UAV Technical Inspection"])
+        UC_MF01_06(["UC-MF01-06: Cancel / Expire Assessment"])
+    end
+    class UC_MF01_01,UC_MF01_02,UC_MF01_03,UC_MF01_04,UC_MF01_05,UC_MF01_06 ucStyle
+
+    %% Associations
+    MANAGER --- UC_MF01_01
+    MANAGER --- UC_MF01_02
+    MANAGER --- UC_MF01_06
+
+    TECH --- UC_MF01_05
+
+    UC_MF01_02 --- MAP
+
+    %% Includes relationships
+    UC_MF01_02 -.->|"<<include>>"| UC_MF01_03
+    UC_MF01_02 -.->|"<<include>>"| UC_MF01_04
+```

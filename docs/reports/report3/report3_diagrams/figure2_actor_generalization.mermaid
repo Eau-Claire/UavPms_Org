@@ -1,0 +1,54 @@
+```mermaid
+classDiagram
+    class User {
+        <<Human Actor>>
+        +Login()
+        +ViewNotifications()
+    }
+
+    class SystemAdministrator {
+        +ManageUserAccounts()
+        +ManagePersonnelQualifications()
+        +ViewAuditLogs()
+        +ManageSystemSettings()
+    }
+
+    class MissionManager {
+        +ManageInfrastructureAssets()
+        +ManageUAVInventory()
+        +EvaluatePreMissionReadiness()
+        +CreateAndDispatchMission()
+        +ManageMaintenanceTickets()
+        +ApproveDefectReports()
+    }
+
+    class Inspector {
+        <<Pilot>>
+        +RespondToAssignment()
+        +PerformCheckIn()
+        +HandleUAVHandover()
+        +ExecuteMission()
+        +UploadMediaAndLogs()
+        +ReportFieldIncident()
+    }
+
+    class Analyst {
+        +ReviewAIDetections()
+        +ReviewEmergencyAlerts()
+        +RequestReanalysis()
+        +PrepareDefectReports()
+    }
+
+    class UAVTechnician {
+        +PerformTechnicalInspection()
+        +PairFlightController()
+        +ExecuteMaintenanceTicket()
+        +UploadRepairProofs()
+    }
+
+    User <|-- SystemAdministrator : specializes
+    User <|-- MissionManager : specializes
+    User <|-- Inspector : specializes
+    User <|-- Analyst : specializes
+    User <|-- UAVTechnician : specializes
+```
