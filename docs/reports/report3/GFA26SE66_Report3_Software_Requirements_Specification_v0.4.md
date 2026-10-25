@@ -93,6 +93,7 @@ Group: GFA26SE66
 | 24/10/2026 | D | SE193338 – Nguyễn Nhật An | v0.4 – Removed the Asset Health feature from the scope: asset health index, risk level, health history (CONDITION_HISTORY), health penalty on confirmed defects and health recovery on ticket closure. SCR-07 is now the Grid Asset Catalogue. |
 | 24/10/2026 | A | SE193338 – Nguyễn Nhật An | v0.4 – Added the use-case specifications of MF02 (Section 3.3), MF03 (Section 3.4), MF04 (Section 3.5) and the Common Functions (Section 3.6). |
 | 24/10/2026 | M | SE193338 – Nguyễn Nhật An | v0.4 – Reformatted the whole report (headings, tables, captions, numbering); re-aligned MF01, business rules, messages, configuration parameters and state tables with the backend (commit 7a90ab8); marked UC-CF-03 and UC-MF03-04 as deferred. |
+| 24/10/2026 | M | SE193338 – Nguyễn Nhật An | v0.5 – Redrew the screens flow (Figure 8) and rewrote the screen descriptions and authorization matrix from the current web-client routes and role guards; replaced formula-level wording in BR-17, BR-21, BR-23, BR-53 and UC-MF01-02/05 with plain descriptions; aligned role, state and notification statements with the backend. |
 
 \*A – Added, M – Modified, D – Deleted
 
@@ -244,169 +245,156 @@ Table 2 describes every use case in Figure 3 – Figure 7. The WBS column links 
 
 #### 3.1.1 Screens Flow
 
-Figure 8 shows the navigation between the screens of the Angular web client (`app.routes.ts`, `sidebar.ts`). After logging in through SCR-01 (and the OTP step on SCR-28 when the device is not trusted), users land on SCR-02 Operations Dashboard. The sidebar shows only the modules allowed for the user’s role (Table 4).
+Figure 8 shows the screens of the Angular web client and how users move between them. All users sign in on SCR-01; on an untrusted device they confirm an e-mailed OTP on SCR-28. Every user then lands on SCR-02 Dashboard. The sidebar of SCR-02 shows only the modules allowed for the user’s role (Table 4), so each role follows its own path:
+
+- **System Administrator:** user accounts (SCR-04), audit log (SCR-25), and every operational screen of the Mission Manager.
+- **Mission Manager:** readiness assessments (SCR-09, SCR-10) → mission creation and dispatch (SCR-12) → mission follow-up (SCR-13, SCR-14) → emergency alerts (SCR-19), AI review (SCR-21, SCR-22) and reports (SCR-24).
+- **Inspector, Analyst and UAV Technician (field roles):** assigned missions (SCR-11, *Assigned to me* tab) → Inspector Console (SCR-15) to accept or postpone the assignment. The Inspector then executes the mission and uploads data on SCR-13. The Analyst reviews detections (SCR-22, SCR-21) and alerts (SCR-19). The Technician maintains the UAV fleet (SCR-08) and works on maintenance tickets (SCR-26).
 
 Notation used in Figure 8:
 
-- Rectangles are routable pages; a page with tabs lists its tab count (for example, the 7-tab Mission Detail Workspace).
-- Dashed hexagons are modal dialogs and pop-overs.
-- Sub-graphs group the screens by Common Functions and MF01–MF04.
+- Rectangles are pages with their own route; a rectangle divided into rows is a page with tabs.
+- Dashed ellipses are dialogs and pop-overs.
+- Dashed frames group the screens by Common Functions and MF01–MF04. A dashed arrow from SCR-02 is a sidebar entry; the roles that see each page are written under its name.
 
 ```mermaid
 flowchart TD
-    classDef authScreen fill:#f5f5f5,stroke:#616161,stroke-width:2px;
-    classDef commonScreen fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
-    classDef mf01Screen fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
-    classDef mf02Screen fill:#fffde7,stroke:#fbc02d,stroke-width:2px;
-    classDef mf03Screen fill:#fbe9e7,stroke:#d84315,stroke-width:2px;
-    classDef mf04Screen fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px;
-    classDef popupDialog fill:#ffffff,stroke:#424242,stroke-width:2px,stroke-dasharray: 4 4;
+    classDef auth fill:#f5f5f5,stroke:#616161;
+    classDef cf fill:#e3f2fd,stroke:#1565c0;
+    classDef mf01 fill:#e8f5e9,stroke:#2e7d32;
+    classDef mf02 fill:#fffde7,stroke:#f9a825;
+    classDef mf03 fill:#fbe9e7,stroke:#d84315;
+    classDef mf04 fill:#f3e5f5,stroke:#6a1b9a;
+    classDef dlg fill:#ffffff,stroke:#424242,stroke-dasharray: 4 4;
 
-    subgraph AuthArea ["Authentication"]
-        SCR01["SCR-01: Login<br/><i>/login</i>"]:::authScreen
-        SCR28["SCR-28: OTP Verification<br/><i>/otp</i>"]:::authScreen
-        SCR27["SCR-27: Password Management<br/><i>/forgot-password, /reset-password, /change-password</i>"]:::authScreen
+    subgraph AUTH ["Authentication – all users"]
+        SCR01["SCR-01 Login"]:::auth
+        SCR28["SCR-28 OTP Verification"]:::auth
+        SCR27["SCR-27 Password Management"]:::auth
     end
-
     SCR01 -->|"Untrusted device"| SCR28
     SCR01 -->|"Forgot password"| SCR27
     SCR27 -->|"Password reset"| SCR01
     SCR28 -->|"OTP verified"| SCR02
     SCR01 -->|"Trusted device"| SCR02
 
-    SCR02["SCR-02: Operations Dashboard<br/><i>/dashboard</i>"]:::commonScreen
-    SCR03{{"SCR-03: Notification Center<br/><i>Header pop-over</i>"}}:::popupDialog
+    SCR02["SCR-02 Dashboard"]:::cf
+    SCR03(["SCR-03 Notification Center"]):::dlg
+    SCR02 -->|"Bell"| SCR03
     SCR02 -->|"Change password"| SCR27
-    SCR02 -->|"Open notifications"| SCR03
 
-    subgraph CommonArea ["Common Functions"]
-        SCR04["SCR-04: User Management<br/><i>/admin/users</i>"]:::commonScreen
-        SCR06["SCR-06: GIS Map<br/><i>/gis</i>"]:::commonScreen
-        SCR07["SCR-07: Grid Asset Catalogue<br/><i>/assets, /assets/:id</i>"]:::commonScreen
-        SCR08["SCR-08: UAV Fleet Management<br/><i>/drones</i>"]:::commonScreen
-        DLG01{{"SCR-08-M: Technical Check & FC Pairing"}}:::popupDialog
-        SCR25["SCR-25: Audit Log Viewer<br/><i>/system/audit-logs</i>"]:::commonScreen
+    subgraph CF ["Common Functions"]
+        SCR04["SCR-04 User Management<br/><i>Admin</i>"]:::cf
+        SCR25["SCR-25 Audit Log<br/><i>Admin, Manager</i>"]:::cf
+        SCR06["SCR-06 GIS Map<br/><i>Admin, Manager, Analyst, Inspector</i>"]:::cf
+        SCR07["SCR-07 Grid Asset Catalogue<br/><i>all roles</i>"]:::cf
+        SCR08["SCR-08 UAV Fleet Management<br/><i>Admin, Manager, Technician</i>"]:::cf
+        DLG08(["SCR-08-M Add/Edit UAV · Technical check · GIS capacity estimate"]):::dlg
     end
+    SCR02 -.->|"Sidebar"| CF
+    SCR06 -->|"View asset"| SCR07
+    SCR08 --> DLG08
 
-    SCR02 -->|"Sidebar"| SCR04
-    SCR02 -->|"Sidebar"| SCR06
-    SCR02 -->|"Sidebar"| SCR07
-    SCR02 -->|"Sidebar"| SCR08
-    SCR02 -->|"Sidebar"| SCR25
-    SCR06 -->|"Open asset"| SCR07
-    SCR08 -->|"Technical check / pairing"| DLG01
-
-    subgraph MF01Area ["MF01: Pre-Mission Feasibility"]
-        SCR09["SCR-09: Assessment List<br/><i>/pre-mission</i>"]:::mf01Screen
-        SCR10A["SCR-10A: Create Assessment<br/><i>/pre-mission/new</i>"]:::mf01Screen
-        SCR10B["SCR-10B: Assessment Workspace<br/><i>/pre-mission/:id (5 tabs)</i>"]:::mf01Screen
-        DLG02{{"SCR-10-M: Cancel Assessment"}}:::popupDialog
+    subgraph MF01 ["MF01 – Pre-Mission Feasibility · Manager, Admin"]
+        SCR09["SCR-09 Assessment List"]:::mf01
+        SCR10A["SCR-10A Create Assessment"]:::mf01
+        SCR10B["SCR-10B Assessment Workspace<br/>5 tabs"]:::mf01
+        DLG10(["SCR-10-M Cancel Assessment"]):::dlg
     end
-
-    SCR02 -->|"Sidebar"| SCR09
+    SCR02 -.->|"Sidebar"| MF01
     SCR09 -->|"Create"| SCR10A
     SCR10A -->|"Create & evaluate"| SCR10B
     SCR09 -->|"Open"| SCR10B
-    SCR10B -->|"Cancel"| DLG02
-    SCR10B -.->|"Technical tab"| DLG01
+    SCR10B -->|"Cancel"| DLG10
 
-    subgraph MF02Area ["MF02: Mission Creation & Dispatch"]
-        SCR11["SCR-11: Mission List<br/><i>/missions</i>"]:::mf02Screen
-        SCR12["SCR-12: Create & Dispatch Mission<br/><i>/missions/new</i>"]:::mf02Screen
-        SCR13["SCR-13: Mission Detail Workspace<br/><i>/missions/:id (7 tabs)</i>"]:::mf02Screen
-        SCR14{{"SCR-14: Change Mission Dialogs"}}:::popupDialog
-        SCR15["SCR-15: Inspector Console<br/><i>/missions/:id/inspector</i>"]:::mf02Screen
-        SCR16{{"SCR-16: Postpone Assignment"}}:::popupDialog
+    subgraph MF02 ["MF02 – Create & Assign Mission"]
+        SCR11["SCR-11 Mission List<br/>Assigned to me / All"]:::mf02
+        SCR12["SCR-12 Create & Dispatch Mission<br/><i>Manager, Admin</i>"]:::mf02
+        SCR13["SCR-13 Mission Detail<br/>7 tabs"]:::mf02
+        DLG14(["SCR-14 Change Mission"]):::dlg
+        SCR15["SCR-15 Inspector Console<br/><i>Inspector, Analyst, Technician</i>"]:::mf02
+        DLG16(["SCR-16 Postpone Assignment"]):::dlg
     end
-
+    SCR02 -.->|"Sidebar"| MF02
     SCR10B -->|"Ready → Create mission"| SCR12
-    SCR02 -->|"Sidebar"| SCR11
-    SCR11 -->|"Open"| SCR13
+    SCR06 -->|"Create mission from selection"| SCR12
+    SCR11 -->|"New mission"| SCR12
     SCR12 -->|"Dispatch"| SCR13
-    SCR13 -->|"Change actions"| SCR14
-    SCR11 -->|"Assigned mission"| SCR15
-    SCR15 -->|"Postpone"| SCR16
+    SCR11 -->|"Open (Manager, Admin)"| SCR13
+    SCR11 -->|"Open (field roles)"| SCR15
+    SCR03 -->|"Mission notification"| SCR13
+    SCR03 -->|"Mission notification (field roles)"| SCR15
+    SCR13 -->|"Change"| DLG14
+    SCR15 -->|"Postpone"| DLG16
 
-    subgraph MF03Area ["MF03: Field Execution & Monitoring"]
-        SCR17["SCR-17: Inspection History & Flight Logs<br/><i>/inspections</i>"]:::mf03Screen
-        SCR18["SCR-18: Live Monitoring<br/><i>/gis live layer, dashboard</i>"]:::mf03Screen
-        SCR19["SCR-19: Emergency Alerts<br/><i>/emergency-alerts</i>"]:::mf03Screen
-        DLG03{{"SCR-19-M: Review / Escalate Alert"}}:::popupDialog
+    subgraph MF03 ["MF03 – Field Execution & Alerts"]
+        SCR17["SCR-17 Inspection History & Flight Logs<br/><i>all roles</i>"]:::mf03
+        SCR19["SCR-19 Emergency Alerts<br/><i>Admin, Manager, Analyst</i>"]:::mf03
+        DLG19(["SCR-19-M Confirm · Dismiss · Escalate"]):::dlg
     end
+    SCR02 -.->|"Sidebar"| MF03
+    SCR13 -->|"Emergency banner"| SCR19
+    SCR17 -->|"View results"| SCR13
+    SCR19 --> DLG19
 
-    SCR02 -->|"Sidebar"| SCR17
-    SCR02 -->|"Active alert"| SCR19
-    SCR15 -->|"Mission completed"| SCR17
-    SCR13 -->|"Live UAV"| SCR18
-    SCR18 -->|"Emergency event"| SCR19
-    SCR19 -->|"Actions"| DLG03
-
-    subgraph MF04Area ["MF04: AI Analysis & Defect Resolution"]
-        SCR20["SCR-20: Standalone AI Upload<br/><i>/ai-analysis/upload</i>"]:::mf04Screen
-        SCR22["SCR-22: AI Review Queue<br/><i>/ai-review</i>"]:::mf04Screen
-        SCR21["SCR-21: Detection Review Workspace<br/><i>/ai-review/:id</i>"]:::mf04Screen
-        SCR23{{"SCR-23: Reject / Reanalysis Dialogs"}}:::popupDialog
-        SCR26["SCR-26: Maintenance Tickets<br/><i>/missions/:id → Maintenance tab</i>"]:::mf04Screen
-        SCR24["SCR-24: Reports<br/><i>/reports</i>"]:::mf04Screen
-        DLG04{{"SCR-24-M: Create Report & Export"}}:::popupDialog
+    subgraph MF04 ["MF04 – AI Analysis, Review & Reports"]
+        SCR22["SCR-22 AI Review Queue<br/><i>Admin, Manager, Analyst</i>"]:::mf04
+        SCR21["SCR-21 Detection Review"]:::mf04
+        DLG23(["SCR-23 Reject Detection"]):::dlg
+        SCR20["SCR-20 AI Trial Upload<br/><i>Admin, Manager, Analyst</i>"]:::mf04
+        SCR24["SCR-24 Reports<br/><i>all roles</i>"]:::mf04
+        DLG24(["SCR-24-M Create Report"]):::dlg
     end
-
-    SCR02 -->|"Sidebar"| SCR20
-    SCR02 -->|"Sidebar"| SCR22
-    SCR02 -->|"Sidebar"| SCR24
-    SCR13 -->|"Results tab"| SCR22
+    SCR02 -.->|"Sidebar"| MF04
+    SCR06 -->|"Open detection"| SCR21
     SCR22 -->|"Select detection"| SCR21
-    SCR21 -->|"Reject / reanalyse"| SCR23
-    SCR21 -->|"Confirm defect → ticket"| SCR26
-    SCR13 -->|"Maintenance tab"| SCR26
-    SCR26 -->|"Defects into report"| SCR24
-    SCR24 -->|"Create / export"| DLG04
+    SCR21 -->|"Reject"| DLG23
+    SCR24 -->|"Create"| DLG24
 ```
 
-**Figure 8.** *UAV-PMS screens flow.*
+**Figure 8.** *UAV-PMS screens flow. The draw.io version for the Word report is `report3_diagrams/Screen_Flow_Diagram_v0.5.drawio`.*
 
 #### 3.1.2 Screen Descriptions
 
-Table 3 describes each screen in Figure 8, its route and Angular component, and the use cases it serves.
+Table 3 describes each screen in Figure 8 and the use cases it serves. Live UAV monitoring (SCR-18) and maintenance tickets (SCR-26) are not separate pages; they are parts of SCR-13 Mission Detail.
 
 **Table 3.** *Screen descriptions.*
 
-| ID | Feature | Screen | Route (Component) | Description | Use Case(s) |
+| ID | Feature | Screen | Route | Description | Use Case(s) |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| SCR-01 | CF | Login | `/login` (`Login`) | E-mail and password entry; shows validation errors and redirects to SCR-28 when the device is not trusted. | UC-CF-01 |
-| SCR-02 | CF | Operations Dashboard | `/dashboard` (`Dashboard`) | Role-based home page: mission status counts, active emergency alerts, recent defects, defect statistics and shortcuts. | UC-CF-01, UC-MF03-06 |
-| SCR-03 | CF | Notification Center | Header pop-over | Real-time notification list received through SignalR, unread count, mark as read and link to the record. | UC-CF-06 |
-| SCR-04 | CF | User Management | `/admin/users` (`UserManagement`) | Searchable user list with dialogs to create, edit, suspend and delete accounts and assign roles. | UC-CF-02 |
-| SCR-05 | CF | Personnel Qualifications | – | *Deferred* together with UC-CF-03. | UC-CF-03 |
-| SCR-06 | CF | GIS Map | `/gis` (`GisMonitoring`) | Map of substations, lines, towers and assets with layer toggles and filters; also shows live UAV positions and alert markers. | UC-CF-04, UC-MF02-05 |
-| SCR-07 | CF | Grid Asset Catalogue | `/assets`, `/assets/:id` | List of grid assets with code, type, tower, region, operational status, last inspection date and number of open defects; filters by region, line, tower, type and status; the detail view shows technical data and the linked defects and tickets. | UC-CF-04 |
-| SCR-08 | CF / MF01 | UAV Fleet Management | `/drones` (`DroneManagement`) | UAV inventory with operational status, technical health, battery and specification; dialogs to add, edit and delete UAVs, run the basic technical check and pair the flight controller. | UC-CF-05, UC-MF01-05 |
-| SCR-09 | MF01 | Assessment List | `/pre-mission` (`AssessmentList`) | Assessments with code, region, planned window and status (Evaluating, Ready, Not Ready, Expired, Completed, Cancelled). | UC-MF01-01, UC-MF01-06 |
-| SCR-10 | MF01 | Assessment Create / Workspace | `/pre-mission/new`, `/pre-mission/:id` (`AssessmentCreate`, `AssessmentWorkspace`) | Create form (region, window, target towers on the map, boundary) and a 5-tab workspace: Overview, Personnel Candidates, UAV Candidates, Technical Inspection and Result; cancel dialog and hand-over to MF02. | UC-MF01-01 – UC-MF01-06 |
-| SCR-11 | MF02 | Mission List | `/missions` (`MissionList`) | Missions with code, region, priority, status, UAV, team and planned window; filters by status, priority and date. | UC-MF02-08 |
-| SCR-12 | MF02 | Create & Dispatch Mission | `/missions/new?assessmentId=` (`MissionCreate`) | Mission form initialised from a Ready assessment: title, priority, objective, priority defects, personnel with role and required flag, UAV; conflict check and dispatch. | UC-MF02-01 – UC-MF02-04 |
-| SCR-13 | MF02 | Mission Detail Workspace | `/missions/:id` (`MissionDetail`) | 7 tabs: Overview (data, team, targets, map), Upload, Processing (AI requests), Results (detections), Assets (target assets), Maintenance (tickets) and Activity (timeline and communications). | UC-MF02-05, UC-MF02-08, UC-MF03-06, UC-MF04-03, UC-MF04-04 |
-| SCR-14 | MF02 | Change Mission Dialogs | Dialogs in `/missions/:id` | Cancel, suspend, resume, postpone, reassign personnel, change UAV and change priority. | UC-MF02-09 |
-| SCR-15 | MF02 / MF03 | Inspector Console | `/missions/:id/inspector` (`MissionInspector`) | Field view for assigned users: accept or postpone, instructions, targets, UAV, check-in, handover, start, media upload, flight log, incident report and completion. | UC-MF02-06, UC-MF02-07, UC-MF03-01 – UC-MF03-03, UC-MF03-05, UC-MF03-09 |
-| SCR-16 | MF02 | Postpone Assignment Dialog | Dialog in SCR-15 | Reason entry for postponing an assignment. | UC-MF02-07 |
-| SCR-17 | MF03 | Inspection History & Flight Logs | `/inspections` (`InspectionHistory`) | Uploaded media per mission with defect/clean result, flight logs and filters by date and result. | UC-MF03-05, UC-MF03-09 |
-| SCR-18 | MF03 | Live Monitoring | `/gis` live layer, SCR-02 | Live UAV status and telemetry (position, altitude, battery, speed, heading) received through MQTT and pushed to the browser. | UC-MF03-06 |
-| SCR-19 | MF03 | Emergency Alerts | `/emergency-alerts` (`EmergencyAlertsReview`) | Active and history tabs of emergency alerts with evidence image; dialogs to confirm, dismiss or escalate. | UC-MF03-07, UC-MF03-08 |
-| SCR-20 | MF04 | Standalone AI Upload | `/ai-analysis/upload` (`StandaloneUpload`) | Trial upload of images or videos for AI analysis outside a mission (demonstration only; results are not stored). | UC-MF04-03 |
-| SCR-21 | MF04 | Detection Review Workspace | `/ai-review/:id` (`DetectionReview`) | Image with bounding boxes, category, confidence and severity; confirm or reject with notes; request reanalysis. | UC-MF04-04 – UC-MF04-06 |
-| SCR-22 | MF04 | AI Review Queue | `/ai-review` (`DetectionList`) | Detections waiting for review with thumbnail, category, confidence and filters (status, mission, date). | UC-MF04-05 |
-| SCR-23 | MF04 | Reject / Reanalysis Dialogs | Dialogs in SCR-21 | Rejection notes; reanalysis with analysis type and preferred model. | UC-MF04-05, UC-MF04-06 |
-| SCR-24 | MF04 | Reports | `/reports` (`ReportsPage`) | Report list with status; create, submit, approve or reject, generate and download PDF or Excel; defect statistics. | UC-MF04-07 |
-| SCR-25 | CF | Audit Log Viewer | `/system/audit-logs` (`AuditLogViewer`) | Audit records with time, user, table, action, old and new values and IP address; search and filters. | UC-CF-07 |
-| SCR-26 | MF04 | Maintenance Tickets | Maintenance tab of `/missions/:id` | Tickets created from confirmed defects: status, technician, due date, proof photos and material log. | UC-MF04-08 |
-| SCR-27 | CF | Password Management | `/forgot-password`, `/reset-password`, `/change-password` | Request an OTP, reset a forgotten password, or change the password after OTP step-up. | UC-CF-01 |
-| SCR-28 | CF | OTP Verification | `/otp` (`Otp`) | Six-digit OTP entry with resend cooldown and the “trust this device” option. | UC-CF-01 |
+| SCR-01 | CF | Login | `/login` | E-mail and password entry. Opens SCR-28 when the device is not trusted, or the change-password page when the password must be changed. | UC-CF-01 |
+| SCR-02 | CF | Dashboard | `/dashboard` | Home page of every role: active emergency alerts, mission status overview, defect statistics and recent defects. The sidebar shows only the modules of the user’s role. | UC-CF-01 |
+| SCR-03 | CF | Notification Center | Header pop-over | Real-time notification list with unread count, filters, mark as read and a link to the related mission. | UC-CF-06 |
+| SCR-04 | CF | User Management | `/admin/users` | User list with search and filters; dialogs to create and edit accounts, change the role, unlock and reset the password. | UC-CF-02 |
+| SCR-06 | CF | GIS Map | `/gis` | Map of lines, towers, defects and alerts with layer toggles and filters. Selecting assets on the map can start a new mission (SCR-12); a detail drawer opens the asset (SCR-07) or the detection (SCR-21). | UC-CF-04, UC-MF02-05 |
+| SCR-07 | CF | Grid Asset Catalogue | `/assets`, `/assets/:id` | List of grid assets with code, type, tower, line and operational status, and a detail drawer with technical data and linked defects. | UC-CF-04 |
+| SCR-08 | CF / MF01 | UAV Fleet Management | `/drones` | UAV list with operational status and technical health. Dialogs to add, edit and delete a UAV, run the technical check (optionally reading the flight controller) and estimate the GIS coverage of a UAV. | UC-CF-05, UC-MF01-05 |
+| SCR-09 | MF01 | Assessment List | `/pre-mission` | Assessments with code, region, planned window and status; filters; open, re-evaluate and cancel actions. | UC-MF01-01, UC-MF01-06 |
+| SCR-10 | MF01 | Create Assessment / Assessment Workspace | `/pre-mission/new`, `/pre-mission/:id` | **Create:** one form with scope (region, line, towers on the map), time window, GIS boundary, required personnel and a summary. **Workspace:** 5 tabs – Overview & scope map, Line layout & weather, Personnel candidates, UAV candidates, Technical check – with readiness cards, a cancel dialog and the *Create mission* button when the result is Ready. | UC-MF01-01 – UC-MF01-06 |
+| SCR-11 | MF02 | Mission List | `/missions` | Two tabs: *Assigned to me* and *All missions*; filters by status and priority. Managers open SCR-13; field roles open SCR-15. | UC-MF02-06, UC-MF02-08 |
+| SCR-12 | MF02 | Create & Dispatch Mission | `/missions/new` | Mission form filled from a Ready assessment (or from a GIS selection): scope and readiness, resource assignment (Inspector, Analyst, Technician, UAV) with a conflict check and map preview, deadline and instructions; *Dispatch*. | UC-MF02-01 – UC-MF02-04 |
+| SCR-13 | MF02 / MF03 / MF04 | Mission Detail | `/missions/:id` | 7 tabs: Overview (mission data, team, target map and live UAV telemetry), Upload data, AI processing, AI results, Target assets, Maintenance and Activity. Actions: start and complete the flight, send a reminder, and the change dialogs of SCR-14. | UC-MF02-05, UC-MF02-08, UC-MF03-03, UC-MF03-06, UC-MF03-09, UC-MF04-01, UC-MF04-03, UC-MF04-04 |
+| SCR-14 | MF02 | Change Mission Dialogs | Dialogs in SCR-13 | Postpone, suspend, resume, cancel, reassign a role and change the priority, each with a reason. | UC-MF02-09 |
+| SCR-15 | MF02 | Inspector Console | `/missions/:id/inspector` | Field view of an assigned mission: accept the assignment, UAV specification, pre-flight checklist, route map and tower list. | UC-MF02-06, UC-MF02-07 |
+| SCR-16 | MF02 | Postpone Assignment Dialog | Dialog in SCR-15 | Reason for postponing or rescheduling an assignment. | UC-MF02-07 |
+| SCR-17 | MF03 | Inspection History & Flight Logs | `/inspections` | Inspection records with result and filters; each row opens the AI results of the mission. | UC-MF03-05, UC-MF03-09 |
+| SCR-18 | MF03 | Live Monitoring | Overview tab of SCR-13 | Telemetry panel and map with the latest UAV position, altitude, battery, speed and heading. | UC-MF03-06 |
+| SCR-19 | MF03 | Emergency Alerts | `/emergency-alerts` | Two tabs: *Active alerts* and *Alert & review history*, with evidence image; dialogs to confirm, dismiss or escalate. | UC-MF03-07, UC-MF03-08 |
+| SCR-20 | MF04 | AI Trial Upload | `/ai-analysis/upload` | Two tabs: image analysis and video analysis. Trial upload outside a mission; results are shown but not stored. | UC-MF04-03 |
+| SCR-21 | MF04 | Detection Review | `/ai-review/:id` | Image with bounding box, category, confidence and severity; approve, or reject with a reason (SCR-23). | UC-MF04-04, UC-MF04-05 |
+| SCR-22 | MF04 | AI Review Queue | `/ai-review` | Detections by review status (Pending, Confirmed, Rejected) in grid or table view. | UC-MF04-05 |
+| SCR-23 | MF04 | Reject Detection Dialog | Dialog in SCR-21 | Reason for rejecting a detection. | UC-MF04-05 |
+| SCR-24 | MF04 | Reports | `/reports` | Report list filtered by type and status; create report dialog; submit, approve and download. | UC-MF04-07 |
+| SCR-25 | CF | Audit Log | `/system/audit-logs` | Audit records with filters, search and CSV export; detail dialog with the change comparison and raw data. | UC-CF-07 |
+| SCR-26 | MF04 | Maintenance Tickets | Maintenance tab of SCR-13 | Tickets created from confirmed defects with status, technician, due date and proof. | UC-MF04-08 |
+| SCR-27 | CF | Password Management | `/forgot-password`, `/reset-password`, `/change-password` | Request an OTP, reset a forgotten password, or change the password. | UC-CF-01 |
+| SCR-28 | CF | OTP Verification | `/otp` | Six-digit OTP entry with resend for login and password reset. | UC-CF-01 |
 
-*UC-CF-08 Manage System Settings has no web screen in the current release; it is performed through the System Settings API (Section 3.6.8).*
+*SCR-05 Personnel Qualifications is deferred together with UC-CF-03. UC-CF-08 Manage System Settings has no screen in the current release; it is performed through the System Settings API (Section 3.6.8).*
 
 #### 3.1.3 Screen Authorization
 
-Table 4 states which actor may open each screen. *X* = full access, *V* = view only, blank = no access. Access is enforced by the router guards (`authGuard`, `roleGuard`) and again by the backend role and geographic-scope checks (BR-01, BR-02).
+Table 4 states which actor may open each screen. *X* = full access, *V* = view only, *own* = only missions the user is assigned to, blank = no access. Each user has one role. Access is checked by the web client (route guards) and again by the backend role and geographic-scope checks (BR-01, BR-02).
 
 **Table 4.** *Screen authorization matrix.*
 
@@ -414,21 +402,21 @@ Table 4 states which actor may open each screen. *X* = full access, *V* = view o
 | :---- | :----: | :----: | :----: | :----: | :----: |
 | SCR-01 – SCR-03, SCR-27, SCR-28 | X | X | X | X | X |
 | SCR-04 User Management | X | | | | |
-| SCR-06 GIS Map, SCR-18 Live Monitoring | X | X | V | V | |
-| SCR-07 Grid Asset Catalogue | X | X | V | V | V |
-| SCR-08 UAV Fleet Management | X | X | V | V | X (no delete) |
-| SCR-09, SCR-10 Assessment List / Workspace | X | X | V | | V (technical tab) |
-| SCR-11 Mission List | X | X | V (own) | V | V (own) |
+| SCR-06 GIS Map | X | X | V | V | |
+| SCR-07 Grid Asset Catalogue | V | V | V | V | V |
+| SCR-08 UAV Fleet Management | X | X | | | X |
+| SCR-09, SCR-10 Assessment List / Workspace | X | X | | | |
+| SCR-11 Mission List | X | X | V (own) | V (own) | V (own) |
 | SCR-12 Create Mission, SCR-14 Change Mission | X | X | | | |
-| SCR-13 Mission Detail Workspace | X | X | V (own) | V | V (own) |
+| SCR-13 Mission Detail (incl. SCR-18) | X | X | X (own: start, complete, upload) | V (own) | V (own) |
 | SCR-15 Inspector Console, SCR-16 Postpone | | | X (own) | X (own) | X (own) |
-| SCR-17 Inspection History | X | X | V (own) | V | V (own) |
+| SCR-17 Inspection History | V | V | V | V | V |
 | SCR-19 Emergency Alerts | X | X | | X | |
-| SCR-20 Standalone AI Upload | X | X | | X | |
-| SCR-21 – SCR-23 AI Review | V | V | | X | |
-| SCR-24 Reports | X | X (approve) | X (create, submit) | X (create, submit) | X (create, submit) |
-| SCR-25 Audit Log Viewer | X | V | | | |
-| SCR-26 Maintenance Tickets | X | X | V | V | X (own tickets) |
+| SCR-20 AI Trial Upload | X | X | | X | |
+| SCR-21 – SCR-23 AI Review | X | V | | X | |
+| SCR-24 Reports | X (approve) | X (approve) | X (create, submit) | X (create, submit) | X (create, submit) |
+| SCR-25 Audit Log | X | V | | | |
+| SCR-26 Maintenance Tickets | X | X | V (own) | V (own) | X (own tickets) |
 
 #### 3.1.4 Non-Screen Functions
 
@@ -440,7 +428,7 @@ Table 5 lists the functions that run without a user screen: background jobs, mes
 | :---- | :---- | :---- | :---- | :---- |
 | NS-01 | MF01 | Assessment Expiry Job | Operations Service background job, every 2 minutes: sets Ready assessments whose validity has passed to Expired. The same expiry rule is applied whenever an assessment is read, evaluated or used (BR-17). | UC-MF01-02 |
 | NS-02 | MF02 | Mission Confirmation Overdue Job | Hangfire job, every minute: for a Pending Acceptance mission whose confirmation deadline has passed, notifies the manager (`MISSION_CONFIRMATION_OVERDUE`), writes an OVERDUE communication log and sends a real-time event, once per mission (BR-31). | UC-MF02-08 |
-| NS-03 | CF | Notification Dispatcher | RabbitMQ consumers that turn integration events (mission created, defect confirmed, notification push, AI status changed) into in-app notifications, and the Hangfire job `push-notifications-sync` (every minute) that e-mails unsent notifications through SendGrid (BR-46). | UC-CF-06 |
+| NS-03 | CF | Notification Dispatcher | RabbitMQ consumers that turn integration events (mission created, mission dispatched, defect detected, maintenance ticket assigned, notification push, AI status changed) into in-app notifications, and the Hangfire job `push-notifications-sync` (every minute) that e-mails unsent notifications through SendGrid (BR-46). | UC-CF-06 |
 | NS-04 | MF03 | MQTT Drone Consumer | Subscribes to `uav/+/status` and `uav/+/telemetry`, validates the UAV code and stores the latest UAV live state in Redis for 30 seconds (BR-39). | UC-MF03-05 |
 | NS-05 | CF | Outbox Dispatcher | Publishes integration events stored in the outbox table (for example media uploaded, mission created from assessment, defect confirmed) to the RabbitMQ topic exchange. | UC-MF02-04, UC-MF04-01 |
 | NS-06 | MF03 | Vision Bridge Ingestion | Receives edge AI detections (UAV, class, confidence, bounding box, GPS, image) for a UAV on an In Progress mission, stores the media and detection and notifies the mission manager and inspector (BR-42). | UC-MF03-07 |
@@ -638,7 +626,7 @@ Weather is not evaluated automatically; flight-condition decisions remain with t
 3. The system rebuilds the personnel candidates (UC-MF01-03).
 4. The system rebuilds the UAV candidates (UC-MF01-04).
 5. The system sets the overall status: Ready if all components pass, otherwise Not Ready (BR-16).
-6. The system sets `ValidUntil` to the earlier of evaluation time + 4 hours and the planned end (BR-17).
+6. The system sets how long the result stays valid (BR-17).
 7. The system saves the result, writes the audit record and pushes the real-time event.
 8. SCR-10 shows the overall badge, the component cards and enables **“Tạo nhiệm vụ bay”** when the result is Ready (MSG-101); otherwise it lists the reasons (MSG-102).
 
@@ -775,9 +763,9 @@ Weather is not evaluated automatically; flight-condition decisions remain with t
 | Frame and body | Airframe | Yes |
 | Propeller integrity | Propulsion | Yes |
 | Motors | Propulsion | Yes |
-| Battery health (≥ 30 %; 30–49 % is a warning) | Power | Yes |
+| Battery level (low battery gives a warning, very low battery fails – BR-23) | Power | Yes |
 | GPS / RTK fix | Avionics | Yes |
-| RF link and telemetry (≥ 50) | Communication | Yes |
+| RF link and telemetry (signal quality above the minimum – BR-23) | Communication | Yes |
 | Flight controller | Avionics | Yes |
 | Camera payload | Payload | No |
 
@@ -2189,7 +2177,7 @@ Business rules are grouped by function area. Default values of configurable rule
 | | **General** |
 | BR-01 | Only an authenticated user with an Active account and a verified e-mail may use protected functions. Each API checks the user’s role (Table 4). |
 | BR-02 | A Mission Manager acts only on regions in their geographic scope (a scope row for the region, or a global scope). A System Administrator has every region. A mission member may access the missions they are assigned to. |
-| BR-03 | A user may hold several roles. `Technician` and `MaintenanceTechnician` are equivalent; `Pilot` is treated as Inspector. |
+| BR-03 | Each account has one system role. `Technician` and `MaintenanceTechnician` are equivalent. `Pilot` is used only as a mission-assignment role equivalent to Inspector; it is not a system role. |
 | BR-04 | Login from an untrusted device requires an e-mailed OTP. A trusted device stays trusted for 30 days after its last use. |
 | BR-05 | Status changes follow the state tables in Section 5.4.2; other transitions are rejected. |
 | BR-06 | Data changes and business actions are audited with user, time, table, record, old and new values, IP address and user agent. |
@@ -2199,19 +2187,19 @@ Business rules are grouped by function area. Default values of configurable rule
 | BR-10 | Regions, substations, lines, towers, assets, UAVs, users and missions are soft-deleted; their history is kept. |
 | | **Assets and UAVs** |
 | BR-11 | Coordinates use WGS 84 (EPSG:4326). The hierarchy is Region → Substation → Line → Tower → Asset; each asset belongs to one tower. |
-| BR-12 | A UAV has an operational status (Available, Reserved, In Use, Maintenance, Unavailable, Lost) and a flight status (Idle, Flying, Maintenance, Offline). Only an Available UAV can be assigned. |
+| BR-12 | A UAV has an operational status (Available, Reserved, In Use, Maintenance, Unavailable, Lost) and a flight status (Idle, Online, Flying, Maintenance, Offline). Only an Available UAV can be assigned. |
 | BR-13 | A flight-controller UID is bound to at most one UAV and a UAV to at most one active UID; pairing deactivates the previous bindings of both. |
 | | **MF01 – Readiness** |
 | BR-14 | Only a Mission Manager or System Administrator may create, evaluate or cancel an assessment. The region must be active and in scope; at least one asset is selected, without duplicates; the planned end is after the planned start and in the future. |
 | BR-15 | Every target asset is Active/Operational, belongs to the region and has coordinates. A boundary, if given, is a valid Polygon or MultiPolygon of at most 1,000 vertices and 65,536 characters and contains every target asset. |
 | BR-16 | The result is Ready only when the site component passes and at least one eligible Inspector, one eligible Analyst, one eligible Technician and one eligible UAV exist; otherwise Not Ready with the reason of each failed component. |
-| BR-17 | `ValidUntil` = min(evaluation time + 4 hours, planned end). After it passes, the assessment becomes Expired. Expired, Completed and Cancelled assessments cannot be evaluated. |
+| BR-17 | An evaluated assessment stays valid for a limited time (default 4 hours) and never beyond its planned end. After that it becomes Expired. Expired, Completed and Cancelled assessments cannot be evaluated. |
 | BR-18 | A person is eligible when the account is Active and verified, holds a field role (Inspector, Analyst or Technician) and no SystemAdmin or Manager role, is in scope for the region and has no booking conflict. |
 | BR-19 | A resource has a booking conflict when an Active booking overlaps the requested interval [start, end). |
 | BR-20 | A UAV is eligible when it is Available, has no booking conflict, its technical health is Healthy or Warning, and its scope suitability is not Unsuitable. |
-| BR-21 | Scope suitability: corridor = assets × 0.35 km; usable flight time = endurance × 0.8; mission time = corridor / 36 km/h + 3 minutes per asset; flights = ⌈mission time / usable flight time⌉. Suitable if 1 flight and corridor ≤ operational range (default 10 km); SuitableWithSplit if 2–4 flights; otherwise Unsuitable. |
+| BR-21 | Scope suitability: the system estimates the flight distance and time needed to inspect the target assets and compares them with the UAV’s endurance and operational range. The result is *Suitable* when one flight is enough, *Suitable with split* when a few flights (2–4) are needed, and *Unsuitable* otherwise. |
 | BR-22 | A technical inspection is Failed if any critical item fails. Health is Critical if a critical item fails, Warning if a non-critical item fails, otherwise Healthy. The inspection is valid for 7 days. |
-| BR-23 | Battery below 30% fails as critical; 30–49% passes with a warning. RF link quality below 50 fails. |
+| BR-23 | A battery level below the critical threshold fails the check; a level below the warning threshold passes with a warning. An RF link quality below the minimum fails the check. The thresholds are system settings (Table 57). |
 | BR-24 | If a flight-controller UID is supplied with an inspection, it must be registered and bound to the inspected UAV. |
 | | **MF02 – Mission and assignment** |
 | BR-25 | Only a Ready, unexpired and unused assessment can create a mission. One assessment creates at most one mission; the assessment then becomes Completed and keeps the link. |
@@ -2244,8 +2232,8 @@ Business rules are grouped by function area. Default values of configurable rule
 | BR-50 | An analysis request moves Pending → Processing → Completed or Failed. A result must match the stored request and media; results for a finished request are ignored. |
 | BR-51 | Every detection must map to an existing defect category code; it is stored with validation status Pending. |
 | BR-52 | A transient error while processing a result is retried at most 3 times with a 15-second delay; other errors move the message to the dead-letter queue. |
-| BR-53 | Priority score = (45 if emergency class else 0) + round(confidence × 55), limited to 0–100. Severity/risk: ≥ 90 Critical/Immediate Action; ≥ 75 High/Urgent Review; ≥ 50 Medium/Planned Review; otherwise Low/Monitor. An immediate alert is required when the class is an emergency class and confidence ≥ 0.80. |
-| BR-54 | A review decision is Confirmed or Rejected with optional notes; the reviewer and time are recorded. A confirmed detection creates exactly one maintenance ticket and a defect-confirmed notification. |
+| BR-53 | Each detection receives a priority score from 0 to 100 that grows with its confidence and is higher for emergency defect classes. The score sets the severity: Critical, High, Medium or Low. An emergency-class detection with high confidence also raises an immediate alert. The thresholds are system settings (Table 57). |
+| BR-54 | A review decision is Confirmed or Rejected with optional notes; the reviewer and time are recorded. A confirmed detection creates exactly one maintenance ticket, and the ticket is pushed to the mission page in real time. |
 | BR-55 | An automatic ticket has priority Emergency if the category is an emergency class or the analyst overrides the severity to Critical/Urgent, Low if overridden to Low, otherwise High. Due date: 1 day for Emergency, otherwise 7 days. It is assigned to the mission’s technician. |
 | BR-56 | Ticket status moves Open → In Progress → Pending Verification → Closed. Only the assigned technician, a Manager or an Administrator changes it. Pending Verification and Closed require at least one proof photo. A Closed ticket cannot be changed; closing sets the detection to Resolved. |
 | BR-57 | A proof is a JPEG, PNG, WebP or TIFF image of at most 50 MB. A material record has a name, a unit and a quantity greater than 0. |
@@ -2366,8 +2354,6 @@ Table 57 lists the system settings (UC-CF-08, BR-09) with their default values, 
 | `Ai:CriticalScoreThreshold` | 90 | Priority score for Critical | BR-53 |
 | `Ai:HighScoreThreshold` | 75 | Priority score for High | BR-53 |
 | `Ai:MediumScoreThreshold` | 50 | Priority score for Medium | BR-53 |
-| `Ai:EmergencyWeight` | 45 | Score added for an emergency class | BR-53 |
-| `Ai:MaxConfidenceWeight` | 55 | Score weight of confidence | BR-53 |
 | `Ai:DefaultPreferredModel` | SERVER | Default AI model route | BR-49 |
 | `Ai:TimeoutSeconds` | 60 | AI processing time-out | NFR-AI-03 |
 | `Drone:CriticalBatteryThreshold` | 30 % | Battery below which the check fails | BR-23 |
@@ -2391,6 +2377,7 @@ The tables below define the allowed statuses and transitions referenced by BR-05
 
 | State | Meaning | Next states (trigger) |
 | :---- | :---- | :---- |
+| Draft | Created, not yet evaluated | Evaluating (UC-MF01-02) |
 | Evaluating | Created; evaluation running | Ready, Not Ready (UC-MF01-02) |
 | Ready | All components pass | Completed (UC-MF02-01), Expired (BR-17), Cancelled (UC-MF01-06), Ready/Not Ready (re-evaluation) |
 | Not Ready | At least one component fails | Ready/Not Ready (re-evaluation), Expired, Cancelled |
@@ -2418,14 +2405,14 @@ The tables below define the allowed statuses and transitions referenced by BR-05
 
 | Object | States and transitions |
 | :------- | :------------------------------------ |
-| Assignment response | Pending → Accepted or Postponed; reassignment resets to Pending. The assignment record is Active or Revoked. |
+| Assignment response | Pending → Accepted or Postponed; reassignment resets to Pending; a replaced or removed member becomes Replaced or Cancelled. The assignment record is Active, Unavailable or Revoked. |
 | Resource booking | Active → Released (mission completed, member replaced) or Cancelled (mission cancelled, member or UAV removed). |
-| Technical inspection | Passed or Failed; technical health Unknown, Healthy, Warning or Critical. |
+| Technical inspection | Pending → In Progress → Passed, Failed or Incomplete; technical health Unknown, Healthy, Warning or Critical. |
 | UAV handover | Accepted or Rejected → Returned. |
 | AI analysis request | Pending → Processing → Completed or Failed. |
 | Detection | Pending → Confirmed or Rejected (re-review allowed) → Resolved (ticket closed). |
 | Emergency alert | Active → Confirmed, Dismissed or Escalated. |
-| Maintenance ticket | Open → In Progress → Pending Verification → Closed. |
+| Maintenance ticket | Open → In Progress → Pending Verification → Closed (Resolved is also accepted as a final status). |
 | Report | Draft → Pending → Approved; Pending → Draft on rejection. |
 
 #### 5.4.3 Defect Categories

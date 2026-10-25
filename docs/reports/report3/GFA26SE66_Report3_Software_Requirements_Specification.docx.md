@@ -8,163 +8,67 @@
 
 – TP.HCM, September 2026 –
 
-**Table of Contents**
+**Table of Contents**  
+[I. Record of Changes	3](#i.-record-of-changes)
 
-**[I. Record of Changes	4](#i.-record-of-changes)**
+[II. Software Requirements Specification	4](#ii.-software-requirements-specification)
 
-[**II. Software Requirements Specification	5**](#ii.-software-requirements-specification)
+[1\. Product Overview	4](#1.-product-overview)
 
-[1\. Product Overview	5](#1.-product-overview)
+[2\. User Requirements	5](#2.-user-requirements)
 
-[2\. User Requirements	6](#2.-user-requirements)
+[2.1 Actors	5](#heading=h.gr7fx75nyrv3)
 
-[2.1 Actors	6](#heading=h.gr7fx75nyrv3)
+[2.2 Use Cases	6](#2.2-use-cases)
 
-[2.2 Use Cases	7](#2.2-use-cases)
+[3\. Functional Requirements	10](#3.-functional-requirements)
 
-[2.2.1 Diagram(s)	7](#heading)
+[3.1 System Functional Overview	10](#3.1-system-functional-overview)
 
-[2.2.2 Descriptions	9](#heading=)
+[3.2 MF01 – Pre-Mission Feasibility and Resource Readiness	12](#heading=h.gjchyyv4mmwu)
 
-[3\. Functional Requirements	12](#3.-functional-requirements)
+[3.2.1 Evaluate Pre-Mission Readiness	12](#heading=h.uierc48vy5dr)
 
-[3.1 System Functional Overview	12](#3.1-system-functional-overview)
+[3.3 MF02 – Create and Assign Inspection Mission	12](#heading=h.ikwdcdb7lnxf)
 
-[3.1.1 Screens Flow	12](#3.1.1-screens-flow)
+[4\. Non-Functional Requirements	13](#heading=h.55kcw411cbmd)
 
-[3.1.2 Screen Descriptions	12](#heading=)
+[4.1 External Interfaces	13](#heading=h.69z6qlk7aqfk)
 
-[3.1.3 Screen Authorization	12](#heading=)
+[4.2 Quality Attributes	13](#heading=h.qxluz8p80zq0)
 
-[3.1.4 Non-Screen Functions	13](#heading=)
+[5\. Requirement Appendix	16](#heading=h.183sxhctwqwi)
 
-[3.1.5 Entity Relationship Diagram	13](#heading=)
+[5.1 Business Rules	16](#heading=h.5a8te9hepmfx)
 
-[3.2 MF01 – Pre-Mission Feasibility and Resource Readiness	14](#heading=h.gjchyyv4mmwu)
+[5.2 Common Requirements	19](#heading=h.w5ca74p4at95)
 
-[3.2.1 Create Readiness Assessment	14](#heading=h.gjchyyv4mmwu)
+[5.3 Application Messages List	19](#heading=h.hjatmzx6e0sk)
 
-[3.2.2 Evaluate Pre-Mission Readiness	14](#heading=h.uierc48vy5dr)
-
-[3.2.3 Check Personnel Availability and Eligibility	14](#heading=h.a8zaazi2ptgj)
-
-[3.2.4 Check UAV Availability, Technical Health and GIS Suitability	14](#heading=h.a8zaazi2ptgj)
-
-[3.2.5 Record UAV Technical Inspection and Hardware UID Binding	15](#heading=h.a8zaazi2ptgj)
-
-[3.2.6 View Readiness Assessment Result & Mission Handoff	15](#heading=h.a8zaazi2ptgj)
-
-[3.2.7 Automated Assessment Expiry Background Service	15](#heading=h.a8zaazi2ptgj)
-
-[3.3 MF02 – Create and Assign Inspection Mission	15](#heading=h.ikwdcdb7lnxf)
-
-[4\. Non-Functional Requirements	15](#heading=h.55kcw411cbmd)
-
-[4.1 External Interfaces	15](#heading=h.69z6qlk7aqfk)
-
-[4.2 Quality Attributes	15](#heading=h.qxluz8p80zq0)
-
-[4.2.1 Usability	15](#heading=h.foec7x2dp7na)
-
-[4.2.2 Reliability	16](#heading=h.z9k7tgcdf376)
-
-[4.2.3 Performance	16](#heading=h.246gkvipqwkp)
-
-[4.2.4 Security and Privacy	16](#heading=h.bv1spp2bnbji)
-
-[Table 4.4. Security and Privacy Requirements.	17](#heading=h.3x73ui3snrdq)
-
-[4.2.5 Maintainability, Observability and Compatibility	17](#heading=h.yd97132il6pk)
-
-[Table 4.5. Maintainability, Observability and Compatibility Requirements.	17](#heading=h.ii5nkqgjlf2i)
-
-[5\. Requirement Appendix	17](#heading=h.183sxhctwqwi)
-
-[5.1 Business Rules	17](#heading=h.5a8te9hepmfx)
-
-[5.2 Common Requirements	20](#heading=h.w5ca74p4at95)
-
-[5.3 Application Messages List	21](#heading=h.hjatmzx6e0sk)
-
-[5.4 Other Requirements	23](#heading=h.2tqsfs1jycwl)
-
-[**III. Literature Review	23**](#iii.-literature-review)
-
-[1\. Introduction	23](#1.-introduction)
-
-[2\. Conceptual Foundations and Domain Challenges	24](#2.-conceptual-foundations-and-domain-challenges)
-
-[2.1 Conceptual Foundations and Core Theories	24](#2.1-conceptual-foundations-and-core-theories)
-
-[2.1.1 UAV-Based Electrical-Infrastructure Inspection	24](#2.1.1-uav-based-electrical-infrastructure-inspection)
-
-[2.1.2 Object Detection Architecture Families	24](#2.1.2-object-detection-architecture-families)
-
-[2.1.3 Multi-Scale Feature Representation	25](#2.1.3-multi-scale-feature-representation)
-
-[2.1.4 Frequency-Domain Feature Representation	25](#2.1.4-frequency-domain-feature-representation)
-
-[2.1.5 Structural Context and Component Relationships	25](#2.1.5-structural-context-and-component-relationships)
-
-[2.1.6 Temporal and Multi-Frame Evidence	26](#2.1.6-temporal-and-multi-frame-evidence)
-
-[2.2 Problem Space and Domain Challenges	26](#2.2-problem-space-and-domain-challenges)
-
-[2.2.1 Small and Fine-Grained Defects	26](#2.2.1-small-and-fine-grained-defects)
-
-[2.2.2 Viewpoint and Scale Variation	27](#2.2.2-viewpoint-and-scale-variation)
-
-[2.2.3 Complex Backgrounds and Environmental Interference	27](#2.2.3-complex-backgrounds-and-environmental-interference)
-
-[2.2.4 Occlusion and Visual Ambiguity	27](#2.2.4-occlusion-and-visual-ambiguity)
-
-[2.2.5 Intra-Class Variation and Inter-Class Similarity	28](#2.2.5-intra-class-variation-and-inter-class-similarity)
-
-[2.2.6 Dataset Imbalance and Taxonomy Constraints	28](#2.2.6-dataset-imbalance-and-taxonomy-constraints)
-
-[2.2.7 Annotation Quality and Bounding-Box Semantics	28](#2.2.7-annotation-quality-and-bounding-box-semantics)
-
-[3\. Existing Research Work	29](#3.-existing-research-work)
-
-[3.1 Technology Landscape Review	29](#3.1-technology-landscape-review)
-
-[3.2 Strategies Applied in Previous Research	31](#3.2-strategies-applied-in-previous-research)
-
-[3.3 Evaluation Metrics Used in Previous Work	33](#3.3-evaluation-metrics-used-in-previous-work)
-
-[4\. Fit-Gap Analysis	36](#4.-fit-gap-analysis)
-
-[5\. Summary	40](#5.-summary)
-
-[**IV. References	41**](#iv.-references)
+[5.4 Other Requirements…	21](#heading=h.2tqsfs1jycwl)
 
 **ABBREVIATIONS**
 
-A list of abbreviations and acronyms used in the thesis, with their full forms.
+***Table 1\.** Abbreviations used in this report.* 
 
 | Acronym | Meaning |
-| ----- | ----- |
+| :---: | ----- |
 | AI | Artificial Intelligence |
 | AMQP | Advanced Message Queuing Protocol (used by RabbitMQ) |
 | API | Application Programming Interface |
 | BR | Business Rule identifier (Section 5.1) |
 | CF | Common Function identifier (Section 3.2) |
 | CR | Common Requirement identifier (Section 5.2) |
+| CRS | Coordinate Reference System |
 | DETR | DEtection TRansformer |
-| DLQ | Dead-Letter Queue |
 | ERD | Entity Relationship Diagram |
 | EVN | Vietnam Electricity |
-| EXIF | Exchangeable Image File Format (image metadata) |
-| FC | Flight Controller |
 | GIS | Geographic Information System |
-| gRPC | Google Remote Procedure Call (internal service call over HTTP/2) |
-| JWT | JSON Web Token |
 | mAP | mean Average Precision |
 | MF | Main Flow identifier; MF01–MF04 name the four project main flows |
 | MQTT | Message Queuing Telemetry Transport |
 | MSG | Application message identifier (Section 5.3) |
 | NFR | Non-Functional Requirement |
-| OTP | One-Time Password |
 | RPO / RTO | Recovery Point Objective / Recovery Time Objective |
 | SCR | Screen identifier (Section 3.1) |
 | SDI / SCI | The two YOLO11s-based improved detection models evaluated in the AI research |
@@ -175,10 +79,11 @@ A list of abbreviations and acronyms used in the thesis, with their full forms.
 | UC | Use Case identifier |
 | UTC | Coordinated Universal Time |
 | WBS | Work Breakdown Structure (Report 2, Table 1\) |
-| WKT | Well-Known Text (geometry format) |
 | YOLO | You Only Look Once |
 
 # **I. Record of Changes** {#i.-record-of-changes}
+
+***Table 2\.** Record of Changes.* 
 
 | Date | A\*M, D | In charge | Change Description |
 | ----- | ----- | ----- | ----- |
@@ -186,9 +91,6 @@ A list of abbreviations and acronyms used in the thesis, with their full forms.
 | 07/10/2026 | M | SE193338 \- Nguyễn Nhật An | Unified actor names; redrew the context, use-case, screen-flow and ER diagrams; renumbered use cases and aligned them with the Report 2 WBS; added Common Functions. |
 | 07/10/2026 | A | SE193338 \- Nguyễn Nhật An | Added screen list, screen authorization, non-screen functions, entity descriptions and detailed use-case specifications for CF and MF01–MF04. |
 | 07/10/2026 | M | SE193338 \- Nguyễn Nhật An | Revised NFRs to measurable targets, aligned AI rules with the seven-class dataset and the YOLO11s/SDI/SCI/StructDETR models, reorganized business rules and messages, and added traceability and state tables. |
-| 14/10/2026 | M | SE193338 \- Nguyễn Nhật An | v0.3 – Aligned the SRS with the implemented backend (commit 124d764): microservice architecture, six system roles, email/OTP login, Region–Substation–Line–Tower–Asset hierarchy, UAV status model and flight-controller pairing, automatic assessment evaluation with GIS suitability, combined create-and-dispatch of missions, mission/assignment/booking states, MQTT topics, media ingestion with EXIF, Vision Bridge, RabbitMQ AI pipeline with gRPC severity evaluation, analyst review with automatic maintenance tickets, reports and system settings. |
-| 14/10/2026 | A | SE193338 \- Nguyễn Nhật An | v0.3 – Added UC-CF-08 Manage System Settings, UC-MF04-08 Manage Maintenance Ticket, screens SCR-26 – SCR-28, booking/alert/ticket state tables and the backend error code of every message. |
-| 14/10/2026 | D | SE193338 \- Nguyễn Nhật An | v0.3 – Removed requirements that conflict with the implemented design: username login and account lockout, Needs Review assessment result and override, automatic weather thresholds, flight altitude/speed parameters, Field Completed state, assignment Expired state, automatic confidence-based acceptance/discarding, Edge-Device metric import and the technical-inspection expiry job. |
 |  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
@@ -202,73 +104,64 @@ A list of abbreviations and acronyms used in the thesis, with their full forms.
 
 ## **1\. Product Overview** {#1.-product-overview}
 
-UAV-PMS is a web-based system that supports UAV-assisted inspection of electrical infrastructure for the requesting EVN southern business unit described in Report 1\. The system manages an inspection from the pre-mission readiness assessment, through mission assignment and field execution, to AI-based defect detection, analyst review and maintenance follow-up.
+UAV-PMS is a web-based system that supports UAV-assisted inspection of electrical infrastructure for the requesting EVN southern business unit described in Report 1\. The system manages an inspection from the pre-mission readiness assessment, through mission assignment and field execution, to AI-based defect detection and analyst review.
 
 The product covers four main flows and a set of common functions:
 
-* MF01 – Pre-Mission Feasibility and Resource Readiness: defines the proposed inspection scope (region, asset components and optional boundary) and time window, then automatically evaluates site feasibility, personnel availability and eligibility, UAV operational availability, technical health and GIS scope suitability, and decides whether the assessment is Ready for a mission.
-
-* MF02 – Create and Assign Inspection Mission: creates a mission from a Ready assessment with priority and objective, assigns eligible personnel and UAVs, reserves them with resource bookings, dispatches the mission and tracks the assignees’ acceptance or postponement; supports later changes (cancel, suspend, resume, postpone, reassign, change UAV, change priority).
-
-* MF03 – Mission Execution and Field Inspection: supports field check-in, UAV handover and return, mission start and completion, live UAV status through MQTT, inspection media upload with EXIF metadata, flight logs, field incident reports and edge AI emergency alerts.
-
-* MF04 – AI Inspection and Defect Detection: sends every uploaded media file to the AI service through RabbitMQ, stores detections with category, bounding box and confidence, evaluates severity and risk through the internal Inspection Evaluation service, supports analyst review and reanalysis, creates maintenance tickets for confirmed defects, and produces defect reports (PDF/Excel).
-
-* Common Functions (CF): login with OTP, user accounts and geographic scope, personnel qualifications, infrastructure assets, UAV inventory and flight-controller pairing, notifications, the audit log and system settings.
+* **MF01 – Pre-Mission Feasibility and Resource Readiness:** defines the proposed inspection scope and time window, checks personnel availability and eligibility, checks UAV availability and technical readiness, records site and flight conditions, and determines whether a mission may be created.  
+* **MF02 – Create and Assign Inspection Mission:** creates a mission from a Ready assessment, sets mission parameters and schedule, assigns eligible personnel and a UAV, dispatches the mission and records the assignees’ responses.  
+* **MF03 – Mission Execution and Field Inspection:** supports field check-in, UAV handover, mission start, per-asset progress, telemetry and media transmission from the UAV, critical-anomaly alerts from the edge model, and field completion.  
+* **MF04 – AI Inspection and Defect Detection:** validates submitted inspection media, sends it to the Server/Deep AI model, stores detections with category, bounding box and confidence score, supports analyst review and reanalysis, and produces defect reports.  
+* **Common Functions (CF):** login, user accounts and qualifications, infrastructure assets, UAV inventory, notifications and the audit log.
 
 UAV-PMS uses two AI processing modes, consistent with Report 1 (FE-03) and Report 2 (MF03-06, MF04-04 to MF04-07):
 
-* Edge/Fast mode: a YOLO-based model deployed on the UAV’s onboard computer (Raspberry Pi) detects suspected anomalies during flight and sends them to the Vision Bridge API; emergency classes raise an alert (UC-MF03-07). Analysis requests can also be routed to the edge model queue (preferred model EDGE or YOLO).
+* **Edge/Fast mode:** a YOLO11s model deployed on the UAV’s onboard computer (Raspberry Pi) detects suspected critical anomalies during flight and sends an alert (UC-MF03-07).  
+* **Server/Deep mode:** after the flight, the Cloud AI Service analyses the full-resolution media with the model selected by the AI research (StructDETR candidate; if StructDETR is not stable by 15 November 2026, the best YOLO11s, SDI or SCI model is used) (UC-MF04-02).
 
-* Server/Deep mode: after upload, the AI service analyses the full-resolution media with the model selected by the AI research (StructDETR candidate; if StructDETR is not stable by 15 November 2026, the best YOLO11s, SDI or SCI model is used) (UC-MF04-02). SERVER is the default preferred model.
-
-The backend is built as ASP.NET Core 9 microservices behind an Ocelot API gateway: Identity Service (authentication, users), Operations Service (assets, UAVs, assessments, missions, field execution, media, alerts, reports, maintenance, audit, settings), AI Inspection Service (AI analysis orchestration and Vision Bridge), Notification Service (in-app/e-mail notifications, SignalR hub, background jobs) and the internal Inspection Evaluation Service (gRPC severity evaluation). The services share one PostgreSQL/PostGIS database and communicate asynchronously through RabbitMQ.
-
-The system does not control the UAV in flight, generate flight waypoints, perform physical repair, certify UAV hardware, or replace aviation licensing and safety procedures. Flight control and flight-condition decisions remain with the flight controller and the pilot.
+The system does not control the UAV in flight, perform physical repair, certify UAV hardware, or replace aviation licensing and safety procedures. Flight control remains with the flight controller and the pilot.
 
 Figure 1 shows the system boundary, the external entities and the data exchanged with them. Each external entity is described as an actor in Table 3\.
 
 ![][image2] 
 
-***Figure 1\.** UAV-PMS system context.*
+***Figure 1\.** UAV-PMS context diagram.*
 
 ## **2\. User Requirements** {#2.-user-requirements}
 
 ### **2.1 Actors**
 
-UAV-PMS has five human actors and four system actors. All human actors are specializations of the generic User actor, as shown in Figure 2, so they share the functions in Section 3.2 (Log In, View Notifications). A user account may hold more than one role; the actor is determined by the role used for the action.
+UAV-PMS has five human actors and four system actors. All human actors are specializations of the generic User actor, as shown in Figure 2, so they share the functions in Section 3.2 (Log In, View Notifications).
 
 ![][image3]
 
 ***Figure 2\.** Generalization of human actors.* 
 
-| \# | Actor | Type | Description |
-| ----- | ----- | ----- | ----- |
-| 1 | System Administrator | Human | Manages user accounts, roles, geographic scopes, personnel qualifications and system settings; has access to every function and data scope; reviews the audit log. |
-| 2 | Mission Manager | Human | Maintains infrastructure assets and the UAV inventory, creates readiness assessments, creates and dispatches missions, assigns personnel and UAVs, changes missions, monitors field execution, requests reanalysis, manages maintenance tickets and approves reports. Limited to the regions in their geographic scope. |
-| 3 | Inspector | Human | Field operator who also acts as the UAV pilot. Responds to assignments, checks in, receives and returns the UAV, starts and completes the mission, uploads media and flight logs and reports field incidents. |
-| 4 | Analyst | Human | Reviews AI detections (confirm or reject), reviews and escalates emergency alerts, requests reanalysis and prepares reports. |
-| 5 | UAV Technician | Human | Records UAV technical inspections, pairs flight controllers with UAVs, maintains UAV records and executes maintenance tickets (status, proof, materials). |
-| 6 | Edge Device | System | The UAV’s onboard computer (Raspberry Pi, camera, GPS and flight-controller link). Publishes UAV status and telemetry through MQTT and sends edge AI detections with images to the Vision Bridge API. |
-| 7 | Cloud AI Service | System | Server-side AI inference service (FastAPI). Consumes analysis requests from RabbitMQ and returns processing status and detections through the result queue. |
-| 8 | Map Service | System | Leaflet with OpenStreetMap tiles; provides the base map for towers, assets, assessment boundaries, mission targets and live UAV position. |
-| 9 | Notification Provider | System | E-mail services that deliver notification e-mails (SendGrid) and OTP / password-reset e-mails (Brevo). In-app notifications are produced by UAV-PMS itself. |
-
 **Table 3**. UAV-PMS actors.
+
+| \# | Actor | Type | Description |
+| :---- | :---- | :---- | :---- |
+| 1 | System Administrator | Human | Manages user accounts, roles, personnel qualifications, infrastructure assets and the UAV inventory; reviews the audit log. |
+| 2 | Mission Manager | Human | Creates and evaluates readiness assessments, creates and dispatches missions, assigns personnel and UAVs, monitors field execution, handles critical alerts and reviews defect reports. |
+| 3 | Inspector | Human | Field operator who also acts as the UAV pilot. Responds to assignments, checks in, confirms UAV handover, executes the mission, records asset progress, reports anomalies and submits inspection data. |
+| 4 | Analyst | Human | Monitors AI processing, reviews AI detections (confirm, reject or correct) and requests reanalysis. |
+| 5 | UAV Technician | Human | Maintains UAV records and performs and records the UAV technical inspection used by the readiness check. |
+| 6 | Edge Device | System | The UAV’s onboard computer (Raspberry Pi, camera, GPS and flight-controller link). Sends telemetry, captured media, flight-controller health metrics and edge anomaly events. |
+| 7 | Cloud AI Service | System | Server-side AI inference service (Server/Deep mode). Receives analysis requests and returns processing status and detections asynchronously. |
+| 8 | Map Service | System | Leaflet with OpenStreetMap tiles; provides the base map for towers, inspection scope, routes and live UAV position. |
+| 9 | Notification Provider | System | Email service that delivers assignment, reminder and alert notifications and returns delivery status. In-app notifications are produced by UAV-PMS itself. |
 
 ### **2.2 Use Cases** {#2.2-use-cases}
 
 #### ***2.2.1 Diagram(s)***
 
-The use cases are grouped into five diagrams: the common functions (Figure 3\) and one diagram for each main flow (Figures 4–7). Each use case is labelled with the identifier used in Table 4 and in Sections 3.2–3.6. A use case reused by another flow is shown in both diagrams with its original identifier; for example, UC-MF02-02 includes UC-MF01-03 in Figure 5\.
-
-####  {#heading}
+The use cases are grouped into five diagrams: the common functions (Figure 3\) and one diagram for each main flow (Figures 4–7). Each use case is labelled with the identifier used in Table 4 and in Sections 3.2–3.6. A use case reused by another flow is shown in both diagrams with its original identifier; for example, UC-MF02-02 includes UC-MF01-03 in Figure 5\. 
 
 ![][image4]
 
 ***Figure 3\.** Use case diagram – Common Functions.* 
 
-![][image5] 
+![][image5]
 
 ***Figure 4\.** Use case diagram – MF01 Pre-Mission Feasibility and Resource Readiness.* 
 
@@ -288,733 +181,1336 @@ The use cases are grouped into five diagrams: the common functions (Figure 3\) a
 
 Table 4 describes every use case in Figures 3–7. The column WBS links each use case to the work item in Report 2, Table 1\. The AI model training and evaluation items (MF04-04 to MF04-07) are research work and have no use case.
 
-| ID | Use Case | Primary Actor(s) | Secondary Actor(s) | Description | WBS |
-| :---- | :---- | :---- | :---- | :---- | :---- |
-| UC-CF-01 | Log In | User | Notification Provider | Authenticate with e-mail and password; on an untrusted device verify an e-mailed OTP; open the role-based dashboard. | CF-01 |
-| UC-CF-02 | Manage User Accounts | System Administrator | – | Create, update and suspend accounts, assign one or more roles and the geographic scope. | CF-02 |
-| UC-CF-03 | Manage Personnel Qualifications | System Administrator | – | Record each person’s qualifications (UAV pilot, inspector, technician) with validity dates. | CF-02 |
-| UC-CF-04 | Manage Infrastructure Assets | System Administrator, Mission Manager | Map Service | Maintain regions, substations, transmission lines, towers and asset components with coordinates; import towers from Excel. | CF-03 |
-| UC-CF-05 | Manage UAV Inventory | Mission Manager, Technician, System Administrator | – | Maintain UAV records, operational status and technical health; pair a flight controller (Betaflight UID) with a UAV. | CF-04 |
-| UC-CF-06 | View Notifications | User | – | View and mark as read in-app notifications, received in real time, and open the linked record. | CF-05 |
-| UC-CF-07 | View Audit Log | System Administrator, Mission Manager | – | Search audit records of data changes and material actions. | CF-05 |
-| UC-CF-08 | Manage System Settings | System Administrator | – | View and change the configurable thresholds and parameters (Table 60). | CF-05 |
-| UC-MF01-01 | Create Readiness Assessment | Mission Manager | Map Service | Define the region, planned window, asset components and optional boundary; the assessment is evaluated immediately (includes UC-MF01-02). | MF01-01 |
-| UC-MF01-02 | Evaluate Pre-Mission Readiness | Mission Manager | – | Run the site-feasibility, personnel and UAV checks and obtain the result Ready or Not Ready; re-evaluate or cancel an assessment. | MF01-05, MF01-06 |
-| UC-MF01-03 | Check Personnel Availability and Eligibility | – (included) | – | Included by UC-MF01-02 and UC-MF02-02. List field personnel who are active, in the geographic scope, hold a valid qualification and are not booked in the window. | MF01-02 |
-| UC-MF01-04 | Check UAV Availability and Technical Readiness | – (included) | – | Included by UC-MF01-02 and UC-MF02-03. List UAVs that are operationally available, not booked, technically healthy and suitable for the scope. | MF01-03 |
-| UC-MF01-05 | Record UAV Technical Inspection | Technician | Edge Device | Record the basic checklist or detailed metrics, verify the paired flight controller and obtain Passed or Failed with a technical health. | MF01-04 |
-| UC-MF01-06 | View Readiness Assessment Result | Mission Manager | – | View the overall result with the status and reason of each component. | MF01-06 |
-| UC-MF02-01 | Create Inspection Mission | Mission Manager | – | Create a mission from a Ready assessment with title, priority, objective, personnel and UAVs (includes UC-MF02-02, UC-MF02-03, UC-MF02-04). | MF02-01 – MF02-03 |
-| UC-MF02-02 | Assign Personnel to Mission | Mission Manager | – | Assign eligible personnel with a mission role and required flag; add, remove or reassign later (includes UC-MF01-03). | MF02-04 |
-| UC-MF02-03 | Assign UAV to Mission | Mission Manager | – | Assign an available, healthy and unbooked UAV; change it later (includes UC-MF01-04). | MF02-05 |
-| UC-MF02-04 | Dispatch Mission | – (included) | Notification Provider | Reserve resources with bookings, set the mission to Pending Acceptance and notify the assignees. | MF02-06 |
-| UC-MF02-05 | Preview Mission Targets on Map | Mission Manager, Inspector | Map Service | Display the mission targets in sequence, their towers and the scope boundary on the map. | MF02-07 |
-| UC-MF02-06 | View Assigned Mission | Inspector | – | View scope, schedule, deadline, instructions and assigned UAV of own missions. | MF02-08 |
-| UC-MF02-07 | Respond to Mission Assignment | Inspector | – | Accept, or postpone with a reason, before the confirmation deadline. | MF02-08 |
-| UC-MF02-08 | Monitor Assignment Status | Mission Manager | Notification Provider | Track responses and the confirmation deadline, send reminders and messages. | MF02-06 |
-| UC-MF02-09 | Change Dispatched Mission | Mission Manager | Notification Provider | Cancel, suspend, resume, postpone, reschedule, reassign personnel, change the UAV or change the priority with re-validation. | MF02-09 |
-| UC-MF03-01 | Check In at Mission Site | Inspector | – | Record arrival at the site with server time and GPS location. | MF03-01 |
-| UC-MF03-02 | Confirm UAV Handover | Inspector | – | Receive custody of the assigned UAV with its condition, and return it after the flight. | MF03-02\* |
-| UC-MF03-03 | Start Mission Execution | Inspector | – | Start a Ready mission; the UAV becomes Flying and the mission In Progress. | MF03-02 |
-| UC-MF03-04 | Record Asset Inspection Progress | Inspector | – | Mark each mission target as Inspected or Skipped (with reason). | MF03-05 |
-| UC-MF03-05 | Transmit Telemetry and Field Media | Edge Device, Inspector | – | Publish UAV status and telemetry through MQTT; upload inspection images and videos with EXIF/GPS metadata. | MF03-03, MF03-04 |
-| UC-MF03-06 | Monitor Field Execution | Mission Manager | Map Service | View live UAV state, mission lifecycle events, targets and alerts. | MF03-03 |
-| UC-MF03-07 | Report Critical Anomaly | Edge Device, Inspector | Notification Provider | Create an emergency alert from an edge AI detection, or a field incident report, with image, time, location and confidence. | MF03-06 |
-| UC-MF03-08 | Handle Critical Alert | Analyst | Mission Manager | Review an emergency alert (confirm or dismiss) or escalate it to a responsible user. | MF03-06 |
-| UC-MF03-09 | Finish Field Inspection | Inspector | – | Submit the flight log and complete the mission; the UAV becomes Idle and bookings are released. | MF03-07 |
-| UC-MF04-01 | Submit Inspection Data | Inspector | – | Upload media for a mission target; each valid file is queued for analysis automatically (includes UC-MF04-02). | MF04-01, MF04-02 |
-| UC-MF04-02 | Process AI Analysis | – (included) | Cloud AI Service | Create an analysis request, publish it to the AI queue, receive the result, evaluate each detection and store it. | MF04-03 |
-| UC-MF04-03 | Monitor AI Processing Status | Inspector, Analyst, Mission Manager | – | Track analysis requests in Pending, Processing, Completed or Failed state. | MF04-03 |
-| UC-MF04-04 | View AI Analysis Results | Mission Manager, Inspector, Analyst | – | View detections with category, bounding box, confidence, severity, risk and review status on the image. | MF04-08 |
-| UC-MF04-05 | Review AI Detections | Analyst | – | Confirm, reject or correct detections; a confirmed detection updates the asset health and creates a maintenance ticket. | MF04-09, MF04-11 |
-| UC-MF04-06 | Request Media Reanalysis | Analyst, Mission Manager | Cloud AI Service | Request a new analysis of existing media with a model and analysis type (includes UC-MF04-02). | MF04-10 |
-| UC-MF04-07 | View Defect Report and Export | Mission Manager, Analyst, Inspector | – | Create, submit and approve defect reports, view statistics and export PDF or Excel. | MF04-12 |
-| UC-MF04-08 | Manage Maintenance Ticket | Mission Manager, Technician | – | Create, assign, execute (status, proof, materials) and close maintenance tickets for confirmed defects. | MF04-11 |
-
 ***Table 4\.** Use case descriptions.*
 
-*\*UAV handover has no separate item in Report 2, Table 1; it is estimated inside MF03-02. If the WBS is renumbered, update this column.*
+| ID | Use Case | Primary Actor(s) | Secondary Actor(s) | Description | WBS |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| UC-CF-01 | Log In | User | – | Authenticate with username and password and open the role-based dashboard. | CF-01 |
+| UC-CF-02 | Manage User Accounts | System Administrator | – | Create, update, deactivate and assign a role and region to user accounts. | CF-02 |
+| UC-CF-03 | Manage Personnel Qualifications | System Administrator | – | Record each person’s qualifications (UAV pilot, inspector, technician) with validity dates. | CF-02 |
+| UC-CF-04 | Manage Infrastructure Assets | System Administrator | Map Service | Maintain regions, power lines, towers and tower assets with coordinates. | CF-03 |
+| UC-CF-05 | Manage UAV Inventory | System Administrator, UAV Technician | – | Maintain UAV records, operational status and maintenance data. | CF-04 |
+| UC-CF-06 | View Notifications | User | – | View and mark as read in-app notifications and open the linked record. | CF-05 |
+| UC-CF-07 | View Audit Log | System Administrator | – | Search audit records of material actions. | CF-05 |
+| UC-MF01-01 | Create Readiness Assessment | Mission Manager | – | Define the inspection scope (region, line, towers, assets), inspection type and desired time window. | MF01-01 |
+| UC-MF01-02 | Evaluate Pre-Mission Readiness | Mission Manager | – | Run the personnel and UAV checks, record site and flight conditions and obtain the result Ready, Not Ready or Needs Review. | MF01-05, MF01-06 |
+| UC-MF01-03 | Check Personnel Availability and Eligibility | – (included) | – | Included by UC-MF01-02, UC-MF02-02 and UC-MF02-09. List personnel who are active, qualified, authorized for the region and not booked in the window. | MF01-02 |
+| UC-MF01-04 | Check UAV Availability and Technical Readiness | – (included) | – | Included by UC-MF01-02, UC-MF02-03 and UC-MF02-09. List UAVs that are active, not booked and have a valid passed technical inspection. | MF01-03 |
+| UC-MF01-05 | Record UAV Technical Inspection | UAV Technician | Edge Device | Record checklist results and flight-controller health metrics for a UAV. | MF01-04 |
+| UC-MF01-06 | View Readiness Assessment Result | Mission Manager | – | View the overall result with the reason for each component. | MF01-06 |
+| UC-MF02-01 | Create Inspection Mission | Mission Manager | – | Create a mission from a Ready assessment and set flight parameters, schedule, deadline, priority and instructions. | MF02-01 – MF02-03 |
+| UC-MF02-02 | Assign Personnel to Mission | Mission Manager | – | Assign eligible Inspector(s) after re-checking availability (includes UC-MF01-03). | MF02-04 |
+| UC-MF02-03 | Assign UAV to Mission | Mission Manager | – | Assign one eligible UAV after re-checking health and battery (includes UC-MF01-04). | MF02-05 |
+| UC-MF02-04 | Dispatch Mission | Mission Manager | Notification Provider | Reserve resources and notify the assignees. | MF02-06 |
+| UC-MF02-05 | Preview Mission Route on Map | Mission Manager, Inspector | Map Service | Display towers and the planned route on the map. | MF02-07 |
+| UC-MF02-06 | View Assigned Mission | Inspector | – | View scope, route, schedule, instructions and assigned UAV of own missions. | MF02-08 |
+| UC-MF02-07 | Respond to Mission Assignment | Inspector | – | Accept, or request postponement with a reason, before the confirmation deadline. | MF02-08 |
+| UC-MF02-08 | Monitor Assignment Status | Mission Manager | – | Track responses and deadlines of all assignments. | MF02-06 |
+| UC-MF02-09 | Change Dispatched Mission | Mission Manager | Notification Provider | Cancel, suspend, resume, reschedule or reassign a mission with a reason and re-validation. | MF02-09 |
+| UC-MF03-01 | Check In at Mission Site | Inspector | – | Record arrival at the site with server time and GPS location. | MF03-01 |
+| UC-MF03-02 | Confirm UAV Handover | Inspector | – | Acknowledge custody and condition of the assigned UAV. | MF03-02\* |
+| UC-MF03-03 | Start Mission Execution | Inspector | – | Pass the final checks and move the mission to In Progress. | MF03-02 |
+| UC-MF03-04 | Record Asset Inspection Progress | Inspector | – | Mark each mission target as Inspected or Skipped (with reason). | MF03-05 |
+| UC-MF03-05 | Transmit Telemetry and Field Media | Edge Device | – | Stream telemetry and send captured images with metadata; buffer and resend when the link is lost. | MF03-03, MF03-04 |
+| UC-MF03-06 | Monitor Field Execution | Mission Manager | Map Service | View live UAV position, telemetry, target progress and alerts. | MF03-03 |
+| UC-MF03-07 | Report Critical Anomaly | Edge Device, Inspector | Notification Provider | Create a critical alert from the edge YOLO11s model or manually, with image, time, location and confidence. | MF03-06 |
+| UC-MF03-08 | Handle Critical Alert | Mission Manager | – | Acknowledge and resolve a critical alert with a disposition. | MF03-06 |
+| UC-MF03-09 | Finish Field Inspection | Inspector | – | Confirm target and evidence completeness and close the field session. | MF03-07 |
+| UC-MF04-01 | Submit Inspection Data | Inspector | – | Upload or confirm synchronized media for analysis (includes UC-MF04-02). | MF04-01, MF04-02 |
+| UC-MF04-02 | Process AI Analysis | – (included) | Cloud AI Service | Create an analysis job, send it to the Server/Deep model and store the returned detections. | MF04-03 |
+| UC-MF04-03 | Monitor AI Processing Status | Inspector, Analyst | – | Track jobs in Queued, Processing, Completed, Review Required or Failed state. | MF04-03 |
+| UC-MF04-04 | View AI Analysis Results | Mission Manager, Inspector, Analyst | – | View detections with category, bounding box, confidence and review status on the image. | MF04-08 |
+| UC-MF04-05 | Review AI Detections | Analyst | – | Confirm, reject or correct detections; confirmed detections become defect records with severity. | MF04-09, MF04-11 |
+| UC-MF04-06 | Request Media Reanalysis | Analyst, Mission Manager | – | Request a new analysis version for existing media with a reason (includes UC-MF04-02). | MF04-10 |
+| UC-MF04-07 | View Defect Report and Export | Mission Manager | – | View defect statistics by mission, asset and category and export them. | MF04-12 |
+
+\*UAV handover has no separate item in Report 2, Table 1; it is estimated inside MF03-02. If the WBS is renumbered, update this column.
 
 ## **3\. Functional Requirements** {#3.-functional-requirements}
 
 ### **3.1 System Functional Overview** {#3.1-system-functional-overview}
 
-#### ***3.1.1 Screens Flow*** {#3.1.1-screens-flow}
+#### ***3.1.1 Screens Flow***
 
-Figure 8 illustrates the complete screen navigation flow and functional UI architecture of the web client, directly mapped to the Angular single-page application router structure (`app.routes.ts`) and shell layout (`sidebar.ts`, `header.ts`). 
+Figure 8 shows the main screens of the web client and the navigation between them. After login, every user lands on SCR-02 Dashboard, which only shows the menu entries allowed by Table 6\. Rectangles are full screens, rectangles divided into rows are screens with tabs, and ellipses are pop-up dialogs. Dashed frames group the screens by function area. 
 
-After authenticating through SCR-01 (and completing two-factor OTP verification on SCR-28 when challenged), users enter the main application shell and land on the role-based SCR-02 Operations Dashboard. The left navigation sidebar exposes feature modules filtered strictly according to the user's operational role (Table 6). 
-
-In Figure 8:
-- Rectangles represent standalone pages and routable workspace views.
-- Rectangles with sub-tab indications represent tabbed workspaces (such as the 5-tab Pre-Mission Assessment Workspace or the 7-tab Mission Detail Workspace).
-- Ellipses with dashed borders represent contextual modal dialogs and action sheets (e.g., flight controller pairing, assignment postponement, mission status overrides, or defect reject forms).
-- Subgraphs demarcate functional boundaries across the Common Core, MF01 Pre-Mission Feasibility, MF02 Mission Scheduling & Dispatch, MF03 Field Execution & Monitoring, and MF04 AI Analysis & Defect Resolution.
-
-```mermaid
-flowchart TD
-    %% Class Definitions
-    classDef authScreen fill:#f5f5f5,stroke:#616161,stroke-width:2px;
-    classDef commonScreen fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
-    classDef mf01Screen fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
-    classDef mf02Screen fill:#fffde7,stroke:#fbc02d,stroke-width:2px;
-    classDef mf03Screen fill:#fbe9e7,stroke:#d84315,stroke-width:2px;
-    classDef mf04Screen fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px;
-    classDef popupDialog fill:#ffffff,stroke:#424242,stroke-width:2px,stroke-dasharray: 4 4;
-
-    %% Authentication & Account Area
-    subgraph AuthArea ["Authentication & Account Security"]
-        SCR01["SCR-01: Login Form<br/><i>/login</i>"]:::authScreen
-        SCR28["SCR-28: Two-Factor OTP Verification<br/><i>/otp</i>"]:::authScreen
-        SCR27["SCR-27: Password Management<br/><i>/forgot-password, /reset-password, /change-password</i>"]:::authScreen
-    end
-
-    SCR01 -->|"Valid Credentials / 2FA Challenge"| SCR28
-    SCR01 -->|"Forgot Password"| SCR27
-    SCR27 -->|"Password Reset Completed"| SCR01
-    SCR28 -->|"OTP Verified"| SCR02
-
-    %% Operations Dashboard & Shell Layout
-    SCR02["SCR-02: Operations Dashboard<br/><i>/dashboard</i>"]:::commonScreen
-    SCR03{{"SCR-03: Real-time Notification Center<br/><i>Header Popover & SignalR Hub</i>"}}:::popupDialog
-    SCR02 -->|"User Profile Settings"| SCR27
-    SCR02 -->|"Open Notifications"| SCR03
-
-    %% Common Administration & Asset Infrastructure
-    subgraph CommonArea ["Common Administration & Infrastructure Assets"]
-        SCR04["SCR-04: User & Role Management<br/><i>/admin/users</i>"]:::commonScreen
-        SCR05["SCR-05: Personnel Qualifications<br/><i>Embedded in User & Crew Profile</i>"]:::commonScreen
-        SCR06["SCR-06: Power Grid GIS Map<br/><i>/gis</i>"]:::commonScreen
-        SCR07["SCR-07: Power Grid Asset Health & Risk<br/><i>/assets, /assets/:id</i>"]:::commonScreen
-        SCR08["SCR-08: UAV Fleet Management<br/><i>/drones</i>"]:::commonScreen
-        DLG01{{"SCR-08-M: Technical Inspection & FC Pairing<br/><i>Checklist & MSP_UID Verification Modal</i>"}}:::popupDialog
-        SCR25["SCR-25: System Audit Log Viewer<br/><i>/system/audit-logs</i>"]:::commonScreen
-    end
-
-    SCR02 -->|"Sidebar Menu"| SCR04
-    SCR04 -->|"View / Edit Qualifications"| SCR05
-    SCR02 -->|"Sidebar Menu"| SCR06
-    SCR02 -->|"Sidebar Menu"| SCR07
-    SCR02 -->|"Sidebar Menu"| SCR08
-    SCR02 -->|"Sidebar Menu"| SCR25
-    SCR08 -->|"Open Inspection / FC Pairing"| DLG01
-
-    %% MF01: Pre-Mission Feasibility & Planning
-    subgraph MF01Area ["MF01: Pre-Mission Feasibility & Planning"]
-        SCR09["SCR-09: Pre-Mission Assessment List<br/><i>/pre-mission</i>"]:::mf01Screen
-        SCR10A["SCR-10A: Create Assessment Form<br/><i>/pre-mission/new</i>"]:::mf01Screen
-        SCR10B["SCR-10B: Assessment Workspace<br/><i>/pre-mission/:id (5 Tabs)</i>"]:::mf01Screen
-        DLG02{{"SCR-10-M: Cancel Assessment Modal<br/><i>Cancellation Reason & Resource Release</i>"}}:::popupDialog
-    end
-
-    SCR02 -->|"Sidebar Menu"| SCR09
-    SCR09 -->|"Create New Assessment"| SCR10A
-    SCR10A -->|"Initialize Workspace"| SCR10B
-    SCR09 -->|"View Assessment Detail"| SCR10B
-    SCR10B -->|"Cancel Feasibility Assessment"| DLG02
-    SCR10B -.->|"Technical Check Tab / FC Pairing"| DLG01
-
-    %% MF02: Mission Scheduling & Dispatch
-    subgraph MF02Area ["MF02: Mission Scheduling & Dispatch"]
-        SCR11["SCR-11: Mission Management List<br/><i>/missions</i>"]:::mf02Screen
-        SCR12["SCR-12: Create & Dispatch Mission Form<br/><i>/missions/new</i>"]:::mf02Screen
-        SCR13["SCR-13: Mission Detail Workspace<br/><i>/missions/:id (7 Tabs)</i>"]:::mf02Screen
-        SCR14{{"SCR-14: Change Mission Modals<br/><i>Postpone / Suspend / Cancel / Reassign / Priority</i>"}}:::popupDialog
-        SCR15["SCR-15: Inspector Assignment & Field Console<br/><i>/missions/:id/inspector</i>"]:::mf02Screen
-        SCR16{{"SCR-16: Inspector Postpone Modal<br/><i>Postpone Reason & Deadline Extension</i>"}}:::popupDialog
-    end
-
-    SCR10B -->|"Ready Assessment -> Create Mission"| SCR12
-    SCR02 -->|"Sidebar Menu"| SCR11
-    SCR11 -->|"New Mission"| SCR12
-    SCR11 -->|"Open Mission Detail"| SCR13
-    SCR12 -->|"Dispatch Mission"| SCR13
-    SCR13 -->|"Lifecycle Change Actions"| SCR14
-    SCR11 -->|"Inspector Direct Access"| SCR15
-    SCR13 -->|"Open Field View"| SCR15
-    SCR15 -->|"Request Postponement"| SCR16
-    SCR15 -->|"Accept Assignment"| SCR15
-
-    %% MF03: Field Execution & Monitoring
-    subgraph MF03Area ["MF03: Field Execution & Monitoring"]
-        SCR17["SCR-17: Inspection History & Flight Logs<br/><i>/inspections</i>"]:::mf03Screen
-        SCR18["SCR-18: Live Monitoring & Telemetry<br/><i>/gis (Live Mode) & Dashboard Monitor</i>"]:::mf03Screen
-        SCR19["SCR-19: Edge AI Emergency Alerts Review<br/><i>/emergency-alerts</i>"]:::mf03Screen
-        DLG03{{"SCR-19-M: Alert Action Modals<br/><i>Confirm / Dismiss / Escalate Alert</i>"}}:::popupDialog
-    end
-
-    SCR02 -->|"Sidebar Menu"| SCR17
-    SCR02 -->|"Active Emergency Alert Click"| SCR19
-    SCR15 -->|"Mission Complete / Flight Log Submitted"| SCR17
-    SCR15 -->|"Stream Telemetry & GPS Coordinates"| SCR18
-    SCR18 -->|"Real-time Critical Defect Event"| SCR19
-    SCR19 -->|"Review & Triage Actions"| DLG03
-
-    %% MF04: AI Detections & Defect Resolution
-    subgraph MF04Area ["MF04: AI Analysis, Review & Defect Resolution"]
-        SCR20["SCR-20: Standalone AI Media Upload<br/><i>/ai-analysis/upload</i>"]:::mf04Screen
-        SCR22["SCR-22: AI Defect Review Queue<br/><i>/ai-review</i>"]:::mf04Screen
-        SCR21["SCR-21: AI Detection Verification Workspace<br/><i>/ai-review/:id</i>"]:::mf04Screen
-        SCR23{{"SCR-23: Detection Reject & Reanalysis Modals<br/><i>Reject Reason / Trigger Reanalysis</i>"}}:::popupDialog
-        SCR26["SCR-26: Maintenance Tickets & Health Tracking<br/><i>/assets & /missions/:id (Maintenance Tab)</i>"]:::mf04Screen
-        SCR24["SCR-24: Defect & Inspection Reports<br/><i>/reports</i>"]:::mf04Screen
-        DLG04{{"SCR-24-M: Create Defect Report Modal<br/><i>Generate & Export PDF / Excel</i>"}}:::popupDialog
-    end
-
-    SCR02 -->|"Sidebar Menu"| SCR20
-    SCR02 -->|"Sidebar Menu"| SCR22
-    SCR02 -->|"Sidebar Menu"| SCR24
-    SCR20 -->|"AI Analysis Completed"| SCR22
-    SCR13 -->|"Target Inspection Media"| SCR22
-    SCR22 -->|"Select Detection for Review"| SCR21
-    SCR21 -->|"Reject / Request Reanalysis"| SCR23
-    SCR21 -->|"Confirm Engineering Defect"| SCR26
-    SCR26 -->|"Update Asset Health Index"| SCR07
-    SCR26 -->|"Aggregate Defects into Report"| SCR24
-    SCR24 -->|"Open Report Generator"| DLG04
-```
-
-***Figure 8\.** UAV-PMS screens flow diagram.*
+![][image9]***Figure 8\.** UAV-PMS screens flow.*
 
 #### ***3.1.2 Screen Descriptions***
 
-Table 5 describes each screen in Figure 8, its corresponding Angular codebase route, components, and the functional use cases it serves. 
-
-| \# | Feature | Screen | Codebase Route & Component | Description | Use Case(s) |
-| :---- | :---- | :---- | :---- | :---- | :---- |
-| SCR-01 | Common | Login | `/login`<br/>(`Login`) | E-mail and password credentials entry; validates user authentication, displays validation error states, and triggers 2FA challenge redirecting to SCR-28 when required. | UC-CF-01 |
-| SCR-02 | Common | Operations Dashboard | `/dashboard`<br/>(`Dashboard`) | Role-based operational homepage: live telemetry status bar, mission lifecycle counts, active critical alerts panel, defect breakdown charts, and quick-access shortcuts. | UC-CF-01 |
-| SCR-03 | Common | Notification Center | Shell Header Popover<br/>(`NotificationsStore`) | Real-time in-app notification drawer connected via SignalR hub; displays categorized mission dispatches, emergency alerts, defect notices, and unread counts with quick navigation links. | UC-CF-06 |
-| SCR-04 | Common | User Management | `/admin/users`<br/>(`UserManagement`) | Searchable and filterable user directory with modal dialogs to create, view, edit accounts, assign operational roles (Admin, Manager, Inspector, Analyst, Technician), and set geographic scopes. | UC-CF-02 |
-| SCR-05 | Common | Personnel Qualifications | Embedded in User & Pre-Mission Profiles | Tracks professional drone pilot licenses, safety certificates, equipment certifications, issue/expiry dates, and real-time eligibility status used by MF01 feasibility validation. | UC-CF-03 |
-| SCR-06 | Common | Power Grid GIS Map | `/gis`<br/>(`GisMonitoring`) | Interactive GIS map displaying power transmission lines, tower coordinates, live drone GPS tracking positions, defect locations, and emergency alert markers with layer toggles. | UC-CF-04 |
-| SCR-07 | Common | Asset Health & Risk Dashboard | `/assets`, `/assets/:id`<br/>(`AssetHealthDashboard`) | Power grid equipment health overview tracking Asset Health Index (0–100), high-risk component rankings, defect histories, and tower-specific diagnostic details. | UC-CF-04, UC-MF04-05 |
-| SCR-08 | MF01 / Common | UAV Fleet Management | `/drones`<br/>(`DroneManagement`) | Fleet inventory tracking UAV statuses, operational hours, battery health, and hardware specs; includes modal dialogs for basic technical checklists and Betaflight FC MSP_UID pairing. | UC-CF-05, UC-MF01-05 |
-| SCR-09 | MF01 | Pre-Mission Assessment List | `/pre-mission`<br/>(`AssessmentList`) | Searchable table of feasibility assessment records with code, power region, scheduled window, assessment status (Draft, Evaluating, Ready, Expired, Cancelled), and action triggers. | UC-MF01-01, UC-MF01-06 |
-| SCR-10 | MF01 | Pre-Mission Assessment Workspace | `/pre-mission/new`, `/pre-mission/:id`<br/>(`AssessmentCreate`, `AssessmentWorkspace`) | Dedicated planning workspace: Setup form (`/new`) for region, transmission lines, tower targets, and personnel quotas; 5-tab detail workspace (`/:id`) covering Overview & Decision, Site & Weather, Personnel Candidates, UAV Candidates, and Technical Inspection / FC Pairing, with cancel modal and mission creation handoff. | UC-MF01-01 – UC-MF01-06 |
-| SCR-11 | MF02 | Mission Management List | `/missions`<br/>(`MissionList`) | Multi-role mission console with filters by status, priority, and date range; displays mission code, transmission line, assigned crew, drone, scheduled window, and dispatch progress. | UC-MF02-08 |
-| SCR-12 | MF02 | Create & Dispatch Mission | `/missions/new`<br/>(`MissionCreate`) | Mission dispatch form initialized from a Ready feasibility assessment; configures mission priority, objective, instructions, confirmation deadline, assigns eligible UAV and crew roles (Inspector, Analyst, Technician), runs conflict checks, and dispatches. | UC-MF02-01 – UC-MF02-04 |
-| SCR-13 | MF02 | Mission Detail Workspace | `/missions/:id`<br/>(`MissionDetail`) | Multi-tab operational workspace featuring 7 tabs: Overview (metadata, team, targets), Upload (media ingestion), Processing (AI job status), Results (detected anomalies), Assets (affected grid components), Maintenance (ticket status), and Activity (audit timeline); includes action modals to cancel, suspend, postpone, or reassign. | UC-MF02-05, UC-MF02-08, UC-MF04-04 |
-| SCR-14 | MF02 | Change Mission Modals | Modals in `/missions/:id` | Contextual modal dialogs on the mission detail page allowing authorized managers to cancel, suspend, resume, postpone, reschedule, reassign personnel, or override mission priority with audit logging. | UC-MF02-09 |
-| SCR-15 | MF02 / MF03 | Inspector Assignment & Field Console | `/missions/:id/inspector`<br/>(`MissionInspector`) | Dedicated field inspection view for assigned inspectors and pilots: displays acceptance hero banner (Accept / Postpone), mission instructions, flight specifications, hardware status, and interactive waypoint/tower checklist. | UC-MF02-06, UC-MF02-07, UC-MF03-01 – UC-MF03-05 |
-| SCR-16 | MF02 | Inspector Postpone Modal | Modal in `/missions/:id/inspector` | Dialog allowing assigned crew members to request postponement or report schedule conflicts by entering a detailed reason and requested deferral window. | UC-MF02-07 |
-| SCR-17 | MF03 | Inspection History & Flight Logs | `/inspections`<br/>(`InspectionHistory`) | Historical repository of completed inspection sessions, submitted flight logs, UAV flight durations, weather conditions, defect-vs-clean inspection counts, and linked media records. | UC-MF03-05, UC-MF03-09 |
-| SCR-18 | MF03 | Live Monitoring & Telemetry | `/gis` & `/dashboard` Live Mode | Real-time field monitoring interface displaying active drone telemetry (altitude, battery, GPS coordinates, RF link quality, speed) and live mission progress updates streamed via MQTT/SignalR. | UC-MF03-06 |
-| SCR-19 | MF03 | Edge AI Emergency Alerts Review | `/emergency-alerts`<br/>(`EmergencyAlertsReview`) | Emergency incident console with Active and History tabs; displays real-time critical anomaly detections (wildfire, tower damage, flashover) with evidence snapshots; includes modals to confirm, dismiss, or escalate to grid emergency units. | UC-MF03-07, UC-MF03-08 |
-| SCR-20 | MF04 | Standalone AI Media Upload | `/ai-analysis/upload`<br/>(`StandaloneUpload`) | Standalone AI ingestion portal allowing users to upload inspection imagery or video files, select preferred YOLO power-grid models, configure confidence thresholds, monitor progress, and automatically enqueue analysis jobs. | UC-MF04-01 – UC-MF04-03 |
-| SCR-21 | MF04 | AI Detection Verification Workspace | `/ai-review/:id`<br/>(`DetectionReview`) | Interactive verification screen displaying inspection images with overlaid defect bounding boxes, confidence scores, defect class, and severity levels; provides one-click approval, severity override, or rejection dialog. | UC-MF04-04, UC-MF04-05 |
-| SCR-22 | MF04 | AI Defect Review Queue | `/ai-review`<br/>(`DetectionList`) | Triage queue of pending AI detections with thumbnail previews, defect classifications, confidence scores, and multi-criteria filters (severity, inspection date, line, status). | UC-MF04-05 |
-| SCR-23 | MF04 | Detection Reject & Reanalysis Modals | Modals in `/ai-review/:id` | Contextual modal dialogs to reject false-positive detections using standardized EVN rejection reasons, or request media reanalysis using alternative AI model versions. | UC-MF04-05, UC-MF04-06 |
-| SCR-24 | MF04 | Defect Reports & Analytics | `/reports`<br/>(`ReportsPage`) | Technical report center listing generated defect summaries; provides a modal dialog to create new reports scoped by line/region, view defect statistics, and export PDF or Excel dossiers. | UC-MF04-07 |
-| SCR-25 | Common | System Audit Log Viewer | `/system/audit-logs`<br/>(`AuditLogViewer`) | Security and compliance audit console providing searchable and filterable event logs with timestamps, acting users, affected entities, action types, and IP addresses. | UC-CF-07 |
-| SCR-26 | MF04 | Maintenance Tickets & Asset Tracking | `/assets` & `/missions/:id` (Maintenance Tab) | Corrective maintenance tracking linking confirmed defects to equipment remediation tickets, technician assignments, execution proofs, material consumption, and asset health recovery. | UC-MF04-08 |
-| SCR-27 | Common | Password Management & Security | `/forgot-password`, `/reset-password`, `/change-password` | Self-service credential management allowing users to request password recovery tokens, reset forgotten credentials, and update passwords from within the user profile. | UC-CF-01, UC-CF-08 |
-| SCR-28 | Common | Two-Factor OTP Verification | `/otp`<br/>(`Otp`) | Six-digit time-based OTP verification screen with countdown cooldown timer, resend code trigger, and "trust this device" configuration. | UC-CF-01 |
+Table 5 describes each screen in Figure 8 and the use cases it serves. 
 
 ***Table 5\.** Screen descriptions.* 
 
+| \# | Feature | Screen | Description | Use Case(s) |
+| :---- | :---- | :---- | :---- | :---- |
+| SCR-01 | Common | Login | Username and password form; shows lockout and error messages. | UC-CF-01 |
+| SCR-02 | Common | Dashboard | Role-based home: counts of assessments and missions by status, open critical alerts, pending reviews and shortcuts to allowed screens. | UC-CF-01 |
+| SCR-03 | Common | Notification Center | List of in-app notifications with read status and link to the related record. | UC-CF-06 |
+| SCR-04 | Common | User Management | Searchable list of accounts with a create/edit form for role, region and status. | UC-CF-02 |
+| SCR-05 | Common | Personnel Qualifications | Qualifications of each person with type, number, issue and expiry date. | UC-CF-03 |
+| SCR-06 | Common | Infrastructure Assets | List and map of regions, lines, towers and tower assets; create/edit form with coordinates. | UC-CF-04 |
+| SCR-07 | Common | UAV Inventory | List and detail of UAVs with status, maintenance history and latest technical inspection. | UC-CF-05 |
+| SCR-08 | MF01 | Technical Inspection Form | Checklist and flight-controller metrics (battery, GPS fix, IMU, motors, firmware), imported from the Edge Device or entered manually. | UC-MF01-05 |
+| SCR-09 | MF01 | Readiness Assessment List | Assessments with scope, window, status and result; filter by region and status. | UC-MF01-01, UC-MF01-06 |
+| SCR-10 | MF01 | Readiness Assessment Detail | Tabs: Scope (assets and window), Personnel (eligible list), UAV (eligible list), Site Conditions (weather and restrictions form), Result (overall result and reasons). | UC-MF01-01 – UC-MF01-04, UC-MF01-06 |
+| SCR-11 | MF02 | Mission List | Missions with status, schedule, priority and assignment status. | UC-MF02-08 |
+| SCR-12 | MF02 | Create Mission | Tabs: Parameters (targets, altitude, speed, schedule, deadline, priority, instructions), Personnel, UAV, Route Map; Dispatch button. | UC-MF02-01 – UC-MF02-05 |
+| SCR-13 | MF02 | Mission Detail | Tabs: Overview, Route Map, Assignments (responses and deadlines), Timeline (status history and audit). | UC-MF02-05, UC-MF02-08, UC-MF04-04 |
+| SCR-14 | MF02 | Change Mission (pop-up) | Choose cancel, suspend, resume, reschedule or reassign; enter reason and new values. | UC-MF02-09 |
+| SCR-15 | MF02 | My Missions | Inspector’s missions with status and confirmation deadline. | UC-MF02-06 |
+| SCR-16 | MF02 | Respond to Assignment (pop-up) | Accept, or postpone with reason and proposed available time. | UC-MF02-07 |
+| SCR-17 | MF03 | Field Execution Console | Tabs: Check-in and Handover, Targets (per-asset progress), Evidence (received media and sync status), Alerts; Start and Finish buttons. | UC-MF03-01 – UC-MF03-04, UC-MF03-07, UC-MF03-09 |
+| SCR-18 | MF03 | Live Monitoring | Map with live UAV position and route, telemetry panel, target progress and alert list. | UC-MF03-06 |
+| SCR-19 | MF03 | Critical Alert (pop-up) | Alert image, time, location, confidence and source; acknowledge and resolve with disposition. | UC-MF03-07, UC-MF03-08 |
+| SCR-20 | MF04 | Inspection Data and AI Jobs | Upload area, validation result per file and AI job list with status. | UC-MF04-01, UC-MF04-03 |
+| SCR-21 | MF04 | AI Result Viewer | Image with bounding boxes, category, confidence, severity and review status. | UC-MF04-04, UC-MF04-06 |
+| SCR-22 | MF04 | Detection Review Queue | Detections waiting for review; confirm, reject or correct with reason. | UC-MF04-05 |
+| SCR-23 | MF04 | Request Reanalysis (pop-up) | Reason and selected media for a new analysis version. | UC-MF04-06 |
+| SCR-24 | MF04 | Defect Report | Defect statistics by mission, asset, category and severity; export to Excel or PDF. | UC-MF04-07 |
+| SCR-25 | Common | Audit Log | Searchable audit records by actor, action, target and time. | UC-CF-07 |
+
 #### ***3.1.3 Screen Authorization***
 
-Table 6 states which actor may open each screen and which actions they may perform, strictly aligned with the Angular router guards (`authGuard`, `roleGuard`) in the frontend application. *X* denotes full execution and management access; *V* denotes read-only access; a blank cell denotes that access is restricted. Access is further constrained by the user’s assigned geographic region and assigned mission scope.
+Table 6 states which actor may open each screen and which actions they may perform. *X* means full access to the actions of that screen; *V* means view only; a blank cell means no access. Access is also limited by the user’s region and, for Inspectors, by their own assignments (BR-001). 
+
+***Table 6\.** Screen authorization matrix.* 
 
 | Screen | System Administrator | Mission Manager | Inspector | Analyst | UAV Technician |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| SCR-01 Login, SCR-02 Dashboard, SCR-03 Notification Center, SCR-27 Password, SCR-28 OTP | X | X | X | X | X |
-| SCR-04 User Management | X | V (assignable users) |  |  |  |
-| SCR-05 Personnel Qualifications | X | V (assignable users) |  |  |  |
-| SCR-06 Power Grid GIS Map | X | X | X | X | V |
-| SCR-07 Asset Health & Risk Dashboard | X | X | V | V | V |
-| SCR-08 UAV Fleet Management | X | X | V | V | X (no delete) |
-| SCR-09 Pre-Mission Assessment List, SCR-10 Assessment Workspace | X | X | V (own region) |  | V (latest tech) |
-| SCR-11 Mission Management List | X | X | X (own) | V | X (own) |
-| SCR-12 Create Mission, SCR-14 Change Mission | X | X |  |  |  |
-| SCR-13 Mission Detail Workspace | X | X | V (own) | V | V (own) |
-| SCR-15 Inspector Console, SCR-16 Respond Postpone | V | V | X | X (own) | X (own) |
-| SCR-17 Inspection History & Flight Logs | X | X | X (own) | V | V (own) |
-| SCR-18 Live Monitoring & Telemetry | X | X | X (own UAV) | V |  |
-| SCR-19 Emergency Alerts Review | X | X | X (trigger) | X |  |
-| SCR-20 Standalone AI Media Upload | X | X |  | X |  |
-| SCR-21 AI Detection Workspace, SCR-22 AI Review Queue, SCR-23 Reject/Reanalysis | X | X |  | X |  |
-| SCR-24 Defect Reports & Analytics | X | X | V | X (generate) |  |
-| SCR-25 System Audit Log Viewer | X | V |  |  |  |
-| SCR-26 Maintenance Tickets & Asset Tracking | X | X | V | V | X (own) |
-
-***Table 6\.** Screen authorization matrix.* 
+| SCR-01 Login, SCR-02 Dashboard, SCR-03 Notification Center | X | X | X | X | X |
+| SCR-04 User Management, SCR-05 Personnel Qualifications | X | V |  |  |  |
+| SCR-06 Infrastructure Assets | X | V | V | V |  |
+| SCR-07 UAV Inventory | X | V |  |  | X |
+| SCR-08 Technical Inspection Form |  | V |  |  | X |
+| SCR-09 / SCR-10 Readiness Assessment | V | X |  |  | V |
+| SCR-11 Mission List, SCR-13 Mission Detail | V | X | V (own) | V |  |
+| SCR-12 Create Mission, SCR-14 Change Mission |  | X |  |  |  |
+| SCR-15 My Missions, SCR-16 Respond to Assignment |  |  | X |  |  |
+| SCR-17 Field Execution Console |  | V (override only) | X (own) |  |  |
+| SCR-18 Live Monitoring |  | X | V (own) |  |  |
+| SCR-19 Critical Alert | V | X | X (report) | V |  |
+| SCR-20 Inspection Data and AI Jobs |  | V | X (own) | V |  |
+| SCR-21 AI Result Viewer |  | V | V (own) | X |  |
+| SCR-22 Detection Review Queue |  |  |  | X |  |
+| SCR-23 Request Reanalysis |  | X |  | X |  |
+| SCR-24 Defect Report |  | X |  | V |  |
+| SCR-25 Audit Log | X |  |  |  |  |
 
 #### ***3.1.4 Non-Screen Functions***
 
 Table 7 lists the functions that run without a user screen: background jobs, message consumers and integrations. Each one is part of a use case in Sections 3.2–3.6. 
 
+***Table 7\.** Non-screen functions.* 
+
 | \# | Feature | System Function | Description | Use Case |
 | :---- | :---- | :---- | :---- | :---- |
-| NS-01 | MF01 | Assessment Expiry Job | Background service of the Operations Service that runs every 2 minutes and sets Ready assessments whose validity has passed to Expired; the same expiry rule is also applied when an assessment is read, evaluated or used (BR-028). | UC-MF01-02 |
-| NS-02 | MF02 | Mission Confirmation Overdue Job | Hangfire recurring job (every minute) that finds Pending Acceptance missions whose confirmation deadline has passed, notifies the manager (MISSION\_CONFIRMATION\_OVERDUE), writes an OVERDUE communication log and sends a real-time event (BR-040). | UC-MF02-08 |
-| NS-03 | CF | Notification Dispatcher | RabbitMQ consumers that turn integration events (mission created, defect detected, notification push, AI status changed) into in-app notifications, and the Hangfire job push-notifications-sync (every minute) that e-mails unsent notifications through SendGrid and marks them pushed (BR-052). | UC-CF-06 |
-| NS-04 | MF03 | MQTT Drone Consumer | Subscribes to uav/+/telemetry and uav/+/status, validates the UAV code and values, and stores the latest UAV live state in Redis (BR-047). | UC-MF03-05 |
-| NS-05 | CF | Outbox Dispatcher | Publishes integration events written to the OutboxMessages table (for example media uploaded, mission created from assessment) to the RabbitMQ topic exchange every 2 seconds. | UC-MF02-04, UC-MF04-01 |
-| NS-06 | MF03 | Vision Bridge Ingestion | Receives edge AI detections (UAV, class, confidence, bounding box, GPS, image), stores the media and detection and notifies the mission participants; emergency detections raise an emergency alert (BR-051, BR-052). | UC-MF03-07 |
-| NS-07 | MF04 | AI Request Publisher | Consumes the media-uploaded event, creates an analysis request and publishes it to the server or edge, image or video request queue (BR-059). | UC-MF04-02 |
-| NS-08 | MF04 | AI Result Consumer | Consumes AI results, validates them, evaluates each detection through NS-10, stores detections, retries transient errors and moves failed messages to the dead-letter queue (BR-060 – BR-064). | UC-MF04-02 |
-| NS-09 | CF | Audit Logger | Records every insert, update and soft delete of audited entities with user, table, record, old and new values, IP address and user agent, plus explicit business actions (BR-007). | UC-CF-07 |
-| NS-10 | MF04 | Inspection Evaluation (gRPC) | Internal gRPC service that calculates severity, risk level, priority score and the immediate-alert decision for a detection (BR-068). | UC-MF04-02 |
-| NS-11 | CF | Real-time Relay | Consumes mission-lifecycle and assessment real-time events and pushes them to SignalR groups (user, role, mission, assessment). | UC-MF01-02, UC-MF03-06 |
-| NS-12 | CF | Housekeeping Jobs | daily-summary-job (daily summary to administrators and managers) and auto-cleanup-job (weekly removal of old temporary files and expired refresh tokens). | UC-CF-06 |
-
-***Table 7\.** Non-screen functions.* 
+| NS-01 | MF01 | Technical Inspection Expiry Check | Hourly job that marks technical inspections whose validity has passed as Expired (BR-022). | UC-MF01-04 |
+| NS-02 | MF02 | Assignment Deadline Job | Sends a reminder before the confirmation deadline and marks unanswered assignments as Expired at the deadline (BR-040). | UC-MF02-08 |
+| NS-03 | CF | Notification Dispatcher | Consumes notification events from RabbitMQ, stores the in-app notification, sends the email through the Notification Provider and records delivery status (BR-052). | UC-CF-06 |
+| NS-04 | MF03 | Telemetry Ingestion | Subscribes to the MQTT topic of each In Progress mission, validates the UAV identity (BR-047), stores telemetry and pushes it to SCR-18 through SignalR. | UC-MF03-05 |
+| NS-05 | MF03 | Edge Media Synchronization | Receives media from the Edge Device, deduplicates by checksum and stores it with mission and target references (BR-049, BR-050). | UC-MF03-05 |
+| NS-06 | MF03 | Edge Alert Consumer | Receives edge anomaly events, creates critical alerts and publishes notification events (BR-051, BR-052). | UC-MF03-07 |
+| NS-07 | MF04 | AI Job Dispatcher | Publishes analysis requests to the Cloud AI Service, retries transient failures and marks jobs Failed after the limit (BR-063). | UC-MF04-02 |
+| NS-08 | MF04 | AI Result Callback Handler | Authenticates callbacks, validates detections, maps labels to categories and applies the confidence threshold (BR-060 – BR-064). | UC-MF04-02 |
+| NS-09 | CF | Audit Logger | Records material actions with actor, time, target, old and new values and reason (BR-007). | UC-CF-07 |
 
 #### ***3.1.5 Entity Relationship Diagram***
 
-Figure 9 presents the Conceptual Entity Relationship Diagram (Conceptual ERD) of UAV-PMS in crow’s foot notation. At this conceptual stage, the diagram focuses on high-level business entities and their semantic domain relationships across the inspection and maintenance lifecycle, omitting low-level relational keys and technical storage tables to ensure clarity. A bar (|) denotes exactly one, a circle (o) denotes zero, and a crow’s foot denotes many. Table 8 describes each conceptual entity.
+Figure 9 is the ERD of UAV-PMS in crow’s foot notation. To keep the diagram readable, each entity shows only its primary key (PK), foreign keys (FK) and unique keys (UQ); the main attributes are listed in Table 8\. A bar (\|) means exactly one, a circle (o) means zero, and a crow’s foot means many. 
 
-```mermaid
-erDiagram
-    REGION ||--o{ TOWER : contains
-    REGION ||--o{ MISSION : covers
+***![][image10]***
 
-    USER }o--o{ ROLE : holds
-    USER ||--o{ MISSION : manages
+***Figure 9**. UAV-PMS entity relationship diagram.*
 
-    MISSION ||--o| PRE_MISSION_ASSESSMENT : has
-    USER ||--o{ PRE_MISSION_ASSESSMENT : evaluates
-
-    MISSION }o--o{ TOWER : targets
-    MISSION }o--o{ USER : assigns
-    MISSION }o--o{ UAV : reserves
-
-    UAV ||--o{ TECHNICAL_INSPECTION : undergoes
-    USER ||--o{ TECHNICAL_INSPECTION : performs
-    TECHNICAL_INSPECTION ||--o{ TECHNICAL_METRIC : records
-
-    MISSION ||--o{ FIELD_CHECK_IN : records
-    USER ||--o{ FIELD_CHECK_IN : performs
-
-    MISSION ||--o{ DRONE_HANDOVER : records
-    UAV ||--o{ DRONE_HANDOVER : involves
-
-    MISSION ||--o{ FLIGHT_LOG : generates
-    MISSION ||--o{ INCIDENT_REPORT : records
-    USER ||--o{ INCIDENT_REPORT : reports
-
-    MISSION ||--o{ INSPECTION_MEDIA : produces
-    TOWER ||--o{ INSPECTION_MEDIA : appears_in
-    USER ||--o{ INSPECTION_MEDIA : uploads
-
-    INSPECTION_MEDIA ||--o{ AI_ANALYSIS : analyzed_by
-    MISSION ||--o{ AI_ANALYSIS : includes
-
-    INSPECTION_MEDIA ||--o{ DETECTED_ANOMALY : contains
-    TOWER ||--o{ DETECTED_ANOMALY : has
-    DEFECT_CATEGORY ||--o{ DETECTED_ANOMALY : classifies
-    USER ||--o{ DETECTED_ANOMALY : validates
-
-    DETECTED_ANOMALY ||--o{ EMERGENCY_ALERT : triggers
-    EMERGENCY_ALERT ||--o{ ALERT_ESCALATION : escalates
-
-    DETECTED_ANOMALY ||--o{ MAINTENANCE_TICKET : requires
-    TOWER ||--o{ MAINTENANCE_TICKET : receives
-    USER ||--o{ MAINTENANCE_TICKET : handles
-
-    MAINTENANCE_TICKET ||--o{ MAINTENANCE_PROOF : documented_by
-    TOWER ||--o{ CONDITION_HISTORY : tracks
-
-    USER ||--o{ NOTIFICATION : receives
-    USER ||--o{ AUDIT_LOG : generates
-    MISSION ||--o{ AUDIT_LOG : records
-```
-
-***Figure 9**. UAV-PMS conceptual entity relationship diagram.*
+**Table 8**. Entity descriptions.
 
 | \# | Entity | Description |
 | :---- | :---- | :---- |
-| 1 | REGION | Geographic operational jurisdiction containing towers and defining the spatial boundaries for inspection missions. |
-| 2 | TOWER | Power grid transmission or distribution structure identified by code, line code, voltage level, and geographical location. |
-| 3 | USER | System user account (Administrator, Mission Manager, Inspector/Pilot, Analyst, Technician) with authentication and profile data. |
-| 4 | ROLE | System privilege role (SystemAdmin, Manager, Inspector, Analyst, Technician) defining role-based access control permissions. |
-| 5 | MISSION | Inspection campaign defining objectives, scheduled time window, target towers, assigned crew members, and allocated UAV. |
-| 6 | PRE_MISSION_ASSESSMENT | Pre-flight feasibility assessment evaluating airspace clearance, weather suitability, crew readiness, and drone availability. |
-| 7 | UAV | Unmanned Aerial Vehicle hardware unit tracking model, serial number, technical health, battery level, and flight readiness. |
-| 8 | TECHNICAL_INSPECTION | Periodic or pre-mission technical airworthiness inspection of a UAV performed by a certified technician. |
-| 9 | TECHNICAL_METRIC | Quantitative telemetry and sensor metrics (vibration, battery health, IMU drift) recorded during technical inspection. |
-| 10 | FIELD_CHECK_IN | On-site check-in record confirming the physical presence and location coordinates of field personnel before flight. |
-| 11 | DRONE_HANDOVER | Custody transfer protocol logging pre-flight handoff and post-flight return checklists between technician and pilot. |
-| 12 | FLIGHT_LOG | Telemetry flight log recording GPS flight track, flight duration, altitude profile, minimum battery, and link quality. |
-| 13 | INCIDENT_REPORT | Field incident documentation submitted by crew regarding unexpected hazards, equipment anomalies, or weather changes. |
-| 14 | INSPECTION_MEDIA | High-resolution aerial photographs or video streams captured during inspection, tagged with EXIF metadata and GPS coordinates. |
-| 15 | AI_ANALYSIS | AI inference job processing uploaded inspection media to identify, localize, and classify infrastructure defects. |
-| 16 | DETECTED_ANOMALY | Defect anomaly localized on a tower or component, containing bounding box, confidence score, visual crop, and review status. |
-| 17 | DEFECT_CATEGORY | Standardized taxonomy of power-grid defects (e.g., broken insulator, flashover, bird nest, foreign object, broken strand) with default severity. |
-| 18 | EMERGENCY_ALERT | High-priority alert triggered by critical in-flight anomalies or severe defects requiring immediate review and response. |
-| 19 | ALERT_ESCALATION | Formal escalation record transferring an unhandled or critical alert to higher supervisory personnel with documented justification. |
-| 20 | MAINTENANCE_TICKET | Work order generated from confirmed defects, detailing required repair actions, assigned technician, and due date. |
-| 21 | MAINTENANCE_PROOF | Photographic and documentary proof (before, during, and after repair) submitted by technicians upon completing maintenance. |
-| 22 | CONDITION_HISTORY | Historical tracking log recording changes in a tower's risk status and active defect count over successive inspection cycles. |
-| 23 | NOTIFICATION | System operational notification and push message dispatched to users regarding assignments, alerts, and workflow updates. |
-| 24 | AUDIT_LOG | Comprehensive immutable audit trail capturing user actions, entity modifications, timestamps, and network origins for accountability. |
-
-***Table 8**. Conceptual entity descriptions.*
-
-*\*Sections 3.2–3.6 specify each use case in Table 4 with the same template: actors, trigger, pre- and postconditions, normal flow, alternative flows (A), exceptions (E), and the related screens, business rules (Section 5.1) and messages (Section 5.3). Priority High marks the use cases required for the MF01–MF04 end-to-end demonstration.*
-### ***3.2 MF01 – Pre-Mission Feasibility and Resource Readiness***
-
-The Pre-Mission Feasibility and Resource Readiness module (MF01) acts as the operational prerequisite before executing any aerial inspection campaign in UAV-PMS. It ensures that every planned inspection has valid geographic boundaries, active transmission line assets, eligible and unconflicted crew members, flight-ready drones, and verified flight controller hardware.
-
----
-
-#### ***3.2.1 Create Readiness Assessment (UC-MF01-01)***
-
-* **Function Trigger:**
-  * **Navigation Path:** From the main navigation menu, go to **Pre-Mission** (`/pre-mission`) to access the assessment list (SCR-09), then click **"+ Tạo thẩm định mới"** (Create New Assessment).
-  * **Direct Route:** `/pre-mission/new` (SCR-09 / SCR-10 Setup).
-
-* **Function Description:**
-  * **Actors / Roles:** Primary: **Mission Manager**, **System Administrator**.
-  * **Purpose:** Create a new pre-mission assessment by specifying the operational region, the planned flight timeframe, the power grid towers to inspect, and an optional custom map boundary. Once created, the assessment status is set to `Evaluating` and automatically initiates the readiness check.
-  * **Interface:** Web Client (Angular standalone components with reactive forms and Leaflet GIS map).
-  * **Data Processing:** Validates that the planned timeframe is in the future and the end time is after the start time; ensures the user has permission for the region; verifies that all chosen towers are active and belong to that region; creates the assessment record; and triggers the evaluation workflow.
-
-* **Screen Layout:**
-  > **[Screen Layout Placeholder - Paste Screenshot Here]**
-  > * **Screen ID:** SCR-09 / SCR-10: *Create Readiness Assessment & Scope Setup Form*
-  > * **Route:** `/pre-mission/new`
-  > * **Frontend Component Path:** `E:\UavPms_FE\UavPms_FE\src\app\features\pre-mission\pages\assessment-create\assessment-create.html` (`assessment-create.ts`)
-  > * **Visual Elements to Capture:** Region dropdown, Planned Start and End datetime inputs, Leaflet map showing tower pins and spatial boundary drawing, Target Assets checklist, and the "Khởi tạo & Đánh giá" (Create & Evaluate) button.
-
-* **Function Details:**
-  * **General Data & Input Validation:**
-    * **Region:** Required; user must be authorized for this region.
-    * **Planned Start & End:** Required; start time must be in the future (at least 1 hour ahead) and end time must be after start time.
-    * **Target Assets:** Required; at least one active transmission tower located within the selected region must be chosen.
-    * **Boundary Polygon:** Optional; drawn on the map to define the flight operating envelope.
-    * **Idempotency Key:** Optional client token to prevent duplicate submissions upon network retries.
-
-  * **Business Rules Applied:**
-    * `BR-001` & `BR-016`: Access restricted to authorized Mission Managers within their designated geographic region.
-    * `BR-017` & `BR-018`: Assessment requires at least one tower, a valid future timeframe, and all towers must belong to the selected region.
-    * `BR-021`: Planned timeframe cannot be in the past.
-
-  * **Operational Workflow (Flow):**
-    * **Normal Flow:**
-      1. Manager navigates to `/pre-mission/new`.
-      2. Manager selects the target Region; the system updates the map and lists the towers in that area.
-      3. Manager specifies the planned inspection Start and End date and time.
-      4. Manager selects target towers from the list or directly by clicking map markers.
-      5. Manager optionally draws a geographic boundary polygon around the flight area.
-      6. Manager clicks **"Khởi tạo & Đánh giá"**.
-      7. System validates inputs, creates the assessment record in `Evaluating` status, runs the automatic evaluation, and redirects the manager to the Assessment Workspace (`/pre-mission/:id`).
-    * **Alternative Flows:**
-      * *A1 (Idempotent Resubmission):* If submitted with an existing idempotency key, the system returns the existing assessment without duplicate creation.
-    * **Exception Flows:**
-      * *E1 (Invalid Timeframe):* If end time is before start time or in the past, system rejects with `INVALID_PLANNED_TIME` (MSG-002).
-      * *E2 (Asset Out of Scope):* If a selected tower does not belong to the region, system rejects with `ASSET_OUTSIDE_MANAGEMENT_SCOPE` (MSG-108).
-      * *E3 (Boundary Violation):* If the drawn boundary excludes target towers, system flags site feasibility as failed.
-
-  * **Technical Integration & APIs:**
-    * **Backend Controller:** `PreMissionAssessmentV2Controller` (`POST /api/v2/pre-mission-assessments`)
-    * **Service:** `PreMissionAssessmentService.CreateAsync(...)`
-    * **Database Entities:** `PreMissionAssessment`, `PreMissionAssessmentAsset`.
-
----
-
-#### ***3.2.2 Evaluate Pre-Mission Readiness (UC-MF01-02)***
-
-* **Function Trigger:**
-  * **Automatic:** Triggered automatically right after an assessment is created (UC-MF01-01).
-  * **Manual:** In the Assessment Workspace (`/pre-mission/:id`), click the **"Đánh giá lại"** (Re-evaluate) button on the top toolbar.
-
-* **Function Description:**
-  * **Actors / Roles:** Primary: **Mission Manager**, **System Administrator**. Secondary: **System Background Worker**.
-  * **Purpose:** Check the overall readiness of the planned inspection across four core dimensions:
-    1. *Site Feasibility:* Tower locations, boundary, and weather conditions.
-    2. *Personnel Readiness:* Availability of qualified pilots/inspectors, analysts, and technicians (UC-MF01-03).
-    3. *UAV Hardware Readiness:* Drone operational availability, battery level, and flight endurance (UC-MF01-04).
-    4. *Technical Airworthiness:* Valid passed technical inspection records within 72 hours (UC-MF01-05).
-  * **Interface:** Assessment Workspace (`assessment-workspace.html`), displaying summary cards for each dimension and overall status.
-  * **Data Processing:** Evaluates all four dimensions. Sets overall status to `Ready` if all components pass, or `NotReady` if any component fails; sets assessment validity (up to 4 hours or until planned end); logs an audit event; and pushes real-time updates via SignalR.
-
-* **Screen Layout:**
-  > **[Screen Layout Placeholder - Paste Screenshot Here]**
-  > * **Screen ID:** SCR-10: *Readiness Assessment Workspace - Overview & Component Header*
-  > * **Route:** `/pre-mission/:id`
-  > * **Frontend Component Path:** `E:\UavPms_FE\UavPms_FE\src\app\features\pre-mission\pages\assessment-workspace\assessment-workspace.html`
-  > * **Visual Elements to Capture:** Overall status badge (`Ready` or `NotReady`), Expiration countdown timer, 4 component status cards (*Site*, *Personnel*, *UAV*, *Technical*), Re-evaluate button, and navigation tabs.
-
-* **Function Details:**
-  * **Readiness Evaluation Logic:**
-    * **Site Feasibility:** Passes if all towers are inside the region, boundary is valid, and weather conditions are acceptable (wind $\le 10\text{ m/s}$, visibility $\ge 1\text{ km}$, no rain).
-    * **Personnel Readiness:** Passes if at least one eligible Inspector/Pilot, one Analyst, and one Technician are available without schedule conflicts.
-    * **UAV Readiness:** Passes if at least one operational, unbooked UAV has sufficient endurance for the corridor.
-    * **Technical Airworthiness:** Passes if candidate drones have a passed technical inspection within the last 72 hours and overall health is Healthy or Warning.
-    * **Overall Outcome:** Marked as `Ready` only when all four components pass; otherwise marked as `NotReady` with itemized failure reasons. Assessment validity is set to 4 hours or planned end time, whichever is earlier.
-
-  * **Business Rules Applied:**
-    * `BR-025`: Site conditions acceptable when wind $\le 10\text{ m/s}$, rain is absent, visibility $\ge 1\text{ km}$.
-    * `BR-026`: Overall assessment is `Ready` only when site, personnel, UAV, and technical components pass.
-    * `BR-027`: Any component failure must show specific reasons.
-    * `BR-028`: Assessment expires when the validity window or planned end time elapses.
-
-  * **Operational Workflow (Flow):**
-    * **Normal Flow:**
-      1. Evaluation begins automatically after creation or when manager clicks "Đánh giá lại".
-      2. Backend verifies assessment state is not Completed, Cancelled, or Expired.
-      3. System runs site checks, personnel availability checks, and UAV health checks.
-      4. System aggregates the results into overall status (`Ready` or `NotReady`) and assigns expiration time.
-      5. Results are saved, audit log is written, and real-time status update is pushed to the client via SignalR.
-      6. UI displays updated status badges and enables "Tạo nhiệm vụ bay" if `Ready`.
-    * **Alternative Flows:**
-      * *A1 (Re-evaluating after changes):* If a technician completes a drone inspection or personnel availability changes, manager clicks "Đánh giá lại" to refresh readiness status.
-    * **Exception Flows:**
-      * *E1 (Already Completed):* If the assessment was already used to create a mission, re-evaluation is blocked.
-      * *E2 (Assessment Expired):* If validity time has passed, status changes to `Expired` and re-evaluation is refused.
-
-  * **Technical Integration & APIs:**
-    * **Backend Controller:** `PreMissionAssessmentV2Controller` (`POST /api/v2/pre-mission-assessments/{id}/evaluate`)
-    * **Realtime Notification:** SignalR hub notification sent to topic `assessment-{id}`.
-
----
-
-#### ***3.2.3 Check Personnel Availability and Eligibility (UC-MF01-03)***
-
-* **Function Trigger:**
-  * **System Trigger:** Runs automatically as part of the readiness evaluation (UC-MF01-02).
-  * **UI Navigation:** In the Assessment Workspace (`/pre-mission/:id`), open the **"Ứng viên Nhân sự"** (Personnel Candidates) tab.
-
-* **Function Description:**
-  * **Actors / Roles:** Primary: **Mission Manager**, **System Administrator**. Evaluated Entities: **Field Personnel (Pilots/Inspectors, Analysts, Technicians)**.
-  * **Purpose:** Identify and verify candidate staff members who are eligible and available to participate in the inspection mission during the scheduled window and region.
-  * **Interface:** Data table showing staff candidates, role badges, regional scopes, calendar availability, and eligibility status.
-  * **Data Processing:** Filters active and verified accounts; verifies operational role assignment; checks regional scope match; and detects schedule conflicts against existing active bookings in the same timeframe.
-
-* **Screen Layout:**
-  > **[Screen Layout Placeholder - Paste Screenshot Here]**
-  > * **Screen ID:** SCR-10: *Readiness Assessment Workspace - Personnel Candidates Tab*
-  > * **Route:** `/pre-mission/:id` *(Tab: `personnel`)*
-  > * **Frontend Component Path:** `E:\UavPms_FE\UavPms_FE\src\app\features\pre-mission\pages\assessment-workspace\assessment-workspace.html` (Lines 575–815)
-  > * **Visual Elements to Capture:** Role breakdown summary bar (*Inspector, Analyst, Technician availability counts*), Role filter tabs, Candidate table with Full Name, Role, Regional Scope, Booking status (`Available` or `Conflict`), Certification status, and Eligibility badge (`Đủ điều kiện` / `Không đủ điều kiện`).
-
-* **Function Details:**
-  * **General Eligibility Criteria:**
-    * **Account Status:** Must be Active and email-verified.
-    * **Role:** Must hold an operational role (UAV Pilot/Inspector, Data Analyst, or UAV Technician). Administrative-only accounts are excluded.
-    * **Geographic Scope:** User's authorized region must cover the assessment region.
-    * **Schedule Availability:** User must not have overlapping active mission bookings during the planned window.
-    * **Certification:** UAV pilots must possess a valid pilot certificate throughout the flight window.
-
-  * **Business Rules Applied:**
-    * `BR-014`: Professional qualifications are valid strictly between issue and expiry dates.
-    * `BR-015`: Deactivated or suspended personnel cannot be assigned.
-    * `BR-019`: An Inspector must be Active, hold a valid UAV-pilot license, and be authorized for the region.
-    * `BR-020`: Any active booking overlapping the planned timeframe is considered a schedule conflict.
-
-  * **Operational Workflow (Flow):**
-    * **Normal Flow:**
-      1. Manager opens the "Ứng viên Nhân sự" tab in the workspace.
-      2. System lists all candidate personnel categorized by role (Inspector, Analyst, Technician).
-      3. For each candidate, system displays regional fit, booking availability, and certification status.
-      4. Manager reviews the breakdown to confirm that minimum required crew positions are satisfied.
-    * **Alternative Flows:**
-      * *A1 (Role Filtering):* Manager filters candidates by clicking role tabs (e.g., showing only Inspectors).
-    * **Exception Flows:**
-      * *E1 (No Eligible Pilot):* If zero inspectors are available, the personnel component fails and alerts with MSG-101 (*"No eligible Inspector is available for the selected region and time window"*).
-
-  * **Technical Integration & APIs:**
-    * **Data Transfer Object:** `PreMissionAssessmentPersonnelDto` (contains user details, eligibility flag, and conflict reason).
-
----
-
-#### ***3.2.4 Check UAV Availability and Technical Readiness (UC-MF01-04)***
-
-* **Function Trigger:**
-  * **System Trigger:** Runs automatically during pre-mission evaluation (UC-MF01-02).
-  * **UI Navigation:** In the Assessment Workspace (`/pre-mission/:id`), open the **"Ứng viên Thiết bị UAV"** (UAV Candidates) tab.
-
-* **Function Description:**
-  * **Actors / Roles:** Primary: **Mission Manager**, **UAV Technician**. Evaluated Entities: **UAV Drones**.
-  * **Purpose:** Verify drone fleet availability, operational status, battery capacity, and technical airworthiness for the selected inspection scope. Estimates whether drone endurance matches the target transmission corridor distance.
-  * **Interface:** Data table displaying drone candidates, operational status, battery levels, technical health ratings, range suitability, and inspection shortcuts.
-  * **Data Processing:** Checks that drone status is `Available` with no conflicting bookings; checks for a passed technical inspection within 72 hours; calculates estimated corridor flight time against drone battery endurance; categorizes scope suitability as `Suitable` (1 flight), `SuitableWithSplit` (multiple sorties required), or `Unsuitable`.
-
-* **Screen Layout:**
-  > **[Screen Layout Placeholder - Paste Screenshot Here]**
-  > * **Screen ID:** SCR-10: *Readiness Assessment Workspace - UAV Candidates Tab*
-  > * **Route:** `/pre-mission/:id` *(Tab: `uav`)*
-  > * **Frontend Component Path:** `E:\UavPms_FE\UavPms_FE\src\app\features\pre-mission\pages\assessment-workspace\assessment-workspace.html` (Lines 820–930)
-  > * **Visual Elements to Capture:** Fleet readiness summary cards, UAV candidate table with UAV Code, Model, Operational Status, Technical Health badge (`Healthy`, `Warning`, `Critical`), Battery Level bar, Suitability badge (`Phù hợp`, `Phù hợp (Phân tách)`, `Không phù hợp`), and the "Kiểm định" (Inspect) button.
-
-* **Function Details:**
-  * **General Evaluation Criteria:**
-    * **Operational Availability:** Drone status must be `Available` with no concurrent mission booking.
-    * **Technical Health:** Drone must have overall health of `Healthy` or `Warning` (`Critical` health is disqualified).
-    * **Inspection Airworthiness:** Drone must have a recorded `Passed` technical inspection valid at the planned start time (valid within 72 hours of inspection).
-    * **Corridor Suitability:** Evaluates corridor length and battery endurance. If flight time exceeds single-battery capability, the system flags the scope as requiring multiple sorties (`SuitableWithSplit`). If scope exceeds operational limits, it is marked `Unsuitable`.
-
-  * **Business Rules Applied:**
-    * `BR-013`: Only UAVs with status `Available` can be booked for flight missions.
-    * `BR-021`: Eligible UAV must be Available, unbooked, and have a `Passed` technical inspection valid at planned start.
-    * `BR-022`: Technical inspection records remain valid for 72 hours.
-    * `BR-024`: If the inspection scope exceeds aircraft capability, the drone is deemed `Unsuitable`.
-
-  * **Operational Workflow (Flow):**
-    * **Normal Flow:**
-      1. Manager navigates to the "Ứng viên Thiết bị UAV" tab.
-      2. System lists all fleet drones with their current health and availability.
-      3. Manager reviews candidate drones to select the best unit for the mission.
-      4. If a drone needs updated inspection, technician clicks "Kiểm định" to open the inspection tab.
-    * **Alternative Flows:**
-      * *A1 (Scope Split Recommendation):* When scope distance exceeds single flight endurance, system displays a recommendation to partition the mission into multiple flights.
-    * **Exception Flows:**
-      * *E1 (No Eligible UAV):* If no operational drone with valid inspection exists, UAV component fails and alerts with MSG-102 (*"No technically ready UAV is available for the selected time window"*).
-
-  * **Technical Integration & APIs:**
-    * **Data Transfer Object:** `PreMissionAssessmentDroneDto` (contains drone details, health rating, battery level, and suitability recommendation).
-
----
-
-#### ***3.2.5 Record UAV Technical Inspection and Flight Controller Binding (UC-MF01-05)***
-
-* **Function Trigger:**
-  * **Navigation Path A:** In Assessment Workspace (`/pre-mission/:id`), open the **"Kiểm định Kỹ thuật"** tab (Tab 4).
-  * **Navigation Path B:** From main menu, go to **UAV Inventory** (`/drones`), click on a drone record, and select the Technical Inspection action (SCR-08).
-  * **Direct Route:** `/pre-mission/:id` *(Tab: `technical`)* or `/drones` modal.
-
-* **Function Description:**
-  * **Actors / Roles:** Primary: **UAV Technician**, **Mission Manager**. Secondary: **Flight Controller Hardware (Betaflight STM32)**.
-  * **Purpose:** Conduct pre-flight technical inspection across 6 vital subsystems; connect to the flight controller via USB (Web Serial API) to read hardware identifier (`MSP_UID`); enforce safety lock BR-05 ensuring the connected controller belongs to the assigned drone; and record metric pass/fail outcomes.
-  * **Interface:** Technical Inspection Dashboard showing hardware connection state, flight controller UID card, 6-subsystem health grid, sensor telemetry table, and submission controls.
-  * **Data Processing:** Communicates with flight controller over serial interface; retrieves hardware UID; checks against registered bindings; verifies quantitative metrics against thresholds; updates drone technical health to `Healthy`, `Warning`, or `Critical`; and saves the inspection record valid for 72 hours.
-
-* **Screen Layout:**
-  > **[Screen Layout Placeholder - Paste Screenshot Here]**
-  > * **Screen ID:** SCR-08: *Drone Technical Inspection Dashboard & Flight Controller Pairing Console*
-  > * **Route:** `/pre-mission/:id` *(Tab: `technical`)*
-  > * **Frontend Component Path:** `E:\UavPms_FE\UavPms_FE\src\app\features\pre-mission\pages\assessment-workspace\assessment-workspace.html` (Lines 945–1420)
-  > * **Visual Elements to Capture:** Flight Controller Hardware UID Card with connection status badge, Safety validation banner (*Xác thực thành công* or safety lock *Cảnh báo lệch thiết bị BR-05*), 6 Subsystem Health grid, Detailed telemetry metric table, and the action button "Chạy kiểm định kỹ thuật" (Run Inspection).
-
-* **Function Details:**
-  * **Hardware Verification & Subsystems:**
-    * **Hardware UID Binding (BR-05):** Reads hardware UID from the flight controller. If the UID matches the assigned drone, inspection is allowed. If the UID belongs to another drone, the system activates a safety lock disabling test submission (`FC_DRONE_MISMATCH`). If unregistered, technician can bind the controller (`BR-04`).
-    * **6 Subsystem Checklist:**
-      1. *IMU & Sensors:* Accelerometer vibration and gyroscope drift stability.
-      2. *Propulsion & Motors:* Motor ESC balance and temperature.
-      3. *Power & Battery:* Cell voltage balance and battery state of health ($\ge 80\%$).
-      4. *RF & Telemetry Link:* Signal strength (RSSI) and link packet quality.
-      5. *GPS & Navigation:* Satellite lock count ($\ge 12$ satellites) and HDOP positioning precision.
-      6. *Camera Payload & Gimbal:* 3-axis stabilization and video feed connectivity.
-    * **Result Determination:** If all critical metrics pass, inspection result is `Passed` with health `Healthy` (or `Warning` if minor non-critical warnings exist), valid for 72 hours. If any critical item fails, result is `Failed` with health `Critical`.
-
-  * **Business Rules Applied:**
-    * `BR-004` & `BR-005`: Hardware bindings are tracked; submitting an inspection with mismatched hardware is strictly blocked.
-    * `BR-022`: Technical inspection records remain valid for 72 hours from completion.
-    * `BR-023`: Inspection fails if any mandatory checklist item or critical sensor metric fails.
-
-  * **Operational Workflow (Flow):**
-    * **Normal Flow:**
-      1. Technician connects the drone's flight controller to the workstation via USB cable.
-      2. Technician opens the "Kiểm định Kỹ thuật" tab and selects the candidate drone.
-      3. System connects via Web Serial, reads hardware UID, and validates against the database.
-      4. System confirms hardware match and unlocks the "Chạy kiểm định kỹ thuật" button.
-      5. Technician clicks **"Chạy kiểm định kỹ thuật"**; system reads sensor metrics across all 6 subsystems.
-      6. System verifies metric values against safety thresholds and displays pass/fail status for each item.
-      7. Technician confirms and submits; backend saves the inspection record, updates drone health, and resets the 72-hour validity timer.
-    * **Alternative Flows:**
-      * *A1 (Hardware Pairing):* If a new flight controller is connected, technician uses the pairing tool to bind the UID to the drone before testing.
-    * **Exception Flows:**
-      * *E1 (Hardware Mismatch Lock - BR-05):* If connected flight controller belongs to another drone, the submit button is locked with message: *"Connected Flight Controller belongs to UAV-02, but this assessment requires UAV-01"*.
-      * *E2 (Critical Diagnostic Failure):* If battery or motor metrics fail, inspection is recorded as `Failed` and drone is blocked from flight assignment.
-
-  * **Technical Integration & APIs:**
-    * **Backend Controller:** `DroneTechnicalInspectionController` (`POST /api/v2/drone-technical-inspections`, `GET /api/v2/drone-technical-inspections/drone/{id}/latest`)
-    * **Service:** `DroneTechnicalInspectionService.SubmitInspectionAsync(...)`.
-
----
-
-#### ***3.2.6 View Readiness Assessment Result & Mission Handoff (UC-MF01-06)***
-
-* **Function Trigger:**
-  * **Navigation Path:** From Assessment List (`/pre-mission`), click on an assessment; or open the **"Kết quả Thẩm định"** (Result) tab (Tab 5) in the Assessment Workspace (`/pre-mission/:id`).
-
-* **Function Description:**
-  * **Actors / Roles:** Primary: **Mission Manager**, **System Administrator**. Read-Only: **Inspector/Pilot**, **Analyst**.
-  * **Purpose:** Provide an overview of the readiness assessment results; review component evaluations and failure explanations; manage assessment cancellation; and transition approved assessments into the Mission Creation flow (MF02).
-  * **Interface:** Executive dashboard with overall outcome badge, component status breakdown, failure reasons list, cancellation modal, and the **"Tạo nhiệm vụ bay"** (Create Mission) handoff button.
-  * **Data Processing:** Displays status summary; if status is `Ready`, enables the mission creation handoff button passing assessment scope and eligible resources; if status is `NotReady`, displays diagnostic reasons; allows manager to cancel assessment with documented justification.
-
-* **Screen Layout:**
-  > **[Screen Layout Placeholder - Paste Screenshot Here]**
-  > * **Screen ID:** SCR-10: *Readiness Assessment Workspace - Result Tab & Mission Dispatch Handoff*
-  > * **Route:** `/pre-mission/:id` *(Tab: `result`)*
-  > * **Frontend Component Path:** `E:\UavPms_FE\UavPms_FE\src\app\features\pre-mission\pages\assessment-workspace\assessment-workspace.html` (Lines 1425–1580)
-  > * **Visual Elements to Capture:** Result banner with overall badge (`READY - SẴN SÀNG BAY` or `NOT READY - CHƯA ĐỦ ĐIỀU KIỆN`), Validity expiration countdown, 4 component outcome blocks (*Site*, *Personnel*, *UAV*, *Technical*), Failure diagnostic list, "Hủy đánh giá" (Cancel) button, and the primary action button **"Tạo nhiệm vụ bay"** (Create Mission).
-
-* **Function Details:**
-  * **Mission Creation Handoff (MF02 Integration):**
-    * The **"Tạo nhiệm vụ bay"** button is enabled only when assessment status is `Ready`.
-    * Clicking this button redirects the manager to `/missions/new?assessmentId={id}` (SCR-12), pre-filling:
-      * Regional operational scope and target transmission towers in order.
-      * Pre-filtered eligible candidate crew members (pilots, analysts, technicians).
-      * Pre-filtered eligible, inspected UAV airframes.
-      * Scheduled flight window.
-    * Once a mission is created from the assessment, the assessment status changes to `Completed` (`Consumed`), preventing reuse.
-
-  * **Assessment Cancellation Workflow:**
-    * Manager can cancel an active assessment by clicking **"Hủy đánh giá"**.
-    * A dialog prompt requires entering an explicit cancellation reason.
-    * System transitions status to `Cancelled`, releases temporary resource reservations, records an audit log entry, and broadcasts a status update.
-
-  * **Business Rules Applied:**
-    * `BR-026`: Assessment is `Ready` when all four components pass; `NotReady` when any component fails.
-    * `BR-027`: All failure reasons must be explicitly displayed for non-ready assessments.
-    * `BR-028` & `BR-029`: Only an unexpired, unconsumed `Ready` assessment can spawn an inspection mission. Each assessment can create at most one mission.
-
-  * **Operational Workflow (Flow):**
-    * **Normal Flow:**
-      1. Manager reviews the synthesized scorecard on the "Kết quả Thẩm định" tab.
-      2. If all components display green checkmarks and status is `Ready`, manager clicks **"Tạo nhiệm vụ bay"**.
-      3. System navigates to the Mission Creation wizard (`/missions/new`) with pre-populated scope and candidate pools.
-    * **Alternative Flows:**
-      * *A1 (Cancellation):* Manager clicks "Hủy đánh giá", inputs cancellation reason, and confirms; status changes to `Cancelled`.
-    * **Exception Flows:**
-      * *E1 (Not Ready Block):* If status is `NotReady`, the "Tạo nhiệm vụ bay" button is disabled and specific diagnostic failure reasons are highlighted.
-
-  * **Technical Integration & APIs:**
-    * **Backend Controller:** `PreMissionAssessmentV2Controller` (`GET /api/v2/pre-mission-assessments/{id}`, `POST /api/v2/pre-mission-assessments/{id}/cancel`)
-    * **DTOs:** `PreMissionAssessmentDto`, `CancelAssessmentRequest`.
-
----
-
-#### ***3.2.7 Automated Assessment Expiry Background Service (NS-01)***
-
-* **Function Trigger:**
-  * **Timing / Frequency:** Scheduled background service running every **2 minutes** (`*/2 * * * *`) via background worker service.
-  * **On-Demand:** Also evaluated synchronously whenever an assessment is accessed or evaluated.
-
-* **Function Description:**
-  * **Actors / Roles:** System Background Worker (**Operations Service**).
-  * **Purpose:** Enforce temporal expiration on all active assessments so that outdated readiness evaluations cannot be used to dispatch missions after their validity period or planned flight window has passed.
-  * **Interface:** Autonomous backend worker; logs status changes to application logs and notifies active web clients via SignalR.
-  * **Data Processing:** Finds all assessments in `Ready` or `Evaluating` status where the validity deadline (`ValidUntil`) or the planned flight end time has elapsed; updates their status to `Expired`; increments record version; writes audit log entries; and emits real-time events to refresh client dashboards.
-
-* **Screen Layout:**
-  > **[Non-Screen Function]**
-  > * **Function ID:** NS-01: *Assessment Expiry Job*
-  > * *Note:* Autonomous background worker without a dedicated UI screen. Results display dynamically on the Assessment List (SCR-09) and Workspace (SCR-10).
-
-* **Function Details:**
-  * **Expiration Logic:**
-    * Evaluates records satisfying: `Status in (Ready, Evaluating) AND (ValidUntil <= CurrentTime OR PlannedEnd <= CurrentTime)`.
-    * Transitions status from `Ready` / `Evaluating` $\rightarrow$ `Expired`.
-    * Dispatches real-time event `AssessmentExpired` to active users viewing the assessment workspace.
-
-  * **Business Rules Applied:**
-    * `BR-005`: Lifecycle state transitions strictly enforced (`Ready` $\rightarrow$ `Expired`).
-    * `BR-007`: Expiry actions are recorded in the audit log.
-    * `BR-028`: An assessment automatically expires when its validity period or planned end time passes.
-
-  * **Technical Integration & APIs:**
-    * **Service Class:** `PreMissionAssessmentExpiryJob` in `UavPms.OperationsService.Infrastructure.Services`
-    * **Policy Class:** `AssessmentExpiryPolicy` in `UavPms.OperationsService.Application.Features.Assessments.Policies`.
-
----
+| 1 | Role | System role: System Administrator, Mission Manager, Inspector, Analyst, UAV Technician. |
+| 2 | Region | Geographic area managed by the unit; limits users’ data scope. |
+| 3 | User | Account with username, password hash, full name, email, phone, status, role and region. |
+| 4 | Qualification | Personnel qualification: type (UAV pilot, inspector, technician), number, issue and expiry date. |
+| 5 | PowerLine | Power line with code, name and voltage level, belonging to one region. |
+| 6 | Tower | Tower with code and location (PostGIS point, WGS 84), belonging to one power line. |
+| 7 | InfrastructureAsset | Inspectable component of a tower (insulator string, conductor span, surge arrester) with type and code. |
+| 8 | UAV | UAV record: serial number, model, status (Available, In Maintenance, Retired), battery cycles and maintenance notes. |
+| 9 | TechnicalInspection | Result of a UAV technical inspection: checklist results, controller metrics, source (Edge Device or Manual), result (Passed or Failed), valid-until time. |
+| 10 | ReadinessAssessment | Pre-mission assessment: scope region, time window, inspection type, site conditions, component results, overall result and status. |
+| 11 | AssessmentTarget | Asset included in the scope of an assessment. |
+| 12 | Mission | Inspection mission created from one assessment: flight parameters, planned start and end, confirmation deadline, priority, instructions, status and version. |
+| 13 | MissionTarget | Asset to inspect in a mission, with progress status (Pending, Inspected, Skipped) and skip reason. |
+| 14 | MissionAssignment | Inspector assigned to a mission: role in mission (pilot-in-command or observer), response status, response reason and time. |
+| 15 | ResourceBooking | Reserved interval of one Inspector or one UAV for a mission; used for collision checks. |
+| 16 | FieldSession | Field execution record: check-in time and location, handover confirmation and UAV condition, start and finish times. |
+| 17 | TelemetryRecord | Telemetry sample: time, latitude, longitude, altitude, speed, heading and battery level. |
+| 18 | MediaEvidence | Captured image or video: storage path, checksum, capture time, location, size and type. |
+| 19 | CriticalAlert | Critical anomaly: source (Edge or Manual), type, severity, confidence, location, status and disposition. |
+| 20 | AnalysisJob | AI analysis request for one media file: version, model mode, correlation ID, status and attempt count. |
+| 21 | DefectCategory | Canonical defect category (seven classes, BR-060) with default severity. |
+| 22 | Detection | AI output: category, bounding box, confidence score, original model label and review status. |
+| 23 | DetectionReview | Analyst decision on a detection: confirm, reject or correct, corrected category and reason. |
+| 24 | DefectRecord | Confirmed defect on an asset with category, severity and status, created from one detection. |
+| 25 | Notification | In-app notification with type, link, read time and email delivery status. |
+| 26 | AuditLog | Audit record of a material action. |
+
+Sections 3.2–3.6 specify each use case in Table 4 with the same template: actors, trigger, pre- and postconditions, normal flow, alternative flows (A), exceptions (E), and the related screens, business rules (Section 5.1) and messages (Section 5.3). Priority *High* marks the use cases required for the MF01–MF04 end-to-end demonstration.
+
+### **3.2 Common Functions**
+
+#### ***3.2.1 UC-CF-01 Log In***
+
+***Table 9\.** UC-CF-01 Log In – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | User |
+| Secondary actors | – |
+| Trigger | The user opens the web client or the session has expired. |
+| Description | Authenticates the user and opens the dashboard for the user’s role. |
+| Preconditions | The user has an account. |
+| Postconditions | A session token is issued; the login is recorded in the audit log. |
+| Priority | High |
+| Screens | SCR-01, SCR-02 |
+| Business rules | BR-001, BR-003, BR-007 |
+| Messages | MSG-001, MSG-008, MSG-009 |
+
+**Normal flow**
+
+1. The user enters username and password and selects *Log In*.  
+2. The system checks the input, verifies the credentials and checks that the account is Active.  
+3. The system issues an access token with the user’s role and region and opens SCR-02 with the menu allowed by Table 6\.
+
+**Alternative flows**
+
+* A1 – Session expired: the system returns the user to SCR-01 and, after login, back to the requested screen.
+
+**Exceptions**
+
+* E1 – Missing field: the system shows MSG-001.  
+* E2 – Wrong credentials: the system shows MSG-008 and increases the failed-attempt counter.  
+* E3 – Account locked or inactive: the system shows MSG-009 (BR-003).
+
+#### ***3.2.2 UC-CF-02 Manage User Accounts***
+
+***Table 10\.** UC-CF-02 Manage User Accounts – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | System Administrator |
+| Secondary actors | – |
+| Trigger | The administrator opens SCR-04. |
+| Description | Creates, updates and deactivates accounts and assigns role and region. |
+| Preconditions | The administrator is logged in. |
+| Postconditions | The account is saved; the change is audited. |
+| Priority | High |
+| Screens | SCR-04 |
+| Business rules | BR-002, BR-004, BR-007, BR-015 |
+| Messages | MSG-001, MSG-004, MSG-005, MSG-010 |
+
+**Normal flow**
+
+1. The administrator searches the account list and selects *Create* or an existing account.  
+2. The administrator enters username, full name, email, phone, role and region, then selects *Save*.  
+3. The system validates the data, checks that username and email are unique, saves the account and shows MSG-004.
+
+**Alternative flows**
+
+* A1 – Deactivate: the administrator selects *Deactivate* and enters a reason; the system sets the status to Inactive and flags the user’s future assignments for reassignment (BR-015).
+
+**Exceptions**
 
+* E1 – Duplicate username or email: MSG-010.  
+* E2 – Record changed by another user: MSG-005.
+
+#### ***3.2.3 UC-CF-03 Manage Personnel Qualifications***
+
+***Table 11\.** UC-CF-03 Manage Personnel Qualifications – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | System Administrator |
+| Secondary actors | – |
+| Trigger | The administrator opens SCR-05 for a person. |
+| Description | Records qualifications used by the personnel eligibility check (UC-MF01-03). |
+| Preconditions | The person has an account. |
+| Postconditions | The qualification is saved and used by later eligibility checks. |
+| Priority | High |
+| Screens | SCR-05 |
+| Business rules | BR-014, BR-007 |
+| Messages | MSG-001, MSG-002, MSG-004 |
+
+**Normal flow**
+
+1. The administrator selects a person and selects *Add Qualification*.  
+2. The administrator enters type, certificate number, issue date and expiry date.  
+3. The system checks that the issue date is before the expiry date, saves the qualification and shows MSG-004.
+
+**Exceptions**
+
+* E1 – Expiry date not after issue date: MSG-002.
+
+#### ***3.2.4 UC-CF-04 Manage Infrastructure Assets***
+
+***Table 12\.** UC-CF-04 Manage Infrastructure Assets – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | System Administrator |
+| Secondary actors | Map Service |
+| Trigger | The administrator opens SCR-06. |
+| Description | Maintains regions, power lines, towers and tower assets with coordinates. |
+| Preconditions | The administrator is logged in. |
+| Postconditions | Asset data is saved and shown on the map. |
+| Priority | High |
+| Screens | SCR-06 |
+| Business rules | BR-004, BR-011, BR-012 |
+| Messages | MSG-001, MSG-004, MSG-010, MSG-011 |
+
+**Normal flow**
+
+1. The administrator selects a region and a power line, then selects *Add Tower*.  
+2. The administrator enters tower code, latitude and longitude, or picks the point on the map.  
+3. The system validates the coordinates and the code, saves the tower and displays it on the map.  
+4. The administrator adds the tower’s assets (type and code).
+
+**Alternative flows**
+
+* A1 – Deactivate an asset: the asset is hidden from new assessments but kept for history (BR-004).
+
+**Exceptions**
+
+* E1 – Coordinates out of range: MSG-011.  
+* E2 – Duplicate code: MSG-010.  
+* E3 – Map Service unavailable: the list view still works; the map shows MSG-007.
+
+#### ***3.2.5 UC-CF-05 Manage UAV Inventory***
+
+***Table 13\.** UC-CF-05 Manage UAV Inventory – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | System Administrator, UAV Technician |
+| Secondary actors | – |
+| Trigger | The user opens SCR-07. |
+| Description | Maintains UAV records, status and maintenance notes. |
+| Preconditions | The user is logged in. |
+| Postconditions | The UAV record is saved; status changes are audited. |
+| Priority | High |
+| Screens | SCR-07 |
+| Business rules | BR-004, BR-007, BR-013 |
+| Messages | MSG-001, MSG-004, MSG-010 |
+
+**Normal flow**
+
+1. The user selects *Add UAV* or an existing UAV.  
+2. The user enters serial number, model, camera, status and maintenance notes.  
+3. The system checks that the serial number is unique, saves the record and shows MSG-004.
+
+**Alternative flows**
+
+* A1 – Change status to In Maintenance or Retired: the system rejects the change if the UAV has a future booking, and shows the affected missions.
+
+**Exceptions**
+
+* E1 – Duplicate serial number: MSG-010.
+
+#### ***3.2.6 UC-CF-06 View Notifications***
+
+***Table 14\.** UC-CF-06 View Notifications – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | User |
+| Secondary actors | – |
+| Trigger | The user selects the notification icon or a new notification arrives. |
+| Description | Shows the user’s in-app notifications and opens the linked record. |
+| Preconditions | The user is logged in. |
+| Postconditions | Opened notifications are marked as read. |
+| Priority | Medium |
+| Screens | SCR-03 |
+| Business rules | BR-001 |
+| Messages | MSG-003, MSG-006 |
+
+**Normal flow**
+
+1. The system shows the unread count, updated in real time through SignalR.  
+2. The user opens SCR-03 and selects a notification.  
+3. The system marks it as read and opens the linked screen if the user is still authorized.
+
+**Exceptions**
+
+* E1 – No notification: MSG-003.  
+* E2 – User no longer authorized for the linked record: MSG-006.
+
+#### ***3.2.7 UC-CF-07 View Audit Log***
+
+***Table 15\.** UC-CF-07 View Audit Log – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | System Administrator |
+| Secondary actors | – |
+| Trigger | The administrator opens SCR-25. |
+| Description | Searches audit records by actor, action, target and time range. |
+| Preconditions | The administrator is logged in. |
+| Postconditions | None (read-only). |
+| Priority | Medium |
+| Screens | SCR-25 |
+| Business rules | BR-007 |
+| Messages | MSG-002, MSG-003 |
+
+**Normal flow**
+
+1. The administrator sets filters and selects *Search*.  
+2. The system shows matching records, newest first, 20 per page.
+
+**Exceptions**
+
+* E1 – Invalid time range: MSG-002. E2 – No record: MSG-003.
+
+### **3.3 MF01 – Pre-Mission Feasibility and Resource Readiness**
+
+MF01 decides whether an inspection is feasible before a mission is created. Its output, a Ready assessment, is the only input that UC-MF02-01 accepts (BR-029). The assessment states are listed in Table 59\.
+
+#### ***3.3.1 UC-MF01-01 Create Readiness Assessment***
+
+***Table 16\.** UC-MF01-01 Create Readiness Assessment – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | – |
+| Trigger | The manager selects New Assessment on SCR-09. |
+| Description | Defines the inspection scope and the desired time window. |
+| Preconditions | The manager is logged in and has scope over at least one region. |
+| Postconditions | An assessment in status Draft is saved with its targets. |
+| Priority | High |
+| Screens | SCR-09, SCR-10 (Scope tab) |
+| Business rules | BR-016, BR-017, BR-018 |
+| Messages | MSG-001, MSG-002, MSG-004, MSG-108 |
+
+**Normal flow**
+
+1. The manager selects the region, power line and inspection type (routine or incident).  
+2. The manager selects towers or assets in the list or on the map.  
+3. The manager enters the desired window start and end and selects *Save*.  
+4. The system validates the scope and window, saves the assessment as Draft and shows MSG-004.
+
+**Exceptions**
+
+* E1 – No asset selected or window missing: MSG-001.  
+* E2 – Window start in the past or not before the end: MSG-002.  
+* E3 – Asset outside the selected region: MSG-108.
+
+#### ***3.3.2 UC-MF01-02 Evaluate Pre-Mission Readiness***
+
+***Table 17\.** UC-MF01-02 Evaluate Pre-Mission Readiness – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | – |
+| Trigger | The manager selects Evaluate on a Draft, Not Ready or Needs Review assessment. |
+| Description | Runs the personnel and UAV checks, records site and flight conditions and determines the overall result. |
+| Preconditions | The assessment exists and is not Consumed or Expired. |
+| Postconditions | The assessment has status Ready, Not Ready or Needs Review with reasons; the evaluation is audited. |
+| Priority | High |
+| Screens | SCR-10 (all tabs) |
+| Business rules | BR-008, BR-016, BR-019 – BR-021, BR-025 – BR-028 |
+| Messages | MSG-101 – MSG-105 |
+
+**Normal flow**
+
+1. The system runs UC-MF01-03 and shows the eligible personnel on the *Personnel* tab.  
+2. The system runs UC-MF01-04 and shows the eligible UAVs on the *UAV* tab.  
+3. The manager enters site and flight conditions on the *Site Conditions* tab: wind speed, rain, visibility, flight restrictions and notes.  
+4. The system checks the conditions against the configured limits (BR-025).  
+5. The system determines the overall result (BR-026), lists the reason for each component (BR-027) and shows MSG-103, MSG-104 or MSG-105.
+
+**Alternative flows**
+
+* A1 – Confirm Needs Review: the manager selects *Confirm as Ready* and enters a justification; the system sets the result to Ready and records an override (BR-008).  
+* A2 – Re-evaluate: the manager changes the scope, window or conditions and selects *Evaluate* again; the previous result is kept in the history.
+
+**Exceptions**
+
+* E1 – No eligible personnel: the result is Not Ready with MSG-101.  
+* E2 – No eligible UAV: the result is Not Ready with MSG-102.
+
+#### ***3.3.3 UC-MF01-03 Check Personnel Availability and Eligibility***
+
+***Table 18\.** UC-MF01-03 Check Personnel Availability and Eligibility – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager (through the including use case) |
+| Secondary actors | – |
+| Trigger | Included by UC-MF01-02, UC-MF02-02 and UC-MF02-09. |
+| Description | Lists Inspectors who can be assigned in the given region and time window. |
+| Preconditions | A region and a time window are known. |
+| Postconditions | None (read-only result). |
+| Priority | High |
+| Screens | SCR-10 (Personnel tab), SCR-12 (Personnel tab) |
+| Business rules | BR-014, BR-019, BR-020 |
+| Messages | MSG-003, MSG-101 |
+
+**Normal flow**
+
+1. The system selects users with role Inspector and status Active.  
+2. The system keeps those with a valid UAV-pilot qualification on the window end date and authorization for the region.  
+3. The system removes those with an overlapping booking (BR-020).  
+4. The system shows the eligible list and, for each excluded person, the reason (expired qualification, other region, booked).
+
+**Exceptions**
+
+* E1 – Nobody eligible: MSG-101.
+
+#### ***3.3.4 UC-MF01-04 Check UAV Availability and Technical Readiness***
+
+***Table 19\.** UC-MF01-04 Check UAV Availability and Technical Readiness – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager (through the including use case) |
+| Secondary actors | – |
+| Trigger | Included by UC-MF01-02, UC-MF02-03 and UC-MF02-09. |
+| Description | Lists UAVs that are free and technically ready for the window. |
+| Preconditions | A time window is known. |
+| Postconditions | None (read-only result). |
+| Priority | High |
+| Screens | SCR-10 (UAV tab), SCR-12 (UAV tab) |
+| Business rules | BR-013, BR-020 – BR-024 |
+| Messages | MSG-102, MSG-106 |
+
+**Normal flow**
+
+1. The system selects UAVs with status Available and no overlapping booking.  
+2. For each UAV, the system reads the latest technical inspection and checks that it is Passed and valid at the planned start (BR-021, BR-022).  
+3. The system shows the eligible UAVs with battery health and inspection time, and the reason for each excluded UAV.
+
+**Alternative flows**
+
+* A1 – Latest inspection used manual metrics: the UAV is listed with the mark *Needs Review* (BR-024).
+
+**Exceptions**
+
+* E1 – Inspection expired or missing: the UAV is excluded with MSG-106.  
+* E2 – No eligible UAV: MSG-102.
+
+#### ***3.3.5 UC-MF01-05 Record UAV Technical Inspection***
+
+***Table 20\.** UC-MF01-05 Record UAV Technical Inspection – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | UAV Technician |
+| Secondary actors | Edge Device |
+| Trigger | The technician selects New Technical Inspection on SCR-07. |
+| Description | Records checklist results and flight-controller health metrics. |
+| Preconditions | The UAV exists and is not Retired. |
+| Postconditions | A Passed or Failed inspection is saved with its valid-until time. |
+| Priority | High |
+| Screens | SCR-07, SCR-08 |
+| Business rules | BR-022, BR-023, BR-024 |
+| Messages | MSG-001, MSG-107 |
+
+**Normal flow**
+
+1. The technician powers on the UAV and selects *Import Metrics*.  
+2. The Edge Device returns battery voltage and state of health, GPS fix and satellite count, IMU and compass status, motor test result and firmware version.  
+3. The technician completes the checklist: frame, propellers, camera, gimbal, storage, failsafe settings.  
+4. The system calculates the result: Failed if any mandatory item fails (BR-023), otherwise Passed; it sets the valid-until time (BR-022) and shows MSG-107.
+
+**Alternative flows**
+
+* A1 – Edge Device not reachable: the technician enters the metrics manually with a justification; the inspection is marked Manual (BR-024).
+
+**Exceptions**
+
+* E1 – Mandatory field missing: MSG-001.
+
+#### ***3.3.6 UC-MF01-06 View Readiness Assessment Result***
+
+***Table 21\.** UC-MF01-06 View Readiness Assessment Result – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | – |
+| Trigger | The manager selects an assessment on SCR-09. |
+| Description | Shows the overall result, the component results and their reasons. |
+| Preconditions | The assessment has been evaluated. |
+| Postconditions | None (read-only). |
+| Priority | Medium |
+| Screens | SCR-09, SCR-10 (Result tab) |
+| Business rules | BR-027, BR-028 |
+| Messages | MSG-003 |
+
+**Normal flow**
+
+1. The manager filters the list by region, status or result.  
+2. The manager opens an assessment; the system shows each component (scope, personnel, UAV, site conditions) with Pass, Fail or Review and its reason.  
+3. For a Ready assessment, the system shows the *Create Mission* button that starts UC-MF02-01.
+
+**Exceptions**
+
+* E1 – No assessment matches the filter: MSG-003.
+
+### **3.4 MF02 – Create and Assign Inspection Mission**
+
+MF02 turns a Ready assessment into a dispatched mission with confirmed assignees. The mission and assignment states are listed in Table 60 and Table 61\.
+
+#### ***3.4.1 UC-MF02-01 Create Inspection Mission***
+
+***Table 22\.** UC-MF02-01 Create Inspection Mission – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | – |
+| Trigger | The manager selects Create Mission on a Ready assessment (SCR-10) or on SCR-11. |
+| Description | Creates a mission from a Ready assessment and sets the flight parameters and schedule. |
+| Preconditions | The assessment is Ready, not Consumed and not Expired. |
+| Postconditions | A mission in status Draft is saved; the assessment becomes Consumed. |
+| Priority | High |
+| Screens | SCR-12 (Parameters tab) |
+| Business rules | BR-029 – BR-032 |
+| Messages | MSG-001, MSG-002, MSG-004, MSG-201 |
+
+**Normal flow**
+
+1. The system loads the assessment scope, window and the eligible resources found in MF01.  
+2. The manager confirms the mission targets (all or part of the scope).  
+3. The manager enters flight altitude, flight speed, planned start and end, confirmation deadline, priority and instructions.  
+4. The system validates the data (BR-030 – BR-032), saves the mission as Draft, links it to the assessment and sets the assessment to Consumed.
+
+**Exceptions**
+
+* E1 – Assessment not Ready, already used or expired: MSG-201.  
+* E2 – Schedule outside the assessment window, or deadline not before start: MSG-002.  
+* E3 – Altitude or speed above the configured limit: MSG-001 with the limit value.
+
+#### ***3.4.2 UC-MF02-02 Assign Personnel to Mission***
+
+***Table 23\.** UC-MF02-02 Assign Personnel to Mission – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | – |
+| Trigger | The manager opens the Personnel tab of SCR-12, or reassigns through UC-MF02-09. |
+| Description | Assigns one or more eligible Inspectors and designates the pilot-in-command. |
+| Preconditions | The mission is Draft, or Dispatched for a reassignment. |
+| Postconditions | Assignments are saved with status Pending. |
+| Priority | High |
+| Screens | SCR-12 (Personnel tab) |
+| Business rules | BR-033, BR-035, BR-036 |
+| Messages | MSG-101, MSG-202 |
+
+**Normal flow**
+
+1. The system runs UC-MF01-03 for the mission schedule and shows the eligible Inspectors.  
+2. The manager selects one or more Inspectors and marks one as pilot-in-command.  
+3. The system re-checks the collision for each selected person and saves the assignments as Pending.
+
+**Exceptions**
+
+* E1 – Selected person booked by another mission in the meantime: MSG-202; the person is removed from the selection.  
+* E2 – No eligible Inspector: MSG-101.
+
+#### ***3.4.3 UC-MF02-03 Assign UAV to Mission***
+
+***Table 24\.** UC-MF02-03 Assign UAV to Mission – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | – |
+| Trigger | The manager opens the UAV tab of SCR-12, or reassigns through UC-MF02-09. |
+| Description | Assigns one UAV after checking technical readiness and battery health. |
+| Preconditions | The mission is Draft, or Dispatched for a reassignment. |
+| Postconditions | The UAV is linked to the mission. |
+| Priority | High |
+| Screens | SCR-12 (UAV tab) |
+| Business rules | BR-021, BR-034, BR-035 |
+| Messages | MSG-102, MSG-106, MSG-202 |
+
+**Normal flow**
+
+1. The system runs UC-MF01-04 for the mission schedule and shows the eligible UAVs.  
+2. The manager selects one UAV.  
+3. The system checks that the battery state of health is at or above the limit (BR-034) and that the technical inspection is still valid at the planned start, then links the UAV.
+
+**Exceptions**
+
+* E1 – Battery below limit or inspection expired: MSG-106.  
+* E2 – UAV booked in the meantime: MSG-202.
+
+#### ***3.4.4 UC-MF02-04 Dispatch Mission***
+
+***Table 25\.** UC-MF02-04 Dispatch Mission – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | Notification Provider |
+| Trigger | The manager selects Dispatch on SCR-12. |
+| Description | Reserves the personnel and UAV and notifies the assignees. |
+| Preconditions | The mission is Draft with at least one target, one pilot-in-command and one UAV. |
+| Postconditions | The mission is Dispatched; bookings exist for all resources; notifications are queued. |
+| Priority | High |
+| Screens | SCR-12, SCR-13 |
+| Business rules | BR-030, BR-033 – BR-037, BR-052 |
+| Messages | MSG-012, MSG-202, MSG-203, MSG-209, MSG-013 |
+
+**Normal flow**
+
+1. The system shows a summary and asks for confirmation (MSG-012).  
+2. The manager confirms.  
+3. The system re-checks all resources (BR-035) and, in one transaction, creates the bookings and sets the mission to Dispatched (BR-036).  
+4. The system publishes notification events for each assignee (BR-037) and shows MSG-203.
+
+**Exceptions**
+
+* E1 – Missing target, pilot-in-command or UAV: MSG-209.  
+* E2 – A resource collision is found in step 3: the transaction is rolled back and MSG-202 names the resource.  
+* E3 – Email delivery fails: the in-app notification is kept and the manager sees MSG-013.
+
+#### ***3.4.5 UC-MF02-05 Preview Mission Route on Map***
+
+***Table 26\.** UC-MF02-05 Preview Mission Route on Map – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager, Inspector |
+| Secondary actors | Map Service |
+| Trigger | The user opens the Route Map tab of SCR-12 or SCR-13. |
+| Description | Shows the mission towers, targets and the planned route on the map. |
+| Preconditions | The mission has at least one target with valid coordinates. Inspectors see only their own missions. |
+| Postconditions | None (read-only). |
+| Priority | Medium |
+| Screens | SCR-12, SCR-13 (Route Map tab) |
+| Business rules | BR-001, BR-011 |
+| Messages | MSG-007, MSG-011 |
+
+**Normal flow**
+
+1. The system loads the base map from the Map Service.  
+2. The system draws the towers, highlights the targets and draws the route in the planned order.  
+3. The user selects a tower to see its code and assets.
+
+**Exceptions**
+
+* E1 – Map Service unavailable: the system shows the target list and MSG-007.  
+* E2 – A target has invalid coordinates: it is listed without a marker and MSG-011 is shown.
+
+#### ***3.4.6 UC-MF02-06 View Assigned Mission***
+
+***Table 27\.** UC-MF02-06 View Assigned Mission – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Inspector |
+| Secondary actors | – |
+| Trigger | The Inspector opens SCR-15 or selects a dispatch notification. |
+| Description | Shows the Inspector’s missions with scope, schedule, deadline, instructions and assigned UAV. |
+| Preconditions | The Inspector is logged in. |
+| Postconditions | None (read-only). |
+| Priority | High |
+| Screens | SCR-15, SCR-13 |
+| Business rules | BR-001 |
+| Messages | MSG-003 |
+
+**Normal flow**
+
+1. The system lists the missions in which the Inspector has an assignment, ordered by planned start.  
+2. The Inspector opens a mission; the system shows SCR-13 in read-only mode with the *Respond* button when the assignment is Pending.
+
+**Exceptions**
+
+* E1 – No mission: MSG-003.
+
+#### ***3.4.7 UC-MF02-07 Respond to Mission Assignment***
+
+***Table 28\.** UC-MF02-07 Respond to Mission Assignment – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Inspector |
+| Secondary actors | – |
+| Trigger | The Inspector selects Respond on SCR-15 or SCR-13. |
+| Description | Accepts the assignment, or requests postponement with a reason. |
+| Preconditions | The assignment is Pending and the confirmation deadline has not passed. |
+| Postconditions | The assignment is Accepted or Postponement Requested; the manager is notified. When all assignments are Accepted, the mission becomes Confirmed. |
+| Priority | High |
+| Screens | SCR-16 |
+| Business rules | BR-038, BR-039, BR-042 |
+| Messages | MSG-204, MSG-205, MSG-206, MSG-207 |
+
+**Normal flow**
+
+1. The Inspector selects *Accept*.  
+2. The system sets the assignment to Accepted, notifies the manager and shows MSG-205.  
+3. If every assignment of the mission is Accepted, the system sets the mission to Confirmed (BR-042).
+
+**Alternative flows**
+
+* A1 – Postpone: the Inspector selects *Postpone*, enters a reason and a proposed available time; the system sets the assignment to Postponement Requested and notifies the manager, who then uses UC-MF02-09.
+
+**Exceptions**
+
+* E1 – Reason missing: MSG-204.  
+* E2 – Deadline passed: MSG-207.  
+* E3 – Assignment changed by the manager after it was opened: MSG-206.
+
+#### ***3.4.8 UC-MF02-08 Monitor Assignment Status***
+
+***Table 29\.** UC-MF02-08 Monitor Assignment Status – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | – |
+| Trigger | The manager opens SCR-11 or the Assignments tab of SCR-13. |
+| Description | Tracks responses and deadlines; the deadline job (NS-02) sends reminders and expires unanswered assignments. |
+| Preconditions | The manager is logged in. |
+| Postconditions | None (read-only); expired assignments are shown for action. |
+| Priority | Medium |
+| Screens | SCR-11, SCR-13 (Assignments tab) |
+| Business rules | BR-040 |
+| Messages | MSG-003 |
+
+**Normal flow**
+
+1. The system lists the missions with the number of Pending, Accepted, Postponement Requested and Expired assignments.  
+2. The manager opens a mission to see each assignee’s status, response time and reason.  
+3. For a Postponement Requested or Expired assignment, the system shows the *Reassign* and *Reschedule* actions of UC-MF02-09.
+
+#### ***3.4.9 UC-MF02-09 Change Dispatched Mission***
+
+***Table 30\.** UC-MF02-09 Change Dispatched Mission – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | Notification Provider |
+| Trigger | The manager selects Change on SCR-13. |
+| Description | Cancels, suspends, resumes, reschedules or reassigns a mission. |
+| Preconditions | The mission is not Completed, Field Completed or Cancelled (Table 60). |
+| Postconditions | The mission and its bookings are updated in one transaction; affected users are notified; the change is audited. |
+| Priority | High |
+| Screens | SCR-14 |
+| Business rules | BR-006, BR-035, BR-036, BR-041 |
+| Messages | MSG-001, MSG-005, MSG-012, MSG-202, MSG-208 |
+
+**Normal flow**
+
+1. The manager selects the action and enters a reason.  
+2. For *Reschedule*, the manager enters the new schedule and deadline; for *Reassign*, the manager selects the new Inspector or UAV. The system runs UC-MF01-03 or UC-MF01-04 for the new values.  
+3. The manager confirms (MSG-012).  
+4. The system applies the change and the booking updates in one transaction, resets the affected assignments to Pending, notifies the affected users and shows MSG-208.
+
+**Alternative flows**
+
+* A1 – Cancel: all bookings are released and assignments are set to Cancelled.  
+* A2 – Suspend an In Progress mission: the mission becomes Suspended; telemetry is still stored. *Resume* returns it to In Progress.
+
+**Exceptions**
+
+* E1 – Reason missing: MSG-001.  
+* E2 – New resource has a collision: MSG-202.  
+* E3 – Mission changed by another user: MSG-005.
+
+### **3.5 MF03 – Mission Execution and Field Inspection**
+
+MF03 covers the work at the site, from check-in to field completion. During the flight, the Edge Device sends telemetry and media to UAV-PMS and runs the YOLO11s edge model; UAV-PMS does not control the flight.
+
+#### ***3.5.1 UC-MF03-01 Check In at Mission Site***
+
+***Table 31\.** UC-MF03-01 Check In at Mission Site – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Inspector |
+| Secondary actors | – |
+| Trigger | The Inspector selects Check In on SCR-17. |
+| Description | Records the Inspector’s arrival at the site. |
+| Preconditions | The mission is Confirmed; the Inspector’s assignment is Accepted; the current time is inside the check-in window. |
+| Postconditions | A field session is created with server time and GPS location. |
+| Priority | High |
+| Screens | SCR-17 (Check-in and Handover tab) |
+| Business rules | BR-043, BR-044 |
+| Messages | MSG-301, MSG-302 |
+
+**Normal flow**
+
+1. The Inspector opens the mission on SCR-15 and selects *Field Execution*.  
+2. The browser provides the current GPS location after the Inspector allows location access.  
+3. The Inspector selects *Check In*; the system stores server time and location and creates the field session.
+
+**Alternative flows**
+
+* A1 – Location farther than the configured distance from the nearest target: the check-in is saved with a warning flag, MSG-302 is shown and the manager is notified (BR-044).  
+* A2 – Location not available: the Inspector enters a note; the check-in is saved with the flag *No location*.
+
+**Exceptions**
+
+* E1 – Not assigned, not Accepted, mission not Confirmed or outside the window: MSG-301.
+
+#### ***3.5.2 UC-MF03-02 Confirm UAV Handover***
+
+***Table 32\.** UC-MF03-02 Confirm UAV Handover – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Inspector |
+| Secondary actors | – |
+| Trigger | The Inspector selects Confirm Handover on SCR-17. |
+| Description | Confirms that the Inspector has received the assigned UAV and records its condition. |
+| Preconditions | Check-in is done. |
+| Postconditions | Handover is recorded in the field session. |
+| Priority | High |
+| Screens | SCR-17 (Check-in and Handover tab) |
+| Business rules | BR-045 |
+| Messages | MSG-311 |
+
+**Normal flow**
+
+1. The system shows the assigned UAV serial number and its latest technical inspection.  
+2. The Inspector enters the serial number on the UAV, the battery level and the visible condition (OK or Damaged).  
+3. The system checks that the serial matches and records the handover.
+
+**Exceptions**
+
+* E1 – Serial number does not match: MSG-311; handover is not recorded.  
+* E2 – Condition Damaged: handover is recorded as Rejected, the manager is notified and the mission cannot start until a new UAV is assigned (UC-MF02-09).
+
+#### ***3.5.3 UC-MF03-03 Start Mission Execution***
+
+***Table 33\.** UC-MF03-03 Start Mission Execution – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Inspector |
+| Secondary actors | – |
+| Trigger | The pilot-in-command selects Start Mission on SCR-17. |
+| Description | Runs the final checks and moves the mission to In Progress. |
+| Preconditions | Check-in and handover are done. |
+| Postconditions | The mission is In Progress; telemetry ingestion (NS-04) is enabled for the assigned UAV. |
+| Priority | High |
+| Screens | SCR-17 |
+| Business rules | BR-046 |
+| Messages | MSG-303, MSG-304 |
+
+**Normal flow**
+
+1. The system checks the start conditions of BR-046 and shows each one with Pass or Fail.  
+2. If all pass, the system sets the mission to In Progress, stores the start time, enables NS-04 for the assigned UAV and shows MSG-304.
+
+**Exceptions**
+
+* E1 – A condition fails: MSG-303 lists the failed conditions; the mission is not started.  
+* E2 – Mission already started: the system shows the current state and does not start it again.
+
+#### ***3.5.4 UC-MF03-04 Record Asset Inspection Progress***
+
+***Table 34\.** UC-MF03-04 Record Asset Inspection Progress – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Inspector |
+| Secondary actors | – |
+| Trigger | The Inspector selects a target on the Targets tab of SCR-17. |
+| Description | Marks each target as Inspected or Skipped. |
+| Preconditions | The mission is In Progress. |
+| Postconditions | The target status is updated and shown on SCR-18. |
+| Priority | High |
+| Screens | SCR-17 (Targets tab) |
+| Business rules | BR-054 |
+| Messages | MSG-004, MSG-312 |
+
+**Normal flow**
+
+1. The system lists the targets with their status and the number of media received for each.  
+2. The Inspector selects a target and selects *Mark Inspected*.  
+3. The system saves the status and time and updates the progress on SCR-18.
+
+**Alternative flows**
+
+* A1 – Skip: the Inspector selects *Skip* and enters a reason (for example, access blocked or unsafe).
+
+**Exceptions**
+
+* E1 – Skip reason missing: MSG-312.
+
+#### ***3.5.5 UC-MF03-05 Transmit Telemetry and Field Media***
+
+***Table 35\.** UC-MF03-05 Transmit Telemetry and Field Media – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Edge Device |
+| Secondary actors | – |
+| Trigger | The mission is In Progress and the Edge Device is powered on. |
+| Description | Sends telemetry through MQTT and captured images with metadata; buffers data when the link is lost. |
+| Preconditions | The Edge Device is registered to the assigned UAV. |
+| Postconditions | Telemetry and media are stored and linked to the mission and, when known, to a target. |
+| Priority | High |
+| Screens | SCR-17 (Evidence tab), SCR-18 |
+| Business rules | BR-047 – BR-050 |
+| Messages | MSG-305, MSG-306, MSG-307 |
+
+**Normal flow**
+
+1. The Edge Device publishes telemetry (position, altitude, speed, heading, battery) every second.  
+2. NS-04 checks the UAV identity, stores the sample and pushes it to SCR-18.  
+3. When the camera captures an image, the Edge Device sends the file with capture time, GPS position and checksum.  
+4. NS-05 validates and stores the file, links it to the nearest target and shows it on the *Evidence* tab with MSG-306.
+
+**Alternative flows**
+
+* A1 – Link lost: the Edge Device keeps the data locally and resends it when the link returns; SCR-17 shows MSG-305 until synchronization ends; duplicates are ignored (BR-050).
+
+**Exceptions**
+
+* E1 – Telemetry from a UAV not assigned to an In Progress mission: rejected and logged (BR-047).  
+* E2 – Unsupported file type or size: MSG-307.
+
+#### ***3.5.6 UC-MF03-06 Monitor Field Execution***
+
+***Table 36\.** UC-MF03-06 Monitor Field Execution – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | Map Service |
+| Trigger | The manager opens SCR-18 from the dashboard or SCR-13. |
+| Description | Shows live UAV position, telemetry, target progress and alerts. |
+| Preconditions | The mission is In Progress or Suspended. |
+| Postconditions | None (read-only). |
+| Priority | High |
+| Screens | SCR-18 |
+| Business rules | BR-001 |
+| Messages | MSG-007 |
+
+**Normal flow**
+
+1. The system loads the base map, the route and the targets.  
+2. The system shows the latest UAV position and telemetry, updated through SignalR.  
+3. The system shows target progress and the list of open alerts; the manager can open an alert (UC-MF03-08).
+
+**Alternative flows**
+
+* A1 – No telemetry for more than the configured time (default 10 seconds): the system marks the link as *Lost* and shows the last known position.
+
+**Exceptions**
+
+* E1 – Map Service unavailable: telemetry and progress are shown as a table with MSG-007.
+
+#### ***3.5.7 UC-MF03-07 Report Critical Anomaly***
+
+***Table 37\.** UC-MF03-07 Report Critical Anomaly – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Edge Device, Inspector |
+| Secondary actors | Notification Provider |
+| Trigger | The edge YOLO11s model detects a suspected critical defect, or the Inspector selects Report Anomaly on SCR-17. |
+| Description | Creates a critical alert with image, time, location and confidence, and notifies the manager. |
+| Preconditions | The mission is In Progress. |
+| Postconditions | An Open critical alert is stored; the manager is notified in-app and by email. |
+| Priority | High |
+| Screens | SCR-17 (Alerts tab), SCR-19 |
+| Business rules | BR-051, BR-052 |
+| Messages | MSG-001, MSG-308, MSG-013 |
+
+**Normal flow**
+
+1. The Edge Device sends an anomaly event with image, class, confidence, time and GPS position.  
+2. NS-06 checks that the confidence is at or above the edge threshold (BR-051) and creates the alert with source *Edge*.  
+3. The system stores the alert first, then publishes the notification event (BR-052) and shows the alert on SCR-17 and SCR-18 with MSG-308.
+
+**Alternative flows**
+
+* A1 – Manual report: the Inspector selects *Report Anomaly*, chooses type and severity, attaches an image or selects a received image and enters a description; the alert is created with source *Manual*.  
+* A2 – Confidence below the edge threshold: no alert is created; the event is stored with the media for Server/Deep analysis in MF04.
+
+**Exceptions**
+
+* E1 – Required field missing in a manual report: MSG-001.  
+* E2 – Email delivery fails: MSG-013; the in-app alert remains.
+
+#### ***3.5.8 UC-MF03-08 Handle Critical Alert***
+
+***Table 38\.** UC-MF03-08 Handle Critical Alert – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | – |
+| Trigger | The manager opens an alert from SCR-03, SCR-13 or SCR-18. |
+| Description | Acknowledges and resolves a critical alert with a disposition. |
+| Preconditions | The alert is Open or Acknowledged. |
+| Postconditions | The alert is Acknowledged or Resolved; the action is audited. |
+| Priority | High |
+| Screens | SCR-19 |
+| Business rules | BR-053 |
+| Messages | MSG-001, MSG-004 |
+
+**Normal flow**
+
+1. The system shows the alert image, source, class, confidence, time and location on the map.  
+2. The manager selects *Acknowledge*; the system records actor and time.  
+3. After action in the field, the manager selects *Resolve*, chooses a disposition (False alarm, Continue mission, Suspend mission, Abort mission) and enters a note.  
+4. The system saves the disposition; for *Suspend mission* or *Abort mission* it starts UC-MF02-09.
+
+**Exceptions**
+
+* E1 – Disposition or note missing: MSG-001.
+
+#### ***3.5.9 UC-MF03-09 Finish Field Inspection***
+
+***Table 39\.** UC-MF03-09 Finish Field Inspection – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Inspector |
+| Secondary actors | – |
+| Trigger | The pilot-in-command selects Finish Field Inspection on SCR-17. |
+| Description | Confirms that the field work is complete and closes the field session. |
+| Preconditions | The mission is In Progress. |
+| Postconditions | The mission is Field Completed; telemetry ingestion stops; flight logs are stored; MF04 can start. |
+| Priority | High |
+| Screens | SCR-17 |
+| Business rules | BR-008, BR-055 |
+| Messages | MSG-309, MSG-310 |
+
+**Normal flow**
+
+1. The system checks the finish conditions of BR-055 and shows each one.  
+2. The Inspector uploads the flight log exported from the flight controller and confirms.  
+3. The system stores the finish time and flight log, sets the mission to Field Completed and shows MSG-310.
+
+**Alternative flows**
+
+* A1 – Unresolved critical alert: the manager may record an override with a reason on SCR-17 (BR-008); then the Inspector can finish.
+
+**Exceptions**
+
+* E1 – A target is still Pending, or media is not yet synchronized: MSG-309 lists the blocking items.
+
+### **3.6 MF04 – AI Inspection and Defect Detection**
+
+MF04 analyses the inspection media with the Server/Deep model and turns accepted detections into defect records. The analysis job and detection states are listed in Table 62 and Table 63\. The AI model training and evaluation (Report 2, MF04-04 to MF04-07) are described in Part III; this section only specifies how the system uses the deployed model.
+
+#### ***3.6.1 UC-MF04-01 Submit Inspection Data***
+
+***Table 40\.** UC-MF04-01 Submit Inspection Data – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Inspector |
+| Secondary actors | – |
+| Trigger | The Inspector selects Submit for Analysis on SCR-20 after field completion. |
+| Description | Uploads media that was not synchronized automatically, validates all media of the mission and requests analysis. |
+| Preconditions | The mission is Field Completed; the Inspector is assigned to it. |
+| Postconditions | Valid media is stored; one analysis job per valid media file is created through UC-MF04-02. |
+| Priority | High |
+| Screens | SCR-20 |
+| Business rules | BR-048, BR-056 – BR-058 |
+| Messages | MSG-307, MSG-401, MSG-409 |
+
+**Normal flow**
+
+1. The system lists the media already received from the Edge Device (UC-MF03-05).  
+2. The Inspector adds any missing files from the UAV storage card and links each one to a target.  
+3. The Inspector selects *Submit for Analysis*.  
+4. The system validates each file (BR-057) and checks duplicates by checksum (BR-058).  
+5. For each valid file, the system runs UC-MF04-02 and shows MSG-401.
+
+**Exceptions**
+
+* E1 – Invalid file: the file is rejected with MSG-307 and the reason; other files continue.  
+* E2 – Duplicate file: the file is skipped with MSG-409.
+
+#### ***3.6.2 UC-MF04-02 Process AI Analysis***
+
+***Table 41\.** UC-MF04-02 Process AI Analysis – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | – (included by UC-MF04-01 and UC-MF04-06) |
+| Secondary actors | Cloud AI Service |
+| Trigger | A valid media file is submitted or a reanalysis is requested. |
+| Description | Sends the media to the Server/Deep model and stores the returned detections. |
+| Preconditions | The media is stored and valid. |
+| Postconditions | The job is Completed, Review Required or Failed; detections are stored with their review status. |
+| Priority | High |
+| Screens | – (background: NS-07, NS-08) |
+| Business rules | BR-059 – BR-064 |
+| Messages | MSG-401 – MSG-404 |
+
+**Normal flow**
+
+1. The system creates an analysis job with status Queued and a correlation ID (BR-059).  
+2. NS-07 publishes the request with the media reference and model mode; the job becomes Processing.  
+3. The Cloud AI Service runs the model and returns, for each detection, the model label, bounding box and confidence.  
+4. NS-08 authenticates the callback (BR-064), maps each label to a defect category (BR-060) and validates confidence and bounding box (BR-061).  
+5. NS-08 applies the confidence threshold (BR-062): detections at or above it are Auto-Accepted and create defect records; others are Pending Review.  
+6. The job becomes Completed if no detection needs review, otherwise Review Required (MSG-403). When every job of the mission is Completed, the mission becomes Completed.
+
+**Alternative flows**
+
+* A1 – No detection returned: the job is Completed with zero detections.
+
+**Exceptions**
+
+* E1 – Transient error or timeout: the job is retried up to the limit, then set to Failed (MSG-404) (BR-063).  
+* E2 – Unknown label or invalid geometry: the detection is stored as Pending Review with the problem noted (MSG-405).  
+* E3 – Callback without valid authentication or for an unknown job: rejected and logged.
+
+#### ***3.6.3 UC-MF04-03 Monitor AI Processing Status***
+
+***Table 42\.** UC-MF04-03 Monitor AI Processing Status – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Inspector, Analyst |
+| Secondary actors | – |
+| Trigger | The user opens SCR-20. |
+| Description | Shows the status of each analysis job of a mission. |
+| Preconditions | At least one job exists. Inspectors see only their missions. |
+| Postconditions | None (read-only). |
+| Priority | Medium |
+| Screens | SCR-20 |
+| Business rules | BR-059, BR-063 |
+| Messages | MSG-401 – MSG-404 |
+
+**Normal flow**
+
+1. The system lists the jobs with media name, version, status, attempts and last update, refreshed through SignalR.  
+2. The user selects a Completed or Review Required job to open SCR-21.
+
+**Alternative flows**
+
+* A1 – Failed job: the system shows the error summary and the *Request Reanalysis* action (UC-MF04-06) to Analysts.
+
+#### ***3.6.4 UC-MF04-04 View AI Analysis Results***
+
+***Table 43\.** UC-MF04-04 View AI Analysis Results – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager, Inspector, Analyst |
+| Secondary actors | – |
+| Trigger | The user opens SCR-21 from SCR-13, SCR-20, SCR-22 or SCR-24. |
+| Description | Shows the image with bounding boxes, category, confidence, severity and review status. |
+| Preconditions | The job is Completed or Review Required. |
+| Postconditions | None (read-only). |
+| Priority | High |
+| Screens | SCR-21 |
+| Business rules | BR-001, BR-065 |
+| Messages | MSG-003 |
+
+**Normal flow**
+
+1. The system shows the image and draws a bounding box for each detection, coloured by review status.  
+2. The user selects a box; the system shows category, confidence, severity, original model label and review history.  
+3. The user can switch between analysis versions of the same media.
+
+**Exceptions**
+
+* E1 – No detection: MSG-003 (*No defect detected*).
+
+#### ***3.6.5 UC-MF04-05 Review AI Detections***
+
+***Table 44\.** UC-MF04-05 Review AI Detections – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Analyst |
+| Secondary actors | – |
+| Trigger | The Analyst opens SCR-22 or selects Review on SCR-21. |
+| Description | Confirms, rejects or corrects detections; confirmed detections become defect records with severity. |
+| Preconditions | The detection is Pending Review, or already reviewed and being re-reviewed. |
+| Postconditions | The detection is Confirmed, Rejected or Corrected; defect records and severity are updated; Critical defects notify the manager. |
+| Priority | High |
+| Screens | SCR-22, SCR-21 |
+| Business rules | BR-065, BR-066, BR-068 |
+| Messages | MSG-001, MSG-406 |
+
+**Normal flow**
+
+1. The system lists Pending Review detections, lowest confidence first.  
+2. The Analyst opens a detection and selects *Confirm*.  
+3. The system stores the review, creates or updates the defect record with the category’s default severity (BR-068) and shows MSG-406.  
+4. When no detection of the job is Pending Review, the job becomes Completed; when all jobs of the mission are Completed, the mission becomes Completed.
+
+**Alternative flows**
+
+* A1 – Reject: the Analyst enters a reason; no defect record is created and an Auto-Accepted defect is closed as Rejected.  
+* A2 – Correct: the Analyst changes the category or redraws the box and enters a reason; the corrected values are used and the original AI output is kept (BR-065).  
+* A3 – Critical severity: the system notifies the Mission Manager.
+
+**Exceptions**
+
+* E1 – Reason missing for reject or correct: MSG-001.
+
+#### ***3.6.6 UC-MF04-06 Request Media Reanalysis***
+
+***Table 45\.** UC-MF04-06 Request Media Reanalysis – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Analyst, Mission Manager |
+| Secondary actors | – |
+| Trigger | The user selects Request Reanalysis on SCR-21 or for a Failed job on SCR-20. |
+| Description | Creates a new analysis version for existing media. |
+| Preconditions | The media exists and is valid. |
+| Postconditions | A new job version is created through UC-MF04-02; earlier versions are kept. |
+| Priority | Medium |
+| Screens | SCR-23 |
+| Business rules | BR-067 |
+| Messages | MSG-407, MSG-408 |
+
+**Normal flow**
+
+1. The user enters the reason and selects *Submit*.  
+2. The system checks that no identical request is active (BR-067).  
+3. The system runs UC-MF04-02 with a new version number and shows MSG-401.
+
+**Exceptions**
+
+* E1 – Reason missing: MSG-407.  
+* E2 – Identical request already active: MSG-408.
+
+#### ***3.6.7 UC-MF04-07 View Defect Report and Export***
+
+***Table 46\.** UC-MF04-07 View Defect Report and Export – use case specification.*
+
+| Item | Detail |
+| :---- | :---- |
+| Primary actor | Mission Manager |
+| Secondary actors | – |
+| Trigger | The manager opens SCR-24. |
+| Description | Shows defect statistics and lists, and exports them. |
+| Preconditions | The manager is logged in. |
+| Postconditions | An export file is produced when requested. |
+| Priority | Medium |
+| Screens | SCR-24 |
+| Business rules | BR-001, BR-069 |
+| Messages | MSG-002, MSG-003, MSG-410 |
+
+**Normal flow**
+
+1. The manager sets filters: region, line, mission, category, severity, review status and date range.  
+2. The system shows totals by category and severity, a defect list and the defect locations on the map.  
+3. The manager selects *Export* and a format (Excel or PDF); the system generates the file with the same filters and shows MSG-410.
+
+**Exceptions**
+
+* E1 – Invalid date range: MSG-002. E2 – No defect: MSG-003.
 
 ## ***4\. Non-Functional Requirements***
 
@@ -1036,7 +1532,7 @@ Table 47 lists the software interfaces between UAV-PMS and the actors in Figure 
 | INT-03 | Cache | Redis | Caches reference data and SignalR connections; a cache failure must not change stored data. |
 | INT-04 | Database | PostgreSQL with PostGIS | Stores all business and geospatial data; schema managed by EF Core migrations. |
 
-***Table 48**. **Hardware** interfaces of the team-built UAV.*
+***Table 48**. Hardware interfaces of the team-built UAV.*
 
 | ID | Component | Connection to UAV-PMS | Requirement |
 | :---- | :---- | :---- | :---- |
@@ -1407,695 +1903,31 @@ Table 65 links each main flow to its use cases, screens, non-screen functions an
 | MF03 | UC-MF03-01 – UC-MF03-09 | SCR-17 – SCR-19 | NS-04 – NS-06 | FieldSession, TelemetryRecord, MediaEvidence, CriticalAlert |
 | MF04 | UC-MF04-01 – UC-MF04-07 | SCR-20 – SCR-24 | NS-07, NS-08 | AnalysisJob, Detection, DetectionReview, DefectRecord, DefectCategory |
 
-# 
+# **III. Literature Review**
 
-# **III. Literature Review** {#iii.-literature-review}
+## **1\. Introduction to the Literature Review**
 
-## **1\. Introduction** {#1.-introduction}
+## **2\. Conceptual Foundations and Domain Challenges**
 
-Inspection of electrical transmission infrastructure is essential for maintaining power-system reliability, identifying deteriorated components at an early stage, and reducing the risk of unexpected failures. Conventional inspection methods commonly rely on ground patrols, manual visual observation, or direct physical access to transmission-line assets. Although these approaches remain widely used, they are often labor-intensive, time-consuming, and potentially hazardous when infrastructure is located in difficult or high-risk environments. Unmanned Aerial Vehicles (UAVs) have therefore become increasingly important for electrical-infrastructure inspection because they can collect high-resolution visual data from towers, conductors, insulators, and surrounding environments while reducing the need for direct human exposure to hazardous locations.    
+### **2.1 Conceptual Foundations & Core Theories**
 
-The increasing availability of UAV imagery has also accelerated the application of computer vision and deep-learning techniques to automated infrastructure monitoring. Previous research has investigated convolutional neural networks, one-stage detectors from the YOLO family, transformer-based detectors such as RT-DETR, and multimodal inspection systems for tasks including asset localization, defect detection, foreign-object identification, and power-line monitoring. These approaches demonstrate the potential of artificial intelligence to support faster and more consistent inspection processes, particularly when large volumes of aerial imagery must be analyzed.    
+### **2.2 Problem Space & Domain Challenges**
 
-However, UAV-based electrical-infrastructure inspection remains a challenging visual-recognition problem. Important defects may occupy only a small region of a high-resolution image, while the apparent size and orientation of components can vary significantly depending on flight altitude, camera angle, and viewing distance. In addition, vegetation, buildings, shadows, occlusion, motion blur, and changing illumination may interfere with object detection. Certain defect classes are also visually ambiguous. For example, an apparently discontinuous conductor may represent actual physical damage, but it may also result from temporary occlusion or an unfavorable viewpoint.
+## **3\. Existing Research Work**
 
-Another important issue is the reliability of the evaluation process itself. Model performance can be influenced by class imbalance, annotation quality, inconsistent bounding-box definitions, and differences in datasets, image resolution, or evaluation protocols. Consequently, comparing only headline accuracy values from different studies may lead to misleading conclusions about the relative effectiveness of detection architectures.
+### **3.1 Technology Landscape Review**
 
-Accordingly, this literature review examines the main technical foundations and previous research relevant to UAV-based electrical-infrastructure inspection. Particular attention is given to object-detection architecture families, multi-scale and frequency-domain feature representation, structural context, temporal evidence, annotation quality, and evaluation methodology. The review also considers the trade-off between detection accuracy and computational efficiency, which is particularly important when models are intended for both embedded UAV hardware and server-side analysis.
+### **3.2 Strategies or Approaches Applied in Previous Research**
 
-The purpose of this review is therefore not only to identify high-performing detection models, but also to establish a foundation for a controlled comparative evaluation. Representative lightweight YOLO models are considered for edge-oriented deployment, while RT-DETR-R50 serves as the principal transformer-based reference for server-side experimentation. Frequency-domain enhancement, structural-context reasoning, and multi-frame verification are treated as targeted experimental extensions whose value must be demonstrated empirically rather than assumed in advance. This framing is consistent with the benchmark-oriented scope of the study.
+### **3.3 Evaluation Metrics from Previous Work**
 
-## **2\. Conceptual Foundations and Domain Challenges** {#2.-conceptual-foundations-and-domain-challenges}
+## **4\. Fit–Gap Analysis**
 
-### **2.1 Conceptual Foundations and Core Theories** {#2.1-conceptual-foundations-and-core-theories}
-
-#### ***2.1.1 UAV-Based Electrical-Infrastructure Inspection*** {#2.1.1-uav-based-electrical-infrastructure-inspection}
-
-Unmanned Aerial Vehicles (UAVs) have become an important platform for electrical-infrastructure inspection because they can collect visual data from locations that are difficult, expensive, or unsafe for human inspectors to access directly. In transmission-line environments, UAVs can be equipped with RGB cameras, thermal sensors, LiDAR, positioning systems, and communication modules depending on the inspection objective.
-
-Among these sensing modalities, RGB imagery is particularly suitable for visually observable defects and abnormalities, including damaged insulators, foreign objects, broken components, corrosion, and vegetation-related issues. Thermal imagery is more appropriate for detecting abnormal heat patterns, whereas LiDAR provides geometric information such as conductor sag, clearance, and three-dimensional structure.
-
-The present study focuses primarily on RGB-based object detection from UAV imagery and video. Autonomous flight control, three-dimensional reconstruction, and thermal fault diagnosis are outside the core scope of the research. Limiting the study to a common visual input modality allows different detection architectures to be evaluated under a more consistent experimental setting.
-
-#### ***2.1.2 Object Detection Architecture Families*** {#2.1.2-object-detection-architecture-families}
-
-Modern object-detection methods can be broadly grouped into several architectural families according to how candidate objects are represented, localized, and classified.
-
-Two-stage detectors, such as Faster R-CNN, first generate candidate regions and then classify and refine those regions in a separate stage. This design has historically provided strong localization performance, but the additional processing stages generally increase computational cost and inference latency.
-
-One-stage detectors, represented by the YOLO family, perform object localization and classification within a unified detection pipeline. Their relatively high inference speed, compact model variants, and efficient feature extraction make them attractive for real-time and edge-oriented applications. These characteristics are especially relevant to UAV inspection, where inference may need to operate under limited computing and power resources.
-
-Transformer-based detectors adopt a different formulation. DETR and its derivatives use attention mechanisms and object queries to perform set-based prediction. RT-DETR extends this approach toward real-time detection, providing a transformer-based alternative to conventional one-stage detectors while retaining competitive computational efficiency. RT-DETR-based models have also been investigated for transmission-line and insulator-defect detection.
-
-In this study, these architecture families are used primarily as representative benchmarks rather than as starting points for designing a completely new detector. Lightweight YOLO models represent the practical edge-deployment family, while RT-DETR-R50 is used as the principal transformer-based reference for controlled experiments.
-
-#### ***2.1.3 Multi-Scale Feature Representation*** {#2.1.3-multi-scale-feature-representation}
-
-UAV imagery often contains objects with substantial variation in apparent size. Large electrical structures may occupy a significant portion of an image, whereas defects such as broken strands, damaged insulator elements, or small foreign objects may occupy only a limited number of pixels.    
-
-This scale variation creates a fundamental challenge for object detection. High-resolution feature maps preserve local spatial details that are important for detecting small objects, while deeper and lower-resolution feature maps contain stronger semantic information. Effective detectors therefore commonly combine information from multiple feature levels.
-
-Previous detection approaches have addressed this problem using strategies such as feature-pyramid networks, additional high-resolution detection layers, adaptive feature fusion, multi-scale neck structures, attention mechanisms, and higher input resolutions. 
-
-For this study, multi-scale representation is important not only as a model-design consideration but also as an evaluation factor. A detector may achieve strong overall performance while continuing to perform poorly on small or fine-grained defect categories. Consequently, per-class and object-scale analysis is required in addition to global mAP.
-
-#### ***2.1.4 Frequency-Domain Feature Representation*** {#2.1.4-frequency-domain-feature-representation}
-
-Most object detectors operate primarily in the spatial domain, where visual information is represented directly through image pixels and learned spatial feature maps. However, recent studies have investigated frequency-domain information as a complementary representation for object detection.
-
-Frequency-domain representations can emphasize characteristics such as edges, repetitive patterns, high-frequency details, and texture transitions that may be difficult to preserve through conventional spatial feature extraction.
-
-Recent works such as FES-DETR and DFIR-DETR have investigated the use of frequency-domain enhancement for UAV and small-object detection. These studies suggest that frequency information may provide complementary cues for fine-grained visual patterns and small targets.    
-
-In the present study, frequency-domain enhancement is treated as a targeted modification to the RT-DETR baseline rather than as an assumed improvement. Its contribution must therefore be evaluated experimentally against the unchanged baseline under the same dataset and evaluation protocol.
-
-The corresponding research question can be formulated as:
-
-*Does frequency-domain feature enhancement provide measurable improvements for difficult or fine-grained electrical-infrastructure defect categories compared with the unchanged RT-DETR baseline?*
-
-This formulation keeps the experiment focused on measurable improvement rather than architectural complexity itself.
-
-#### ***2.1.5 Structural Context and Component Relationships*** {#2.1.5-structural-context-and-component-relationships}
-
-Electrical infrastructure has an important property that distinguishes it from many generic object-detection environments: its components are not positioned independently.
-
-Conductors generally follow continuous paths, insulators occur in specific supporting configurations, and electrical components have relatively constrained spatial relationships with towers, cross-arms, fittings, and surrounding objects.    
-
-These relationships provide information that may not be available from local visual appearance alone. Relevant structural relationships may include continuity, connectivity, support, expected component presence, relative geometry, and clearance.
-
-For example, an apparent conductor discontinuity may be more suspicious if it violates an otherwise continuous conductor path. Similarly, the interpretation of a foreign object may depend not only on its appearance but also on its position relative to electrical components.
-
-In this study, structural context is therefore considered as an additional source of evidence rather than as a replacement for conventional visual detection.
-
-The proposed structural-context experiment is intended to evaluate whether learnable relationships between detected components can improve performance beyond appearance-based detection alone. Structural reasoning is consequently treated as a controlled extension of the RT-DETR baseline rather than as the basis of an entirely new architecture.    
-
-This distinction is important because a negative result is still meaningful. If structural context improves only certain defect classes, or does not produce a statistically meaningful improvement, the experiment can still clarify where contextual reasoning is useful and where conventional visual features are sufficient.
-
-#### ***2.1.6 Temporal and Multi-Frame Evidence*** {#2.1.6-temporal-and-multi-frame-evidence}
-
-UAV inspections frequently generate video sequences or multiple neighboring images rather than isolated single frames. As a result, the same electrical component may appear in several consecutive observations from slightly different viewpoints.
-
-This temporal redundancy can provide additional evidence when a single frame is visually ambiguous. For example, a conductor may appear discontinuous in one frame because of vegetation, motion blur, or viewpoint occlusion. If the same conductor appears continuous in neighboring frames, the apparent defect may be more likely to represent a temporary visual artifact than a persistent structural failure.    
-
-Previous work in related video-analysis domains has demonstrated that structural consistency and persistent object-state information can improve interpretation across frames. SSTM applies structural consistency and spatiotemporal matching to satellite-video detection, while StateTrace maintains object-level state and visibility information over extended video sequences.    
-
-These methods do not directly solve electrical-infrastructure defect detection. Nevertheless, they support the broader principle that temporal observations can provide evidence unavailable from a single image.
-
-Accordingly, the present study treats multi-frame information as a verification mechanism rather than as a complete video-understanding architecture. Its purpose is to determine whether neighboring frames can help distinguish persistent defects from temporary visual ambiguity while keeping the primary benchmark focused on object detection.
-
-### **2.2 Problem Space and Domain Challenges** {#2.2-problem-space-and-domain-challenges}
-
-#### ***2.2.1 Small and Fine-Grained Defects*** {#2.2.1-small-and-fine-grained-defects}
-
-A major challenge in UAV-based electrical-infrastructure inspection is that many important defects occupy only a small portion of a high-resolution image. Examples include broken conductor strands, localized insulator damage, small foreign objects, missing fittings, and other fine-grained abnormalities.
-
-When an object is represented by only a limited number of pixels, the detector has less visual information available for both classification and localization. Small defects can also disappear after repeated downsampling inside a deep neural network, particularly when the background contains strong textures such as vegetation, cables, or structural components.
-
-This challenge is one reason why previous studies have explored high-resolution detection layers, multi-scale feature fusion, region-focused processing, and higher input resolutions. However, these strategies usually increase computational cost. Therefore, improving small-object sensitivity must be balanced against inference efficiency, especially for edge deployment.
-
-#### ***2.2.2 Viewpoint and Scale Variation*** {#2.2.2-viewpoint-and-scale-variation}
-
-UAV imagery is captured under highly variable geometric conditions. The same electrical component may be observed from different altitudes, camera distances, angles, and flight trajectories. As a result, its apparent size, shape, orientation, and visible surface may change considerably across images.
-
-This variation can make detection difficult even when the physical object itself does not change. For example, a defect that is clearly visible from a frontal view may become partially hidden or visually compressed when viewed from an oblique angle. Long and thin structures such as conductors are particularly sensitive to perspective distortion.
-
-Viewpoint variation also complicates benchmarking. A model may perform well on images captured under a narrow set of conditions but generalize poorly when exposed to different flight paths or camera distances. Therefore, model performance should be interpreted in relation to the diversity of the evaluation data rather than as a purely architecture-dependent property.
-
-#### ***2.2.3 Complex Backgrounds and Environmental Interference*** {#2.2.3-complex-backgrounds-and-environmental-interference}
-
-Electrical infrastructure is often surrounded by visually complex environments. UAV imagery may contain sky, trees, vegetation, roads, buildings, mountains, nearby towers, and other electrical structures within the same scene.
-
-These backgrounds can introduce patterns that resemble target objects or partially obscure them. Vegetation is especially challenging because it can simultaneously act as background clutter, an occluding object, and an inspection concern when it approaches electrical assets.    
-
-Environmental conditions further increase visual variability. Changes in brightness, shadow, haze, backlighting, motion blur, compression artifacts, and defocus can alter the appearance of the same component without any physical change in the infrastructure itself.
-
-Consequently, a reliable inspection model must distinguish defect-related visual evidence from environmental variation. This motivates the use of representative data augmentation and robustness testing, but also highlights the need to evaluate models on realistic aerial imagery rather than on visually clean examples alone.
-
-#### ***2.2.4 Occlusion and Visual Ambiguity*** {#2.2.4-occlusion-and-visual-ambiguity}
-
-Occlusion is a particularly important challenge in electrical-infrastructure inspection because many components are thin, elongated, or partially hidden by surrounding objects.
-
-A conductor may temporarily disappear behind vegetation, another component, or a structural element. In a single frame, this missing visual segment may resemble a broken conductor even though the physical line remains intact. Motion blur, compression, and unfavorable viewpoints can produce similar visual ambiguity.
-
-This creates an important limitation for purely appearance-based single-frame detection. The model must infer physical condition from incomplete visual evidence, even though multiple physical states may produce similar image patterns.
-
-This challenge does not imply that conventional object detectors are unsuitable. Instead, it motivates more careful error analysis and provides a rationale for evaluating additional contextual or multi-frame evidence when single-frame predictions are uncertain.
-
-#### ***2.2.5 Intra-Class Variation and Inter-Class Similarity*** {#2.2.5-intra-class-variation-and-inter-class-similarity}
-
-Objects belonging to the same electrical-infrastructure category may have substantially different visual appearances.
-
-Insulators, for example, can vary in material, geometry, number of discs, installation configuration, surface condition, and viewing direction. Defects within the same category may also appear differently depending on their severity and location.
-
-This phenomenon is known as intra-class variation. A detector must therefore learn a category that may contain many visually different examples.
-
-At the same time, different categories may share similar visual features. This inter-class similarity can make it difficult to distinguish a defect from a normal structure or to separate visually related defect types.
-
-The combination of high intra-class variation and inter-class similarity increases the risk of class confusion and makes per-class evaluation particularly important.
-
-#### ***2.2.6 Dataset Imbalance and Taxonomy Constraints*** {#2.2.6-dataset-imbalance-and-taxonomy-constraints}
-
-Electrical defects do not occur with equal frequency in real inspection data. Common conditions are easier to collect, while severe or rare failures may appear only occasionally. This naturally produces imbalanced datasets in which some classes contain substantially more training examples than others.    
-
-Class imbalance can cause a model to perform well on dominant categories while remaining weak on rare but operationally important defects. Aggregate mAP may therefore hide poor performance on individual classes.
-
-A second issue concerns taxonomy consistency. For controlled benchmarking, the meaning of each class must remain stable across training and evaluation. The current project uses the following six-class taxonomy:  
-1\. insulator  
-2\. insulator\_broken  
-3\. insulator\_flashover  
-4\. bird\_nest  
-5\. foreign\_object  
-6\. broken\_strand
-
-Maintaining a fixed taxonomy is necessary because changing class definitions between experiments would make direct comparison unreliable. A measured improvement could otherwise reflect a simpler or altered labeling scheme rather than a genuinely better detector.    
-
-For this reason, class definitions, dataset versions, and train-validation-test splits should be documented and kept consistent during controlled comparisons.
-
-#### ***2.2.7 Annotation Quality and Bounding-Box Semantics*** {#2.2.7-annotation-quality-and-bounding-box-semantics}
-
-Annotation quality is another major factor affecting both model training and evaluation.
-
-In object detection, disagreement can arise not only from incorrect class labels or missing objects, but also from different interpretations of what a bounding box should represent. For the same defect, an annotation may enclose only the damaged region, the complete affected component, or the component together with surrounding contextual structure.    
-
-This distinction becomes especially important for elongated or structurally ambiguous categories such as conductor damage. Two bounding boxes may refer to the same physical defect while having substantially different spatial extents.
-
-Evaluation metrics based on Intersection over Union are sensitive to these differences. A detector may still obtain strong mAP@50 when its predicted box roughly overlaps the target, while stricter thresholds used in mAP@50:95 penalize inaccurate box extent much more heavily.    
-
-Internal project benchmarks illustrate this issue. The V6.2E YOLO11n@640 baseline achieved an mAP@50 of 0.768 and an mAP@50:95 of 0.413, while YOLO11m@1024 achieved 0.815 and 0.457 respectively. Although the larger model and higher input resolution improved both metrics, the difference between loose and strict localization remained approximately 0.36.    
-
-Further analysis indicated that object size alone did not fully explain this gap, suggesting that class-specific annotation semantics and bounding-box extent consistency also require attention.    
-
-Therefore, evaluation in this study should not rely exclusively on a single aggregate mAP value. Per-class behavior, strict-IoU performance, annotation consistency, and qualitative error analysis are all necessary for distinguishing model limitations from dataset-quality limitations.
-
-## **3\. Existing Research Work** {#3.-existing-research-work}
-
-Research on UAV-based electrical-infrastructure inspection has developed across several major technological directions, ranging from conventional convolutional detectors to lightweight real-time models, transformer-based architectures, frequency-enhanced methods, and multimodal inspection systems.
-
-### **3.1 Technology Landscape Review** {#3.1-technology-landscape-review}
-
-**3.1.1 Conventional CNN-Based Detection**
-
-Earlier studies established the feasibility of using convolutional neural networks for visual inspection of electrical infrastructure. CNN-based approaches demonstrated that defects in power-line components could be detected directly from aerial imagery rather than relying entirely on manually designed image-processing rules.
-
-For example, Tao et al. investigated power-line insulator defect detection from aerial images using convolutional neural networks. This line of work provided an important foundation for later object-detection systems by demonstrating that visual characteristics of damaged electrical components could be learned automatically from labeled data.    
-
-However, conventional CNN-based architectures may become less effective when scenes contain large variations in object scale, complex backgrounds, or long-range relationships between components. These limitations motivated later work involving stronger multi-scale feature representation, attention mechanisms, and transformer-based detection.
-
-**3.1.2 YOLO-Based Real-Time Detection**
-
-The YOLO family has become widely adopted in UAV inspection because of its high inference speed and availability of compact model variants.
-
-Previous transmission-line studies have adapted YOLO architectures for foreign-object detection and insulator-defect recognition. Gao et al. proposed a YOLOv11-based method for UAV foreign-object detection on power transmission lines. Their YOLOv11-SDI configuration focuses on small-object representation and improved feature fusion and reports strong performance on an expanded FOTL\_Drone dataset.    
-
-Wang et al. proposed SCI-YOLO11 for transmission-line insulator defect detection, further demonstrating continued interest in adapting YOLO-family models to electrical-inspection tasks.    
-
-The relevance of these works to the present study is primarily practical. Lightweight YOLO variants provide strong candidates for edge-oriented deployment because they offer a favorable trade-off between computational cost and detection performance.
-
-Accordingly, YOLO models are used in the present study as practical baselines and edge-deployment references rather than as the main subject of architectural innovation.
-
-**3.1.3 Transformer-Based Detection**
-
-Transformer-based object detection has become another important research direction for electrical-infrastructure inspection.
-
-RT-DETR provides a real-time end-to-end transformer detector and serves as a representative architecture for this family. Unlike conventional dense prediction pipelines, RT-DETR uses object queries and attention-based feature interaction while remaining suitable for real-time applications.    
-
-Several studies have extended DETR-based models for transmission-line inspection.
-
-Zhang and Zhao proposed TL-DETR, which incorporates multi-scale feature enhancement, sparse attention, and feature recalibration for transmission-line defect detection. Their reported results show an mAP@50 of 86.0%, compared with 83.1% for their RT-DETR baseline.    
-
-Yao and Li also proposed an improved Detection Transformer for transmission-line insulator defects by incorporating window attention, an additional small-object detection layer, and improved feature aggregation.    
-
-These studies support the use of RT-DETR as a strong transformer-based benchmark for the present research.
-
-**3.1.4 Frequency-Enhanced Detection**
-
-Frequency-domain enhancement has recently emerged as a complementary strategy for improving visual representation in UAV and small-object detection.
-
-FES-DETR introduces frequency-domain enhancement into an efficient UAV object detector, while DFIR-DETR combines frequency-domain iterative refinement with dynamic feature aggregation for small-object detection.    
-
-These approaches suggest that spatial-domain features may benefit from complementary frequency information, particularly for fine edges, repetitive patterns, and small targets.
-
-For the present study, these works provide the motivation for evaluating frequency enhancement as a controlled modification to the RT-DETR baseline rather than assuming that the technique will automatically improve performance.
-
-**3.1.5 State-Space and Sequence-Oriented Approaches**
-
-Recent research has also explored architectures beyond conventional CNNs and transformers.
-
-For example, Mamba-enhanced Detection Transformer models incorporate selective state-space mechanisms for transmission-line defect detection. Such approaches reflect broader interest in sequence-oriented modeling and efficient long-range dependency representation.    
-
-Although these models are not used as the primary benchmark in this study, they demonstrate that the technology landscape continues to evolve and that no single architecture can be assumed to be universally optimal for all electrical-inspection tasks.
-
-**3.1.6 Multimodal Inspection Systems**
-
-Electrical-infrastructure inspection is not limited to RGB imagery.
-
-Previous reviews describe UAV systems that combine RGB cameras with thermal sensors, LiDAR, positioning systems, GIS, wireless communication, and edge-computing components.    
-
-Such multimodal systems can provide information that is unavailable from RGB imagery alone. Thermal sensing can reveal abnormal heat patterns, while LiDAR can provide geometric information such as conductor sag, spatial clearance, and three-dimensional structure.
-
-However, multimodal systems also require additional hardware, calibration, synchronization, storage, and deployment complexity.    
-
-Therefore, the present benchmark remains primarily focused on RGB-based object detection to ensure that model comparisons are performed under a consistent visual input modality.
-
-### **3.2 Strategies Applied in Previous Research** {#3.2-strategies-applied-in-previous-research}
-
-Previous studies have proposed a wide range of techniques for improving detection performance in UAV and electrical-infrastructure imagery.
-
-**3.2.1 Multi-Scale Feature Fusion**
-
-Multi-scale feature fusion is one of the most common strategies used in previous object-detection research.
-
-Feature maps at different network depths contain complementary information. High-resolution features preserve local spatial details, while deeper features provide stronger semantic representation.
-
-Combining these representations can improve detection performance when scenes contain both large infrastructure components and small defects.    
-
-This strategy is especially relevant to UAV inspection because object scale may vary substantially within the same image.
-
-**3.2.2 High-Resolution Detection Layers**
-
-Another common approach is to introduce additional high-resolution detection layers.
-
-Small objects may lose important visual details as feature maps are repeatedly downsampled. Additional high-resolution layers preserve more local information and can therefore improve sensitivity to small targets.    
-
-However, this improvement comes at the cost of increased memory consumption and computational complexity.
-
-For edge-oriented systems, this creates a direct trade-off between small-object sensitivity and deployment efficiency.
-
-**3.2.3 Attention Mechanisms**
-
-Attention mechanisms are widely used to improve feature selection.
-
-Common forms include spatial attention, channel attention, window attention, and cross-scale attention. These mechanisms are intended to emphasize informative features while reducing the influence of irrelevant background information.    
-
-Attention is particularly relevant to electrical-infrastructure imagery because target defects often occupy only a small region within visually complex scenes.
-
-**3.2.4 Adaptive Feature-Fusion Necks**
-
-YOLO-based research frequently modifies the neck portion of the detection architecture.
-
-Previous approaches include adaptive feature fusion, BiFPN-like structures, dynamic integration mechanisms, and local-global feature processing.    
-
-These techniques aim to improve the flow of information between multiple feature scales.
-
-However, increased architectural complexity does not guarantee improved performance. Therefore, such modifications should be evaluated experimentally rather than adopted solely because they are more sophisticated.
-
-**3.2.5 Frequency-Domain Enhancement**
-
-Frequency-domain enhancement represents another recent strategy.
-
-FES-DETR and DFIR-DETR suggest that frequency features can provide complementary information for UAV and small-object detection.    
-
-In the present study, frequency enhancement is therefore considered a candidate experiment whose value will be measured against the unchanged RT-DETR baseline.
-
-The relevant question is not whether the model becomes more complex, but whether the modification produces a measurable and reproducible improvement.
-
-**3.2.6 Region-of-Interest Hierarchical Detection**
-
-Hierarchical or region-of-interest pipelines provide another method for dealing with small defects.
-
-Rather than detecting a very small defect directly from a large UAV image, the system can first identify a relevant component or region and then analyze a higher-resolution crop.    
-
-A simplified pipeline can be represented as:
-
-UAV Image  
-   ↓  
-Component Detection  
-   ↓  
-Region-of-Interest Crop  
-   ↓  
-Defect Detection
-
-This approach increases the effective visual resolution of the target and reduces irrelevant background information.
-
-However, errors in the first detection stage can propagate through the pipeline. If the correct region is not identified initially, later defect detection cannot recover the missed object.    
-
-**3.2.7 Data Augmentation and Environmental Perturbation**
-
-Data augmentation is commonly used to improve robustness to UAV imaging conditions.
-
-Frequently used transformations include brightness and contrast variation, rotation, scaling, motion blur, defocus blur, haze, compression artifacts, shadow, and backlighting.    
-
-These transformations allow the training process to expose the detector to a wider range of visual conditions.
-
-However, augmented samples are not equivalent to new independent real-world observations. Therefore, augmentation should improve robustness rather than be interpreted as a substitute for representative data collection.    
-
-**3.2.8 Structural Consistency and Object-State Reasoning**
-
-Research in related video-analysis domains has explored structural consistency and persistent object states across frames.
-
-SSTM uses structural consistency and spatiotemporal matching, while StateTrace represents object trajectories, states, relationships, and visibility over time. These approaches provide conceptual evidence that information across frames can help distinguish persistent physical conditions from temporary visual ambiguity.
-
-Although these methods were not designed specifically for electrical-infrastructure inspection, they motivate the controlled use of structural and temporal evidence in the present study.
-
-**3.2.9 Controlled Model Adaptation**
-
-A common pattern across previous research is that domain-specific detectors are usually created by adapting an existing architecture rather than designing a completely new model from first principles.
-
-This observation aligns directly with the methodology of the present study.    
-
-The research therefore follows a benchmark-first process:
-
-1\. evaluate representative baseline models;  
-2\. identify class-specific or localization-specific weaknesses;  
-3\. introduce limited modifications related to those weaknesses;  
-4\. measure whether the modifications produce reproducible improvements;  
-5\. retain only changes supported by experimental evidence.
-
-This strategy reduces the risk of adding architectural components without demonstrating that they solve an observed problem.
-
-### **3.3 Evaluation Metrics Used in Previous Work** {#3.3-evaluation-metrics-used-in-previous-work}
-
-Reliable evaluation of object-detection systems requires more than a single accuracy value.
-
-Different metrics capture different aspects of model behavior, including classification quality, missed detections, localization accuracy, class-specific performance, and computational efficiency.
-
-**3.3.1 Precision, Recall, and F1-Score**
-
-Precision measures the proportion of predicted detections that correspond to correct detections.
-
-*$Precision=\frac{TP}{TP+FP}$*
-
-*where $TP$ represents true positives and $FP$ represents false positives.*
-
-High Precision indicates that the detector produces relatively few false alarms.
-
-Recall measures the proportion of ground-truth objects that are successfully detected.
-
-$Recall=\frac{TP}{TP+FN}$
-
-where $FN$ represents false negatives.
-
-High Recall indicates that relatively few true objects are missed.
-
-The F1-score combines Precision and Recall using their harmonic mean:
-
-$F1=2\times \frac{Precision\times Recall}{Precision+Recall}$
-
-This metric is useful when both false positives and false negatives are important.
-
-For infrastructure inspection, Recall may be particularly important when missing a genuine defect is more costly than sending an additional candidate for later verification.
-
-**3.3.2 IoU and Mean Average Precision**
-
-Intersection over Union (IoU) measures the spatial overlap between a predicted bounding box and its corresponding ground-truth box.
-
-$IoU=\frac{AreaofIntersection}{AreaofUnion}$
-
-A prediction is normally considered correct only if its IoU exceeds a specified threshold.
-
-mAP@50 evaluates Average Precision using an IoU threshold of 0.50.
-
-Because this threshold permits relatively loose spatial overlap, mAP@50 provides a useful measure of general detection capability.
-
-mAP@50:95 evaluates performance over multiple IoU thresholds from 0.50 to 0.95.
-
-This metric is considerably more sensitive to localization quality and bounding-box extent.
-
-For this reason, both metrics should be reported. A model may achieve high mAP@50 while still producing imprecise bounding boxes, particularly when annotation boundaries are inconsistent. The current project specifically identifies strict bounding-box localization as an important evaluation concern.    
-
-**3.3.3 Per-Class and Object-Scale Evaluation**
-
-Overall mAP can hide substantial differences between classes.
-
-A model may achieve strong aggregate performance while performing poorly on rare or difficult categories.
-
-Therefore, evaluation should report per-class Precision, Recall, AP@50, and AP@50:95 where possible.
-
-Object-scale analysis is also useful because UAV datasets often contain large differences in target size.
-
-Performance on small, medium, and large objects can reveal whether a model improvement benefits the intended target categories or merely improves already-easy cases.
-
-**3.3.4 Error Categorization**
-
-Quantitative metrics do not explain why a detector fails.
-
-Error analysis can distinguish between:
-
-\- missed detections;  
-\- incorrect class predictions;  
-\- duplicate detections;  
-\- inaccurate bounding-box extent;  
-\- background false positives;  
-\- occlusion-related errors;  
-\- failures caused by blur or viewpoint variation.
-
-This type of analysis is important before modifying a model because different errors require different solutions.
-
-For example, increasing model capacity may help recover missed detections but may not correct inconsistent bounding-box semantics.    
-
-**3.3.5 Edge-Deployment Metrics**
-
-When a detector is intended for embedded deployment, model quality must be evaluated together with computational cost.
-
-Relevant metrics include:
-
-\- model parameters;  
-\- model size;  
-\- FLOPs;  
-\- preprocessing time;  
-\- inference latency;  
-\- post-processing latency;  
-\- end-to-end latency;  
-\- RAM utilization;  
-\- CPU or GPU utilization;  
-\- FPS;  
-\- device temperature;  
-\- power consumption.
-
-These metrics are particularly important for Raspberry Pi deployment because a model that performs well on a desktop GPU may not satisfy memory, thermal, or latency constraints on edge hardware.
-
-**3.3.6 Video and System-Level Metrics**
-
-If the final system processes UAV video rather than isolated images, frame-level mAP alone may not fully describe operational behavior.
-
-Additional metrics may include:
-
-\- false alarms per minute;  
-\- missed events;  
-\- event-level Recall;  
-\- persistence of false detections;  
-\- time from first observation to alert.
-
-These metrics are especially relevant when the edge model is used for screening or urgent alert generation.
-
-**3.3.7 Controlled Benchmark Protocol**
-
-Meaningful model comparison requires consistent experimental conditions.
-
-Important controls include:
-
-\- fixed class taxonomy;  
-\- fixed train, validation, and test splits;  
-\- consistent evaluation metrics;  
-\- documented image resolution;  
-\- documented training schedule;  
-\- reproducible random seeds;  
-\- fixed evaluation thresholds where required.
-
-Without these controls, an apparent model improvement may be caused by changes in data, preprocessing, resolution, or evaluation procedure rather than by the model architecture itself.
-
-For this reason, the present study emphasizes reproducible dataset versions, controlled evaluation conditions, and a locked test set during model development.
-
-## **4\. Fit-Gap Analysis** {#4.-fit-gap-analysis}
-
-The reviewed literature demonstrates that UAV-based electrical-infrastructure inspection has been addressed using a wide range of object-detection architectures and enhancement strategies. These include conventional CNN-based detectors, lightweight YOLO models, transformer-based architectures such as RT-DETR, multi-scale feature fusion, attention mechanisms, frequency-domain enhancement, region-of-interest processing, and temporal or structural reasoning.
-
-However, direct comparison among published methods remains difficult because different studies frequently use different datasets, defect taxonomies, image resolutions, training procedures, hardware platforms, and evaluation protocols. A model reporting higher mAP in one study cannot therefore be assumed to be universally superior to another model evaluated under different experimental conditions.    
-
-Based on the reviewed literature, five main research gaps are identified.
-
-**4.1 Lack of Controlled Comparability**
-
-The first gap concerns comparability between model families.
-
-Published studies often report strong detection results, but these results are commonly obtained under different datasets, class definitions, augmentation procedures, input resolutions, evaluation splits, and model scales.    
-
-As a result, headline metrics alone do not provide sufficient evidence that one architecture is inherently more suitable than another.
-
-The present study addresses this limitation through a controlled benchmarking methodology. Representative model families are evaluated using a consistent dataset taxonomy, fixed data splits, standardized evaluation metrics, and documented training conditions.
-
-This design allows differences in model behavior to be interpreted more reliably and reduces the risk of attributing improvements to architecture when they may instead result from changes in data or evaluation settings.
-
-**4.2 Accuracy–Efficiency Trade-Off for Edge Deployment**
-
-The second gap concerns the relationship between detection accuracy and computational efficiency.
-
-High-capacity models may provide stronger recognition performance but can be unsuitable for embedded hardware because of memory, latency, power, or thermal constraints. Conversely, lightweight models may satisfy real-time requirements while losing detection accuracy or Recall on difficult defect classes.    
-
-This trade-off is particularly important in UAV inspection, where the computing resources available on the aircraft are substantially more limited than those available on a workstation or server.
-
-The present research therefore separates the inspection system into two functional levels.
-
-A lightweight YOLO-family model is investigated for on-board screening and rapid alert generation, while higher-capacity models are retained for server-side post-flight analysis.
-
-This two-tier design avoids forcing a single model to simultaneously optimize for minimum latency and maximum analytical accuracy.
-
-**4.3 Dataset Quality and Annotation Reliability**
-
-The third gap concerns dataset quality and the reliability of evaluation labels.
-
-Although previous work frequently focuses on improving model architecture, detection performance can also be strongly affected by missing labels, incorrect class assignments, inconsistent taxonomy, or inconsistent bounding-box definitions.
-
-These problems are particularly important when strict localization metrics are used because different interpretations of the spatial extent of a defect may substantially affect IoU-based evaluation. The current literature review therefore identifies annotation quality and bounding-box semantics as important factors in benchmark reliability.    
-
-Preliminary experiments in the present project further demonstrate that validation-label errors can substantially underestimate model performance. Correcting systematic annotation issues produced significant changes in class-level AP, particularly for bird\_nest and foreign\_object.
-
-This finding indicates that improvements in model architecture should not be interpreted independently of dataset quality.
-
-Accordingly, the proposed methodology includes model-assisted annotation auditing and dataset-version control as part of the benchmark process.
-
-**4.4 Class-Specific and Localization-Specific Failure Analysis**
-
-The fourth gap concerns the limited explanatory value of aggregate detection metrics.
-
-A single overall mAP value may conceal substantial weaknesses in individual defect categories. Similarly, strong mAP@50 performance may coexist with poor performance under stricter IoU thresholds.
-
-Existing project benchmarks show that increasing model size and input resolution improves overall performance but does not necessarily eliminate the difference between loose and strict localization metrics.    
-
-This indicates that performance analysis should distinguish between several possible failure modes, including:
-
-\- missed objects;  
-\- incorrect classifications;  
-\- inaccurate bounding-box extent;  
-\- annotation inconsistency;  
-\- small-object detection failure;  
-\- occlusion-related ambiguity.
-
-The present study therefore emphasizes per-class AP, mAP@50, mAP@50:95, Recall, localization quality, and qualitative error categorization instead of relying exclusively on a single aggregate score.
-
-**4.5 Limited Validation of Targeted Architectural Enhancements**
-
-The fifth gap concerns the way architectural improvements are evaluated.
-
-Previous studies have proposed many potentially useful techniques, including attention mechanisms, feature-pyramid modifications, additional high-resolution layers, frequency-domain processing, adaptive feature fusion, region-focused analysis, and structural or temporal reasoning.    
-
-However, multiple modifications are often introduced simultaneously.
-
-When this occurs, it becomes difficult to determine which component is responsible for an observed performance improvement.
-
-The present study addresses this problem through controlled ablation around a common RT-DETR-R50 baseline.
-
-The planned experimental configurations are:
-
-| Configuration | Description | Experimental Purpose |
-| ----- | ----- | ----- |
-| **B0** | RT-DETR-R50 baseline | Establish transformer reference performance |
-| **B1** | RT-DETR-R50 \+ frequency-domain enhancement | Evaluate the contribution of frequency information |
-| **B2** | RT-DETR-R50 \+ structural-context reasoning | Evaluate the contribution of component relationships |
-| **B3** | Combined experimental configuration | Evaluate whether the selected enhancements provide complementary benefits |
-
-***Table 6\.** Limited Validation of Targeted Architectural Enhancements.*
-
-This structure follows the existing benchmark-first design of the project.    
-
-The objective is not to present B3 as a completely new object-detection architecture. Instead, each modification is evaluated according to whether it provides measurable and reproducible improvement over B0.
-
-**4.6 Visual Ambiguity and Limited Use of Multi-Frame Evidence**
-
-The sixth gap concerns visual ambiguity in single-frame inspection.
-
-A single UAV frame may contain incomplete or misleading evidence due to occlusion, motion blur, vegetation, or viewpoint changes. For example, a conductor that appears discontinuous in one image may be fully visible in neighboring frames.
-
-Research such as SSTM and StateTrace demonstrates that temporal consistency and persistent object states can provide information that is unavailable from isolated frames. However, these methods were developed for satellite-video detection and general long-video reasoning rather than the specific electrical-infrastructure defect task considered in this research.    
-
-Therefore, multi-frame information is treated as an optional verification mechanism rather than the central detection architecture.
-
-The aim is to determine whether neighboring observations can reduce ambiguous false alarms or missed detections without significantly increasing system complexity.
-
-**4.7 Fit-Gap Summary**
-
-The relationship between previous work and the present study can be summarized as follows:
-
-| Research Direction | Existing Strength | Remaining Limitation | Role in the Present Study |
-| ----- | ----- | ----- | ----- |
-| YOLO-based detection | High inference speed and practical deployment potential | Accuracy may decrease on difficult classes and constrained hardware introduces trade-offs | Edge-oriented baseline and on-board detector |
-| RT-DETR-based detection | Strong transformer-based detection and global feature modeling | Additional computation and limited domain-specific contextual reasoning | Principal transformer benchmark |
-| Multi-scale / attention methods | Improve representation of small and difficult objects | Often introduce several modifications simultaneously | Reference strategies for targeted experiments |
-| Frequency-domain enhancement | May preserve fine-grained and high-frequency information | Benefit is not established for the target electrical dataset | Controlled B1 experiment |
-| Structural reasoning | Can exploit relationships between components | Limited direct validation for electrical-infrastructure detection | Controlled B2 experiment |
-| Temporal reasoning | Can reduce ambiguity across neighboring frames | Adds processing complexity and is not always required | Optional verification experiment |
-| Annotation auditing | Can reveal hidden dataset-quality problems | Often treated as preprocessing rather than part of evaluation methodology | Integrated into benchmark reliability |
-| Edge deployment | Enables real-time UAV-side inference | Accuracy, latency, memory, and thermal constraints must be balanced | Teacher–student and Raspberry Pi evaluation |
-
-***Table 7\.**  Fit-Gap Summary.*
-
-Overall, the principal gap addressed by this study is not the absence of object-detection architectures. Numerous capable detectors already exist.
-
-Instead, the main research need is a controlled and reproducible evaluation of model families, dataset quality, localization behavior, deployment constraints, and selected architectural extensions under a common UAV electrical-infrastructure inspection setting.
-
-The expected contribution is therefore both comparative and experimental: first, to determine which model configurations are suitable for different operational roles, and second, to measure whether frequency-domain enhancement, structural context, and limited temporal verification provide meaningful improvements beyond established baselines.
-
-## **5\. Summary** {#5.-summary}
-
-This literature review examined the theoretical foundations, existing research, common improvement strategies, evaluation methods, and remaining challenges associated with UAV-based electrical-infrastructure inspection.
-
-Previous research demonstrates that UAV platforms provide an effective means of acquiring visual data from electrical assets while reducing the need for direct human access to difficult or hazardous locations. RGB imagery is particularly suitable for visually observable defects, while thermal and LiDAR sensing provide complementary information for temperature-related and geometric inspection tasks.    Pasted markdown
-
-Deep-learning-based object detection has become an important component of automated inspection. YOLO-family detectors are attractive for real-time and edge-oriented deployment because of their relatively high inference speed and availability of compact variants. Transformer-based detectors, particularly RT-DETR and its derivatives, provide another strong model family and have increasingly been adapted to transmission-line inspection tasks.    Pasted markdown
-
-Previous studies have also investigated multi-scale feature fusion, attention mechanisms, high-resolution detection layers, region-of-interest processing, and frequency-domain enhancement. These methods aim to improve representation of small or visually difficult targets. Research in neighboring video-analysis domains further suggests that structural consistency and temporal evidence may help distinguish persistent physical conditions from temporary visual ambiguity.    Pasted markdown
-
-At the same time, several persistent challenges remain. These include small and fine-grained defects, viewpoint and scale variation, complex backgrounds, occlusion, motion blur, intra-class variation, inter-class similarity, class imbalance, annotation inconsistency, and inaccurate bounding-box localization.    Pasted markdown
-
-These challenges demonstrate that model evaluation should not rely exclusively on global mAP. A comprehensive benchmark should consider Precision, Recall, F1-score, mAP@50, mAP@50:95, per-class AP, localization quality, object-scale performance, false-positive and false-negative behavior, model size, inference latency, and computational requirements.    Pasted markdown
-
-The literature also indicates that reported results from different studies cannot always be directly compared because datasets, class definitions, input resolutions, model scales, and evaluation protocols frequently differ.
-
-For this reason, the present research adopts a benchmark-first methodology.
-
-Lightweight YOLO models are investigated primarily for edge-oriented deployment and rapid UAV-side screening, while higher-capacity detectors support more detailed server-side analysis. RT-DETR-R50 serves as the principal transformer baseline for controlled architectural experiments.
-
-Model customization remains secondary to this benchmark.
-
-When a consistent weakness is identified, a limited modification is introduced and evaluated through controlled ablation. Frequency-domain enhancement, structural-context reasoning, and short-term multi-frame verification are therefore treated as targeted experimental extensions rather than assumptions about what must improve detection performance. This is consistent with the existing research scope, which explicitly prioritizes comparative evaluation over development of an entirely new detector.    Pasted markdown
-
-In addition, the present study incorporates dataset-quality analysis as part of the experimental process. Preliminary findings indicate that annotation errors and taxonomy inconsistencies can substantially influence measured performance. Consequently, dataset provenance, annotation auditing, fixed evaluation splits, and reproducible benchmark conditions are considered essential to interpreting model improvements correctly.
-
-Overall, the expected contribution of the study is a reproducible comparative assessment of detection accuracy, localization quality, class-specific behavior, computational efficiency, and deployment suitability, together with an evaluation of the incremental benefits of selected model enhancements.
-
-Rather than seeking architectural complexity for its own sake, the research aims to determine which model, data, and reasoning strategies provide meaningful practical value for UAV-based electrical-infrastructure inspection under controlled experimental conditions.
-
-# **IV. References** {#iv.-references}
-
-\[1\] F. Ahmed, J. C. Mohanta, and A. Keshari, “Power transmission line inspections: Methods, challenges, current status and usage of unmanned aerial systems,” *Journal of Intelligent & Robotic Systems*, vol. 110, Art. no. 54, 2024\.
-
-\[2\] A. L. B. Vieira e Silva, H. de Castro Felix, F. P. M. Simões, V. Teichrieb, M. dos Santos, H. Santiago, V. Sgotti, and H. Lott Neto, “InsPLAD: A dataset and benchmark for power line asset inspection in UAV images,” *International Journal of Remote Sensing*, vol. 44, no. 23, pp. 7294–7320, 2023, doi: 10.1080/01431161.2023.2283900.
-
-\[3\] Y. Zhao, W. Lv, S. Xu, J. Wei, G. Wang, Q. Dang, Y. Liu, and J. Chen, “DETRs Beat YOLOs on Real-time Object Detection,” in *Proc. IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)*, 2024, pp. 16965–16974, doi: 10.1109/CVPR52733.2024.01605.
-
-\[4\] X. Tao, D. Zhang, Z. Wang, X. Liu, H. Zhang, and D. Xu, “Detection of Power Line Insulator Defects Using Aerial Images Analyzed With Convolutional Neural Networks,” *IEEE Transactions on Systems, Man, and Cybernetics: Systems*, 2018\.
-
-\[5\] R. Abdelfattah, X. Wang, and S. Wang, “TTPLA: An Aerial-Image Dataset for Detection and Segmentation of Transmission Towers and Power Lines,” in *Proc. Asian Conference on Computer Vision (ACCV)*, 2020\.
-
-\[6\] Y. Zhang and R. Zhao, “TL-DETR: Efficient transmission line defect detection for edge deployment,” *PLOS ONE*, vol. 21, no. 6, Art. no. e0351470, 2026, doi: 10.1371/journal.pone.0351470.
-
-\[7\] R. Qian and C. You, “FES-DETR: Efficient UAV Object Detector With Frequency-Domain Enhancement Across Spatial-Domain,” *Journal of Real-Time Image Processing*, vol. 23, Art. no. 51, 2026, doi: 10.1007/s11554-026-01854-8.
-
-\[8\] B. Gao, J. Tong, X. Chen, H. Yu, and Z. Li, “DFIR-DETR: Frequency-domain iterative refinement and dynamic feature aggregation for small object detection,” *Neural Networks*, vol. 204, Art. no. 109256, 2026, doi: 10.1016/j.neunet.2026.109256.
-
-\[9\] Y. Zhang, Y. Tang, F. Liu, Y. Chen, and T. Han, “Structural Consistency Based Multiobject Detection for Satellite Video and Benchmark With Real Scene Simulation Dataset,” *IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing*, vol. 18, pp. 23728–23743, 2025, doi: 10.1109/JSTARS.2025.3603130.
-
-\[10\] K. Li, G. Wan, G. Cheng, L. Meng, and J. Han, “Object detection in optical remote sensing images: A survey and a new benchmark,” *ISPRS Journal of Photogrammetry and Remote Sensing*, vol. 159, pp. 296–307, 2020, doi: 10.1016/j.isprsjprs.2019.11.023.
-
-\[11\] D. Gao, Y. Yin, H. Zhang, and B. Wang, “YOLOv11-based UAV foreign object detection for power transmission lines,” *Electronics*, vol. 14, no. 18, Art. no. 3577, 2025, doi: 10.3390/electronics14183577.
-
-\[12\] E. İnce, “Transmission line inspection with UAVs: A review of technologies, applications, and challenges,” *International Journal of Energy and Smart Grid*, vol. 9, no. 1, pp. 60–69, 2024, doi: 10.55088/ijesg.1596043.
-
-\[13\] T. Santos, T. Cunha, A. Dias, A. P. Moreira, and J. Almeida, “UAV visual and thermographic power line detection using deep learning,” *Sensors*, vol. 24, no. 17, Art. no. 5678, 2024, doi: 10.3390/s24175678.
-
-\[14\] S. Xiong, Y. Liu, Y. Yan, L. Pei, P. Xu, X. Fu, and X. Jiang, “Object recognition for power equipment via human-level concept learning,” *IET Generation, Transmission & Distribution*, vol. 15, no. 10, pp. 1578–1587, 2021\.
-
-\[15\] P. Jia, “Mamba-enhanced detection transformer with selective state space models for multi-category defect detection in transmission lines,” *Discover Computing*, vol. 29, no. 1, Art. no. 489, 2026\.
-
-\[16\] X. Yao and S. Li, “An object detection method based on improved detection transformer for insulator defect detection of electrical transmission lines,” *Electric Power Systems Research*, Art. no. 112929, 2026, doi: 10.1016/j.epsr.2026.112929.
-
-\[17\] Y. Han, W. Li, Y. Cao, H. Xu, S. Yang, S. You, and X. Su, “StateTrace: An object-centric framework for hidden-state spatiotemporal reasoning in long videos,” *arXiv preprint*, arXiv:2608.18532, 2026\.
-
-\[18\] J. Wang, Y. Wang, X. Li, B. Yuan, and M. Wang, “SCI-YOLO11: An improved defect detection algorithm for transmission line insulators based on YOLO11,” *PLOS ONE*, vol. 20, no. 10, Art. no. e0322561, 2025\.
+## **5\. Summary of the Literature Review**
 
 [image1]: <data:image/png;base64,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>
 
-[image2]: <data:image/png;base64,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>
+[image2]: <data:image/png;base64,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>
 
 [image3]: <data:image/png;base64,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>
 
@@ -2109,8 +1941,6 @@ Rather than seeking architectural complexity for its own sake, the research aims
 
 [image8]: <data:image/png;base64,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REOvz68qN4OSY4abTyPytRj++/J18ApCvDSPqfvXGTVJ939WFv8561+rTl4qT2U/2A2FdP/9HD+42ZSc7HHGafrFL36hboIB0St1FXoHwlabELZq3nzzTVqyZIks6PvII4/QH//4R7rtttskhFx++eX061//ms4991yKx+PSdf+4446TbuXcfX/vvfemHXfcUUZjeLmj9ddfX4IPB6BGGFphhRVolVVWoXXWWUdGerhbP98O49tifI7999+fvv3tb8vtHX469Ec/+lFz9ObKK6+kTCYjI0v33XcfPfroo/SPf/xDbsXxdUPNdtttp26aE0Z9ZCuI3njjDRkJhcE01boKgw9hq02dDFs8F+df//qXzMXh204cDG666Sa5zZNKpeTWE4+o8MgKj7DwraeDDjqIbNumPfbYQ9Zt3HrrrWV9u/nz59Oqq64qywipt5waHyuuuKKM8vDoD48C8ejN0UcfLefm21KN0Rt+72uuuUYWKb7nnnskSBWLRfr73/9OL774oow8Qf/jv985Vyn6P5OGzJ0KohNOOEHdBAMEYQtUCFttmmrY+s1vfkNbbbWVzMXhUZqlzcVZaaWVmre3eNSHRx8WLlwoc3G+9KUv0cEHHywjOnz7jG+j8e20X/3qV3J77frrr5fbbby47UMPPSSdqZ999ll69dVX1csaA0UheN5++23KZrPqZpgl77//vtQEGFyoq6BC2GrTVMNWv0BRCCaey8ZzzmD2bbHFFnT66aerm2GAoK6CCmGrTQhbMEh4/hyPlsLsW3755WUaAQwu1FVQIWy1aaphi+c79cOkbBSF4OKHF9577z11c1eUUlEKhy35vFrKSKPTzplC49FqiXKzvXBji5///Of01ltvqZthwKCuggphq01TDVvspZdeoquvvlpaEfATdzwR/U9/+pN62JxCUQg2fvpzNrSGLW7JEDK4hUOtHQMvocPL+dTCUpnMqO1/HZV+V+VcnEK6SWZEJz0al5YNvAyPZdtk+cfVYlMjbFVIGxomw+WWE7z0ToQK5bK0hXAt/xx2koqZGFn1vl8x1yPPdcjjhlyzYNddd6VoNKpuhgGEugoqhK02TSdstXruueekJxQ/PcgtDLj7dy9AUQg2brDazoMUMzUqbHHAShb5k+YSOtx5npfQ4W38NXeCt9Ml+drwchLEbF0jy99WLXJT1CoVk7VA1jqy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oa6CCmEr4FAUYDbdcMMNtMMOO5Bt98hEdOU2YrWYkqVvKvkklasVysdN6TQ/ErYqlIvxEjj+vphZXwqnIvu44X1r2CrIcfUTz7G77rqLPvShD9GnP/1pdRd0AeoqqBC2Ag5FAebCYYcdRptuuin94he/UHfNnjFPI0bI0DUq5ZJkR0zidQpLGZd0O0n5cpXCmkmeY5Hl1JfPqZb8z2tztjKytFBZ1ni04pn66ROytE9yZHHFWccjiRtvvDGtuuqq9Kc//UndDV2CugoqhK2AQ1GAucZPLa622mp04okn0gMPPKDu7hEjtxF73eLFi2U9R/6+Pv744+pumAWoq6BC2Ao4FAXoBe+99x65rktrrrkmnXTSSb0Xusp5GtYsucXYqxohi+fG3XnnnepumEWoq6BC2Ao4FAXoRe+//z4tWrSIFi5cKI1STzjhBHrrrbfUwwLr5ptvpuOOO07mYe24444STvl7Br0BdRVUCFsBh6IAve66666jI444QloVLFiwgK699lr1kEB44YUX6Pjjj5e5Zfx055FHHiktHKD3oK6CCmEr4FAUoB/df//9dO6550pDzqGhIVk4+eijj5an7p5//nn18L7B1/7LX/6SjjrqKFp33XXpE5/4BO277770xz/+UT0UehjqKqgQtgIORQH63WuvvSZPNR5yyCG04oorSvjadttt6YADDqArr7xSutn3Ir4t+tBDD0nfq/3331+eGGxcOy+fc99996kvgT6BugoqhK2AQ1GAICgWizJpnEfDvvnNb0rn9PXXX5/mzZtHq6++uixXY5om7bXXXjJR/+STT6ZTTz11Sh88sX+//faTc2yxxRZyfg5P/B7bb7+9vC930r/88ssxgX3Aoa6CCmEr4FAUAAA6C3UVVAhbAYeiAADQWairoELYCjgUBQCAzkJdBRXCVsChKAAAdBbqKqgQtgIORQEAoLNQV0GFsBVwKAoAAJ2FugoqhK2AQ1EAAOgs1FVQIWwFHIoCAEBnoa6CCmEr4FAUAAA6C3UVVAhbAYeiAADQWairoELYCjgUBQCAzkJdBRXCVsChKAAAdBbqKqgQtgLuhBNOoE1ufo2WLFmCjw598PeTP15++eUx+/AxvQ/+Xr7yyiv4We3gB39P8bPa+Q/+fnJdBWiFsBVw+AXW+Q/8Auv8R6VSwc9qhz/4e4qf1c5/8PeTf1YBWiFsBRgXBegefH87B9/Lzmv9nuL723n4nkIrhC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOgihC0AAACALkLYAgAAAOii/x85uLrIiPJnjwAAAABJRU5ErkJggg==>
 
-[image9]: <data:image/png;base64,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>
+[image9]: <data:image/png;base64,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>
 
 [image10]: <data:image/png;base64,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>
-
-[image11]: <data:image/png;base64,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>

@@ -36,7 +36,7 @@
 
  
 
-Ho Chi Minh City, September 2026
+Ho Chi Minh City, October 2026
 
 **Table of Contents**
 
@@ -128,6 +128,7 @@ A list of abbreviations and acronyms used in the thesis, with their full forms.
 | 07/10/2026  | M | SE193338 \- Nguyễn Nhật An | Aligned the completion target to 30/11/2026; corrected the effort baseline (117 software \+ 28 non-software \= 145 person-days), objective due dates and training dates; removed the duplicated quality row.  |
 | 07/10/2026  | M | SE193338 \- Nguyễn Nhật An  | Rescheduled all development to finish by 15/11/2026 and reserved 16/11-30/11/2026 for system testing, regression and defect fixing; updated iterations, objectives, risks, training, deliverables, communications and the research roadmap. |
 | 18/10/2026 | M | SE193338 \- Nguyễn Nhật An  | Adjust scope and estimation |
+| 24/10/2026 | M | SE193464 \- Nguyễn Quốc Khánh | Reconciled the function-level WBS estimate and the activity-based project effort budget; clarified that the 99 person-day WBS estimate and the 145 person-day activity budget are not additive.  |
 
  
 
@@ -137,11 +138,13 @@ A list of abbreviations and acronyms used in the thesis, with their full forms.
 
 ## **1\. Overview** {#1.-overview}
 
-This plan describes how the team will complete UAV-PMS by 30 November 2026\. The project includes the web system, four main flows, the AI defect-detection work and a UAV assembled and programmed by the team. The period after November is used for lecturer feedback, report updates and defense preparation. All development work is completed by 15 November 2026; the period from 16 to 30 November is reserved for system testing, regression and defect fixing.
+The team develops a prototype integrating UAV inspection coordination, edge-assisted alerts, server-side defect analysis, GIS-based visualization, human validation and maintenance follow-up. Publicly documented electricity-sector use cases provide domain context; they do not constitute confirmed requirements or formal sponsorship from EVN or any affiliated organization.
+
+The working internal target remains 30 November 2026\. Development is planned to reach feature freeze by 15 November, followed by integration, regression, safety checks and defect fixing through 30 November. The December 2026–March 2027 period remains available for supervisor feedback, academic reporting and defense preparation. These are planning targets, not claims of completed work.
 
 ### **1.1 Scope & Estimation** {#1.1-scope-&-estimation}
 
-The table lists software functions only. Each function is rated Simple, Medium or Complex and estimated in person-days. One person-day means eight hours of effort; it does not mean that each member works eight hours every calendar day. Hardware assembly, project management, training and general documentation are not included in Table 1; they are added in Table 3 of Section 1.2 (UAV and Embedded Engineering: 22 person-days; Project Management and Documentation: 6 person-days).	
+The scope is organized around common functions (CF) and four main flows (MF01–MF04). Table 1 provides a function-level Work Breakdown Structure estimate of 99 person-days for the defined product functions. Table 3 provides an overall activity-based project budget of 145 person-days, covering requirements analysis, design, implementation, AI research, UAV engineering, testing, and project management. These estimates serve different planning purposes and must not be added together. The overall project capacity and schedule are tracked against the 145 person-day activity budget.
 
 | \# | WBS Item | Complexity | Est. Effort (person-days) |
 | :---- | :---- | :---- | :---- |
@@ -184,26 +187,23 @@ The table lists software functions only. Each function is rated Simple, Medium o
 | MF04-10 | Provide dashboards, reports and result export | Medium | 4 |
 |   | Total software-function effort |   | 99 |
 
-***Table 1\.** UAV-PMS product and project-work estimation.*
+***Table 1\.** UAV-PMS Function-level Work Breakdown Structure Estimate.*
 
 ### **1.2 Project Objectives** {#1.2-project-objectives}
 
-The objective is to complete a working UAV-assisted inspection system from mission planning to AI result review. The team plans 145 person-days (1,160 hours) from 5 September to 30 November 2026 (87 calendar days). This equals about 3.3 hours per member per calendar day for four students. The 145 person-days consist of 117 person-days of software functions (Table 1\) and 28 person-days of UAV engineering and project management (Table 3). 
+The objective is to complete a working UAV-assisted inspection system from mission planning to AI result review. The team plans 145 person-days (1,160 hours) from 5 September to 30 November 2026 (87 calendar days). This equals about 3.3 hours per member per calendar day for four students. The 145 person-day activity budget is used for overall capacity and schedule tracking. The 99 person-day estimate in Table 1 is a separate function-level estimate for the defined product scope; it is not added to the overall activity budget. 
 
 | Dimension | Objective | Metric / Acceptance Target | Due Date |
 | :---- | :---- | :---- | :---- |
-| Quality | Requirements and traceability | 100% of approved MF01-MF04 use cases and non-functional requirements have identifiers, acceptance criteria and linked verification evidence. | 10/10/2026  |
-| Quality | Four-flow system | MF01-MF04 critical end-to-end scenarios execute in the integrated web/backend environment with correct role and state controls. | 15/11/2026  |
-| Quality | MF01-MF02 testing | 100% of planned P0/P1 cases executed and passed; no open Severity 1 or Severity 2 defect; regression evidence retained. | 25/10/2026  |
-| Quality | UAV operation | Complete bench assembly and pre-flight checks by 25/10. Conduct controlled manual flight tests from 26/10 to 08/11 and waypoint-route tests from 09/11 to 15/11. Re-test fixed defects during field validation from 16/11 to 30/11. Retain camera, telemetry and flight logs with no critical safety incident.  | 15/11/2026  |
-| Quality | AI research | Use a fixed versioned test split; report precision, recall, mAP50, mAP50-95 and per-class error analysis for YOLO models and RT-DETR; justify the selected model and limitations. | 22/11/2026  |
-| Quality | System testing and defect fixing  | 100% of planned MF01-MF04 P0/P1 system and regression cases executed and passed; all Severity 1/2 defects fixed and re-tested.  | 30/11/2026  |
-| Time | Internal completion | The approved SRS, all four web flows MF01-MF04, required integration and regression tests, manual and waypoint UAV flight evidence and the AI experiment report are completed and accepted. | 30/11/2026 |
-| Time | Schedule control | Progress is checked weekly. If a task is late, the team updates the plan and priority in the same meeting. | Weekly |
-| Cost | Effort control | Each member records actual effort for assigned tasks every week. The team compares planned and actual person-days and explains significant differences in the weekly meeting. | Weekly until 30/11/2026 |
-| Cost | Direct expense control | Drone parts, replacement parts, GPU/cloud services and field-test expenses are recorded with date, purpose, payer, amount and approval status in the shared expense log. | Project-wide |
+| Scope | MF01–MF04 demonstrate core role/state-controlled workflows; evidence links retained | 15–30 Nov 2026 | Scope |
+| Quality | P0/P1 integration and regression cases executed; critical defects resolved or explicitly documented | 30 Nov 2026 | Quality |
+| AI | Versioned raw/curated data; reproducible model comparisons; per-class error analysis | Research milestone / revised as needed | AI |
+| UAV | Bench verification and controlled flight evidence subject to site permission and safety readiness | By 30 Nov if feasible | UAV |
+| GIS | Demonstrate asset/route and defect workflow using clearly labeled sample spatial data; import interface if available | System testing | GIS |
+| Emergency | Device-originated alerts can reach a configured duty manager without requiring an approved mission | Integration testing | Emergency |
+| Cost | Track actual effort and expenses weekly | Weekly | Cost |
 
-***Table 2\.** UAV-PMS quality, time and cost objectives.*
+***Table 2\.** UAV-PMS objectives.*
 
 | Activity | Planned Distribution | Person-days |
 | :---- | :---- | :---- |
@@ -216,7 +216,7 @@ The objective is to complete a working UAV-assisted inspection system from missi
 | Project Management and Documentation | 4% | 6 |
 | Total | 100% | 145 |
 
-***Table 3\.** Planned effort distribution.*
+***Table 3\.** Overall Activity-based Project Effort Budget.*
 
 ### 
 
@@ -225,12 +225,12 @@ The objective is to complete a working UAV-assisted inspection system from missi
 | \# | Risk Description | Impact | Probability | Response Plan |
 | :---- | :---- | :---- | :---- | :---- |
 | 1 | AI data has too few samples or very small defects | High | High | Check labels and class counts; add suitable augmentation and report weak classes clearly. |
-| 2 | SDI, SCI or StructDETR experiments take longer than planned | High | High | Keep YOLO11s as the working baseline and limit each experiment to an agreed time. If StructDETR is not stable by 15 November, the best YOLO11s, SDI or SCI model is used for integration and StructDETR results are reported as experimental.  |
+| 2 | Dataset curation, six-model benchmarking or structural reasoning experiments exceed the planned effort | High | High | Prioritize a reproducible YOLO11/YOLO26/RT-DETR baseline and the raw-versus-curated comparison. Treat structural reasoning as an optional extension, subject to time and evaluation results. |
 | 3 | Raspberry Pi, camera or telemetry is unstable | High | Medium | Test each part on the bench before connecting the full system; lower resolution or rate if needed. |
 | 4 | Soldering, power or vibration causes UAV failure | Very High | Medium | Check wiring and balance, test without propellers first and prepare spare parts. |
 | 5 | Manual flight, failsafe or site conditions cause an unsafe test | Very High | Medium | Use a pre-flight checklist, geofence, observer and abort plan; stop the test when site or weather conditions are unsafe. |
 | 6 | Frontend, backend, AI and UAV use different data formats | High | Medium | Agree on request/result examples and test interfaces early. |
-| 7 | The team misses the 30 November deadline | Very High | High | Review progress weekly, finish all development by 15 November, use 16-26 November only for testing and defect fixing, and freeze the release on 27 November.  |
+| 7 | The team misses the 30 November deadline | Very High | High | Review progress weekly, finish all development by 15 November, use 16-26 November only for testing and defect fixing, and freeze the release on 27 November. |
 | 8 | A member is unavailable for a specialist task | Medium | Medium | Share setup notes and let one other member support each important task. |
 
 ***Table 4\.** UAV-PMS risk register.*
@@ -249,32 +249,32 @@ The team uses Iterative and Incremental Development. The scope is mostly fixed, 
 
 ### **2.1 Project Process** {#2.1-project-process}
 
-| Iteration 0 \- Plan and Baseline  |  05 Sep-10 Oct Focus: Feature estimates, SRS draft, architecture, interfaces, dataset and hardware plans Exit gate: Requirements and interface baseline approved for implementation |
+| Iteration 0 \- Plan and Baseline  \|  05 Sep-10 Oct Focus: Feature estimates, SRS draft, architecture, interfaces, dataset and hardware plans Exit gate: Requirements and interface baseline approved for implementation |
 | :---: |
 
 ↓  Review, evidence and controlled feedback  ↓
 
-| Iteration 1 \- Core Foundations | 11-25 Oct Focus: MF01-MF02, web/backend foundation, YOLO11s baseline and UAV bench assembly  Exit gate: MF01-MF02 integration candidate; reproducible AI baseline; powered UAV bench test  |
+| Iteration 1 \- Core Foundations \| 11-25 Oct Focus: MF01-MF02, web/backend foundation, YOLO11s baseline and UAV bench assembly  Exit gate: MF01-MF02 integration candidate; reproducible AI baseline; powered UAV bench test  |
 | :---: |
 
 ↓  Review, evidence and controlled feedback  ↓
 
-| Iteration 2 \- Field and Research  |  26 Oct-08 Nov  Focus: MF03, camera/telemetry, controlled manual flight, SDI/SCI experiments and per-class diagnosis  Exit gate: Field-data path demonstrated; controlled flight and SDI/SCI evidence reviewed  |
+| Iteration 2 \- Field and Research  \|  26 Oct-08 Nov  Focus: MF03, camera/telemetry, controlled manual flight, SDI/SCI experiments and per-class diagnosis  Exit gate: Field-data path demonstrated; controlled flight and SDI/SCI evidence reviewed  |
 | :---: |
 
 ↓  Review, evidence and controlled feedback  ↓
 
-| Iteration 3 \- Advanced Integration | 09-15 Nov  Focus: MF04, StructDETR candidate, analyst review, waypoint route and cross-system integration  Exit gate: Feature freeze on 15 November; all four flows integrated; waypoint-flight and AI candidate evidence available  |
+| Iteration 3 \- Advanced Integration \| 09-15 Nov  Focus: MF04, StructDETR candidate, analyst review, waypoint route and cross-system integration  Exit gate: Feature freeze on 15 November; all four flows integrated; waypoint-flight and AI candidate evidence available  |
 | :---: |
 
 ↓  Review, evidence and controlled feedback  ↓
 
-| Iteration 4 \- Test, Fix and Accept | 16-30 Nov  Focus: MF01-MF04 system and regression testing, defect fixing, field re-validation, final AI evaluation, SRS finalization and release Exit gate: Release frozen on 27 November; 30 November completion criteria accepted; no open Severity 1/2 defect  |
+| Iteration 4 \- Test, Fix and Accept \| 16-30 Nov  Focus: MF01-MF04 system and regression testing, defect fixing, field re-validation, final AI evaluation, SRS finalization and release Exit gate: Release frozen on 27 November; 30 November completion criteria accepted; no open Severity 1/2 defect  |
 | :---: |
 
 ↓  Review, evidence and controlled feedback  ↓
 
-| Contingency and Defense  |  01 Dec-Mar 2027 Focus: Supervisor-requested changes, extended validation, reports, demo and defense rehearsal Exit gate: Academic submission and defense package approved |
+| Contingency and Defense  \|  01 Dec-Mar 2027 Focus: Supervisor-requested changes, extended validation, reports, demo and defense rehearsal Exit gate: Academic submission and defense package approved |
 | :---: |
 
 ***Figure 1\. UAV-PMS iterative and incremental development process***
@@ -288,7 +288,7 @@ The team uses Iterative and Incremental Development. The scope is mostly fixed, 
 | Unit Testing | Test backend rules, validators and important frontend services/components. | Required unit tests pass before merge. |
 | Integration Testing | Test frontend-backend, service-database, AI callback and UAV telemetry connections. | Data is sent and received in the expected format. |
 | System Testing | Run the main MF01-MF04 scenarios using the correct roles and mission states. | P0/P1 cases pass and no Severity 1/2 defect remains. |
-| AI Evaluation | Compare YOLO11s, SDI/SCI and StructDETR on the same split and check errors by class. | Metrics, error analysis and selected-model reason are recorded. |
+| AI Evaluation | Compare YOLO11/YOLO26/RT-DETR, data curation and structural reasoning on the same split and check errors by class. | Metrics, error analysis and selected-model reason are recorded. |
 | UAV Verification | Check wiring, calibration, geofence and failsafe before controlled and waypoint flights. | Checklist, telemetry, camera and flight evidence are saved. |
 
 ***Table 5\.** Quality-management approach and evidence.*
@@ -302,7 +302,7 @@ The team uses Iterative and Incremental Development. The scope is mostly fixed, 
 | SRS, traceability and Git | All members | 05 Sep-10 Oct; two 90-minute sessions | Waived after completing one reviewed requirement and pull request. |
 | Angular, GIS and API integration | Nguyễn Quốc Khánh; Nguyễn Nhật An | By 15 Oct; two 2-hour sessions  | Waived after completing one reviewed integrated screen. |
 | ASP.NET Core and messaging | Nguyễn Nhật An; Phạm Hoàng Minh Châu | By 15 Oct; two 2-hour sessions  | Waived after completing one reviewed service change. |
-| UAV assembly and flight safety | Trần Ánh Quốc; flight-test members | Before flight; one 3-hour bench session | No waiver for a member joining a live flight. |
+| UAV assembly and flight safety | Trần Ánh Quốc | Before flight; one 3-hour bench session | No waiver for a member joining a live flight. |
 | Raspberry Pi, camera and waypoint flight | Trần Ánh Quốc; Nguyễn Nhật An | By 31 Oct; two 2-hour sessions  | Waived after a successful bench or simulated mission. |
 | YOLO11s, SDI/SCI, StructDETR and error analysis | Phạm Hoàng Minh Châu | 11 Oct-08 Nov; four 2-hour sessions  | Waived after reproducing one experiment and explaining its result. |
 
@@ -316,15 +316,15 @@ The team uses Iterative and Incremental Development. The scope is mostly fixed, 
 | 2 | Report 2 \- Project Management Plan | External | 24/09/2026 |
 | 3 | SRS Working Baseline and Interface Contracts | Internal / Baseline | 05/09-10/10/2026 |
 | 4 | MF01-MF02 Integration and Test Report | Internal | 11/10-25/10/2026 |
-| 5 | YOLO11s Baseline and Dataset Report | Internal / Research | 11/10-25/10/2026 |
+| 5 | Dataset Audit and YOLO11/YOLO26/RT-DETR Baseline Report | Internal / Research | 11/10-25/10/2026 |
 | 6 | UAV Bench Assembly and Safety Checklist | Internal / Engineering | 11/10-25/10/2026 |
 | 7 | MF03 and Camera/Telemetry Integration | Internal | 26/10-08/11/2026 |
-| 8 | SDI/SCI and Per-Class Error Report | Internal / Research | 26/10-08/11/2026 |
-| 9 | MF04 and StructDETR Candidate | Internal / Research | 01/11-15/11/2026 |
+| 8 | Raw-versus-Curated Benchmark and Per-Class Error Report | Internal / Research | 26/10-08/11/2026 |
+| 9 | MF04 Integration and Structural Reasoning Feasibility Assessment | Internal / Research | 01/11-15/11/2026 |
 | 10 | Waypoint Flight Evidence | Internal / Validation | 09/11-15/11/2026 |
 | 11 | System Test, Regression and Defect-Fix Report | Internal / Validation | 16/11-30/11/2026 |
 | 12 | Final SRS, Integrated System and User Guide | External / Baseline | Due 30/11/2026 |
-| 13 | Final Report, Demo and Defense Package  | External  | By the official schedule  |
+| 13 | Final Report, Demo and Defense Package | External | By the official schedule |
 
 ***Table 7\.** UAV-PMS master deliverable schedule.*
 
@@ -332,7 +332,7 @@ The team uses Iterative and Incremental Development. The scope is mostly fixed, 
 
 D \- Do; R \- Review; S \- Support; I \- Informed; blank \- omitted
 
-| Responsibility | Nguyễn Quốc Khánh (SE193464) | Nguyễn Nhật An (SE193338) | Trần Ánh Quốc (SE181995)  | Phạm Hoàng Minh Châu (SE193418) |
+| Responsibility | Nguyễn Quốc Khánh (SE193464) | Nguyễn Nhật An (SE193338) | Trần Ánh Quốc (SE181995) | Phạm Hoàng Minh Châu (SE193418) |
 | :---- | :---- | :---- | :---- | :---- |
 | Project leadership, schedule, risk and stakeholder coordination | D | S | S | S |
 | Business analysis, SRS and requirement traceability | D | S | S | R |
@@ -342,9 +342,9 @@ D \- Do; R \- Review; S \- Support; I \- Informed; blank \- omitted
 | MF03 field workflow and system integration | R | D | S | S |
 | UAV hardware assembly, soldering and power integration | R | S | D | I |
 | Raspberry Pi, camera, telemetry and autonomous route | R | S | D | I |
-| AI dataset, YOLO11s baseline and experiment protocol | R | I | S | D |
-| SDI/SCI experiments and per-class diagnosis | R | I | S | D |
-| StructDETR and structural-consistency research | R | I | S | D |
+| AI dataset curation, six-model baseline and experiment protocol | R | I | S | D |
+| Raw-versus-curated benchmarking and per-class diagnosis | R | I | S | D |
+| Structural reasoning extension and ablation planning | R | I | S | D |
 | MF04 AI-service, analyst review and result integration | R | D | S | D |
 | Unit, integration and system testing | R | D | S | D |
 | UAV safety and flight validation | R | I | D | S |
@@ -395,7 +395,7 @@ Source code is stored in GitHub repositories for backend, frontend, AI and UAV/R
 | Backend and Services | ASP.NET Core 9, Microservices \+ Clean architecture /CQRS, Ocelot API Gateway, gRPC, SignalR and background services |
 | Database and Geospatial | PostgreSQL/PostGIS and EF Core migrations |
 | Messaging and Cache | RabbitMQ, MQTT/Mosquitto and Redis |
-| AI Research | Python, PyTorch/Ultralytics YOLO11s, StructDETR, OpenCV and versioned experiment configurations |
+| AI Research | Python, PyTorch/Ultralytics YOLO11/YOLO26/RT-DETR, structural reasoning, OpenCV and versioned experiment configurations |
 | UAV and Edge | UAV airframe/electronics, soldering and measurement tools, flight controller, Raspberry Pi, camera, GPS/telemetry and waypoint-planning software |
 | Testing | xUnit/.NET test, API regression tests, Angular/Vitest, Playwright, manual system tests, AI evaluation scripts and UAV bench/flight checklists |
 | Deployment and CI | Docker/Docker Compose, GitHub Actions and environment-based configuration |
@@ -411,113 +411,111 @@ Source code is stored in GitHub repositories for backend, frontend, AI and UAV/R
 
 ## **1\. Research Direction and Conceptual Framework** {#1.-research-direction-and-conceptual-framework}
 
-This research focuses on applying object detection models to detect defects in electrical infrastructure from UAV images. The study mainly compares models from the YOLO and DETR families (YOLO11s and StructDETR) because they represent two different object detection approaches.
-
-The research process starts with preparing the dataset and training baseline models. The results are then compared using common evaluation metrics such as Precision, Recall, F1-score, mAP, and inference time. Based on the observed problems, some modifications or optimization methods may be tested to improve detection performance.
-
+The research investigates data quality and detector performance for multi-class power-line defect detection in UAV RGB images. Its primary direction is a data-centric benchmark integrating multi-source annotations, systematic quality curation, and controlled comparison of YOLO11, YOLO26 and RT-DETR models. Structural reasoning is considered a subsequent experimental extension, subject to feasibility and ablation evidence.  
+The baseline study compares raw and curated training data across six detectors (YOLO11n/m, YOLO26n/m and RT-DETR-R50/R101), using a consistent evaluation protocol and held-out test set. Performance is assessed using precision, recall, F1, mAP, per-class errors, inference latency and resource requirements. Proposed structural constraints will be tested separately rather than assumed to improve results.  
 The overall research flow is:
 
-* Dataset preparation   
-* Baseline model training   
-* Model comparison   
-* Error analysis   
-* Model improvement   
-* Final evaluation
+* Multi-source dataset integration and taxonomy mapping  
+* Annotation audit, deduplication and quality curation  
+* Raw versus curated detector benchmarking  
+* Per-class, localization and noise error analysis  
+* Optional structural reasoning and ablation  
+* Deployment-oriented evaluation and reporting
 
-The purpose of this process is not only to find the model with the highest score, but also to understand the strengths and weaknesses of each approach for electrical infrastructure inspection.
+The study aims to distinguish improvements attributable to data quality from those attributable to model choice, and to document practical trade-offs for UAV edge and server-side analysis.
 
 ### **1.1 Gap Positioning** {#1.1-gap-positioning}
 
-Object detection models such as YOLO and DETR have shown good performance in many computer vision tasks. However, detecting defects in electrical infrastructure from UAV images still has several challenges.
+Public UAV power-line datasets vary in class definitions, annotation coverage and box quality. Combining them without controlled mapping and verification can introduce label inconsistencies, duplicate imagery and misleading benchmark results.
 
-Defects can be small compared with the whole image and may appear under different viewing angles, distances, lighting conditions, or backgrounds. Some defects may also have similar visual characteristics, which makes detection more difficult.
+Small objects, damaged conductor strands, nests and foreign objects are especially sensitive to scale, clutter, localization noise and missing labels. These issues motivate a dataset-quality study alongside architecture comparison.
 
-Many existing studies focus on improving individual detection models. However, the performance of different detector families may vary depending on the dataset and the type of defect.
+The initial six-class taxonomy covers insulator, insulator\_broken, insulator\_flashover, bird\_nest, foreign\_object and broken\_strand. Additional sources are candidates for expansion, not yet part of the verified baseline count.
 
-Therefore, this study focuses on experimentally comparing YOLO-based and DETR-based models under similar conditions. The results are then used to identify the main detection problems and determine whether selected modifications can improve the model performance.
+The research gap addressed here is the limited controlled evidence separating the effect of annotation curation from model scaling on a harmonized power-line inspection benchmark. Structural relationships among assets and defects form an exploratory follow-up question.
 
 ### **1.2 Proposed Research Concept & Solution Vision** {#1.2-proposed-research-concept-&-solution-vision}
 
-The proposed research concept is to develop an object detection pipeline that can support the automatic detection of electrical infrastructure defects from UAV images.
+The proposed framework uses multi-source ingestion, class harmonization, annotation auditing, duplicate control, human review and selective box refinement before reproducible model training and evaluation.
 
-The system receives an inspection image as input and uses a trained object detection model to locate and classify possible defects. Different detection models are first evaluated as baseline models.
+The proposal baseline comprises 21,767 images across six classes, with 17,483 training, 2,272 validation and 2,012 held-out test images. These counts describe the existing proposal baseline and will change only after a documented dataset revision.
 
-After the comparison, the model performance will be analyzed in more detail. For example, the study may examine missed detections, incorrect bounding boxes, false detections, and performance on small defects.
+Candidate expansion sources include Roboflow Transmission Detection (approximately 1,393 images as currently reported by the team), the Power Equipment Image Dataset (sxiong), MPCD and Open Images V7 with synthetic-mask-based foreign-object examples. Inclusion depends on licensing, annotation validation, class mapping and cross-source deduplication.
 
-Based on these results, selected modifications may be applied to the model or training process. The final model will then be evaluated again to determine whether the changes provide useful improvements.
+After the controlled benchmark, the team may investigate structural reasoning based on relationships among conductors, insulators, towers and defects. Such experiments require explicit hypotheses, baselines and ablations and are not presented as completed contributions.
 
 The expected solution can be summarized as:
 
-* UAV Image   
-* Image Preprocessing   
-* Object Detection Model   
-* Defect Location and Class   
-* Detection Result
+* UAV RGB images and source annotations  
+* Schema harmonization and dataset quality audit  
+* Raw/curated YOLO11, YOLO26 and RT-DETR training  
+* Held-out evaluation and error diagnosis  
+* Optional structural reasoning and deployment analysis
 
-The main goal is to find a model configuration that provides a reasonable balance between detection performance and computational cost.
+The intended result is a traceable dataset-and-model evaluation, with deployment suitability assessed separately for resource-limited edge hardware and server processing.
 
 ### **1.3 Strategic Research Approach Selection** 	 {#1.3-strategic-research-approach-selection}
 
-This study uses an experimental and comparative research approach.
+The core approach is a controlled data-centric comparative experiment, followed by an optional model-structure extension.
 
-Instead of developing a completely new object detection architecture from the beginning, the research starts with existing YOLO11s and DETR-based models. These models are trained and evaluated using the same or similar datasets and evaluation conditions.
+Six baseline detectors are evaluated across two training-data conditions, raw and curated, with consistent splits and documented training settings. The frozen test set is reserved for final comparison.
 
-The research is divided into three main stages. First, baseline models are trained and compared. Second, the detection results are analyzed to identify common problems. Finally, selected modifications or optimization methods are tested based on the problems found during the experiments.
+Dataset integration and audit precede model training. Benchmark results are analyzed by class, error type, latency and compute cost. Structural reasoning experiments, if undertaken, will use controlled ablations and will not replace the primary benchmark.
 
-This approach was selected because it allows the research to first understand the actual performance of existing models before making modifications. It also makes it easier to measure whether a proposed change provides an improvement compared with the original baseline.
+This design prioritizes reproducibility and avoids attributing gains to architectural changes when the training annotations also changed.
 
 ## **2\. Research Feasibility & Resource Assessment** {#2.-research-feasibility-&-resource-assessment}
 
-The research is considered feasible because the main tools and resources required for the experiments are available.
+The study is feasible as a staged experiment using publicly available image datasets, established detector implementations and reproducible scripts; additional data and structural reasoning remain conditional work packages.
 
-Public and collected image datasets can be used for model training and evaluation. Open-source deep learning frameworks such as PyTorch and Ultralytics provide implementations of object detection models and training tools.
+The existing proposal integrates six public sources. New candidate datasets require verification of redistribution terms, annotation quality, class correspondence and near-duplicate overlap before inclusion.
 
 GPU platforms such as Kaggle or other available computing resources can be used for model training. Model development, evaluation, and result analysis can also be performed using Python and common computer vision libraries.
 
-One limitation is that training large models can require significant GPU time. Therefore, the study will mainly focus on selected models instead of testing a very large number of architectures.
+GPU availability and training time may limit the full experiment matrix. The team will prioritize the fixed raw/curated baseline and document any deferred structural reasoning experiments.
 
-The research also depends on the quality of the available annotations. Dataset checking and preprocessing will therefore be an important part of the experimental process.
+Model-assisted label auditing can introduce false corrections; proposed additions, removals and SAM-assisted box refinements therefore require explicit rules, sampling checks and versioned human review.
 
 ## **3\. Expected Research Outcomes**	 {#3.-expected-research-outcomes}
 
-The expected outcome of this study is a comparison of the YOLO11s, SDI, SCI and StructDETR models for electrical infrastructure defect detection.
+Expected outcomes include a harmonized and versioned six-class benchmark, a documented annotation-curation protocol, and a controlled raw-versus-curated comparison across YOLO11n/m, YOLO26n/m and RT-DETR-R50/R101.
 
-The research is expected to identify the strengths and limitations of each model when detecting different types of defects. The experiments may also show which types of defects are more difficult to detect and which factors affect model performance.
+Evaluation will report precision, recall, F1, mAP50, mAP50-95, per-class failure modes, localization errors, latency and memory or compute trade-offs, with limitations clearly stated.
 
-Another expected outcome is an improved model or model configuration based on the results of the baseline experiments. This improvement may come from changes in the model, training method, image processing, or other selected optimization techniques.
+Potential extensions include vetted new data sources and structural reasoning modules. Their value will be assessed through separate controlled experiments rather than presumed in advance.
 
-The final result of the study is expected to include the trained model, experimental results, performance comparison, error analysis, and recommendations for future development.
+Deliverables comprise dataset manifests and version records, curation scripts, experiment configurations, checkpoints where feasible, comparative results, error analysis and research documentation.
 
 ## **4\. Responsibility Assignments** {#4.-responsibility-assignments-1}
 
 | Task | Main Responsibility | Owner |
 | ----- | ----- | ----- |
-| Dataset preparation | Collect, organize, clean, and verify image datasets and annotations | Phạm Hoàng Minh Châu; Trần Ánh Quốc (support)  |
-| Model research | Review YOLO, DETR, and related object detection methods | Phạm Hoàng Minh Châu  |
-| Model training | Prepare training environments and train baseline models | Phạm Hoàng Minh Châu  |
-| Model improvement | Test SDI/SCI and StructDETR modifications  | Trần Ánh Quốc (Support); Phạm Hoàng Minh Châu |
-| Evaluation | Calculate Precision, Recall, F1-score, mAP50, mAP50-95, per-class results and inference time  | Phạm Hoàng Minh Châu  |
-| Result analysis | Compare models and analyze detection errors | Phạm Hoàng Minh Châu; Trần Ánh Quốc  |
-| Documentation | Prepare research report, figures, tables, and presentation | Nguyễn Quốc Khánh; Nguyễn Nhật An |
-| System integration | Prepare the trained model for later UAV or application integration | Nguyễn Nhật An; Phạm Hoàng Minh Châu  |
+| Dataset preparation | Collect, organize, clean, and verify image datasets and annotations | Phạm Hoàng Minh Châu |
+| Model research | Review YOLO, DETR, and related object detection methods | Phạm Hoàng Minh Châu |
+| Model training | Prepare training environments and train baseline models | Phạm Hoàng Minh Châu |
+| Model improvement | Test data curation and structural reasoning modifications | Phạm Hoàng Minh Châu |
+| Evaluation | Calculate Precision, Recall, F1-score, mAP50, mAP50-95, per-class results and inference time | Phạm Hoàng Minh Châu |
+| Result analysis | Compare models and analyze detection errors | Phạm Hoàng Minh Châu |
+| Documentation | Prepare research report, figures, tables, and presentation | Phạm Hoàng Minh Châu |
+| System integration | Prepare the trained model for later UAV or application integration | Phạm Hoàng Minh Châu |
 
 ***Table 11\.** Responsibility Assignments table.*
 
 ## **5\. Research Roadmap & Milestone Planning** {#5.-research-roadmap-&-milestone-planning}
 
-| Stage | Main Activities | Expected Result | Period  |
+| Stage | Main Activities | Expected Result | Period |
 | ----- | ----- | ----- | ----- |
-| Stage 1 | Literature review and dataset study | Research background and selected datasets | 05/09-30/09/2026  |
-| Stage 2 | Dataset preparation and preprocessing | Clean, versioned dataset with a fixed train/validation/test split | 01/10-10/10/2026  |
-| Stage 3 | Baseline model training | Reproducible YOLO11s baseline results | 11/10-25/10/2026  |
-| Stage 4 | SDI/SCI experiments, model comparison and error analysis | SDI/SCI results and per-class error report | 26/10-08/11/2026  |
-| Stage 5 | StructDETR development and optimization | StructDETR candidate and improved model configuration | 01/11-15/11/2026  |
-| Stage 6 | Final evaluation | Final comparison and selected model | 16/11-22/11/2026  |
-| Stage 7 | Documentation and presentation | Final report and research presentation | 23/11-30/11/2026  |
+| Stage 1 | Literature review and dataset study | Research background and selected datasets | 05/09-30/09/2026 |
+| Stage 2 | Dataset preparation and preprocessing | Clean, versioned dataset with a fixed train/validation/test split | 01/10-10/10/2026 |
+| Stage 3 | Baseline model training | Reproducible baseline results for selected YOLO11, YOLO26 and RT-DETR models | 11/10-25/10/2026 |
+| Stage 4 | Raw-versus-curated controlled benchmarking and error analysis | Preliminary 2×6 comparison and per-class error report | 26/10-08/11/2026 |
+| Stage 5 | Structural reasoning feasibility and optional extension | Proposed structural constraints and evaluation plan, subject to feasibility | 01/11-15/11/2026 |
+| Stage 6 | Final evaluation | Final comparison and selected model | 16/11-22/11/2026 |
+| Stage 7 | Documentation and presentation | Final report and research presentation | 23/11-30/11/2026 |
 
 ***Table 12\.** Research Roadmap.*
 
-The schedule may be adjusted depending on training time and experiment results. If an experimental approach does not provide useful improvement, the result will still be recorded and used to support the final analysis.
+Research milestones are planning targets. Dataset expansion and structural reasoning may continue into the academic reporting period if the baseline comparison is complete and additional experiments remain feasible.
 
 ## **6\. Configuration Management** {#6.-configuration-management-1}
 
@@ -529,9 +527,9 @@ The schedule may be adjusted depending on training time and experiment results. 
 ### **6.1 Dataset Management** {#6.1-dataset-management}
 
 * Datasets used in the research will be organized into separate versions.  
-* Each dataset version will include information about the image source, class definitions, annotations, and train, validation, and test splits.  
+* Each dataset version records source, usage rights, taxonomy mapping, annotation decisions, deduplication results and split membership; proposed new sources are tracked separately until accepted.  
 * When changes are made to the dataset, such as removing invalid annotations or adding new images, a new dataset version will be created instead of replacing the previous version directly.  
-* The validation and test sets should remain separate from the training data to reduce the risk of data leakage.  
+* Near-duplicate checks must cover sources and partitions to reduce leakage; the held-out test set is not used to tune curation decisions or model hyperparameters.  
 * Dataset statistics such as the number of images, number of annotations, and number of samples per class will also be recorded.  
 * This allows experiments using different dataset versions to be compared more clearly.
 
