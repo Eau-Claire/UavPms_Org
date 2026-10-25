@@ -1,9 +1,10 @@
-using System.Runtime.Serialization;
+using System;
+using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Diagnostics;
-using NetTopologySuite.Geometries;
 using UavPms.IdentityService.Domain.Common;
 using UavPms.IdentityService.Domain.Entities;
 using UavPms.IdentityService.Domain.Interfaces.Services;
@@ -17,29 +18,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
-    public DbSet<Region> Regions => Set<Region>();
-    public DbSet<Substation> Substations => Set<Substation>();
-    public DbSet<TransmissionLine> TransmissionLines => Set<TransmissionLine>();
-    public DbSet<Tower> Towers => Set<Tower>();
-    public DbSet<Asset> Assets => Set<Asset>();
-    public DbSet<AssetHealthHistory> AssetHealthHistories => Set<AssetHealthHistory>();
-    public DbSet<Uav> Uavs => Set<Uav>();
-    public DbSet<Mission> Missions => Set<Mission>();
-    public DbSet<MissionTargetLine> MissionTargetLines => Set<MissionTargetLine>();
-    public DbSet<MissionFlightLog> MissionFlightLogs => Set<MissionFlightLog>();
-    public DbSet<InspectionMedia> InspectionMedia => Set<InspectionMedia>();
-    public DbSet<DefectCategory> DefectCategories => Set<DefectCategory>();
-    public DbSet<DetectedAnomaly> DetectedAnomalies => Set<DetectedAnomaly>();
-    public DbSet<EmergencyAlert> EmergencyAlerts => Set<EmergencyAlert>();
-    public DbSet<AlertEscalation> AlertEscalations => Set<AlertEscalation>();
-    public DbSet<IncidentReport> IncidentReports => Set<IncidentReport>();
-    public DbSet<MaintenanceTicket> MaintenanceTickets => Set<MaintenanceTicket>();
-    public DbSet<MaintenanceProof> MaintenanceProofs => Set<MaintenanceProof>();
-    public DbSet<MaterialLog> MaterialLogs => Set<MaterialLog>();
-    public DbSet<Notification> Notifications => Set<Notification>();
-    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
-    public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
+    public DbSet<UserGeographicScope> UserGeographicScopes => Set<UserGeographicScope>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     public ApplicationDbContext(
@@ -136,21 +117,6 @@ public class ApplicationDbContext : DbContext
                         auditEntry.OldValues[propertyName] = "[MASKED]";
                     continue;
                 }
-                // 2. Không gian địa lý: Chuyển dữ liệu NetTopologySuite Geometry sang WKT (Well-Known Text)
-                if (property.Metadata.ClrType.Namespace?.StartsWith("NetTopologySuite") == true)
-                {
-                    if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
-                    {
-                        if (property.CurrentValue is Geometry geom)
-                            auditEntry.NewValues[propertyName] = geom.AsText();
-                    }
-                    if (entry.State == EntityState.Deleted || entry.State == EntityState.Modified)
-                    {
-                        if (property.OriginalValue is Geometry geomOld)
-                            auditEntry.OldValues[propertyName] = geomOld.AsText();
-                    }
-                    continue;
-                }
                 switch (entry.State)
                 {
                     case EntityState.Added:
@@ -188,7 +154,6 @@ public class ApplicationDbContext : DbContext
             AuditLogs.Add(auditEntry.ToAuditLog());
         }
     } 
-    
 }
 
 public class AuditEntry 

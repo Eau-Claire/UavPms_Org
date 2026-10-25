@@ -30,12 +30,25 @@ public sealed class DroneTechnicalInspectionController : ControllerBase
     }
 
     [HttpGet("drone/{droneId:guid}/latest")]
+    [HttpGet("/api/v{version:apiVersion}/uavs/{droneId:guid}/inspections/latest")]
+    [HttpGet("/api/v{version:apiVersion}/uavs/{droneId:guid}/inspections")]
     public async Task<IActionResult> GetLatestForDrone(Guid droneId, CancellationToken ct)
     {
         var inspection = await _inspectionService.GetLatestInspectionAsync(droneId, ct);
         if (inspection == null)
             return NotFound(new { message = $"No technical inspection found for drone {droneId}." });
 
+        return Ok(inspection.ToDto());
+    }
+
+    [HttpPost("/api/v{version:apiVersion}/uavs/{droneId:guid}/inspections")]
+    [Authorize(Roles = $"{UserRoles.MaintenanceTechnician},Technician,{UserRoles.Manager},{UserRoles.SystemAdmin}")]
+    public async Task<IActionResult> SubmitUavInspection(Guid droneId, [FromBody] DroneInspectionSubmitRequest request, CancellationToken ct)
+    {
+        if (request.DroneId == Guid.Empty)
+            request = request with { DroneId = droneId };
+
+        var inspection = await _inspectionService.SubmitInspectionAsync(request, ct);
         return Ok(inspection.ToDto());
     }
 }

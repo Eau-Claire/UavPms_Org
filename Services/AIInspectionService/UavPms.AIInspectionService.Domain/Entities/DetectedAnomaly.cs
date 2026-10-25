@@ -33,9 +33,6 @@ public class DetectedAnomaly : BaseEntity
     public virtual DefectCategory? Category { get; set; }
     public virtual User? Analyst { get; set; }
 
-    public virtual ICollection<EmergencyAlert> EmergencyAlerts { get; set; } = new List<EmergencyAlert>();
-    public virtual ICollection<MaintenanceTicket> MaintenanceTickets { get; set; } = new List<MaintenanceTicket>();
-
     #region Rich domain methods
 
     public void Confirm(Guid analystId, string notes)

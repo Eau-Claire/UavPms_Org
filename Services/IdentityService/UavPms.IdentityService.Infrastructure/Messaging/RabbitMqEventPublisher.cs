@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using UavPms.IdentityService.Domain.Contracts;
 using UavPms.IdentityService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.IdentityService.Infrastructure.Messaging;
 
@@ -49,7 +50,7 @@ public class RabbitMqEventPublisher : IEventPublisher
             using var connection = await _rabbitMqConnection.CreateConnectionAsync();
             using var channel = await connection.CreateChannelAsync();
 
-            var exchangeName = "identity-exchange";
+            var exchangeName = EventTopologyConstants.Exchange;
             await channel.ExchangeDeclareAsync(
                 exchange: exchangeName,
                 type: ExchangeType.Topic,

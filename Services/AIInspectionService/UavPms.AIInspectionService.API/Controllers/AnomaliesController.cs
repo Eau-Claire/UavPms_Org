@@ -86,7 +86,7 @@ public class AnomaliesController : ControllerBase
                 aiModelName = a.AiSource ?? "YOLOv8-PowerGrid-v2.4",
                 createdAt = a.CreatedAt.ToString("o"),
                 severity = a.Category?.SeverityWeight ?? 4,
-                isEmergency = a.EmergencyAlerts != null && a.EmergencyAlerts.Count > 0
+                isEmergency = a.Category?.IsEmergencyClass == true
             })
             .ToList();
 

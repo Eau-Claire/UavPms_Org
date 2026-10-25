@@ -167,6 +167,7 @@ public class UploadInspectionImageCommandHandler
             Id = Guid.NewGuid(),
             MissionId = request.MissionId,
             AssetId = request.AssetId,
+            TowerId = request.TowerId ?? (asset.TowerId != Guid.Empty ? (Guid?)asset.TowerId : (request.AssetId != Guid.Empty ? (Guid?)request.AssetId : null)),
             UploadedBy = currentUserId,
             CaptureLocation = effectiveLat.HasValue && effectiveLng.HasValue
                 ? new Point(effectiveLng.Value, effectiveLat.Value) { SRID = 4326 }
@@ -245,6 +246,7 @@ public class UploadInspectionImageCommandHandler
         {
             MediaId = media.Id,
             MissionId = media.MissionId,
+            TowerId = media.TowerId,
             FileUrl = media.FileUrl,
             MediaType = media.MediaType,
             CapturedAt = media.CapturedAt

@@ -6,19 +6,26 @@ using UavPms.OperationsService.Application.Features.Assessments.DTOs;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.Shared.Contracts.Constants;
 
+using MediatR;
+using UavPms.OperationsService.Application.Features.Assessments.Commands.ConfirmAssessment;
+using UavPms.OperationsService.Application.Features.Assessments.Queries.EvaluateResourceReadiness;
+
 namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [ApiVersion("2.0")]
 [Route("api/v{version:apiVersion}/pre-mission-assessments")]
+[Route("api/v{version:apiVersion}/assessments")]
 [Authorize(Roles = UserRoles.AdminManagerInspector)]
 public sealed class PreMissionAssessmentV2Controller : ControllerBase
 {
     private readonly PreMissionAssessmentService _service;
+    private readonly ISender? _mediator;
 
-    public PreMissionAssessmentV2Controller(PreMissionAssessmentService service)
+    public PreMissionAssessmentV2Controller(PreMissionAssessmentService service, ISender? mediator = null)
     {
         _service = service;
+        _mediator = mediator;
     }
 
     [HttpPost]
@@ -108,6 +115,31 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelAssessmentRequest? request, CancellationToken ct)
     {
         var assessment = await _service.CancelAsync(id, request?.Reason, ct);
+        return Ok(assessment.ToDto());
+    }
+
+    [HttpPost("{id:guid}/confirm")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> Confirm(Guid id, CancellationToken ct)
+    {
+        if (_mediator != null)
+        {
+            var result = await _mediator.Send(new ConfirmAssessmentCommand(id), ct);
+            return Ok(result);
+        }
+        var assessment = await _service.EvaluateAsync(id, ct);
+        return Ok(assessment.ToDto());
+    }
+
+    [HttpGet("{id:guid}/resource-readiness")]
+    public async Task<IActionResult> GetResourceReadiness(Guid id, CancellationToken ct)
+    {
+        if (_mediator != null)
+        {
+            var result = await _mediator.Send(new EvaluateResourceReadinessQuery(id), ct);
+            return Ok(result);
+        }
+        var assessment = await _service.EvaluateAsync(id, ct);
         return Ok(assessment.ToDto());
     }
 }

@@ -77,6 +77,14 @@ public sealed class OutboxDispatcher : BackgroundService
             JsonSerializer.Deserialize<InspectionMediaUploadedEvent>(payload)
             ?? throw new JsonException("Invalid inspection media outbox payload.")),
 
+        nameof(MissionDispatchedEvent) => publisher.PublishAsync(
+            JsonSerializer.Deserialize<MissionDispatchedEvent>(payload)
+            ?? throw new JsonException("Invalid mission dispatched outbox payload.")),
+
+        nameof(MaintenanceTicketAssignedEvent) => publisher.PublishAsync(
+            JsonSerializer.Deserialize<MaintenanceTicketAssignedEvent>(payload)
+            ?? throw new JsonException("Invalid maintenance ticket assigned outbox payload.")),
+
         "MissionCreatedFromAssessment" or nameof(MissionCreatedFromAssessmentEvent) => publisher.PublishAsync(
             JsonSerializer.Deserialize<MissionCreatedFromAssessmentEvent>(payload)
             ?? throw new JsonException("Invalid mission created from assessment outbox payload.")),

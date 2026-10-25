@@ -10,12 +10,13 @@ using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.OperationsService.Application.Common.Interfaces;
+using UavPms.OperationsService.Application.Features.Assessments;
 using UavPms.Shared.Contracts.Constants;
 using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.OperationsService.Infrastructure.Services;
 
-public sealed class PreMissionAssessmentService
+public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 {
     private readonly ApplicationDbContext _db;
     private readonly ICurrentUserServices _current;

@@ -131,10 +131,43 @@ public class TowerConfiguration : IEntityTypeConfiguration<Tower>
         builder.HasIndex(e => e.Geom).HasMethod("gist");
         builder.HasIndex(e => e.TowerCode).IsUnique();
 
+        builder.Property(e => e.LineCode).HasMaxLength(100);
+        builder.Property(e => e.Voltage).HasMaxLength(50);
+        builder.Property(e => e.PoleType).HasMaxLength(100);
+        builder.Property(e => e.Address).HasMaxLength(500);
+        builder.Property(e => e.RiskLevel).HasMaxLength(20).HasDefaultValue("Normal");
+        builder.Property(e => e.ActiveDefectsCount).HasDefaultValue(0);
+
+        builder.HasIndex(e => e.RegionId);
+        builder.HasIndex(e => e.RiskLevel);
+        builder.HasIndex(e => e.LineCode);
+
+        builder.HasOne(e => e.Region)
+            .WithMany()
+            .HasForeignKey(e => e.RegionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasOne(e => e.TransmissionLine)
             .WithMany(l => l.Towers)
             .HasForeignKey(e => e.LineAssetId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class TowerConditionHistoryConfiguration : IEntityTypeConfiguration<TowerConditionHistory>
+{
+    public void Configure(EntityTypeBuilder<TowerConditionHistory> builder)
+    {
+        builder.ToTable("TowerConditionHistories");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.RiskLevel).HasMaxLength(30).HasDefaultValue("Normal");
+        builder.HasIndex(e => e.TowerId);
+        builder.HasIndex(e => e.AssessedAt);
+
+        builder.HasOne(e => e.Tower)
+            .WithMany(t => t.ConditionHistories)
+            .HasForeignKey(e => e.TowerId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 
@@ -473,6 +506,8 @@ public class MissionCheckInConfiguration : IEntityTypeConfiguration<MissionCheck
     {
         builder.ToTable("MissionCheckIns"); builder.HasKey(x => x.Id);
         builder.Property(x => x.Status).HasConversion<string>();
+        builder.Property(x => x.CheckInLocation).HasColumnType("geometry");
+        builder.HasIndex(x => x.CheckInLocation).HasMethod("gist");
         builder.HasIndex(x => new { x.MissionId, x.UserId }).IsUnique().HasFilter("NOT \"IsDeleted\"");
         builder.HasOne(x => x.Mission).WithMany(x => x.CheckIns).HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
@@ -484,11 +519,15 @@ public class DroneHandoverConfiguration : IEntityTypeConfiguration<DroneHandover
     public void Configure(EntityTypeBuilder<DroneHandover> builder)
     {
         builder.ToTable("DroneHandovers"); builder.HasKey(x => x.Id);
-        builder.Property(x => x.Condition).HasMaxLength(500).IsRequired();
+        builder.Property(x => x.Condition).HasMaxLength(500);
+        builder.Property(x => x.InitialChecklist).HasColumnType("jsonb");
+        builder.Property(x => x.ReturnChecklist).HasColumnType("jsonb");
         builder.Property(x => x.Status).HasConversion<string>();
         builder.HasIndex(x => new { x.MissionId, x.DroneId }).IsUnique().HasFilter("\"ReturnedAt\" IS NULL AND NOT \"IsDeleted\"");
         builder.HasOne(x => x.Mission).WithMany(x => x.DroneHandovers).HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.Drone).WithMany().HasForeignKey(x => x.DroneId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.HandedOverByUser).WithMany().HasForeignKey(x => x.HandedOverBy).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.ReceivedByUser).WithMany().HasForeignKey(x => x.ReceivedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -595,7 +634,7 @@ public class InspectionMediaConfiguration : IEntityTypeConfiguration<InspectionM
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Tower)
-            .WithMany()
+            .WithMany(t => t.InspectionMedia)
             .HasForeignKey(e => e.TowerId)
             .OnDelete(DeleteBehavior.Restrict);
     }
@@ -620,6 +659,7 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
         builder.HasKey(e => e.Id);
         builder.Property(e => e.BoundingBox).HasColumnType("jsonb");
         builder.Property(e => e.Gps).HasColumnType("jsonb");
+        builder.Property(e => e.AnalystFeedback).HasColumnType("jsonb");
         builder.Property(e => e.AiDetectionId).HasMaxLength(128);
         builder.Property(e => e.TowerId).HasMaxLength(128);
         builder.HasIndex(e => new { e.MediaId, e.AiDetectionId })
@@ -667,6 +707,12 @@ public class EmergencyAlertConfiguration : IEntityTypeConfiguration<EmergencyAle
             .HasForeignKey(e => e.AssetId)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Tower)
+            .WithMany(t => t.EmergencyAlerts)
+            .HasForeignKey(e => e.TowerId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(e => e.Mission)
             .WithMany(m => m.EmergencyAlerts)
@@ -725,7 +771,14 @@ public class IncidentReportConfiguration : IEntityTypeConfiguration<IncidentRepo
         builder.HasOne(e => e.Asset)
             .WithMany(a => a.IncidentReports)
             .HasForeignKey(e => e.AssetId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Tower)
+            .WithMany(t => t.IncidentReports)
+            .HasForeignKey(e => e.TowerId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 
@@ -748,7 +801,14 @@ public class MaintenanceTicketConfiguration : IEntityTypeConfiguration<Maintenan
         builder.HasOne(e => e.Asset)
             .WithMany(a => a.MaintenanceTickets)
             .HasForeignKey(e => e.AssetId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Tower)
+            .WithMany(t => t.MaintenanceTickets)
+            .HasForeignKey(e => e.TowerId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(e => e.Manager)
             .WithMany()
@@ -768,6 +828,7 @@ public class MaintenanceProofConfiguration : IEntityTypeConfiguration<Maintenanc
     {
         builder.ToTable("MaintenanceProofs");
         builder.HasKey(e => e.Id);
+        builder.Property(e => e.ProofType).HasMaxLength(30).HasDefaultValue("After");
 
         builder.HasOne(e => e.Ticket)
             .WithMany(t => t.MaintenanceProofs)

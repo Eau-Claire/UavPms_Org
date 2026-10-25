@@ -388,6 +388,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("AnalystFeedback")
+                        .HasColumnType("jsonb");
+
                     b.Property<Guid?>("AnalystId")
                         .HasColumnType("uuid");
 
@@ -484,6 +487,73 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.ToTable("DetectedAnomalies", (string)null);
                 });
 
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.DroneFlightController", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BoardIdentifier")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DroneId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FirmwareName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FirmwareVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FlightControllerUid")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("PairedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UnpairedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DroneId", "IsActive")
+                        .HasFilter("\"IsActive\" AND NOT \"IsDeleted\"");
+
+                    b.HasIndex("FlightControllerUid", "IsActive")
+                        .HasFilter("\"IsActive\" AND NOT \"IsDeleted\"");
+
+                    b.ToTable("DroneFlightControllers", (string)null);
+                });
+
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.DroneHandover", b =>
                 {
                     b.Property<Guid>("Id")
@@ -510,6 +580,10 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Property<Guid>("HandedOverBy")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("InitialChecklist")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -521,6 +595,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<Guid>("ReceivedBy")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ReturnChecklist")
+                        .HasColumnType("jsonb");
 
                     b.Property<DateTime?>("ReturnedAt")
                         .HasColumnType("timestamp with time zone");
@@ -538,6 +615,10 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DroneId");
+
+                    b.HasIndex("HandedOverBy");
+
+                    b.HasIndex("ReceivedBy");
 
                     b.HasIndex("MissionId", "DroneId")
                         .IsUnique()
@@ -750,6 +831,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("TowerId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("TriggeredAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -769,6 +853,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasIndex("ReviewedByUserId");
 
+                    b.HasIndex("TowerId");
+
                     b.ToTable("EmergencyAlerts", (string)null);
                 });
 
@@ -778,7 +864,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AssetId")
+                    b.Property<Guid?>("AssetId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
@@ -822,6 +908,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("TowerId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -835,6 +924,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasIndex("MissionId");
 
                     b.HasIndex("ReportedBy");
+
+                    b.HasIndex("TowerId");
 
                     b.ToTable("IncidentReports", (string)null);
                 });
@@ -1047,6 +1138,13 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("ProofType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("After");
+
                     b.Property<string>("TechnicianNotes")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1084,7 +1182,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Property<Guid>("AnomalyId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AssetId")
+                    b.Property<Guid?>("AssetId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("AssignedAt")
@@ -1133,6 +1231,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("TowerId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1151,6 +1252,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasIndex("TicketCode")
                         .IsUnique();
+
+                    b.HasIndex("TowerId");
 
                     b.ToTable("MaintenanceTickets", (string)null);
                 });
@@ -1518,6 +1621,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Geometry>("CheckInLocation")
+                        .HasColumnType("geometry");
+
                     b.Property<DateTime>("CheckedInAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1550,6 +1656,10 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CheckInLocation");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("CheckInLocation"), "gist");
 
                     b.HasIndex("UserId");
 
@@ -1938,6 +2048,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Property<Guid>("AssessmentId")
                         .HasColumnType("uuid");
 
+                    b.Property<double>("CoverageDistanceKm")
+                        .HasColumnType("double precision");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1949,6 +2062,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<Guid>("DroneId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("EstimatedFlightsNeeded")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -1965,6 +2081,13 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<DateTime>("SnapshotAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Suitability")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SuitabilityReason")
+                        .HasColumnType("text");
 
                     b.Property<string>("TechnicalEligibilityStatus")
                         .IsRequired()
@@ -2476,6 +2599,15 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("ActiveDefectsCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2491,8 +2623,30 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("LastInspectedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("LineAssetId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("LineCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PoleType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("RegionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RiskLevel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Normal");
 
                     b.Property<string>("TowerCode")
                         .IsRequired()
@@ -2504,6 +2658,11 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Voltage")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Geom");
@@ -2512,10 +2671,65 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasIndex("LineAssetId");
 
+                    b.HasIndex("LineCode");
+
+                    b.HasIndex("RegionId");
+
+                    b.HasIndex("RiskLevel");
+
                     b.HasIndex("TowerCode")
                         .IsUnique();
 
                     b.ToTable("Towers", (string)null);
+                });
+
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.TowerConditionHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ActiveDefectsCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("AssessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RiskLevel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("Normal");
+
+                    b.Property<Guid>("TowerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssessedAt");
+
+                    b.HasIndex("TowerId");
+
+                    b.ToTable("TowerConditionHistories", (string)null);
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.TransmissionLine", b =>
@@ -2642,8 +2856,24 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AssignedRegionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AssignedRegionName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<double>("BatteryLevel")
                         .HasColumnType("double precision");
+
+                    b.Property<string>("CameraPayloadInfo")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2657,6 +2887,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<double>("FlightEnduranceMinutes")
+                        .HasColumnType("double precision");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -2668,11 +2901,25 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Model")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<double>("OperationalRangeKm")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("OperationalStatus")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("SerialNumber")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -3026,11 +3273,28 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Navigation("Media");
                 });
 
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.DroneFlightController", b =>
+                {
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Uav", "Drone")
+                        .WithMany("FlightControllers")
+                        .HasForeignKey("DroneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Drone");
+                });
+
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.DroneHandover", b =>
                 {
                     b.HasOne("UavPms.OperationsService.Domain.Entities.Uav", "Drone")
                         .WithMany()
                         .HasForeignKey("DroneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.User", "HandedOverByUser")
+                        .WithMany()
+                        .HasForeignKey("HandedOverBy")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -3040,9 +3304,19 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.User", "ReceivedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReceivedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Drone");
 
+                    b.Navigation("HandedOverByUser");
+
                     b.Navigation("Mission");
+
+                    b.Navigation("ReceivedByUser");
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.DroneTechnicalInspection", b =>
@@ -3079,8 +3353,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasOne("UavPms.OperationsService.Domain.Entities.DetectedAnomaly", "Anomaly")
                         .WithMany("EmergencyAlerts")
                         .HasForeignKey("AnomalyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("UavPms.OperationsService.Domain.Entities.Asset", "Asset")
                         .WithMany("EmergencyAlerts")
@@ -3090,12 +3363,16 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasOne("UavPms.OperationsService.Domain.Entities.Mission", "Mission")
                         .WithMany("EmergencyAlerts")
                         .HasForeignKey("MissionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("UavPms.OperationsService.Domain.Entities.User", "ReviewedByUser")
                         .WithMany()
                         .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Tower", "Tower")
+                        .WithMany("EmergencyAlerts")
+                        .HasForeignKey("TowerId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Anomaly");
@@ -3105,6 +3382,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Navigation("Mission");
 
                     b.Navigation("ReviewedByUser");
+
+                    b.Navigation("Tower");
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.IncidentReport", b =>
@@ -3112,8 +3391,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasOne("UavPms.OperationsService.Domain.Entities.Asset", "Asset")
                         .WithMany("IncidentReports")
                         .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("UavPms.OperationsService.Domain.Entities.Mission", "Mission")
                         .WithMany("IncidentReports")
@@ -3127,11 +3405,18 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Tower", "Tower")
+                        .WithMany("IncidentReports")
+                        .HasForeignKey("TowerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Asset");
 
                     b.Navigation("Mission");
 
                     b.Navigation("Reporter");
+
+                    b.Navigation("Tower");
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.InspectionMedia", b =>
@@ -3148,7 +3433,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .IsRequired();
 
                     b.HasOne("UavPms.OperationsService.Domain.Entities.Tower", "Tower")
-                        .WithMany()
+                        .WithMany("InspectionMedia")
                         .HasForeignKey("TowerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
@@ -3234,8 +3519,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasOne("UavPms.OperationsService.Domain.Entities.Asset", "Asset")
                         .WithMany("MaintenanceTickets")
                         .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("UavPms.OperationsService.Domain.Entities.User", "Manager")
                         .WithMany()
@@ -3249,6 +3533,11 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Tower", "Tower")
+                        .WithMany("MaintenanceTickets")
+                        .HasForeignKey("TowerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Anomaly");
 
                     b.Navigation("Asset");
@@ -3256,6 +3545,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Navigation("Manager");
 
                     b.Navigation("Technician");
+
+                    b.Navigation("Tower");
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.ManagementUnit", b =>
@@ -3647,7 +3938,25 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Region", "Region")
+                        .WithMany()
+                        .HasForeignKey("RegionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Region");
+
                     b.Navigation("TransmissionLine");
+                });
+
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.TowerConditionHistory", b =>
+                {
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Tower", "Tower")
+                        .WithMany("ConditionHistories")
+                        .HasForeignKey("TowerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tower");
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.TransmissionLine", b =>
@@ -3828,6 +4137,16 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.Tower", b =>
                 {
                     b.Navigation("Assets");
+
+                    b.Navigation("ConditionHistories");
+
+                    b.Navigation("EmergencyAlerts");
+
+                    b.Navigation("IncidentReports");
+
+                    b.Navigation("InspectionMedia");
+
+                    b.Navigation("MaintenanceTickets");
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.TransmissionLine", b =>
@@ -3843,6 +4162,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.Uav", b =>
                 {
+                    b.Navigation("FlightControllers");
+
                     b.Navigation("Missions");
 
                     b.Navigation("TechnicalInspections");

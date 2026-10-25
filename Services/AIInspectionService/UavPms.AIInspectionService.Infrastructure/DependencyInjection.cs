@@ -79,30 +79,10 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IUserRepository, UserRepository>();
-        
-        // Đăng ký các Repositories quản lý phân cấp lưới điện & tài sản
-        services.AddScoped<IRegionRepository, RegionRepository>();
-        services.AddScoped<ISubstationRepository, SubstationRepository>();
-        services.AddScoped<ITransmissionLineRepository, TransmissionLineRepository>();
-        
-        // Đăng ký các Repositories đặc thù 
-        services.AddScoped<ITowerRepository, TowerRepository>();
-        services.AddScoped<IAssetRepository, AssetRepository>();
         services.AddScoped<IAnomalyRepository, AnomalyRepository>();
-        services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();
         services.AddScoped<IMissionRepository, MissionRepository>();
         services.AddScoped<IUavRepository, UavRepository>();
-
-        // Đăng ký Notification Repository
         services.AddScoped<INotificationRepository, NotificationRepository>();
-
-        // Đăng ký Monitor Repository
-        services.AddScoped<IMonitorRepository, MonitorRepository>();
-
-        // Đăng ký Audit Log Repository
-        services.AddScoped<IAuditLogRepository, AuditLogRepository>();
-
-        // Đăng ký Inspection Media Repository
         services.AddScoped<IInspectionMediaRepository, InspectionMediaRepository>();
 
         // Đăng ký HttpContextAccessor và CurrentUserServices

@@ -160,6 +160,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             var activeAssessments = await _db.PreMissionAssessmentDrones
                 .Include(pad => pad.Assessment)
                 .Where(pad => pad.DroneId == drone.Id &&
+                              pad.Assessment != null &&
                               pad.Assessment.Status != PreMissionAssessmentStatus.Completed &&
                               pad.Assessment.Status != PreMissionAssessmentStatus.Cancelled &&
                               pad.Assessment.Status != PreMissionAssessmentStatus.Expired)

@@ -11,4 +11,13 @@ public interface ITowerRepository : IGenericRepository<Tower>
         int pageSize,
         Guid? lineAssetId
     );
+
+    Task<(IReadOnlyList<Tower> Items, int TotalCount)> GetTowersPagedAsync(
+        int page, 
+        int pageSize,
+        Guid? lineAssetId,
+        Guid? regionId,
+        string? lineCode,
+        string? riskLevel
+    );
 }

@@ -26,6 +26,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ManagementUnit> ManagementUnits => Set<ManagementUnit>();
     public DbSet<UavPms.OperationsService.Domain.Entities.LineSegment> LineSegments => Set<UavPms.OperationsService.Domain.Entities.LineSegment>();
     public DbSet<Tower> Towers => Set<Tower>();
+    public DbSet<TowerConditionHistory> TowerConditionHistories => Set<TowerConditionHistory>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<AssetHealthHistory> AssetHealthHistories => Set<AssetHealthHistory>();
     public DbSet<Uav> Uavs => Set<Uav>();

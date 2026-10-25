@@ -1,41 +1,34 @@
 # 📋 TÀI LIỆU ĐẶC TẢ API (API SPECIFICATION) - UAV-PMS SYSTEM
-
-Hệ thống UAV tích hợp AI để kiểm tra, giám sát và quản lý bảo trì hạ tầng lưới điện truyền tải.
+**Hệ thống Quản lý và Giám sát Lưới điện bằng Thiết bị bay không người lái (UAV PMS)**
+*Phiên bản chuẩn hóa toàn diện: Hợp nhất MF01 - MF04 (Đồng bộ 100% với `docs/ERD_SYSTEM_MF01_TO_MF04.md`)*
 
 ---
 
 ## 1. QUY ƯỚC CHUNG (GENERAL CONVENTIONS)
 
-- **Base URL Gateway**:
-  - **Production**: `https://uavpms.ddns.net`
-  - **Local Development**: `http://localhost:5194`
-- **Tiền tố API**: `/api/v1` (Hầu hết các endpoints) hoặc `/api/v2` (Dành riêng cho Pre-Mission Assessments v2 & Missions v2).
-- **Định dạng dữ liệu**: `application/json` cho request/response tiêu chuẩn, `multipart/form-data` cho upload ảnh/file Excel.
-- **Xác thực (Authentication)**: Gửi Bearer JWT Token qua HTTP Request Header:
-  ```http
-  Authorization: Bearer <access_token>
-  ```
+### 1.1. Base URL & Môi trường Triển khai
+- **Local Development (Qua API Gateway Ocelot)**: `http://localhost:5194`
+- **Staging / Production (Gateway)**: `https://uavpms.ddns.net`
+- **Tiền tố API**:
+  - `/api/v1`: Toàn bộ các API tiêu chuẩn của hệ thống (Auth, Users, GIS, Missions MF02, Execution MF03, AI Review MF04, Maintenance, Notifications).
+  - `/api/v2`: Dành riêng cho luồng Đánh giá Tiền khả thi MF01 (`/api/v2/assessments`).
 
-> [!WARNING]
-> ### QUY TẮC BẮT BUỘC VỀ ID TRÊN PATH (PATH PARAMETERS)
-> Mọi tham số `{id}`, `{missionId}`, `{droneId}`, `{userId}`, `{assetId}`, `{towerId}`, v.v. trên URL định tuyến backend đều áp dụng ràng buộc **`guid`** (UUID chuẩn 36 ký tự: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
-> - ✅ **HỢP LỆ**: `GET /api/v1/missions/3fa85f64-5717-4562-b3fc-2c963f66afa6/assignments`
-> - ❌ **LỖI 404 NOT FOUND**: `GET /api/v1/missions/msn-icrfyl/assignments` *(Do `msn-icrfyl` là chuỗi code/text, router ASP.NET không match regex GUID dẫn đến trả về 404 Not Found ngay lập tức).*
->
-> **Frontend bắt buộc phải truyền `mission.id` (GUID) thay vì mã `mission.missionCode`!**
+### 1.2. Ràng buộc Path Parameters (Bắt buộc GUID)
+Mọi tham số ID trên URL định tuyến backend (`{id}`, `{missionId}`, `{towerId}`, `{droneId}`, `{userId}`, `{ticketId}`, `{anomalyId}`, v.v.) đều áp dụng ràng buộc **`guid`** (UUID 36 ký tự: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
+- ✅ **HỢP LỆ**: `GET /api/v1/missions/3fa85f64-5717-4562-b3fc-2c963f66afa6`
+- ❌ **LỖI 404 NOT FOUND**: `GET /api/v1/missions/MS-2026-0001` *(Router ASP.NET không match regex GUID dẫn đến trả về 404 Not Found ngay lập tức).*
 
----
-
-### Chuẩn Phản hồi (API Response Envelope)
-Tất cả các API trả về theo cấu trúc đóng gói thống nhất `ApiResponse`:
+### 1.3. Chuẩn Đóng gói Phản hồi (API Response Envelope)
+Tất cả các API trả về theo cấu trúc đóng gói thống nhất `ApiResponse<T>`:
 ```json
 {
   "success": true,
-  "message": "Thông điệp phản hồi từ máy chủ",
+  "message": "Thao tác thành công.",
   "data": { ... }
 }
 ```
-Trường hợp phân trang (`Pagination`), trường `data` tuân thủ format:
+
+Trường hợp danh sách có phân trang (`Pagination`), trường `data` tuân thủ format:
 ```json
 {
   "success": true,
@@ -50,633 +43,579 @@ Trường hợp phân trang (`Pagination`), trường `data` tuân thủ format:
 }
 ```
 
+Trường hợp lỗi nghiệp vụ / validation:
+```json
+{
+  "success": false,
+  "message": "Dữ liệu không hợp lệ hoặc xung đột nghiệp vụ.",
+  "errors": [
+    "Thời gian bắt đầu nhiệm vụ không được ở trong quá khứ.",
+    "Drone đã được gán cho một nhiệm vụ khác trong khung giờ này."
+  ]
+}
+```
+
+### 1.4. Xác thực & Phân quyền (Authentication & RBAC)
+Gửi Bearer JWT Token qua HTTP Request Header:
+```http
+Authorization: Bearer <access_token>
+```
+
+Hệ thống định nghĩa 6 vai trò tiêu chuẩn (`UserRoles`):
+1. **`SystemAdmin`**: Toàn quyền cấu hình hệ thống, quản lý tài khoản, gán quyền, xem toàn bộ Audit Logs.
+2. **`Manager`**: Quản lý vận hành khu vực; lập đánh giá tiền khả thi (MF01), tạo & phân công nhiệm vụ (MF02), phát lệnh bảo trì, duyệt cảnh báo sự cố.
+3. **`Pilot` / `Inspector`**: Phi công / Thanh tra viên hiện trường; check-in, nhận/trả drone (MF03), tải ảnh kiểm tra, nạp log bay, báo cáo sự cố.
+4. **`Analyst`**: Chuyên viên phân tích AI; duyệt/bác bỏ kết quả phát hiện khiếm khuyết của YOLOv8, gắn phản hồi chuyên môn (MF04).
+5. **`Technician`**: Kỹ thuật viên kiểm định drone (MF02) và thợ bảo trì sửa chữa cột điện hiện trường (MF04).
+
 ---
 
-## 2. PHÂN QUYỀN VAI TRÒ (ROLE-BASED ACCESS CONTROL - RBAC)
-
-Các vai trò được định nghĩa trong hệ thống (`UserRoles`):
-- `SystemAdmin`: Quản trị hệ thống, CRUD tài khoản, phân quyền, xem toàn bộ Audit Logs.
-- `Manager`: Lập kế hoạch bay, phân công phi công, gán UAV, duyệt báo cáo kiểm định, duyệt kết quả AI.
-- `Inspector`: Phi công/kỹ thuật viên bay UAV, nhận nhiệm vụ được giao, check-in hiện trường, bàn giao drone, tải lên ảnh kiểm tra và log bay.
-- `Analyst`: Chuyên viên phân tích AI, duyệt/bác bỏ phát hiện khuyết tật của YOLOv8, xử lý cảnh báo sự cố.
-- `MaintenanceTechnician` / `Technician`: Kỹ thuật viên bảo trì, kiểm định kỹ thuật drone định kỳ trước chuyến bay.
-
----
-
-## 3. SƠ ĐỒ ĐIỀU HƯỚNG API GATEWAY (OCELOT)
+## 2. SƠ ĐỒ ĐIỀU HƯỚNG GATEWAY (OCELOT ARCHITECTURE)
 
 ```mermaid
 graph TD
-    Client[Frontend Client / App] -->|HTTP/HTTPS| Gateway[UavPms.ApiGateway :5194]
+    Client[Web Frontend / Mobile App / Vision Edge] -->|HTTP / WebSocket| Gateway[UavPms.ApiGateway :5194]
     Gateway -->|/api/v1/auth, /api/v1/users| Identity[IdentityService :8080]
-    Gateway -->|/api/v1/missions, /lines, /towers, /assets, /reports...| Operations[OperationsService :8080]
+    Gateway -->|/api/v1/regions, /towers, /uavs, /missions, /maintenance...| Operations[OperationsService :8080]
+    Gateway -->|/api/v2/assessments| Operations
     Gateway -->|/api/v1/ai-analysis, /api/v1/vision| AIInspection[AIInspectionService :8080]
     Gateway -->|/api/v1/notifications, /hubs/notifications| Notification[NotificationService :8080]
-    Gateway -->|/ai-service| FastAPIAI[fastapi-ai :8000]
+    Gateway -->|/hangfire| Notification
 ```
 
 ---
 
-## 4. CHI TIẾT TỪNG MODULE API
+## 3. CHI TIẾT TỪNG MODULE API
 
 ---
 
-### MODULE 4.1: XÁC THỰC & BẢO MẬT (IDENTITY - AUTH & OTP)
+### MODULE 1: XÁC THỰC & NGƯỜI DÙNG (IDENTITYSERVICE)
 
 > [!TIP]
-> **MÃ OTP MẶC ĐỊNH CHO MÔI TRƯỜNG TEST / DEV**:
-> Hiện tại hệ thống đã được cấu hình mã OTP mặc định là **`123456`** cho toàn bộ các luồng xác thực và phân quyền (Authentication / Authorization / Step-Up / Quên mật khẩu). Khi test trên Frontend, bạn có thể nhập trực tiếp `123456` vào ô OTP mà không cần chờ email.
+> **MÃ OTP MÔI TRƯỜNG DEV/TEST**: Mặc định là **`123456`**.
 
-#### [POST] `/api/v1/auth/login`
+#### 1.1. [POST] `/api/v1/auth/login`
 - **Mô tả**: Đăng nhập tài khoản bằng email và mật khẩu. Tự động kiểm tra thiết bị tin cậy (`device_trust_token`).
 - **Phân quyền**: Public
 - **Request Body**:
   ```json
   {
-    "email": "admin@uavpms.com",
-    "password": "Password123@"
+    "email": "manager@uavpms.com",
+    "password": "Password123@",
+    "deviceFingerprint": "browser-chrome-linux-uuid"
   }
   ```
 - **Response `200 OK` (Khi không yêu cầu OTP)**:
   ```json
   {
     "success": true,
-    "message": "Success",
+    "message": "Đăng nhập thành công.",
     "data": {
-      "accessToken": "eyJhbGciOi...",
-      "tokenType": "Bearer",
-      "refreshToken": "d8a1f81d-6b58-45b7-a3c3-63023e3e2b2a",
-      "expiresIn": 3600,
-      "deviceTrustToken": "...",
+      "requiresOtp": false,
+      "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+      "refreshToken": "7a90ab8e-5b12-4a...",
+      "expiresAt": "2026-10-19T21:30:00Z",
       "user": {
-        "id": "e586b4a3-7649-43a9-a9a3-5c742f8c5cf1",
-        "email": "admin@uavpms.com",
-        "fullName": "System Administrator",
-        "roles": ["SystemAdmin"]
+        "id": "11111111-1111-1111-1111-111111111111",
+        "username": "manager_hp",
+        "email": "manager@uavpms.com",
+        "fullName": "Nguyễn Văn Quản Lý",
+        "roles": ["Manager"]
       }
     }
   }
   ```
-- **Response `200 OK` (Khi yêu cầu OTP trên thiết bị mới)**:
-  ```json
-  {
-    "success": true,
-    "message": "OTP required",
-    "data": {
-      "email": "admin@uavpms.com"
-    }
-  }
-  ```
 
-#### [POST] `/api/v1/auth/refresh-token`
-- **Mô tả**: Cấp lại Access Token mới từ Refresh Token.
+#### 1.2. [POST] `/api/v1/auth/verify-otp`
+- **Mô tả**: Xác thực OTP (khi đăng nhập trên thiết bị lạ hoặc thực hiện hành động nhạy cảm).
 - **Phân quyền**: Public
 - **Request Body**:
   ```json
   {
-    "refreshToken": "d8a1f81d-6b58-45b7-a3c3-63023e3e2b2a"
+    "email": "manager@uavpms.com",
+    "otpCode": "123456",
+    "trustDevice": true
   }
   ```
 
-#### [POST] `/api/v1/auth/otp/send`
-- **Mô tả**: Gửi mã OTP xác thực qua email (mục đích: Login, ResetPassword, ChangePassword).
+#### 1.3. [POST] `/api/v1/auth/refresh-token`
+- **Mô tả**: Cấp mới Access Token bằng Refresh Token.
 - **Request Body**:
   ```json
   {
-    "email": "admin@uavpms.com",
-    "purpose": "Login" // hoặc "ResetPassword", "ChangePassword"
+    "refreshToken": "7a90ab8e-5b12-4a..."
   }
   ```
 
-#### [POST] `/api/v1/auth/otp/verify`
-- **Mô tả**: Xác thực mã OTP gửi về email.
-- **Request Body**:
-  ```json
-  {
-    "email": "admin@uavpms.com",
-    "otp": "123456",
-    "purpose": "Login"
-  }
-  ```
-
-#### [POST] `/api/v1/auth/reset-password`
-- **Mô tả**: Đặt lại mật khẩu sử dụng `verificationToken` nhận được sau khi verify OTP thành công.
-- **Request Body**:
-  ```json
-  {
-    "verificationToken": "valid-token-string",
-    "newPassword": "NewPassword123@"
-  }
-  ```
-
----
-
-### MODULE 4.2: QUẢN LÝ TÀI KHOẢN NGƯỜI DÙNG (USERS)
-
-#### [GET] `/api/v1/users/me`
-- **Mô tả**: Lấy thông tin cá nhân của người dùng hiện tại đang đăng nhập.
-- **Phân quyền**: Tất cả vai trò đã đăng nhập
-
-#### [GET] `/api/v1/users`
-- **Mô tả**: Danh sách người dùng có phân trang và tìm kiếm.
-- **Phân quyền**: `SystemAdmin`
-- **Query Parameters**:
-  - `page` (int, default: 1)
-  - `pageSize` (int, default: 10)
-  - `search` (string, optional)
-
-#### [GET] `/api/v1/users/assignable`
-- **Mô tả**: Lấy danh sách nhân sự đủ điều kiện phân công bay (Active, vai trò Inspector).
+#### 1.4. [GET] `/api/v1/users`
+- **Mô tả**: Lấy danh sách nhân sự trong hệ thống có phân trang và lọc theo vai trò.
 - **Phân quyền**: `SystemAdmin`, `Manager`
+- **Query Params**: `role` (Pilot, Technician, Analyst...), `search`, `page`, `pageSize`
 
-#### [GET] `/api/v1/users/{id:guid}`
-- **Mô tả**: Lấy thông tin chi tiết một người dùng theo GUID.
-- **Phân quyền**: `SystemAdmin`
-
-#### [POST] `/api/v1/users`
-- **Mô tả**: Tạo tài khoản người dùng mới.
-- **Phân quyền**: `SystemAdmin`
-- **Request Body**:
-  ```json
-  {
-    "email": "pilot1@uavpms.com",
-    "fullName": "Trần Văn Phi Công",
-    "phone": "0987654321",
-    "password": "Password123@",
-    "roles": ["Inspector"]
-  }
-  ```
-
-#### [PUT] `/api/v1/users/{id:guid}`
-- **Mô tả**: Cập nhật thông tin người dùng và phân quyền vai trò.
-- **Phân quyền**: `SystemAdmin`
-
-#### [POST] `/api/v1/users/{id:guid}/suspend`
-- **Mô tả**: Tạm khóa hoặc mở khóa tài khoản người dùng.
-- **Phân quyền**: `SystemAdmin`
-
-#### [POST] `/api/v1/users/change-password`
-- **Mô tả**: Đổi mật khẩu tài khoản hiện tại (yêu cầu Step-Up Token).
-- **Request Body**: `{ "newPassword": "NewStrongPassword123@" }`
+#### 1.5. [GET] `/api/v1/users/{id}`
+- **Mô tả**: Xem thông tin chi tiết một người dùng, quyền hạn và khu vực địa lý được phân quyền.
 
 ---
 
-### MODULE 4.3: HẠ TẦNG LƯỚI ĐIỆN & GIS (INFRASTRUCTURE & GIS)
+### MODULE 2: HẠ TẦNG LƯỚI ĐIỆN & GIS (OPERATIONSSERVICE)
 
-#### [GET] `/api/v1/gis/infrastructure`
-- **Mô tả**: Truy vấn toàn bộ dữ liệu đối tượng địa lý hạ tầng lưới điện (Trạm, Tuyến dây, Cột điện) để vẽ lên bản đồ Leaflet/Mapbox.
-- **Query Parameters**:
-  - `administrativeAreaId` (guid, optional)
-  - `managementUnitId` (guid, optional)
-  - `powerLineId` (guid, optional)
-  - `voltageLevel` (string, optional, ví dụ: "220kV", "500kV")
-  - `assetType` (string, optional)
-  - `status` (string, optional)
+#### 2.1. [GET] `/api/v1/regions`
+- **Mô tả**: Lấy danh sách các khu vực quản lý kèm ranh giới Polygon (GeoJSON).
+- **Phân quyền**: Toàn bộ người dùng đã xác thực.
 
-#### [GET] `/api/v1/regions`
-- **Mô tả**: Danh sách khu vực quản lý / vùng miền (North, Central, South).
-- **Phân quyền**: Mọi vai trò đã đăng nhập
-- **Hỗ trợ CRUD**: `GET /{id:guid}`, `POST /`, `PUT /{id:guid}`, `DELETE /{id:guid}` (Yêu cầu `SystemAdmin` hoặc `Manager`).
-
-#### [GET] `/api/v1/substations`
-- **Mô tả**: Danh sách trạm biến áp.
-- **Query Parameters**: `page`, `pageSize`, `regionAssetId` (guid), `search`.
-- **Hỗ trợ CRUD**: `GET /{id:guid}`, `POST /`, `PUT /{id:guid}`, `DELETE /{id:guid}`.
-
-#### [GET] `/api/v1/lines`
-- **Mô tả**: Danh sách đường dây truyền tải điện.
-- **Query Parameters**: `page`, `pageSize`, `substationAssetId` (guid), `search`.
-- **Hỗ trợ CRUD**: `GET /{id:guid}`, `POST /`, `PUT /{id:guid}`, `DELETE /{id:guid}`.
-
-#### [GET] `/api/v1/towers`
-- **Mô tả**: Danh sách cột điện truyền tải.
-- **Query Parameters**: `page`, `pageSize`, `lineAssetId` (guid).
-- **Hỗ trợ CRUD**:
-  - `GET /{id:guid}`: Chi tiết cột điện
-  - `POST /`: Tạo cột mới (`lineAssetId`, `towerCode`, `latitude`, `longitude`)
-  - `PUT /{id:guid}`: Sửa cột điện
-  - `DELETE /{id:guid}`: Xóa cột điện
-  - `POST /import`: Import danh sách cột hàng loạt từ Excel (`multipart/form-data`)
-
-#### [GET] `/api/v1/assets`
-- **Mô tả**: Danh sách thiết bị gắn trên cột/lưới điện (Cách điện, chống sét, chuỗi sứ, thanh xà, dây dẫn...).
-- **Query Parameters**:
+#### 2.2. [GET] `/api/v1/towers`
+- **Mô tả**: Lấy danh sách cột điện có phân trang và lọc theo khu vực, tuyến dây, mức độ rủi ro.
+- **Phân quyền**: Toàn bộ người dùng đã xác thực.
+- **Query Params**:
+  - `regionId`: GUID
+  - `lineCode`: Chuỗi mã tuyến (VD: `22kV_471_E2.1`)
+  - `riskLevel`: `Normal`, `Warning`, `Critical`
+  - `hasActiveDefects`: `true`/`false`
   - `page`, `pageSize`
-  - `towerId` (guid, optional)
-  - `assetType` (string, optional)
-  - `status` (string, optional)
-  - `riskLevel` (string[], optional: `Low`, `Medium`, `High`, `Critical`)
-  - `minHealthScore`, `maxHealthScore` (double)
-  - `regionId`, `lineId` (guid)
-  - `sortBy`, `sortOrder`
-- **Hỗ trợ CRUD**: `GET /{id:guid}`, `POST /`, `PUT /{id:guid}`, `DELETE /{id:guid}`.
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "items": [
+        {
+          "id": "22222222-2222-2222-2222-222222222222",
+          "regionId": "33333333-3333-3333-3333-333333333333",
+          "towerCode": "NPC_HP_01_001",
+          "lineCode": "22kV_471_E2.1",
+          "voltage": "22kV",
+          "poleType": "Bê tông ly tâm",
+          "address": "Xã An Đồng, Huyện An Dương, Hải Phòng",
+          "latitude": 20.8651,
+          "longitude": 106.6838,
+          "riskLevel": "Warning",
+          "activeDefectsCount": 2,
+          "lastInspectedAt": "2026-10-15T08:00:00Z"
+        }
+      ],
+      "totalCount": 45,
+      "page": 1,
+      "pageSize": 10,
+      "totalPages": 5
+    }
+  }
+  ```
 
-#### [GET] `/api/v1/assets/health-summary`
-- **Mô tả**: Lấy thống kê tổng quan sức khỏe thiết bị (tỷ lệ an toàn, cảnh báo, hỏng hóc).
+#### 2.3. [GET] `/api/v1/towers/{id}`
+- **Mô tả**: Xem chi tiết cột điện, danh sách khiếm khuyết đang tồn tại và lịch sử kiểm tra.
 
-#### [POST] `/api/v1/assets/spatial-query`
-- **Mô tả**: Tìm kiếm tất cả thiết bị nằm trong đa giác không gian địa lý GeoJSON Polygon.
+#### 2.4. [POST] `/api/v1/towers/spatial-query`
+- **Mô tả**: Tìm kiếm các cột điện nằm trong đa giác quy hoạch bay (GeoJSON Polygon).
+- **Phân quyền**: `Manager`, `SystemAdmin`
 - **Request Body**:
   ```json
   {
-    "geometry": {
+    "polygon": {
       "type": "Polygon",
-      "coordinates": [[[105.7, 21.0], [105.9, 21.0], [105.9, 21.2], [105.7, 21.2], [105.7, 21.0]]]
-    },
-    "filters": {
-      "powerLineId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-      "assetType": "Insulator"
+      "coordinates": [
+        [
+          [106.680, 20.860],
+          [106.690, 20.860],
+          [106.690, 20.870],
+          [106.680, 20.870],
+          [106.680, 20.860]
+        ]
+      ]
+    }
+  }
+  ```
+
+#### 2.5. [GET] `/api/v1/towers/{id}/condition-history`
+- **Mô tả**: Lấy lịch sử biến thiên tình trạng rủi ro của cột điện (`tower_condition_histories`).
+
+---
+
+### MODULE 3: ĐỘI BAY UAV & KIỂM ĐỊNH KỸ THUẬT (OPERATIONSSERVICE)
+
+#### 3.1. [GET] `/api/v1/uavs`
+- **Mô tả**: Lấy danh sách thiết bị bay, trạng thái hoạt động (`Ready`, `Degraded`, `Grounded`), tình trạng kỹ thuật (`Good`, `Fair`, `Critical`), mức pin, giờ bay.
+- **Query Params**: `status`, `operationalStatus`, `page`, `pageSize`
+
+#### 3.2. [GET] `/api/v1/uavs/{id}`
+- **Mô tả**: Xem thông tin chi tiết một drone và lịch sử kiểm định kỹ thuật.
+
+#### 3.3. [POST] `/api/v1/uavs/{id}/inspections`
+- **Mô tả**: Tạo biên bản kiểm định kỹ thuật cho drone trước chiến dịch bay.
+- **Phân quyền**: `Technician`, `SystemAdmin`
+- **Request Body**:
+  ```json
+  {
+    "technicianUserId": "44444444-4444-4444-4444-444444444444",
+    "notes": "Kiểm định định kỳ tuần 42 trước khi nhận nhiệm vụ"
+  }
+  ```
+
+#### 3.4. [POST] `/api/v1/uavs/{id}/inspections/{inspectionId}/metrics`
+- **Mô tả**: Nạp các chỉ số đo đạc chi tiết từng phân hệ phần cứng (`Propulsion`, `Avionics`, `Payload`, `Power`).
+- **Request Body**:
+  ```json
+  {
+    "metrics": [
+      {
+        "metricCode": "MOTOR_VIBRATION",
+        "subsystem": "Propulsion",
+        "numericValue": 1.25,
+        "passed": true,
+        "isCritical": true,
+        "unit": "mm/s"
+      },
+      {
+        "metricCode": "BATTERY_HEALTH",
+        "subsystem": "Power",
+        "numericValue": 94.0,
+        "passed": true,
+        "isCritical": true,
+        "unit": "%"
+      }
+    ]
+  }
+  ```
+
+#### 3.5. [PUT] `/api/v1/uavs/{id}/inspections/{inspectionId}/complete`
+- **Mô tả**: Hoàn thành kiểm định, chốt kết quả `Passed`/`Failed`, tính hạn giá trị `validUntil` và tự động cập nhật `uav.operational_status`.
+
+---
+
+### MODULE 4: MF01 - ĐÁNH GIÁ TIỀN KHẢ THI (PRE-MISSION ASSESSMENT V2)
+
+#### 4.1. [POST] `/api/v2/assessments`
+- **Mô tả**: Quản lý tạo hồ sơ đánh giá tiền khả thi cho một chiến dịch bay dự kiến.
+- **Phân quyền**: `Manager`, `SystemAdmin`
+- **Request Body**:
+  ```json
+  {
+    "regionId": "33333333-3333-3333-3333-333333333333",
+    "plannedStart": "2026-10-25T08:00:00Z",
+    "plannedEnd": "2026-10-25T17:00:00Z",
+    "targetTowerIds": [
+      "22222222-2222-2222-2222-222222222222",
+      "55555555-5555-5555-5555-555555555555"
+    ],
+    "proposedBoundary": {
+      "type": "Polygon",
+      "coordinates": [...]
+    }
+  }
+  ```
+- **Response `201 Created`**:
+  ```json
+  {
+    "success": true,
+    "message": "Khởi tạo hồ sơ tiền khả thi thành công.",
+    "data": {
+      "assessmentId": "66666666-6666-6666-6666-666666666666",
+      "status": "Evaluating",
+      "siteFeasibility": "Feasible",
+      "weatherSuitability": "Suitable",
+      "airspaceClearance": "Clear",
+      "resourceReadiness": "Ready",
+      "findings": {
+        "candidatePilotsCount": 3,
+        "candidateUavsCount": 2,
+        "totalDistanceMeters": 4500,
+        "estimatedFlightDurationMinutes": 45
+      }
+    }
+  }
+  ```
+
+#### 4.2. [GET] `/api/v2/assessments/{id}`
+- **Mô tả**: Lấy thông tin chi tiết hồ sơ thẩm định tiền khả thi, bao gồm các chỉ số cảnh báo rủi ro bãi bay và danh sách tài nguyên khả dụng.
+
+#### 4.3. [PUT] `/api/v2/assessments/{id}/confirm`
+- **Mô tả**: Quản lý xác nhận hồ sơ tiền khả thi đạt yêu cầu (`status = 'Ready'`), cho phép chuyển tiếp sang MF02 để lập nhiệm vụ chính thức.
+
+---
+
+### MODULE 5: MF02 - ĐIỀU PHỐI & PHÂN CÔNG NHIỆM VỤ BAY (OPERATIONSSERVICE)
+
+#### 5.1. [POST] `/api/v1/missions`
+- **Mô tả**: Tạo nhiệm vụ bay kiểm tra chính thức (có thể kế thừa phạm vi từ Assessment MF01 hoặc tạo trực tiếp).
+- **Phân quyền**: `Manager`, `SystemAdmin`
+- **Request Body**:
+  ```json
+  {
+    "title": "Kiểm tra định kỳ tuyến đường dây 22kV An Dương - Hải Phòng",
+    "assessmentId": "66666666-6666-6666-6666-666666666666",
+    "regionId": "33333333-3333-3333-3333-333333333333",
+    "priority": 1,
+    "objective": "Periodic",
+    "plannedStart": "2026-10-25T08:00:00Z",
+    "plannedEnd": "2026-10-25T17:00:00Z",
+    "managerInstructions": "Chú ý khu vực cột 12-15 có cây cối rậm rạp",
+    "confirmationDeadline": "2026-10-24T18:00:00Z",
+    "targetTowerIds": [
+      "22222222-2222-2222-2222-222222222222",
+      "55555555-5555-5555-5555-555555555555"
+    ]
+  }
+  ```
+
+#### 5.2. [GET] `/api/v1/missions`
+- **Mô tả**: Lấy danh sách nhiệm vụ bay có lọc theo trạng thái (`Draft`, `PendingAcceptance`, `Assigned`, `InProgress`, `Completed`), mức ưu tiên, khoảng thời gian.
+
+#### 5.3. [GET] `/api/v1/missions/{id}`
+- **Mô tả**: Chi tiết nhiệm vụ bao gồm: Danh sách cột cần kiểm tra (`mission_targets`), Đội bay được phân công (`mission_assignments`), Thiết bị bay (`uavs`), Lịch giữ chỗ tài nguyên (`resource_bookings`).
+
+#### 5.4. [POST] `/api/v1/missions/{id}/assignments`
+- **Mô tả**: Gán thành viên đội bay kèm vai trò ngữ cảnh (`PILOT`, `CO_PILOT`, `INSPECTOR`, `OBSERVER`). Tự động gửi thông báo Realtime đến thành viên.
+- **Request Body**:
+  ```json
+  {
+    "userId": "77777777-7777-7777-7777-777777777777",
+    "assignmentRole": "PILOT",
+    "isRequired": true
+  }
+  ```
+
+#### 5.5. [PUT] `/api/v1/missions/{id}/assignments/{assignmentId}/respond`
+- **Mô tả**: Phi công / Thành viên phản hồi nhận nhiệm vụ (`Accepted` hoặc `Postponed` kèm lý do).
+- **Phân quyền**: Chính thành viên được gán.
+- **Request Body**:
+  ```json
+  {
+    "responseStatus": "Accepted",
+    "reason": null
+  }
+  ```
+
+#### 5.6. [PUT] `/api/v1/missions/{id}/drone`
+- **Mô tả**: Gán drone chính thức cho nhiệm vụ (Kiểm tra xung đột lịch giữ chỗ & điều kiện kiểm định còn hạn).
+- **Request Body**:
+  ```json
+  {
+    "uavId": "88888888-8888-8888-8888-888888888888"
+  }
+  ```
+
+#### 5.7. [POST] `/api/v1/missions/{id}/dispatch`
+- **Mô tả**: Quản lý phát lệnh điều phối nhiệm vụ khi tất cả điều kiện sẵn sàng đạt chuẩn. Chuyển trạng thái sang `Assigned`.
+
+#### 5.8. [POST] `/api/v1/missions/{id}/cancel`
+- **Mô tả**: Hủy nhiệm vụ bay (ghi nhận lý do vào Audit Log và tự động giải phóng tài nguyên đã khóa lịch).
+
+---
+
+### MODULE 6: MF03 - THỰC THI HIỆN TRƯỜNG & NẠP DỮ LIỆU (OPERATIONSSERVICE)
+
+#### 6.1. [POST] `/api/v1/missions/{id}/check-in`
+- **Mô tả**: Thành viên đội bay check-in hiện trường bằng GPS khi có mặt tại điểm tập kết.
+- **Phân quyền**: `Pilot`, `Inspector`
+- **Request Body**:
+  ```json
+  {
+    "latitude": 20.8655,
+    "longitude": 106.6840
+  }
+  ```
+
+#### 6.2. [POST] `/api/v1/missions/{id}/drone-handover/deliver`
+- **Mô tả**: Ký biên bản bàn giao drone trước chuyến bay giữa Thủ kho/Kỹ thuật viên và Phi công trưởng.
+- **Request Body**:
+  ```json
+  {
+    "droneId": "88888888-8888-8888-8888-888888888888",
+    "receivedByUserId": "77777777-7777-7777-7777-777777777777",
+    "initialChecklist": {
+      "propellersSecure": true,
+      "cameraLensClean": true,
+      "gimbalCalibrated": true,
+      "batteryPercentage": 100,
+      "gpsLockAcquired": true
+    }
+  }
+  ```
+
+#### 6.3. [POST] `/api/v1/missions/{id}/drone-handover/return`
+- **Mô tả**: Ký biên bản thu hồi drone sau khi hoàn thành chuyến bay (Ghi nhận hư hại vật lý, số pin còn lại).
+
+#### 6.4. [POST] `/api/v1/missions/{id}/flight-logs`
+- **Mô tả**: Nạp file log bay telemetry ghi nhận quỹ đạo GPS, độ cao tối đa, mức pin thấp nhất và thời lượng bay.
+- **Request Body**:
+  ```json
+  {
+    "gpsTrack": [
+      {"lat": 20.8651, "lon": 106.6838, "alt": 45.2, "time": "2026-10-25T08:15:00Z", "battery": 98},
+      {"lat": 20.8658, "lon": 106.6845, "alt": 50.1, "time": "2026-10-25T08:16:00Z", "battery": 96}
+    ],
+    "minBatteryRecorded": 25.5,
+    "maxAltitudeM": 65.0,
+    "flightDurationSeconds": 2400,
+    "connectionStatus": "Normal"
+  }
+  ```
+
+#### 6.5. [POST] `/api/v1/missions/{id}/incidents`
+- **Mô tả**: Lập biên bản sự cố phát sinh tại hiện trường (Va chạm vật cản, thời tiết cực đoan, lỗi mất sóng).
+- **Request Body**:
+  ```json
+  {
+    "towerId": "22222222-2222-2222-2222-222222222222",
+    "incidentType": "Collision",
+    "severity": "High",
+    "description": "Cánh quạt va quẹt nhẹ cành cây khi hạ độ cao tiếp cận chuỗi sứ",
+    "fileUrl": "https://storage.uavpms.com/incidents/inc-01.jpg"
+  }
+  ```
+
+#### 6.6. [POST] `/api/v1/inspections/upload`
+- **Mô tả**: Endpoint canonical upload ảnh/video kiểm tra hiện trường (`multipart/form-data`). Hệ thống tự động bóc tách GPS EXIF, đối chiếu vị trí cột điện và gửi sự kiện Outbox kích hoạt AI Analysis.
+- **Headers**: `Content-Type: multipart/form-data`
+- **Form Data**:
+  - `missionId`: GUID
+  - `towerId`: GUID (tùy chọn, nếu không gửi hệ thống tự động resolve dựa vào tọa độ GPS EXIF của ảnh)
+  - `files`: Danh sách tệp ảnh JPEG/PNG hoặc Video MP4.
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "message": "Tải lên 5 ảnh thành công và đã chuyển vào hàng đợi phân tích AI.",
+    "data": {
+      "uploadedCount": 5,
+      "mediaIds": [
+        "99999999-9999-9999-9999-999999999999",
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      ]
     }
   }
   ```
 
 ---
 
-### MODULE 4.4: QUẢN LÝ NHIỆM VỤ BAY - VÒNG ĐỜI TOÀN DIỆN (MF01 & MF02)
+### MODULE 7: MF04 - PHÂN TÍCH AI & THẨM ĐỊNH KHUYẾT TẬT (AIINSPECTIONSERVICE)
 
-Toàn bộ các thao tác điều phối, bàn giao, cất cánh, xử lý sự cố và nghiệm thu chuyến bay.
+#### 7.1. [GET] `/api/v1/ai-analysis/defects/categories`
+- **Mô tả**: Lấy danh mục khiếm khuyết chuẩn hóa (`CORROSION`, `BROKEN_INSULATOR`, `WIRE_SAGGING`, `FOREIGN_OBJECT`).
 
-#### [GET] `/api/v1/missions`
-- **Mô tả**: Lấy danh sách nhiệm vụ bay có lọc và phân trang.
-- **Query Parameters**:
-  - `page` (int, default: 1)
-  - `pageSize` (int, default: 10)
-  - `search` (string, optional)
-  - `status` (string, optional: `DRAFT`, `PLANNED`, `DISPATCHED`, `CONFIRMED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `SUSPENDED`)
-  - `sortBy` (string, default: "createdAt")
-  - `sortDescending` (bool, default: true)
-
-#### [GET] `/api/v1/missions/{id:guid}`
-- **Mô tả**: Lấy đầy đủ thông tin chi tiết một nhiệm vụ bay kèm danh sách phi công, thiết bị mục tiêu, drone được gán.
-- **Lưu ý**: `{id}` bắt buộc là GUID.
-
-#### [GET] `/api/v1/missions/my`
-- **Mô tả**: Lấy danh sách các nhiệm vụ bay được phân công cho người dùng đang đăng nhập.
-
-#### [POST] `/api/v1/missions`
-- **Mô tả**: Tạo mới kế hoạch nhiệm vụ bay (MF01).
-- **Phân quyền**: `Manager`, `SystemAdmin`
-- **Request Body**:
+#### 7.2. [GET] `/api/v1/ai-analysis/anomalies`
+- **Mô tả**: Lấy danh sách các khiếm khuyết được AI phát hiện, lọc theo nhiệm vụ, cột điện, trạng thái thẩm định.
+- **Query Params**: `missionId`, `towerId`, `validationStatus` (`Pending`, `Confirmed`, `Rejected`), `minConfidence`, `page`, `pageSize`
+- **Response `200 OK`**:
   ```json
   {
-    "title": "Kiểm tra định kỳ tuyến Hòa Bình - Hà Đông đợt 1",
-    "regionId": "e1f2a3b4-5678-90ab-cdef-1234567890ab",
-    "missionType": "SCHEDULED", // hoặc "AD_HOC"
-    "plannedStart": "2026-10-01T08:00:00Z",
-    "plannedEnd": "2026-10-01T17:00:00Z",
-    "confirmationDeadline": "2026-09-30T17:00:00Z",
-    "description": "Bay rà soát chuỗi cách điện và hành lang an toàn",
-    "managerInstructions": "Chú ý khu vực khoảng cột 45-50 gió to",
-    "droneId": "d186b4a3-7649-43a9-a9a3-5c742f8c5cf3",
-    "assignedToUserId": "f186b4a3-7649-43a9-a9a3-5c742f8c5cf2",
-    "assignments": [
-      {
-        "userId": "f186b4a3-7649-43a9-a9a3-5c742f8c5cf2",
-        "assignmentRole": "PilotInCommand",
-        "isRequired": true
-      }
-    ]
+    "success": true,
+    "data": {
+      "items": [
+        {
+          "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+          "mediaId": "99999999-9999-9999-9999-999999999999",
+          "towerId": "22222222-2222-2222-2222-222222222222",
+          "categoryCode": "BROKEN_INSULATOR",
+          "categoryName": "Vỡ bát sứ cách điện",
+          "confidenceScore": 0.94,
+          "validationStatus": "Pending",
+          "boundingBox": {"x": 0.42, "y": 0.55, "width": 0.12, "height": 0.08},
+          "cropUrl": "https://storage.uavpms.com/crops/crop-01.jpg",
+          "imageUrl": "https://storage.uavpms.com/annotated/img-01.jpg",
+          "aiSource": "Server"
+        }
+      ],
+      "totalCount": 1
+    }
   }
   ```
 
-#### [PUT] `/api/v1/missions/{id:guid}`
-- **Mô tả**: Cập nhật thông tin cơ bản của nhiệm vụ bay (chỉ khi ở trạng thái cho phép).
-
-#### [DELETE] `/api/v1/missions/{id:guid}`
-- **Mô tả**: Xóa mềm nhiệm vụ bay.
-
-#### [POST] `/api/v1/missions/{id:guid}/scope/resolve`
-- **Mô tả**: Xác định phạm vi bay dựa trên chuỗi WKT ranh giới polygon (`BoundaryWkt`).
-
-#### [PUT] `/api/v1/missions/{id:guid}/assets`
-- **Mô tả**: Xác nhận danh sách các thiết bị/cột điện nằm trong mục tiêu kiểm tra của chuyến bay.
+#### 7.3. [PUT] `/api/v1/ai-analysis/anomalies/{id}/review`
+- **Mô tả**: Chuyên viên phân tích (Analyst) thẩm định phát hiện bất thường: Phê duyệt (`Confirmed`) hoặc Bác bỏ (`Rejected`) kèm nhận xét chuyên môn.
+- **Phân quyền**: `Analyst`, `Manager`
 - **Request Body**:
   ```json
   {
-    "boundaryWkt": "POLYGON((...))",
-    "assetIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"]
+    "validationStatus": "Confirmed",
+    "analystFeedback": {
+      "defectSubtype": "Vỡ mép đĩa sứ pha B",
+      "recommendedAction": "Thay thế khẩn cấp trong vòng 7 ngày",
+      "comment": "Vết nứt sâu có nguy cơ phóng điện vầng quang khi trời mưa ẩm"
+    }
   }
   ```
 
-#### [GET] `/api/v1/missions/{id:guid}/assignments`
-- **Mô tả**: Lấy tổng quan danh sách nhân sự tham gia nhiệm vụ bay, vai trò và trạng thái phản hồi (Accepted, Postponed, Pending).
-
-#### [POST] `/api/v1/missions/{id:guid}/assignments`
-- **Mô tả**: Thêm nhân sự vào danh sách phân công nhiệm vụ bay.
-- **Request Body**:
-  ```json
-  {
-    "userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "assignmentRole": "Observer" // hoặc "PilotInCommand", "PayloadOperator"
-  }
-  ```
-
-#### [DELETE] `/api/v1/missions/{id:guid}/assignments/{assignmentId:guid}`
-- **Mô tả**: Hủy gán nhân sự khỏi nhiệm vụ.
-
-#### [PUT] `/api/v1/missions/{id:guid}/drone`
-- **Mô tả**: Gán thiết bị UAV vào nhiệm vụ bay.
-- **Request Body**: `{ "droneId": "3fa85f64-5717-4562-b3fc-2c963f66afa6" }`
-
-#### [POST] `/api/v1/missions/{id:guid}/drone-handover`
-- **Mô tả**: Xác nhận biên bản bàn giao drone giữa kho/kỹ thuật và phi công trước/sau chuyến bay.
-- **Request Body**:
-  ```json
-  {
-    "droneId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "receivedBy": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "condition": "Tốt, 2 pin đầy, camera hoạt động bình thường",
-    "accepted": true
-  }
-  ```
-
-#### [POST] `/api/v1/missions/{id:guid}/check-in`
-- **Mô tả**: Phi công check-in hiện trường bằng GPS khi đến vị trí xuất phát.
-
-#### [POST] `/api/v1/missions/{id:guid}/assignments/accept`
-- **Mô tả**: Phi công xác nhận chấp nhận nhiệm vụ bay được điều phối.
-
-#### [POST] `/api/v1/missions/{id:guid}/assignments/postpone`
-- **Mô tả**: Phi công xin hoãn/từ chối nhiệm vụ kèm lý do chính đáng.
-- **Request Body**: `{ "reason": "Thời tiết mưa dông, sức gió cấp 6 không đủ điều kiện an toàn bay" }`
-
-#### [POST] `/api/v1/missions/{id:guid}/start`
-- **Mô tả**: Bắt đầu thực hiện chuyến bay (`IN_PROGRESS`).
-
-#### [POST] `/api/v1/missions/{id:guid}/complete`
-- **Mô tả**: Kết thúc chuyến bay kiểm tra (`COMPLETED`).
-
-#### [POST] `/api/v1/missions/{id:guid}/cancel`
-- **Mô tả**: Hủy nhiệm vụ bay (`CANCELLED`).
-- **Request Body**: `{ "reason": "Hủy theo lệnh điều độ điện lực" }`
-
-#### [POST] `/api/v1/missions/{id:guid}/confirm`
-- **Mô tả**: Quản lý nghiệm thu và chốt hoàn thành nhiệm vụ.
-
-#### [POST] `/api/v1/missions/{id:guid}/suspend`
-- **Mô tả**: Tạm đình chỉ nhiệm vụ do sự cố khẩn cấp.
-- **Request Body**: `{ "reason": "Sự cố mất tín hiệu định vị GPS" }`
-
-#### [POST] `/api/v1/missions/{id:guid}/resume`
-- **Mô tả**: Khôi phục nhiệm vụ sau khi đình chỉ.
-
-#### [POST] `/api/v1/missions/{id:guid}/remind`
-- **Mô tả**: Gửi thông báo nhắc nhở nhân sự xác nhận nhiệm vụ.
-
-#### [GET] & [POST] `/api/v1/missions/{id:guid}/communications`
-- **Mô tả**: Nhật ký trao đổi / chat liên lạc nội bộ giữa Manager và Inspector trong suốt chuyến bay.
-- **POST Body**: `{ "message": "Đã bay xong khoảng néo 10-15, đang tiến về điểm cột 16." }`
-
-#### [GET] & [POST] `/api/v1/missions/{id:guid}/activities`
-- **Mô tả**: Nhật ký các mốc sự kiện hoạt động (Timeline activity log) của nhiệm vụ.
-
-#### [GET] `/api/v1/missions/{id:guid}/detections`
-- **Mô tả**: Danh sách toàn bộ các lỗi/bất thường do AI phát hiện trong khuôn khổ nhiệm vụ này.
-- **Query Parameters**: `status` (Pending, Confirmed, Rejected), `mediaType` (Image, Video), `isEmergency` (bool).
-
-#### [PUT] `/api/v1/missions/{missionId:guid}/detections/{detectionId:guid}/review`
-- **Mô tả**: Thẩm định lỗi do AI phát hiện (Duyệt hoặc Bác bỏ).
-- **Request Body**:
-  ```json
-  {
-    "decision": "Confirmed", // hoặc "Rejected"
-    "notes": "Vết nứt bề mặt bát sứ rõ ràng, đề xuất thay thế"
-  }
-  ```
-
-#### [GET] `/api/v1/missions/{id:guid}/maintenance-tasks`
-- **Mô tả**: Lấy danh sách phiếu đề xuất sửa chữa/bảo trì phát sinh từ nhiệm vụ bay này.
+#### 7.4. [POST] `/api/v1/vision/detections`
+- **Mô tả**: Webhook tiếp nhận cảnh báo phát hiện thời gian thực từ Edge Device (Camera drone / Vision Edge AI).
 
 ---
 
-### MODULE 4.5: ĐÁNH GIÁ TIỀN KHẢ THI CHUYẾN BAY (PRE-MISSION ASSESSMENT V2)
+### MODULE 8: MF04 - CẢNH BÁO KHẨN CẤP & BẢO TRÌ SỬA CHỮA (OPERATIONSSERVICE)
 
-Áp dụng cho quy trình thẩm định rủi ro trước bay (Thời tiết, địa hình, tình trạng kỹ thuật thiết bị, năng lực phi công).
+#### 8.1. [GET] `/api/v1/emergency-alerts`
+- **Mô tả**: Lấy danh sách các cảnh báo sự cố khẩn cấp đang kích hoạt (`Active`, `Investigating`).
 
-- **Base Route**: `/api/v2/pre-mission-assessments`
+#### 8.2. [PUT] `/api/v1/emergency-alerts/{id}/resolve`
+- **Mô tả**: Xử lý / Đóng cảnh báo khẩn cấp (Chuyển sang `Resolved` hoặc `FalsePositive` kèm biên bản).
 
-#### [POST] `/api/v2/pre-mission-assessments`
-- **Mô tả**: Tạo hồ sơ đánh giá tiền khả thi.
+#### 8.3. [POST] `/api/v1/emergency-alerts/{id}/escalate`
+- **Mô tả**: Leo thang cảnh báo lên cấp quản lý cao hơn khi quá hạn thời gian xử lý chuẩn.
+
+#### 8.4. [POST] `/api/v1/maintenance/tickets`
+- **Mô tả**: Quản lý tạo phiếu sửa chữa / bảo trì cột điện (từ khiếm khuyết đã được Analyst phê duyệt).
+- **Phân quyền**: `Manager`
 - **Request Body**:
   ```json
   {
-    "regionId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "plannedStart": "2026-10-05T08:00:00Z",
-    "plannedEnd": "2026-10-05T16:00:00Z",
-    "assetIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"],
-    "boundaryWkt": "POLYGON((...))",
-    "idempotencyKey": "unique-uuid-key"
+    "anomalyId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "towerId": "22222222-2222-2222-2222-222222222222",
+    "technicianId": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    "priority": "High",
+    "description": "Thay thế chuỗi cách điện vỡ tại pha B cột NPC_HP_01_001",
+    "dueDate": "2026-11-01T17:00:00Z"
   }
   ```
 
-#### [GET] `/api/v2/pre-mission-assessments`
-- **Mô tả**: Danh sách hồ sơ đánh giá (`status`: Draft, Evaluated, Ready, Rejected).
+#### 8.5. [GET] `/api/v1/maintenance/tickets`
+- **Mô tả**: Lấy danh sách phiếu bảo trì có lọc theo trạng thái (`Assigned`, `InProgress`, `Completed`, `Closed`), mức ưu tiên, cột điện, thợ sửa chữa.
 
-#### [GET] `/api/v2/pre-mission-assessments/{id:guid}`
-- **Mô tả**: Lấy chi tiết hồ sơ thẩm định và điểm số rủi ro.
-
-#### [POST] `/api/v2/pre-mission-assessments/{id:guid}/evaluate`
-- **Mô tả**: Kích hoạt động cơ tự động tính toán ma trận rủi ro tiền khả thi (AI / Quy tắc an toàn).
-
-#### [POST] `/api/v2/pre-mission-assessments/{id:guid}/create-mission`
-- **Mô tả**: Khởi tạo nhiệm vụ bay chính thức từ hồ sơ thẩm định đạt tiêu chuẩn.
+#### 8.6. [POST] `/api/v1/maintenance/tickets/{id}/proofs`
+- **Mô tả**: Thợ bảo trì tải ảnh chụp nghiệm thu hiện trường trước (`Before`), trong khi làm (`InProgress`) hoặc sau khi sửa chữa (`After`).
 - **Request Body**:
   ```json
   {
-    "assessmentId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "title": "Chuyến bay được duyệt từ đánh giá PMA-2026-001",
-    "inspectorId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "droneId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+    "proofType": "After",
+    "fileUrl": "https://storage.uavpms.com/proofs/after-repair-01.jpg"
   }
   ```
 
----
-
-### MODULE 4.6: QUẢN LÝ THIẾT BỊ DRONE & KIỂM ĐỊNH KỸ THUẬT
-
-#### [GET] `/api/v1/drones`
-- **Mô tả**: Lấy danh sách toàn bộ thiết bị Drone trong hệ thống.
-
-#### [GET] `/api/v1/drones/available`
-- **Mô tả**: Lấy danh sách Drone đang rảnh rỗi (sẵn sàng phân công).
-
-#### [GET] `/api/v1/drones/{id:guid}` & `/api/v1/drones/{id:guid}/status`
-- **Mô tả**: Lấy trạng thái hoạt động, pin, firmware và vị trí gần nhất của drone.
-
-#### [POST] `/api/v1/drone-technical-inspections`
-- **Mô tả**: Kỹ thuật viên nộp phiếu kiểm tra kỹ thuật định kỳ / trước bay cho Drone.
-- **Phân quyền**: `MaintenanceTechnician`, `Technician`, `Manager`, `SystemAdmin`.
-- **Request Body**:
-  ```json
-  {
-    "droneId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "passed": true,
-    "inspectorNotes": "Cánh quạt mới thay, gimbal cân bằng tốt, cảm biến va chạm hoạt động chuẩn.",
-    "metrics": [
-      { "metricName": "BatteryCycles", "metricValue": "24", "unit": "cycles" },
-      { "metricName": "PropellerWear", "metricValue": "0.02", "unit": "mm" }
-    ]
-  }
-  ```
-
-#### [GET] `/api/v1/drone-technical-inspections/drone/{droneId:guid}/latest`
-- **Mô tả**: Lấy kết quả kiểm định kỹ thuật gần nhất của drone để kiểm tra điều kiện an toàn cất cánh.
-
-#### [POST] `/api/v1/devices/register` & `[POST] /api/v1/devices/heartbeat`
-- **Mô tả**: Đăng ký thiết bị phần cứng / gửi nhịp tim định kỳ duy trì trạng thái online.
+#### 8.7. [PUT] `/api/v1/maintenance/tickets/{id}/complete`
+- **Mô tả**: Nghiệm thu và đóng phiếu sửa chữa. Hệ thống tự động giảm `towers.active_defects_count` và cập nhật bản ghi lịch sử `tower_condition_histories`.
 
 ---
 
-### MODULE 4.7: NẠP DỮ LIỆU ẢNH KIỂM TRA HIỆN TRƯỜNG (INSPECTION DATA)
+### MODULE 9: THÔNG BÁO REAL-TIME & SIGNALR (NOTIFICATIONSERVICE)
 
-#### [POST] `/api/v1/inspections/upload`
-- **Mô tả**: Tải lên hình ảnh chụp từ UAV kiểm tra hiện trường. Hệ thống lưu trữ ảnh và tự động bắn event kích hoạt worker AI phân tích.
-- **Phân quyền**: `Inspector`
-- **Content-Type**: `multipart/form-data`
-- **Form Fields**:
-  - `file` (File, binary): Tệp hình ảnh JPG/PNG độ phân giải cao
-  - `missionId` (Guid, required): GUID của nhiệm vụ bay
-  - `assetId` (Guid, required): GUID của thiết bị lưới điện tương ứng
-  - `capturedAt` (DateTime, required): Thời điểm chụp ảnh
-  - `latitude` (double, optional): Tọa độ vĩ độ
-  - `longitude` (double, optional): Tọa độ kinh độ
+#### 9.1. [GET] `/api/v1/notifications`
+- **Mô tả**: Lấy danh sách thông báo gửi đến người dùng hiện tại có phân trang.
 
-#### [GET] `/api/v1/inspections/report/{id:guid}`
-- **Mô tả**: Lấy chi tiết báo cáo kết quả ảnh kiểm tra theo GUID.
+#### 9.2. [GET] `/api/v1/notifications/unread-count`
+- **Mô tả**: Lấy số lượng thông báo chưa đọc.
 
-#### [GET] `/api/v1/inspections/mission/{missionId:guid}`
-- **Mô tả**: Lấy danh sách toàn bộ ảnh và kết quả kiểm tra của một nhiệm vụ bay.
+#### 9.3. [PUT] `/api/v1/notifications/{id}/read`
+- **Mô tả**: Đánh dấu một thông báo là đã đọc.
 
-#### [GET] `/images/{fileName}`
-- **Mô tả**: Truy xuất trực tiếp ảnh kiểm tra tĩnh được lưu trên máy chủ / volume.
+#### 9.4. [WebSocket Hub] `/hubs/notifications`
+- **Giao thức**: SignalR WebSocket
+- **Sự kiện đẩy xuống Client**:
+  - `ReceiveNotification`: Nhận thông báo vận hành mới (giao nhiệm vụ, yêu cầu phản hồi).
+  - `ReceiveEmergencyAlert`: Nhận cảnh báo khẩn cấp tức thời (âm thanh & banner đỏ).
+  - `MissionStatusChanged`: Cập nhật trạng thái nhiệm vụ realtime.
+
+#### 9.5. [Dashboard UI] `/hangfire`
+- **Mô tả**: Bảng điều khiển quản lý tác vụ nền và tác vụ định kỳ của Hangfire (Gửi email nhắc nhở quá hạn, đồng bộ dữ liệu).
 
 ---
 
-### MODULE 4.8: PHÂN TÍCH AI & EDGE VISION BRIDGE
+### MODULE 10: MONITORING DASHBOARD & BÁO CÁO (OPERATIONSSERVICE)
 
-#### [GET] `/api/v1/missions/{missionId:guid}/ai-analysis/detections`
-- **Mô tả**: Lấy toàn bộ danh sách bounding box và nhãn lỗi AI phát hiện trên các ảnh thuộc nhiệm vụ.
+#### 10.1. [GET] `/api/v1/monitor/summary`
+- **Mô tả**: Lấy các chỉ số KPI vận hành tổng hợp toàn hệ thống:
+  - Tổng số nhiệm vụ (theo trạng thái).
+  - Tổng số cột điện theo mức độ rủi ro (`Normal`, `Warning`, `Critical`).
+  - Tình trạng khả dụng của phi đội UAV.
+  - Số sự cố và cảnh báo khẩn cấp đang chờ xử lý.
 
-#### [POST] `/api/v1/missions/{missionId:guid}/ai-analysis/from-media/{mediaId:guid}`
-- **Mô tả**: Yêu cầu AI phân tích lại một ảnh kiểm tra đã có.
-- **Query Parameters**: `analysisType` (General, Thermal, Defect), `preferredModel` (SERVER / EDGE).
-
-#### [PUT] `/api/v1/missions/{missionId:guid}/ai-analysis/detections/{detectionId:guid}/review`
-- **Mô tả**: Analyst duyệt hoặc từ chối một bounding box phát hiện của AI.
-
-#### [POST] `/api/v1/vision/detections` & `[POST] /api/v1/vision/detections/json`
-- **Mô tả**: Endpoint dành riêng cho thiết bị Edge AI trên drone gửi kết quả suy luận real-time kèm tọa độ về backend qua HTTP/Gateway.
-
----
-
-### MODULE 4.9: DASHBOARD GIÁM SÁT & CẢNH BÁO (MONITOR)
-
-- **Base Route**: `/api/v1/monitor`
-
-| Method | Endpoint | Quyền hạn | Mô tả |
-|---|---|---|---|
-| `GET` | `/summary` | Admin, Manager | Tổng quan số liệu dashboard: tổng nhiệm vụ, tổng sự cố, tỷ lệ hoàn thành |
-| `GET` | `/recent-defects` | Admin, Manager, Analyst | Danh sách các khuyết tật thiết bị mới phát hiện gần nhất |
-| `GET` | `/defects-statistics` | Admin, Manager, Analyst | Thống kê số lượng khuyết tật theo phân loại (Sứ, dây, cột...) |
-| `GET` | `/mission-status` | Admin, Manager | Biểu đồ trạng thái nhiệm vụ bay (Planned, Running, Done) |
-| `GET` | `/inspections` | Admin, Manager, Analyst | Lịch sử kiểm tra ảnh kèm bộ lọc ngày và tình trạng có lỗi hay không |
-| `GET` | `/alerts` | Admin, Manager, Analyst | Danh sách các cảnh báo khẩn cấp (Emergency Alerts) đang kích hoạt |
-
----
-
-### MODULE 4.10: BÁO CÁO QUẢN TRỊ (MANAGEMENT REPORTS)
-
-Quản lý chu trình soạn thảo, phê duyệt và xuất bản báo cáo kỹ thuật.
-
-- **Base Route**: `/api/v1/reports`
-
-#### [GET] `/api/v1/reports`
-- **Mô tả**: Danh sách báo cáo có phân trang.
-- **Query Parameters**: `page`, `pageSize`, `type`, `status` (draft, pending, approved, rejected), `transmissionLineId`, `substationId`, `search`.
-
-#### [POST] `/api/v1/reports`
-- **Mô tả**: Tạo mới bản thảo báo cáo quản trị.
-- **Request Body**:
-  ```json
-  {
-    "title": "Báo cáo kiểm định sự cố tuyến dây 220kV tháng 10",
-    "type": "InspectionSummary",
-    "transmissionLineId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "missionIds": ["3fa85f64-5717-4562-b3fc-2c963f66afa6"],
-    "description": "Tổng hợp kết quả bay 5 đợt trong tuần qua",
-    "dateFrom": "2026-10-01T00:00:00Z",
-    "dateTo": "2026-10-07T23:59:59Z"
-  }
-  ```
-
-#### [PUT] `/api/v1/reports/{id:guid}/submit`
-- **Mô tả**: Trình báo cáo lên cấp quản lý phê duyệt (`draft` -> `pending`).
-
-#### [PUT] `/api/v1/reports/{id:guid}/approve`
-- **Mô tả**: Quản lý phê duyệt báo cáo (`pending` -> `approved`).
-
-#### [PUT] `/api/v1/reports/{id:guid}/reject`
-- **Mô tả**: Từ chối báo cáo kèm lý do cần sửa đổi.
-- **Request Body**: `{ "reason": "Cần bổ sung số liệu phân tích ảnh nhiệt ở khoảng néo 12" }`
-
-#### [POST] `/api/v1/reports/{id:guid}/generate`
-- **Mô tả**: Yêu cầu hệ thống sinh file PDF hoặc Excel.
-- **Query Parameter**: `format` (`pdf` hoặc `excel`).
-
-#### [GET] `/api/v1/reports/{id:guid}/download`
-- **Mô tả**: Tải về tệp báo cáo PDF/Excel đã được sinh.
-
----
-
-### MODULE 4.11: NHẬT KÝ KIỂM TOÁN HỆ THỐNG (AUDIT LOGS)
-
-#### [GET] `/api/v1/audit-logs`
-- **Mô tả**: Xem lịch sử truy vết thay đổi dữ liệu của hệ thống (Ai đã thêm, sửa, xóa bản ghi nào, IP nào, thời điểm nào, chi tiết giá trị cũ/mới).
-- **Phân quyền**: `SystemAdmin`, `Manager`
-- **Query Parameters**:
-  - `page` (int, default: 1)
-  - `pageSize` (int, default: 10)
-  - `search` (string, optional)
-  - `tableName` (string, optional, ví dụ: "Missions", "Assets")
-  - `actionType` (string, optional: "Added", "Modified", "Deleted")
-
----
-
-### MODULE 4.12: THÔNG BÁO & SIGNALR REAL-TIME (NOTIFICATIONS)
-
-#### [GET] `/api/v1/notifications` hoặc `/api/v1/notifications/history`
-- **Mô tả**: Lấy danh sách thông báo của người dùng hiện tại (hỗ trợ param `limit`).
-- **Phân quyền**: Tất cả vai trò đã đăng nhập
-
-#### [PUT] `/api/v1/notifications/{id:guid}/read`
-- **Mô tả**: Đánh dấu thông báo là đã đọc.
-
-#### [POST] `/api/v1/notifications/schedule`
-- **Mô tả**: Lên lịch gửi thông báo qua Hangfire (`DelaySeconds` hoặc `ScheduleTime`).
-
-#### [POST] `/api/v1/notifications/enqueue-email`
-- **Mô tả**: Đưa tác vụ gửi email vào hàng đợi nền Hangfire.
-
-#### SignalR Hub: `/hubs/notifications`
-- **Mô tả**: Kết nối WebSocket nhận thông báo đẩy tức thì.
-- **Cách kết nối từ Frontend**:
-  ```typescript
-  import * as signalR from '@microsoft/signalr';
-
-  const connection = new signalR.HubConnectionBuilder()
-    .withUrl('https://uavpms.ddns.net/hubs/notifications', {
-      accessTokenFactory: () => authService.getAccessToken()
-    })
-    .withAutomaticReconnect()
-    .build();
-
-  // Nhận thông báo chung
-  connection.on('ReceiveNotification', (notification) => {
-    console.log('Thông báo mới:', notification);
-  });
-
-  // Nhận sự kiện vòng đời chuyến bay
-  connection.on('MissionLifecycleEvent', (event) => {
-    console.log('Sự kiện chuyến bay:', event);
-  });
-  ```
+#### 10.2. [GET] `/api/v1/audit-logs`
+- **Mô tả**: Truy vấn nhật ký kiểm toán hệ thống (`audit_logs`) có lọc theo bảng, ID bản ghi, nhân sự thao tác và khoảng thời gian.
+- **Phân quyền**: `SystemAdmin`

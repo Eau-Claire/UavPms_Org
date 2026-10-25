@@ -8,6 +8,7 @@ public class UploadInspectionImageCommand : IRequest<UploadInspectionImageResult
 {
     public Guid MissionId { get; set; }
     public Guid AssetId { get; set; }
+    public Guid? TowerId { get; set; }
     public DateTime CapturedAt { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }

@@ -40,16 +40,42 @@ public class TowerRepository : GenericRepository<Tower>, ITowerRepository
             .ToListAsync();
     }
 
-    public async Task<(IReadOnlyList<Tower> Items, int TotalCount)> GetTowersPagedAsync(
+    public Task<(IReadOnlyList<Tower> Items, int TotalCount)> GetTowersPagedAsync(
         int page,
         int pageSize,
         Guid? lineAssetId)
+    {
+        return GetTowersPagedAsync(page, pageSize, lineAssetId, null, null, null);
+    }
+
+    public async Task<(IReadOnlyList<Tower> Items, int TotalCount)> GetTowersPagedAsync(
+        int page,
+        int pageSize,
+        Guid? lineAssetId,
+        Guid? regionId,
+        string? lineCode,
+        string? riskLevel)
     {
         var query = _access.ApplyToTowers(_context.Towers.Where(t => !t.IsDeleted));
 
         if (lineAssetId.HasValue)
         {
             query = query.Where(t => t.LineAssetId == lineAssetId.Value);
+        }
+
+        if (regionId.HasValue)
+        {
+            query = query.Where(t => t.RegionId == regionId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(lineCode))
+        {
+            query = query.Where(t => t.LineCode == lineCode);
+        }
+
+        if (!string.IsNullOrWhiteSpace(riskLevel))
+        {
+            query = query.Where(t => t.RiskLevel == riskLevel);
         }
 
         int totalCount = await query.CountAsync();

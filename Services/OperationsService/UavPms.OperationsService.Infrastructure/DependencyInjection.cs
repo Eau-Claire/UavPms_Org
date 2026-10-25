@@ -75,6 +75,7 @@ public static class DependencyInjection
             services.AddSingleton<RabbitMqConnection>();
             services.AddScoped<IEventPublisher, RabbitMqEventPublisher>();
             services.AddHostedService<OutboxDispatcher>();
+            services.AddHostedService<AiDetectionCompletedConsumer>();
         }
         else
         {
@@ -104,6 +105,7 @@ public static class DependencyInjection
         services.AddScoped<IMissionRealtimeNotifier, MissionRealtimeNotifier>();
         services.AddHttpClient();
         services.AddScoped<PreMissionAssessmentService>();
+        services.AddScoped<IPreMissionAssessmentService, PreMissionAssessmentService>();
         services.AddScoped<IDroneTechnicalInspectionService, DroneTechnicalInspectionService>();
         services.AddScoped<IFlightControllerService, FlightControllerService>();
         services.AddScoped<IUavManagementService, UavManagementService>();

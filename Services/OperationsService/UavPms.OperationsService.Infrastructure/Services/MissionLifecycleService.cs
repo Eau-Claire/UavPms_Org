@@ -483,7 +483,11 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             return existing;
         }
         var assignment = new MissionAssignment { MissionId = missionId, UserId = request.UserId, AssignmentRole = request.AssignmentRole, AssignedByUserId = _current.UserId };
-        _db.MissionAssignments.Add(assignment); mission.Assignments.Add(assignment);
+        _db.MissionAssignments.Add(assignment);
+        if (!mission.Assignments.Contains(assignment))
+        {
+            mission.Assignments.Add(assignment);
+        }
         if (request.AssignmentRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase) || request.AssignmentRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
         {
             if (!mission.InspectorId.HasValue || mission.InspectorId.Value == Guid.Empty)
@@ -635,7 +639,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
-        var assignment = mission.Assignments.SingleOrDefault(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active)
+        var assignment = mission.Assignments.FirstOrDefault(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active)
             ?? throw new NotFoundException("MissionAssignment", _current.UserId);
 
         if (assignment.ResponseStatus == MissionAssignmentResponse.Accepted)

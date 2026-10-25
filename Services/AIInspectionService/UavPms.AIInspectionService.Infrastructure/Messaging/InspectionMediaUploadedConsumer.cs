@@ -13,8 +13,10 @@ namespace UavPms.AIInspectionService.Infrastructure.Messaging;
 /// <summary>Starts Cloud AI analysis from the single authoritative Operations upload event.</summary>
 public sealed class InspectionMediaUploadedConsumer : BackgroundService
 {
-    public const string QueueName = "ai.inspection-media.uploaded";
-    public const string RoutingKey = "identity.event.inspectionmediauploadedevent";
+    public const string QueueName = EventTopologyConstants.Queues.AiInspectionMediaProcess;
+    public const string RoutingKey = EventTopologyConstants.RoutingKeys.InspectionMediaUploaded;
+    public const string LegacyQueueName = "ai.inspection-media.uploaded";
+    public const string LegacyRoutingKey = EventTopologyConstants.RoutingKeys.LegacyInspectionMediaUploaded;
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
     private readonly RabbitMqConnection _connectionFactory;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -38,11 +40,23 @@ public sealed class InspectionMediaUploadedConsumer : BackgroundService
             {
                 await using var connection = await _connectionFactory.CreateConnectionAsync(stoppingToken);
                 await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
-                await channel.ExchangeDeclareAsync(AIAnalysisRequestTopology.ExchangeName, ExchangeType.Topic, true, false, cancellationToken: stoppingToken);
+                
+                // Declare primary standardized exchange
+                await channel.ExchangeDeclareAsync(EventTopologyConstants.Exchange, ExchangeType.Topic, true, false, cancellationToken: stoppingToken);
+                await channel.ExchangeDeclareAsync(AIAnalysisRequestTopology.DeadLetterExchangeName, ExchangeType.Fanout, true, false, cancellationToken: stoppingToken);
+
+                // Declare standardized queue
                 await channel.QueueDeclareAsync(QueueName, true, false, false,
                     new Dictionary<string, object?> { ["x-dead-letter-exchange"] = AIAnalysisRequestTopology.DeadLetterExchangeName },
                     cancellationToken: stoppingToken);
-                await channel.QueueBindAsync(QueueName, AIAnalysisRequestTopology.ExchangeName, RoutingKey, cancellationToken: stoppingToken);
+
+                await channel.QueueBindAsync(QueueName, EventTopologyConstants.Exchange, RoutingKey, cancellationToken: stoppingToken);
+                await channel.QueueBindAsync(QueueName, EventTopologyConstants.Exchange, LegacyRoutingKey, cancellationToken: stoppingToken);
+
+                // Also support legacy exchange binding for backward compatibility
+                await channel.ExchangeDeclareAsync(AIAnalysisRequestTopology.ExchangeName, ExchangeType.Topic, true, false, cancellationToken: stoppingToken);
+                await channel.QueueBindAsync(QueueName, AIAnalysisRequestTopology.ExchangeName, LegacyRoutingKey, cancellationToken: stoppingToken);
+
                 await channel.BasicQosAsync(0, 1, false, stoppingToken);
 
                 var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

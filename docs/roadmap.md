@@ -1,8 +1,14 @@
 # 🗺️ TỔNG THỂ ROADMAP BACKEND: UAV-PMS SYSTEM (.NET 9)
 
-- **Giai đoạn hiện tại:** Tái cấu trúc (Refactoring) & Xây dựng luồng nghiệp vụ cốt lõi.
-- **Cơ sở tham chiếu:** `database_schema.md` (Database Schema chuẩn) & `SU26SE181xxx_UAV_AI_Inspection_v4_final.md` (Tài liệu đăng ký Capstone).
-- **Kiến trúc:** Clean Architecture, CQRS (MediatR), PostgreSQL + PostGIS.
+> [!NOTE]
+> **CẬP NHẬT KIẾN TRÚC & SCHEMA MỚI NHẤT (MF01 - MF04)**:
+> Toàn bộ thiết kế cơ sở dữ liệu đã được hợp nhất và chuẩn hóa tại [ERD_SYSTEM_MF01_TO_MF04.md](file:///home/an/RiderProjects/UavPms_Org/docs/ERD_SYSTEM_MF01_TO_MF04.md) và [database_schema.md](file:///home/an/RiderProjects/UavPms_Org/docs/database_schema.md).
+> Chi tiết lộ trình implement & refactor 5 giai đoạn được theo dõi tại [MASTER_IMPLEMENTATION_AND_REFACTORING_PLAN.md](file:///home/an/RiderProjects/UavPms_Org/docs/MASTER_IMPLEMENTATION_AND_REFACTORING_PLAN.md).
+> Tài liệu đặc tả API chi tiết mới nhất được lưu tại [api_spec.md](file:///home/an/RiderProjects/UavPms_Org/docs/api_spec.md).
+
+- **Giai đoạn hiện tại:** Tái cấu trúc (Refactoring) & Xây dựng luồng nghiệp vụ cốt lõi (MF01 - MF04).
+- **Cơ sở tham chiếu:** `ERD_SYSTEM_MF01_TO_MF04.md`, `database_schema.md`, `api_spec.md` & `SU26SE181xxx_UAV_AI_Inspection_v4_final.md`.
+- **Kiến trúc:** Microservices (.NET 9), Clean Architecture, CQRS (MediatR), PostgreSQL + PostGIS, RabbitMQ.
 
 ---
 

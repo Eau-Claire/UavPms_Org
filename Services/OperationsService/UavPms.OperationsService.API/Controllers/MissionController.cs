@@ -612,6 +612,7 @@ public class MissionController : ControllerBase
         ReportedBy = r.ReportedBy,
         ReporterName = r.Reporter?.FullName ?? string.Empty,
         AssetId = r.AssetId,
+        TowerId = r.TowerId,
         IncidentType = r.IncidentType,
         Severity = r.Severity,
         Description = r.Description,
