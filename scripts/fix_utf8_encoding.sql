@@ -1,0 +1,10 @@
+UPDATE "Users" SET "FullName" = 'Nguyễn Nhật An' WHERE "Email" = 'An3439201@gmail.com';
+UPDATE "DefectCategories" SET "CategoryName" = 'Ăn mòn', "Description" = 'Ăn mòn bề mặt thiết bị' WHERE "CategoryCode" = 'CORROSION';
+UPDATE "DefectCategories" SET "CategoryName" = 'Nứt vỡ', "Description" = 'Nứt vỡ kết cấu' WHERE "CategoryCode" = 'CRACK';
+UPDATE "DefectCategories" SET "CategoryName" = 'Điểm nóng', "Description" = 'Điểm nóng nhiệt' WHERE "CategoryCode" = 'HOTSPOT';
+UPDATE "DefectCategories" SET "CategoryName" = 'Cây cối xâm lấn', "Description" = 'Hành lang tuyến bị xâm lấn' WHERE "CategoryCode" = 'VEGETATION';
+UPDATE "Regions" SET "RegionName" = 'Khu vực Hà Nội demo' WHERE "Code" = 'HN-DEMO';
+UPDATE "ManagementUnits" SET "Name" = 'Đơn vị quản lý Hà Nội demo' WHERE "Code" = 'EVN-HN-DEMO';
+UPDATE "Substations" SET "SubstationName" = 'Trạm biến áp Hà Nội demo' WHERE "Id" = '30000000-0000-0000-0000-000000000001';
+UPDATE "TransmissionLines" SET "LineName" = 'Đường dây 220kV Hà Nội demo' WHERE "Code" = 'HN-220-01';
+UPDATE "Missions" SET "Title" = 'Kiểm tra đường dây Hà Nội demo', "Description" = 'Nhiệm vụ kiểm tra định kỳ UAV' WHERE "Id" = '80000000-0000-0000-0000-000000000001';

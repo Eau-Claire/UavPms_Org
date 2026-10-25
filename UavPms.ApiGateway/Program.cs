@@ -243,6 +243,18 @@ app.UseCors("GatewayCors");
     });
 }
 
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Headers.ContainsKey("ClientId"))
+    {
+        var clientId = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous-client";
+        context.Request.Headers["ClientId"] = clientId;
+    }
+    await next();
+});
+
 await app.UseOcelot();
 
 app.Run();
