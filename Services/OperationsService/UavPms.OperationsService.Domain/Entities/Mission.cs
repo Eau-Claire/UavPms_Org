@@ -14,15 +14,11 @@ public class Mission : BaseEntity
     public Guid AssignedToUserId { get; set; }
     public string DroneCode { get; set; } = string.Empty;
     public Guid ManagerId { get; set; }
-    public Guid? InspectorId { get; set; }
     public Guid? UavId { get; set; }
     public MissionStatus Status { get; set; } = MissionStatus.Pending;
     public MissionPriority Priority { get; set; } = MissionPriority.Normal;
     public InspectionObjective Objective { get; set; } = InspectionObjective.PeriodicInspection;
-    public string PriorityDefectsJson { get; set; } = "[]";
-    public string? EmergencyReason { get; set; }
     public bool IsImmediate { get; set; } = false;
-    public DateTime? ScheduledStartAt { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }
     public string Description { get; set; } = string.Empty;
@@ -40,11 +36,11 @@ public class Mission : BaseEntity
     public string? PostponeReason { get; set; }
     public string? IdempotencyKey { get; set; }
     public DateTime? ConfirmationDeadline { get; set; }
-    public bool IsOverdueNotified { get; set; } = false;
+    /// <summary>NULL = chưa gửi thông báo quá hạn xác nhận</summary>
+    public DateTime? OverdueNotifiedAt { get; set; }
     public string? ManagerInstructions { get; set; }
 
     public virtual User? Manager { get; set; }
-    public virtual User? Inspector { get; set; }
     public virtual User? AssignedToUser { get; set; }
     public virtual Uav? Uav { get; set; }
     public virtual Region? Region { get; set; }
@@ -56,13 +52,38 @@ public class Mission : BaseEntity
     public virtual ICollection<ResourceBooking> ResourceBookings { get; set; } = new List<ResourceBooking>();
     public virtual ICollection<MissionCommunicationLog> CommunicationLogs { get; set; } = new List<MissionCommunicationLog>();
 
-    public virtual ICollection<MissionTargetLine> MissionTargetLines { get; set; } = new List<MissionTargetLine>();
+    public virtual ICollection<MissionPriorityDefect> PriorityDefects { get; set; } = new List<MissionPriorityDefect>();
     public virtual ICollection<MissionTarget> MissionTargets { get; set; } = new List<MissionTarget>();
     public virtual ICollection<MissionFlightLog> MissionFlightLogs { get; set; } = new List<MissionFlightLog>();
     public virtual ICollection<InspectionMedia> InspectionMedias { get; set; } = new List<InspectionMedia>();
     public virtual ICollection<IncidentReport> IncidentReports { get; set; } = new List<IncidentReport>();
-    public virtual ICollection<EmergencyAlert> EmergencyAlerts { get; set; } = new List<EmergencyAlert>();
     
+    #region Derived Data
+    private static readonly string[] InspectorRoles = { "INSPECTOR", "PILOT" };
+
+    /// <summary>
+    /// Thanh tra viên chính của nhiệm vụ, suy ra từ MissionAssignments (vai trò INSPECTOR, sau đó PILOT).
+    /// Cần nạp Assignments (và Assignments.User nếu dùng PrimaryInspector).
+    /// </summary>
+    public MissionAssignment? PrimaryInspectorAssignment() => Assignments
+        .Where(a => !a.IsDeleted && a.Status == MissionAssignmentStatus.Active
+            && InspectorRoles.Contains((a.AssignmentRole ?? string.Empty).ToUpperInvariant()))
+        .OrderBy(a => string.Equals(a.AssignmentRole, "INSPECTOR", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+        .ThenBy(a => a.AssignedAt)
+        .FirstOrDefault();
+
+    public Guid? PrimaryInspectorId() => PrimaryInspectorAssignment()?.UserId;
+
+    public User? PrimaryInspector() => PrimaryInspectorAssignment()?.User;
+
+    /// <summary>Mã các loại lỗi ưu tiên (cần nạp PriorityDefects.Category).</summary>
+    public List<string> PriorityDefectCodes() => PriorityDefects
+        .Select(p => p.Category?.CategoryCode)
+        .Where(code => !string.IsNullOrWhiteSpace(code))
+        .Select(code => code!)
+        .ToList();
+    #endregion
+
     #region Rich Domain Methods
 
     public void Start(DateTime? startTime = null)

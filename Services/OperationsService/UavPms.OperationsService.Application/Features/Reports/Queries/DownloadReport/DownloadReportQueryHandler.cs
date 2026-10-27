@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -59,21 +60,14 @@ public class DownloadReportQueryHandler : IRequestHandler<DownloadReportQuery, R
         bool isExcel = string.Equals(request.Format, "excel", StringComparison.OrdinalIgnoreCase) ||
                        string.Equals(request.Format, "xlsx", StringComparison.OrdinalIgnoreCase);
 
-        string? fileUrl = isExcel ? report.ExcelFileUrl : report.PdfFileUrl;
-        string formatName = isExcel ? "EXCEL" : "PDF";
+        // Báo cáo không lưu tệp: luôn sinh PDF/Excel trực tiếp từ dữ liệu hiện tại theo phạm vi báo cáo.
+        var anomalies = await _reportRepository.GetAnomaliesForReportAsync(report);
+        var (fileBytes, contentType, fileName) = await _reportExportService.GenerateReportFileAsync(
+            report,
+            anomalies,
+            isExcel ? "excel" : "pdf",
+            cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(fileUrl))
-        {
-            throw new NotFoundException($"Tệp báo cáo định dạng {formatName} chưa được tạo. Vui lòng tạo tệp trước khi tải.");
-        }
-
-        var fileResult = await _reportExportService.GetReportFileStreamAsync(fileUrl, cancellationToken);
-        if (fileResult == null)
-        {
-            throw new NotFoundException($"Tệp báo cáo định dạng {formatName} không tồn tại trên hệ thống lưu trữ.");
-        }
-
-        var (stream, contentType, fileName) = fileResult.Value;
-        return new ReportFileDownloadDto(stream, contentType, fileName);
+        return new ReportFileDownloadDto(new MemoryStream(fileBytes), contentType, fileName);
     }
 }

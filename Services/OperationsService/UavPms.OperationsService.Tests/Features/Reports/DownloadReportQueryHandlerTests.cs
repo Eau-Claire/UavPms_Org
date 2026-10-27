@@ -31,7 +31,7 @@ public class DownloadReportQueryHandlerTests
     }
 
     [Fact]
-    public async Task DownloadReport_ShouldReturnFileDownloadDto_WhenPdfFileExists()
+    public async Task DownloadReport_ShouldGeneratePdfLive()
     {
         // Arrange
         var reportId = Guid.NewGuid();
@@ -40,14 +40,14 @@ public class DownloadReportQueryHandlerTests
             Id = reportId,
             Code = "BC-2026-0001",
             Title = "Báo cáo kiểm tra",
-            Status = ReportStatus.Approved,
-            PdfFileUrl = "/reports/BC-2026-0001.pdf"
+            Status = ReportStatus.Approved
         };
         _reportRepositoryMock.Setup(r => r.GetReportByIdWithDetailsAsync(reportId)).ReturnsAsync(report);
+        var anomalies = new List<DetectedAnomaly> { new() { Id = Guid.NewGuid(), ValidationStatus = "Confirmed" } };
+        _reportRepositoryMock.Setup(r => r.GetAnomaliesForReportAsync(report)).ReturnsAsync(anomalies);
 
-        var stream = new MemoryStream(Encoding.UTF8.GetBytes("fake pdf content"));
-        _reportExportServiceMock.Setup(s => s.GetReportFileStreamAsync("/reports/BC-2026-0001.pdf", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((stream, "application/pdf", "BC-2026-0001.pdf"));
+        _reportExportServiceMock.Setup(s => s.GenerateReportFileAsync(report, anomalies, "pdf", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Encoding.UTF8.GetBytes("fake pdf content"), "application/pdf", "BC-2026-0001.pdf"));
 
         _currentUserServicesMock.Setup(c => c.Roles).Returns(new List<string> { UserRoles.SystemAdmin });
 
@@ -65,10 +65,12 @@ public class DownloadReportQueryHandlerTests
         result.ContentType.Should().Be("application/pdf");
         result.FileName.Should().Be("BC-2026-0001.pdf");
         result.FileStream.Should().NotBeNull();
+        result.FileStream.Length.Should().BeGreaterThan(0);
+        _reportExportServiceMock.Verify(s => s.GenerateReportFileAsync(report, anomalies, "pdf", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task DownloadReport_ShouldReturnFileDownloadDto_WhenExcelFileExists()
+    public async Task DownloadReport_ShouldGenerateExcelLive()
     {
         // Arrange
         var reportId = Guid.NewGuid();
@@ -77,14 +79,13 @@ public class DownloadReportQueryHandlerTests
             Id = reportId,
             Code = "BC-2026-0002",
             Title = "Báo cáo kiểm tra",
-            Status = ReportStatus.Approved,
-            ExcelFileUrl = "/reports/BC-2026-0002.xlsx"
+            Status = ReportStatus.Approved
         };
         _reportRepositoryMock.Setup(r => r.GetReportByIdWithDetailsAsync(reportId)).ReturnsAsync(report);
+        _reportRepositoryMock.Setup(r => r.GetAnomaliesForReportAsync(report)).ReturnsAsync(new List<DetectedAnomaly>());
 
-        var stream = new MemoryStream(Encoding.UTF8.GetBytes("fake excel content"));
-        _reportExportServiceMock.Setup(s => s.GetReportFileStreamAsync("/reports/BC-2026-0002.xlsx", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "BC-2026-0002.xlsx"));
+        _reportExportServiceMock.Setup(s => s.GenerateReportFileAsync(report, It.IsAny<IReadOnlyList<DetectedAnomaly>>(), "excel", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Encoding.UTF8.GetBytes("fake excel content"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "BC-2026-0002.xlsx"));
 
         _currentUserServicesMock.Setup(c => c.Roles).Returns(new List<string> { UserRoles.SystemAdmin });
 
@@ -125,35 +126,6 @@ public class DownloadReportQueryHandlerTests
     }
 
     [Fact]
-    public async Task DownloadReport_ShouldThrowNotFoundException_WhenFileHasNotBeenGeneratedYet()
-    {
-        // Arrange
-        var reportId = Guid.NewGuid();
-        var report = new Report
-        {
-            Id = reportId,
-            Code = "BC-2026-0003",
-            Title = "Báo cáo chưa xuất",
-            Status = ReportStatus.Approved,
-            PdfFileUrl = null
-        };
-        _reportRepositoryMock.Setup(r => r.GetReportByIdWithDetailsAsync(reportId)).ReturnsAsync(report);
-        _currentUserServicesMock.Setup(c => c.Roles).Returns(new List<string> { UserRoles.SystemAdmin });
-
-        var handler = new DownloadReportQueryHandler(
-            _reportRepositoryMock.Object,
-            _reportExportServiceMock.Object,
-            _currentUserServicesMock.Object
-        );
-
-        // Act
-        Func<Task> act = async () => await handler.Handle(new DownloadReportQuery(reportId, "pdf"), CancellationToken.None);
-
-        // Assert
-        await act.Should().ThrowAsync<NotFoundException>().WithMessage("*chưa được tạo*");
-    }
-
-    [Fact]
     public async Task DownloadReport_ShouldThrowForbiddenException_WhenManagerIsOutOfGeographicScope()
     {
         // Arrange
@@ -163,8 +135,7 @@ public class DownloadReportQueryHandlerTests
         {
             Id = reportId,
             Title = "Báo cáo ngoài vùng",
-            Status = ReportStatus.Approved,
-            PdfFileUrl = "/reports/file.pdf"
+            Status = ReportStatus.Approved
         };
         _reportRepositoryMock.Setup(r => r.GetReportByIdWithDetailsAsync(reportId)).ReturnsAsync(report);
         _reportRepositoryMock.Setup(r => r.CanUserManageReportAsync(managerId, report)).ReturnsAsync(false);
@@ -196,8 +167,7 @@ public class DownloadReportQueryHandlerTests
             Id = reportId,
             Title = "Báo cáo nháp của người khác",
             Status = ReportStatus.Draft,
-            CreatedBy = creatorId,
-            PdfFileUrl = "/reports/draft.pdf"
+            CreatedBy = creatorId
         };
         _reportRepositoryMock.Setup(r => r.GetReportByIdWithDetailsAsync(reportId)).ReturnsAsync(report);
         _currentUserServicesMock.Setup(c => c.UserId).Returns(inspectorId);

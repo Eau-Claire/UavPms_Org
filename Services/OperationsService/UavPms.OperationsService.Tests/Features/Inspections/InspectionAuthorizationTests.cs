@@ -69,7 +69,7 @@ public class InspectionAuthorizationTests
                 {
                     Id = Guid.NewGuid(),
                     MissionId = missionId,
-                    AssetId = Guid.NewGuid(),
+                    TowerId = Guid.NewGuid(),
                     MediaType = "Image",
                     FileUrl = "/images/sample.jpg",
                     ValidationStatus = "Pending"
@@ -102,7 +102,7 @@ public class InspectionAuthorizationTests
             {
                 Id = mediaId,
                 MissionId = missionId,
-                AssetId = Guid.NewGuid(),
+                TowerId = Guid.NewGuid(),
                 MediaType = "Image",
                 FileUrl = "/images/secure.jpg"
             });
@@ -136,7 +136,7 @@ public class InspectionAuthorizationTests
             {
                 Id = mediaId,
                 MissionId = missionId,
-                AssetId = Guid.NewGuid(),
+                TowerId = Guid.NewGuid(),
                 MediaType = "Image",
                 FileUrl = "/images/allowed.jpg"
             });

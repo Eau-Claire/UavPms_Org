@@ -28,7 +28,7 @@ public class InspectionControllerTests
     public async Task UploadImage_ShouldDispatchCommandToMediatorAndReturnOk_WhenRequestIsValid()
     {
         var missionId = Guid.NewGuid();
-        var assetId = Guid.NewGuid();
+        var towerId = Guid.NewGuid();
         var capturedAt = DateTime.UtcNow;
 
         var fileMock = new Mock<IFormFile>();
@@ -54,7 +54,7 @@ public class InspectionControllerTests
         _mediatorMock.Setup(m => m.Send(It.IsAny<UploadInspectionImageCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(commandResult);
 
-        var result = await _controller.UploadImage(missionId, assetId, capturedAt, null, null, fileMock.Object);
+        var result = await _controller.UploadImage(missionId, towerId, capturedAt, null, null, fileMock.Object);
 
         var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
         var apiResponse = okResult.Value.Should().BeOfType<ApiResponse>().Subject;

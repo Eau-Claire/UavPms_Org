@@ -34,13 +34,12 @@ public class GetReportsPagedQueryHandlerTests
             It.IsAny<ReportType?>(),
             It.IsAny<ReportStatus?>(),
             It.IsAny<Guid?>(),
-            It.IsAny<Guid?>(),
             It.IsAny<string?>(),
             It.IsAny<string?>(),
             It.IsAny<string?>()
         ))
-        .Callback<int, int, ReportType?, ReportStatus?, Guid?, Guid?, string?, string?, string?>(
-            (p, ps, t, s, tl, sub, q, sb, so) =>
+        .Callback<int, int, ReportType?, ReportStatus?, Guid?, string?, string?, string?>(
+            (p, ps, t, s, region, q, sb, so) =>
             {
                 capturedPage = p;
                 capturedPageSize = ps;
@@ -71,7 +70,6 @@ public class GetReportsPagedQueryHandlerTests
             It.IsAny<ReportType?>(),
             It.IsAny<ReportStatus?>(),
             It.IsAny<Guid?>(),
-            It.IsAny<Guid?>(),
             It.IsAny<string?>(),
             It.IsAny<string?>(),
             It.IsAny<string?>()
@@ -101,13 +99,12 @@ public class GetReportsPagedQueryHandlerTests
             It.IsAny<ReportType?>(),
             It.IsAny<ReportStatus?>(),
             It.IsAny<Guid?>(),
-            It.IsAny<Guid?>(),
             It.IsAny<string?>(),
             It.IsAny<string?>(),
             It.IsAny<string?>()
         ))
-        .Callback<int, int, ReportType?, ReportStatus?, Guid?, Guid?, string?, string?, string?>(
-            (p, ps, t, s, tl, sub, q, sb, so) =>
+        .Callback<int, int, ReportType?, ReportStatus?, Guid?, string?, string?, string?>(
+            (p, ps, t, s, region, q, sb, so) =>
             {
                 capturedType = t;
                 capturedStatus = s;
@@ -139,13 +136,12 @@ public class GetReportsPagedQueryHandlerTests
             It.IsAny<ReportType?>(),
             It.IsAny<ReportStatus?>(),
             It.IsAny<Guid?>(),
-            It.IsAny<Guid?>(),
             It.IsAny<string?>(),
             It.IsAny<string?>(),
             It.IsAny<string?>()
         ))
-        .Callback<int, int, ReportType?, ReportStatus?, Guid?, Guid?, string?, string?, string?>(
-            (p, ps, t, s, tl, sub, q, sb, so) =>
+        .Callback<int, int, ReportType?, ReportStatus?, Guid?, string?, string?, string?>(
+            (p, ps, t, s, region, q, sb, so) =>
             {
                 capturedType = t;
                 capturedStatus = s;

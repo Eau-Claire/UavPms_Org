@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 using UavPms.OperationsService.Application.Features.Reports.Commands.ApproveReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.CreateReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.DeleteReport;
-using UavPms.OperationsService.Application.Features.Reports.Commands.GenerateReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.RejectReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.SubmitReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.UpdateReport;
@@ -42,8 +41,7 @@ public class ReportController : ControllerBase
         [FromQuery] int pageSize = 10,
         [FromQuery] string? type = null,
         [FromQuery] string? status = null,
-        [FromQuery] Guid? transmissionLineId = null,
-        [FromQuery] Guid? substationId = null,
+        [FromQuery] Guid? regionId = null,
         [FromQuery] string? search = null,
         [FromQuery] string? sortBy = null,
         [FromQuery] string? sortOrder = null)
@@ -53,8 +51,7 @@ public class ReportController : ControllerBase
             pageSize,
             type,
             status,
-            transmissionLineId,
-            substationId,
+            regionId,
             search,
             sortBy,
             sortOrder
@@ -98,8 +95,7 @@ public class ReportController : ControllerBase
         var command = new CreateReportCommand(
             request.Title,
             request.Type,
-            request.TransmissionLineId,
-            request.SubstationId,
+            request.RegionId,
             request.MissionIds,
             request.Description,
             request.DateFrom,
@@ -120,8 +116,7 @@ public class ReportController : ControllerBase
             id,
             request.Title,
             request.Description,
-            request.TransmissionLineId,
-            request.SubstationId,
+            request.RegionId,
             request.MissionIds,
             request.DateFrom,
             request.DateTo
@@ -179,19 +174,14 @@ public class ReportController : ControllerBase
     }
 
     /// <summary>
-    /// Kích hoạt tạo file xuất bản PDF hoặc Excel cho báo cáo.
+    /// Sinh trực tiếp tệp PDF/Excel từ dữ liệu hiện tại (báo cáo không lưu tệp). Giữ để tương thích, tương đương /download.
     /// </summary>
     [HttpPost("{id:guid}/generate")]
     [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
-    public async Task<IActionResult> Generate(Guid id, [FromQuery] string format = "pdf")
-    {
-        var command = new GenerateReportCommand(id, format);
-        var result = await _mediator.Send(command);
-        return Ok(new ApiResponse(true, $"Tạo tệp báo cáo định dạng {format.ToUpperInvariant()} thành công.", result));
-    }
+    public Task<IActionResult> Generate(Guid id, [FromQuery] string format = "pdf") => Download(id, format);
 
     /// <summary>
-    /// Tải tệp báo cáo đã xuất bản.
+    /// Tải báo cáo dạng PDF/Excel, sinh trực tiếp theo template từ dữ liệu hiện tại.
     /// </summary>
     [HttpGet("{id:guid}/download")]
     [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
@@ -207,8 +197,7 @@ public class ReportController : ControllerBase
 public record CreateReportRequest(
     string Title,
     string Type,
-    Guid? TransmissionLineId = null,
-    Guid? SubstationId = null,
+    Guid? RegionId = null,
     List<Guid>? MissionIds = null,
     string? Description = null,
     DateTimeOffset? DateFrom = null,
@@ -218,8 +207,7 @@ public record CreateReportRequest(
 public record UpdateReportRequest(
     string Title,
     string? Description = null,
-    Guid? TransmissionLineId = null,
-    Guid? SubstationId = null,
+    Guid? RegionId = null,
     List<Guid>? MissionIds = null,
     DateTimeOffset? DateFrom = null,
     DateTimeOffset? DateTo = null

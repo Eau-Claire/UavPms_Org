@@ -245,7 +245,7 @@ public class RealtimeNotificationService : IRealtimeNotificationService
             ReferenceId = notification.ReferenceId,
             Priority = ResolvePriority(notification),
             CreatedAt = notification.SentAt,
-            IsRead = notification.IsRead
+            IsRead = notification.ReadAt != null
         };
     }
 

@@ -121,11 +121,8 @@ public class NotificationHub : Hub
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var hasAccess = await db.Missions.AnyAsync(m => m.Id == missionGuid && !m.IsDeleted && (
-                m.ManagerId == userId.Value ||
-                m.InspectorId == userId.Value ||
-                m.AssignedToUserId == userId.Value
-            )) || await db.MissionAssignments.AnyAsync(a => a.MissionId == missionGuid && a.UserId == userId.Value && a.Status == 1 && !a.IsDeleted);
+            var hasAccess = await db.Missions.AnyAsync(m => m.Id == missionGuid && !m.IsDeleted && m.ManagerId == userId.Value)
+                || await db.MissionAssignments.AnyAsync(a => a.MissionId == missionGuid && a.UserId == userId.Value && a.Status == "Active" && !a.IsDeleted);
 
             if (!hasAccess)
             {

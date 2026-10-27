@@ -69,35 +69,6 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         var detailedReport = await _reportRepository.GetReportByIdWithDetailsAsync(report.Id);
         var target = detailedReport ?? report;
 
-        return new ReportDetailDto(
-            target.Id,
-            target.Code,
-            target.Title,
-            target.Type.ToString().ToLowerInvariant(),
-            target.Status.ToString().ToLowerInvariant(),
-            target.Description,
-            target.CreatedAt,
-            target.UpdatedAt,
-            target.TransmissionLine != null ? new ReportNestedEntityDto(target.TransmissionLine.Id, target.TransmissionLine.LineName) : null,
-            target.Substation != null ? new ReportNestedEntityDto(target.Substation.Id, target.Substation.SubstationName) : null,
-            target.CreatedByUser != null ? new ReportCreatorDto(target.CreatedByUser.Id, target.CreatedByUser.FullName) : null,
-            target.DefectCount,
-            target.PdfFileSize,
-            target.ExcelFileSize,
-            target.PdfFileUrl,
-            target.ExcelFileUrl,
-            target.DateFrom,
-            target.DateTo,
-            target.RejectionReason,
-            target.ApprovedBy != null ? new ReportCreatorDto(target.ApprovedBy.Id, target.ApprovedBy.FullName) : null,
-            target.ApprovedAt,
-            target.ReportMissions.Select(rm => new ReportMissionSummaryDto(
-                rm.MissionId,
-                rm.Mission?.MissionCode ?? string.Empty,
-                rm.Mission?.Title ?? string.Empty,
-                rm.Mission?.Status.ToString().ToLowerInvariant() ?? string.Empty,
-                rm.Mission?.ScheduledStartAt
-            )).ToList()
-        );
+        return target.ToDetailDto(await _reportRepository.CountAnomaliesForReportAsync(target));
     }
 }

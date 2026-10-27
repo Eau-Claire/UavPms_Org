@@ -21,14 +21,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserGeographicScope> UserGeographicScopes => Set<UserGeographicScope>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Region> Regions => Set<Region>();
-    public DbSet<Substation> Substations => Set<Substation>();
-    public DbSet<TransmissionLine> TransmissionLines => Set<TransmissionLine>();
-    public DbSet<ManagementUnit> ManagementUnits => Set<ManagementUnit>();
-    public DbSet<UavPms.OperationsService.Domain.Entities.LineSegment> LineSegments => Set<UavPms.OperationsService.Domain.Entities.LineSegment>();
     public DbSet<Tower> Towers => Set<Tower>();
-    public DbSet<TowerConditionHistory> TowerConditionHistories => Set<TowerConditionHistory>();
-    public DbSet<Asset> Assets => Set<Asset>();
-    public DbSet<AssetHealthHistory> AssetHealthHistories => Set<AssetHealthHistory>();
     public DbSet<Uav> Uavs => Set<Uav>();
     public DbSet<Mission> Missions => Set<Mission>();
     public DbSet<MissionCommunicationLog> MissionCommunicationLogs => Set<MissionCommunicationLog>();
@@ -37,7 +30,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<MissionCheckIn> MissionCheckIns => Set<MissionCheckIn>();
     public DbSet<DroneHandover> DroneHandovers => Set<DroneHandover>();
     public DbSet<ResourceBooking> ResourceBookings => Set<ResourceBooking>();
-    public DbSet<MissionTargetLine> MissionTargetLines => Set<MissionTargetLine>();
+    public DbSet<MissionPriorityDefect> MissionPriorityDefects => Set<MissionPriorityDefect>();
     public DbSet<MissionTarget> MissionTargets => Set<MissionTarget>();
     public DbSet<MissionFlightLog> MissionFlightLogs => Set<MissionFlightLog>();
     public DbSet<InspectionMedia> InspectionMedia => Set<InspectionMedia>();
@@ -52,10 +45,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
-    public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
+    public DbSet<AIAnalysisRun> AIAnalysisRuns => Set<AIAnalysisRun>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<PreMissionAssessment> PreMissionAssessments => Set<PreMissionAssessment>();
-    public DbSet<PreMissionAssessmentAsset> PreMissionAssessmentAssets => Set<PreMissionAssessmentAsset>();
+    public DbSet<PreMissionAssessmentTower> PreMissionAssessmentTowers => Set<PreMissionAssessmentTower>();
     public DbSet<PreMissionAssessmentPersonnel> PreMissionAssessmentPersonnel => Set<PreMissionAssessmentPersonnel>();
     public DbSet<PreMissionAssessmentDrone> PreMissionAssessmentDrones => Set<PreMissionAssessmentDrone>();
     public DbSet<DroneTechnicalInspection> DroneTechnicalInspections => Set<DroneTechnicalInspection>();

@@ -27,12 +27,12 @@ public class UpdateRegionCommandHandler : IRequestHandler<UpdateRegionCommand, R
             throw new NotFoundException("Region", request.Id);
         }
 
-        region.RegionName = request.RegionName;
+        region.Name = request.RegionName;
         region.UpdatedAt = DateTime.UtcNow;
 
         await _regionRepository.UpdateAsync(region);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new RegionDto(region.Id, region.RegionName, region.Geom?.AsText());
+        return new RegionDto(region.Id, region.Name, region.Geom?.AsText());
     }
 }

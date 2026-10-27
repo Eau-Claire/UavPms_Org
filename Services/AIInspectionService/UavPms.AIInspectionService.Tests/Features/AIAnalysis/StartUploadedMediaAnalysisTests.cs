@@ -17,24 +17,24 @@ public sealed class StartUploadedMediaAnalysisTests
     {
         var mediaId = Guid.NewGuid();
         var missionId = Guid.NewGuid();
-        var assetId = Guid.NewGuid();
+        var towerId = Guid.NewGuid();
         var uploaderId = Guid.NewGuid();
         var upload = new InspectionMediaUploadedEvent
         {
-            EventId = Guid.NewGuid(), MediaId = mediaId, MissionId = missionId, AssetId = assetId,
+            EventId = Guid.NewGuid(), MediaId = mediaId, MissionId = missionId, TowerId = towerId,
             UploadedBy = uploaderId, FileUrl = "https://storage/media.jpg", MediaType = "Image"
         };
         var mediaRepo = new Mock<IGenericRepository<InspectionMedia>>();
-        var requestRepo = new Mock<IGenericRepository<AIAnalysisRequest>>();
+        var requestRepo = new Mock<IGenericRepository<AIAnalysisRun>>();
         var unitOfWork = new Mock<IUnitOfWork>();
         var publisher = new Mock<IEventPublisher>();
-        AIAnalysisRequest? persisted = null;
+        AIAnalysisRun? persisted = null;
         mediaRepo.Setup(x => x.GetByIdAsync(mediaId, false, It.IsAny<CancellationToken>())).ReturnsAsync(
-            new InspectionMedia { Id = mediaId, MissionId = missionId, AssetId = assetId, UploadedBy = uploaderId,
+            new InspectionMedia { Id = mediaId, MissionId = missionId, TowerId = towerId, UploadedBy = uploaderId,
                 FileUrl = upload.FileUrl, MediaType = "Image" });
-        requestRepo.Setup(x => x.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<AIAnalysisRequest, bool>>>(), It.IsAny<bool>()))
+        requestRepo.Setup(x => x.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<AIAnalysisRun, bool>>>(), It.IsAny<bool>()))
             .ReturnsAsync(() => persisted == null ? [] : [persisted]);
-        requestRepo.Setup(x => x.AddAsync(It.IsAny<AIAnalysisRequest>())).ReturnsAsync((AIAnalysisRequest value) => persisted = value);
+        requestRepo.Setup(x => x.AddAsync(It.IsAny<AIAnalysisRun>())).ReturnsAsync((AIAnalysisRun value) => persisted = value);
 
         var handler = new StartUploadedMediaAnalysisCommandHandler(mediaRepo.Object, requestRepo.Object,
             unitOfWork.Object, publisher.Object, Mock.Of<ILogger<StartUploadedMediaAnalysisCommandHandler>>());
@@ -43,7 +43,42 @@ public sealed class StartUploadedMediaAnalysisTests
         var replay = await handler.Handle(new StartUploadedMediaAnalysisCommand(upload), CancellationToken.None);
 
         replay.Should().Be(first);
-        requestRepo.Verify(x => x.AddAsync(It.IsAny<AIAnalysisRequest>()), Times.Once);
-        publisher.Verify(x => x.PublishAsync(It.IsAny<AIAnalysisRequestedEvent>()), Times.Exactly(2));
+        requestRepo.Verify(x => x.AddAsync(It.IsAny<AIAnalysisRun>()), Times.Once);
+        publisher.Verify(x => x.PublishAsync(It.Is<AIAnalysisRequestedEvent>(e =>
+            e.RequestId == first && e.FileUrl == upload.FileUrl && e.MediaType == "Image" &&
+            e.MissionId == missionId && e.AssetId == towerId && e.UploadedBy == uploaderId)), Times.Exactly(2));
+        persisted!.ExecutionLocation.Should().Be(AIAnalysisRun.Cloud);
+        persisted.RequestedBy.Should().Be(uploaderId);
+        persisted.SourceEventId.Should().Be(upload.EventId);
+    }
+
+    [Fact]
+    public async Task UploadEvent_WithoutTower_ShouldStillCreateRun()
+    {
+        var mediaId = Guid.NewGuid();
+        var missionId = Guid.NewGuid();
+        var uploaderId = Guid.NewGuid();
+        var upload = new InspectionMediaUploadedEvent
+        {
+            EventId = Guid.NewGuid(), MediaId = mediaId, MissionId = missionId, TowerId = null,
+            UploadedBy = uploaderId, FileUrl = "https://storage/corridor.mp4", MediaType = "Video"
+        };
+        var mediaRepo = new Mock<IGenericRepository<InspectionMedia>>();
+        var requestRepo = new Mock<IGenericRepository<AIAnalysisRun>>();
+        var publisher = new Mock<IEventPublisher>();
+        mediaRepo.Setup(x => x.GetByIdAsync(mediaId, false, It.IsAny<CancellationToken>())).ReturnsAsync(
+            new InspectionMedia { Id = mediaId, MissionId = missionId, UploadedBy = uploaderId,
+                FileUrl = upload.FileUrl, MediaType = "Video" });
+        requestRepo.Setup(x => x.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<AIAnalysisRun, bool>>>(), It.IsAny<bool>()))
+            .ReturnsAsync(Array.Empty<AIAnalysisRun>());
+        requestRepo.Setup(x => x.AddAsync(It.IsAny<AIAnalysisRun>())).ReturnsAsync((AIAnalysisRun value) => value);
+
+        var handler = new StartUploadedMediaAnalysisCommandHandler(mediaRepo.Object, requestRepo.Object,
+            Mock.Of<IUnitOfWork>(), publisher.Object, Mock.Of<ILogger<StartUploadedMediaAnalysisCommandHandler>>());
+
+        await handler.Handle(new StartUploadedMediaAnalysisCommand(upload), CancellationToken.None);
+
+        requestRepo.Verify(x => x.AddAsync(It.IsAny<AIAnalysisRun>()), Times.Once);
+        publisher.Verify(x => x.PublishAsync(It.Is<AIAnalysisRequestedEvent>(e => e.AssetId == null && e.MediaType == "Video")), Times.Once);
     }
 }

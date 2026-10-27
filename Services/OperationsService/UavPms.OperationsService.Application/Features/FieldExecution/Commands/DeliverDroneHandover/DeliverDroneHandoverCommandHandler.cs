@@ -71,7 +71,7 @@ public class DeliverDroneHandoverCommandHandler : IRequestHandler<DeliverDroneHa
         if (request.Accepted)
         {
             drone.OperationalStatus = DroneOperationalStatus.InUse;
-            drone.Status = DroneStatus.Flying;
+            drone.FlightStatus = DroneStatus.Flying;
             await _uavRepository.UpdateAsync(drone);
         }
 

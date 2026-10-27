@@ -44,6 +44,7 @@ public sealed class UavManagementService : IUavManagementService
         CancellationToken ct = default)
     {
         var query = _db.Uavs
+            .Include(x => x.AssignedRegion)
             .Include(x => x.FlightControllers.Where(fc => !fc.IsDeleted))
             .Include(x => x.TechnicalInspections.Where(t => !t.IsDeleted).OrderByDescending(t => t.CompletedAt).Take(1))
             .Where(x => !x.IsDeleted);
@@ -90,6 +91,7 @@ public sealed class UavManagementService : IUavManagementService
     public async Task<UavDetailsDto> GetDroneByIdAsync(Guid droneId, CancellationToken ct = default)
     {
         var drone = await _db.Uavs
+            .Include(x => x.AssignedRegion)
             .Include(x => x.FlightControllers.Where(fc => !fc.IsDeleted))
             .Include(x => x.TechnicalInspections.Where(t => !t.IsDeleted).OrderByDescending(t => t.CompletedAt).Take(1))
                 .ThenInclude(t => t.Technician)
@@ -120,7 +122,7 @@ public sealed class UavManagementService : IUavManagementService
         if (request.AssignedRegionId.HasValue && string.IsNullOrWhiteSpace(regionName))
         {
             var region = await _db.Regions.FindAsync(new object[] { request.AssignedRegionId.Value }, ct);
-            regionName = region?.RegionName;
+            regionName = region?.Name;
         }
 
         var drone = new Uav
@@ -132,14 +134,13 @@ public sealed class UavManagementService : IUavManagementService
             Category = string.IsNullOrWhiteSpace(request.Category) ? "Hexacopter" : request.Category.Trim(),
             SerialNumber = request.SerialNumber?.Trim() ?? string.Empty,
             AssignedRegionId = request.AssignedRegionId,
-            AssignedRegionName = regionName,
             OperationalStatus = request.OperationalStatus ?? DroneOperationalStatus.Available,
             TechnicalHealth = request.TechnicalHealth ?? TechnicalHealth.Unknown,
             FlightEnduranceMinutes = request.FlightEnduranceMinutes.GetValueOrDefault(30.0),
             OperationalRangeKm = request.OperationalRangeKm.GetValueOrDefault(10.0),
             CameraPayloadInfo = request.CameraPayloadInfo?.Trim(),
             BatteryLevel = request.BatteryLevel.GetValueOrDefault(100.0),
-            Status = DroneStatus.Idle,
+            FlightStatus = DroneStatus.Idle,
             Version = 1,
             CreatedAt = DateTime.UtcNow
         };
@@ -155,6 +156,7 @@ public sealed class UavManagementService : IUavManagementService
         EnsureManagerOrAdmin();
 
         var drone = await _db.Uavs
+            .Include(x => x.AssignedRegion)
             .Include(x => x.FlightControllers.Where(fc => !fc.IsDeleted))
             .Include(x => x.TechnicalInspections.Where(t => !t.IsDeleted).OrderByDescending(t => t.CompletedAt).Take(1))
             .SingleOrDefaultAsync(x => x.Id == droneId && !x.IsDeleted, ct)
@@ -175,8 +177,6 @@ public sealed class UavManagementService : IUavManagementService
         if (request.AssignedRegionId.HasValue)
         {
             drone.AssignedRegionId = request.AssignedRegionId;
-            var region = await _db.Regions.FindAsync(new object[] { request.AssignedRegionId.Value }, ct);
-            drone.AssignedRegionName = region?.RegionName ?? request.AssignedRegionName;
         }
 
         if (request.OperationalStatus.HasValue)
@@ -185,7 +185,6 @@ public sealed class UavManagementService : IUavManagementService
         if (request.TechnicalHealth.HasValue)
         {
             drone.TechnicalHealth = request.TechnicalHealth.Value;
-            drone.TechnicalHealthUpdatedAt = DateTime.UtcNow;
         }
 
         if (request.FlightEnduranceMinutes.HasValue && request.FlightEnduranceMinutes.Value > 0)
@@ -221,9 +220,8 @@ public sealed class UavManagementService : IUavManagementService
         drone.DeletedAt = DateTime.UtcNow;
 
         // Deactivate active flight controllers
-        foreach (var fc in drone.FlightControllers.Where(x => x.IsActive))
+        foreach (var fc in drone.FlightControllers.Where(x => x.UnpairedAt == null))
         {
-            fc.IsActive = false;
             fc.UnpairedAt = DateTime.UtcNow;
             fc.UpdatedAt = DateTime.UtcNow;
         }
@@ -387,12 +385,12 @@ public sealed class UavManagementService : IUavManagementService
         if (request.AssessmentId.HasValue && request.AssessmentId.Value != Guid.Empty)
         {
             var assessment = await _db.PreMissionAssessments
-                .Include(a => a.Assets)
+                .Include(a => a.Towers)
                 .SingleOrDefaultAsync(a => a.Id == request.AssessmentId.Value && !a.IsDeleted, ct);
 
             if (assessment != null)
             {
-                assetCount = Math.Max(assetCount, assessment.Assets.Count);
+                assetCount = Math.Max(assetCount, assessment.Towers.Count);
                 if (corridorKm <= 0 && assetCount > 0)
                 {
                     corridorKm = Math.Round(assetCount * 0.35, 2); // 350m average tower distance
@@ -500,7 +498,7 @@ public sealed class UavManagementService : IUavManagementService
         CancellationToken ct = default)
     {
         var assessment = await _db.PreMissionAssessments
-            .Include(a => a.Assets)
+            .Include(a => a.Towers)
             .SingleOrDefaultAsync(a => a.Id == assessmentId && !a.IsDeleted, ct)
             ?? throw new NotFoundException("PreMissionAssessment", assessmentId);
 
@@ -518,7 +516,7 @@ public sealed class UavManagementService : IUavManagementService
     private static UavDetailsDto MapToDetailsDto(Uav drone)
     {
         var activeFc = drone.FlightControllers
-            .Where(fc => fc.IsActive && !fc.IsDeleted)
+            .Where(fc => fc.UnpairedAt == null && !fc.IsDeleted)
             .OrderByDescending(fc => fc.PairedAt)
             .FirstOrDefault();
 
@@ -536,7 +534,7 @@ public sealed class UavManagementService : IUavManagementService
             Category = drone.Category,
             SerialNumber = drone.SerialNumber,
             AssignedRegionId = drone.AssignedRegionId,
-            AssignedRegionName = drone.AssignedRegionName,
+            AssignedRegionName = drone.AssignedRegion?.Name,
             OperationalStatus = drone.OperationalStatus.ToString().ToUpperInvariant(),
             TechnicalHealth = drone.TechnicalHealth.ToString().ToUpperInvariant(),
             FlightEnduranceMinutes = drone.FlightEnduranceMinutes,
@@ -554,7 +552,7 @@ public sealed class UavManagementService : IUavManagementService
                 activeFc.PairedAt,
                 activeFc.UnpairedAt,
                 activeFc.LastSeenAt,
-                activeFc.IsActive
+                activeFc.UnpairedAt == null
             ) : null,
             LastTechnicalInspection = latestInspection != null ? MapInspectionToSummaryDto(latestInspection) : null,
             CreatedAt = drone.CreatedAt,

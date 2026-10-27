@@ -60,11 +60,9 @@ public class ReportExportServiceTests : IDisposable
             Type = ReportType.Periodic,
             Status = ReportStatus.Approved,
             Description = "Kiểm tra tình trạng cột và sứ cách điện",
-            TransmissionLine = new TransmissionLine { LineName = "ĐZ 500kV Thường Tín - Phố Nối", Code = "571-TT-PN" },
-            Substation = new Substation { SubstationName = "TBA 500kV Thường Tín" },
+            Region = new Region { Name = "Khu vực Thường Tín - Phố Nối", Code = "TT-PN" },
             CreatedByUser = new User { FullName = "Nguyễn Văn Kỹ Thuật" },
             ApprovedBy = new User { FullName = "Trần Văn Quản Lý" },
-            DefectCount = 2,
             ReportMissions = new List<ReportMission>
             {
                 new ReportMission
@@ -75,7 +73,7 @@ public class ReportExportServiceTests : IDisposable
                         MissionCode = "MS-2026-01",
                         Title = "Bay quét đường dây đợt 1",
                         Status = MissionStatus.Completed,
-                        ScheduledStartAt = DateTime.UtcNow.AddDays(-2)
+                        PlannedStart = DateTime.UtcNow.AddDays(-2)
                     }
                 }
             }
@@ -90,6 +88,7 @@ public class ReportExportServiceTests : IDisposable
                 ConfidenceScore = 0.94,
                 ValidationStatus = "Confirmed",
                 CreatedAt = DateTime.UtcNow.AddDays(-1),
+                Tower = new Tower { TowerCode = "T-571-01" },
                 Media = new InspectionMedia
                 {
                     Mission = new Mission { MissionCode = "MS-2026-01" }
@@ -121,8 +120,7 @@ public class ReportExportServiceTests : IDisposable
             Title = "Báo cáo khuyết tật nhiệt ảnh",
             Type = ReportType.Thermal,
             Status = ReportStatus.Pending,
-            TransmissionLine = new TransmissionLine { LineName = "ĐZ 220kV Hà Đông" },
-            DefectCount = 1
+            Region = new Region { Name = "Khu vực Hà Đông" }
         };
 
         var anomalies = new List<DetectedAnomaly>
@@ -147,29 +145,5 @@ public class ReportExportServiceTests : IDisposable
         // Excel file (ZIP archive) starts with PK (0x50, 0x4B)
         fileBytes[0].Should().Be(0x50);
         fileBytes[1].Should().Be(0x4B);
-    }
-
-    [Fact]
-    public async Task SaveReportFileAsync_And_GetReportFileStreamAsync_ShouldSaveAndRetrieveFileCorrectly()
-    {
-        // Arrange
-        var fakeData = Encoding.UTF8.GetBytes("fake report payload content");
-        using var stream = new MemoryStream(fakeData);
-
-        // Act - Save
-        var fileUrl = await _service.SaveReportFileAsync(stream, "test_report.pdf");
-
-        // Assert - URL returned
-        fileUrl.Should().StartWith("/reports/");
-
-        // Act - Retrieve
-        var fileResult = await _service.GetReportFileStreamAsync(fileUrl);
-
-        // Assert - Retrieved stream
-        fileResult.Should().NotBeNull();
-        fileResult!.Value.ContentType.Should().Be("application/pdf");
-        using var reader = new StreamReader(fileResult.Value.FileStream);
-        var content = await reader.ReadToEndAsync();
-        content.Should().Be("fake report payload content");
     }
 }

@@ -44,7 +44,6 @@ public class DetectionDto
     public string? CropUrl { get; set; }
     public GpsDto? Gps { get; set; }
     public string? TowerId { get; set; }
-    public Guid? AssetId { get; set; }
 }
 
 public class ProcessAiAnalysisResultCommand : IRequest<AiAnalysisCallbackResponseDto>
@@ -52,7 +51,6 @@ public class ProcessAiAnalysisResultCommand : IRequest<AiAnalysisCallbackRespons
     public Guid RequestId { get; set; }
     public Guid? MediaId { get; set; }
     public Guid? MissionId { get; set; }
-    public Guid? AssetId { get; set; }
     public string Status { get; set; } = string.Empty; // "Completed" or "Failed"
     public string? ModelName { get; set; }
     public string? ModelVersion { get; set; }

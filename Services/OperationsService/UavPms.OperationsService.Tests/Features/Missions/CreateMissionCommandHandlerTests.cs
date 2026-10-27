@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using FluentAssertions;
 using Moq;
 using UavPms.Shared.Contracts.Events;
@@ -15,7 +16,7 @@ public class CreateMissionCommandHandlerTests
     private readonly Mock<IMissionRepository> _missionRepositoryMock;
     private readonly Mock<IUserRepository> _userRepositoryMock;
     private readonly Mock<IUavRepository> _uavRepositoryMock;
-    private readonly Mock<IAssetRepository> _assetRepositoryMock;
+    private readonly Mock<ITowerRepository> _assetRepositoryMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<ICurrentUserServices> _currentUserServicesMock;
     private readonly Mock<IEventPublisher> _eventPublisherMock;
@@ -26,7 +27,7 @@ public class CreateMissionCommandHandlerTests
         _missionRepositoryMock = new Mock<IMissionRepository>();
         _userRepositoryMock = new Mock<IUserRepository>();
         _uavRepositoryMock = new Mock<IUavRepository>();
-        _assetRepositoryMock = new Mock<IAssetRepository>();
+        _assetRepositoryMock = new Mock<ITowerRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _currentUserServicesMock = new Mock<ICurrentUserServices>();
         _eventPublisherMock = new Mock<IEventPublisher>();
@@ -56,18 +57,11 @@ public class CreateMissionCommandHandlerTests
         };
         var droneCode = "XXXX";
         var mockUav = new Uav { Id = Guid.NewGuid(), UavCode = droneCode };
-        var targetAssetId = Guid.NewGuid();
         var targetTowerId = Guid.NewGuid();
-        var targetAssets = new List<Asset>
+        var targetAssets = new List<Tower>
         {
-            new()
-            {
-                Id = targetAssetId,
-                TowerId = targetTowerId,
-                Tower = new Tower { Id = targetTowerId, TowerCode = "TOW-N1-01" },
-                AssetCode = "INS-TOW01-01",
-                Status = "Active"
-            }
+            new() { Id = targetTowerId, RegionId = Guid.NewGuid(), TowerCode = "TOW-N1-01" },
+            new() { Id = Guid.NewGuid(), RegionId = Guid.NewGuid(), TowerCode = "TOW-N1-02" }
         };
         
         _userRepositoryMock.Setup(x => x.GetByIdWithRolesAsync(assignedUserId))
@@ -76,10 +70,8 @@ public class CreateMissionCommandHandlerTests
         _uavRepositoryMock.Setup(x => x.GetByUavCodeAsync(droneCode))
             .ReturnsAsync(mockUav);
 
-        _assetRepositoryMock.Setup(x => x.GetAssetsByIdsAsync(
-                It.Is<IReadOnlyCollection<Guid>>(ids => ids.SequenceEqual(new[] { targetAssetId })),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(targetAssets);
+        _assetRepositoryMock.Setup(x => x.FindAsync(It.IsAny<Expression<Func<Tower, bool>>>(), It.IsAny<bool>()))
+            .ReturnsAsync((Expression<Func<Tower, bool>> predicate, bool _) => targetAssets.Where(predicate.Compile()).ToList());
         
         _currentUserServicesMock.Setup(x => x.UserId).Returns(Guid.NewGuid());
         _currentUserServicesMock.Setup(x => x.Email).Returns("admin@uavpms.com");
@@ -91,7 +83,7 @@ public class CreateMissionCommandHandlerTests
             droneCode,
             "Pending",
             "Description",
-            TargetAssetIds: new[] { targetAssetId });
+            TargetTowerIds: new[] { targetTowerId });
         
         var result = await _handler.Handle(command, CancellationToken.None);
         
@@ -102,7 +94,6 @@ public class CreateMissionCommandHandlerTests
         
         _missionRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Mission>()), Times.Once);
         result.Targets.Should().ContainSingle(target =>
-            target.AssetId == targetAssetId &&
             target.TowerId == targetTowerId &&
             target.Sequence == 1);
 
@@ -122,7 +113,7 @@ public class CreateMissionCommandHandlerTests
     public async Task Handle_ShouldRejectDuplicateTargets()
     {
         var id = Guid.NewGuid();
-        var command = new CreateMissionCommand("Mission", null, Guid.NewGuid(), "UAV-1", null, null, TargetAssetIds: new[] { id, id });
+        var command = new CreateMissionCommand("Mission", null, Guid.NewGuid(), "UAV-1", null, null, TargetTowerIds: new[] { id, id });
         await _handler.Invoking(x => x.Handle(command, CancellationToken.None))
             .Should().ThrowAsync<BusinessRuleException>();
     }
@@ -133,19 +124,8 @@ public class CreateMissionCommandHandlerTests
         var (command, user, uav) = ValidDependencies();
         _userRepositoryMock.Setup(x => x.GetByIdWithRolesAsync(command.AssignedToUserId)).ReturnsAsync(user);
         _uavRepositoryMock.Setup(x => x.GetByUavCodeAsync(command.DroneCode!)).ReturnsAsync(uav);
-        _assetRepositoryMock.Setup(x => x.GetAssetsByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<Asset>());
+        _assetRepositoryMock.Setup(x => x.FindAsync(It.IsAny<Expression<Func<Tower, bool>>>(), It.IsAny<bool>())).ReturnsAsync(Array.Empty<Tower>());
         await _handler.Invoking(x => x.Handle(command, CancellationToken.None)).Should().ThrowAsync<NotFoundException>();
-    }
-
-    [Fact]
-    public async Task Handle_ShouldRejectInactiveAsset()
-    {
-        var (command, user, uav) = ValidDependencies();
-        _userRepositoryMock.Setup(x => x.GetByIdWithRolesAsync(command.AssignedToUserId)).ReturnsAsync(user);
-        _uavRepositoryMock.Setup(x => x.GetByUavCodeAsync(command.DroneCode!)).ReturnsAsync(uav);
-        _assetRepositoryMock.Setup(x => x.GetAssetsByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { new Asset { Id = command.TargetAssetIds![0], Status = "Inactive" } });
-        await _handler.Invoking(x => x.Handle(command, CancellationToken.None)).Should().ThrowAsync<BusinessRuleException>().WithMessage("ASSET_NOT_AVAILABLE");
     }
 
     private static (CreateMissionCommand Command, User User, Uav Uav) ValidDependencies()
@@ -153,7 +133,7 @@ public class CreateMissionCommandHandlerTests
         var inspectorId = Guid.NewGuid();
         var user = new User { Id = inspectorId, UserRoles = new[] { new UserRole { Role = new Role { RoleName = "Inspector" } } } };
         var uav = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-1" };
-        return (new CreateMissionCommand("Mission", null, inspectorId, uav.UavCode, null, null, TargetAssetIds: new[] { Guid.NewGuid() }), user, uav);
+        return (new CreateMissionCommand("Mission", null, inspectorId, uav.UavCode, null, null, TargetTowerIds: new[] { Guid.NewGuid() }), user, uav);
     }
 
     [Fact]
@@ -182,7 +162,7 @@ public class CreateMissionCommandHandlerTests
             droneCode,
             "Pending",
             "Description",
-            TargetAssetIds: new[] { Guid.NewGuid() });
+            TargetTowerIds: new[] { Guid.NewGuid() });
 
         await _handler.Invoking(x => x.Handle(command, CancellationToken.None))
             .Should().ThrowAsync<NotFoundException>();

@@ -13,14 +13,14 @@ public interface IPreMissionAssessmentService
         Guid regionId,
         DateTime plannedStart,
         DateTime plannedEnd,
-        IReadOnlyCollection<Guid> assetIds,
+        IReadOnlyCollection<Guid> towerIds,
         CancellationToken ct);
 
     Task<PreMissionAssessment> CreateAsync(
         Guid regionId,
         DateTime plannedStart,
         DateTime plannedEnd,
-        IReadOnlyCollection<Guid> assetIds,
+        IReadOnlyCollection<Guid> towerIds,
         string? boundaryWkt,
         string? idempotencyKey,
         CancellationToken ct);

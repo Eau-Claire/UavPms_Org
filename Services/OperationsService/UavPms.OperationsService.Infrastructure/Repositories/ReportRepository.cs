@@ -21,15 +21,13 @@ public class ReportRepository : GenericRepository<Report>, IReportRepository
         int pageSize,
         ReportType? type = null,
         ReportStatus? status = null,
-        Guid? transmissionLineId = null,
-        Guid? substationId = null,
+        Guid? regionId = null,
         string? searchTerm = null,
         string? sortBy = null,
         string? sortOrder = null)
     {
         var query = ReadQuery
-            .Include(r => r.TransmissionLine)
-            .Include(r => r.Substation)
+            .Include(r => r.Region)
             .Include(r => r.CreatedByUser)
             .Where(r => !r.IsDeleted);
 
@@ -43,14 +41,9 @@ public class ReportRepository : GenericRepository<Report>, IReportRepository
             query = query.Where(r => r.Status == status.Value);
         }
 
-        if (transmissionLineId.HasValue)
+        if (regionId.HasValue)
         {
-            query = query.Where(r => r.TransmissionLineId == transmissionLineId.Value);
-        }
-
-        if (substationId.HasValue)
-        {
-            query = query.Where(r => r.SubstationId == substationId.Value);
+            query = query.Where(r => r.RegionId == regionId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -82,8 +75,7 @@ public class ReportRepository : GenericRepository<Report>, IReportRepository
     public async Task<Report?> GetReportByIdWithDetailsAsync(Guid id)
     {
         return await ReadQuery
-            .Include(r => r.TransmissionLine)
-            .Include(r => r.Substation)
+            .Include(r => r.Region)
             .Include(r => r.ApprovedBy)
             .Include(r => r.CreatedByUser)
             .Include(r => r.ReportMissions)
@@ -118,33 +110,55 @@ public class ReportRepository : GenericRepository<Report>, IReportRepository
         return $"{prefix}{nextSeq:D4}";
     }
 
-    public async Task<int> CountAnomaliesByMissionIdsAsync(IEnumerable<Guid> missionIds)
+    private IQueryable<DetectedAnomaly> AnomaliesInScope(Report report)
     {
-        var ids = missionIds?.Distinct().ToList();
-        if (ids == null || !ids.Any())
+        var query = _context.DetectedAnomalies
+            .Where(a => !a.IsDeleted && a.SupersededById == null && a.ValidationStatus != "Rejected");
+
+        var missionIds = report.ReportMissions.Select(rm => rm.MissionId).Distinct().ToList();
+        if (missionIds.Count > 0)
         {
-            return 0;
+            query = query.Where(a => missionIds.Contains(a.Media!.MissionId));
+        }
+        else if (!report.RegionId.HasValue && !report.DateFrom.HasValue && !report.DateTo.HasValue)
+        {
+            // Báo cáo chưa có phạm vi: không gom toàn bộ dữ liệu hệ thống.
+            return query.Where(_ => false);
         }
 
-        return await _context.DetectedAnomalies
-            .Where(a => !a.IsDeleted && a.Media != null && ids.Contains(a.Media.MissionId))
-            .CountAsync();
+        if (report.RegionId.HasValue)
+        {
+            var regionId = report.RegionId.Value;
+            query = query.Where(a => (a.Tower != null && (a.Tower.RegionId == regionId || a.Tower.Region!.ParentId == regionId))
+                || (a.Tower == null && a.Media!.Mission!.RegionId == regionId));
+        }
+
+        if (report.DateFrom.HasValue)
+        {
+            var from = report.DateFrom.Value.UtcDateTime;
+            query = query.Where(a => a.CreatedAt >= from);
+        }
+
+        if (report.DateTo.HasValue)
+        {
+            var to = report.DateTo.Value.UtcDateTime;
+            query = query.Where(a => a.CreatedAt <= to);
+        }
+
+        return query;
     }
 
-    public async Task<IReadOnlyList<DetectedAnomaly>> GetAnomaliesByMissionIdsAsync(IEnumerable<Guid> missionIds)
-    {
-        var ids = missionIds?.Distinct().ToList();
-        if (ids == null || !ids.Any())
-        {
-            return Array.Empty<DetectedAnomaly>();
-        }
+    public Task<int> CountAnomaliesForReportAsync(Report report) => AnomaliesInScope(report).CountAsync();
 
-        return await _context.DetectedAnomalies
+    public async Task<IReadOnlyList<DetectedAnomaly>> GetAnomaliesForReportAsync(Report report)
+    {
+        return await AnomaliesInScope(report)
             .AsNoTracking()
             .Include(a => a.Category)
+            .Include(a => a.Tower)
+            .Include(a => a.AnalysisRun)
             .Include(a => a.Media)
                 .ThenInclude(m => m!.Mission)
-            .Where(a => !a.IsDeleted && a.Media != null && ids.Contains(a.Media.MissionId))
             .OrderByDescending(a => a.CreatedAt)
             .ToListAsync();
     }
@@ -157,45 +171,17 @@ public class ReportRepository : GenericRepository<Report>, IReportRepository
             return true;
         }
 
-        if (!report.TransmissionLineId.HasValue && !report.SubstationId.HasValue)
+        if (!report.RegionId.HasValue)
         {
             return true;
         }
 
-        var scopes = await _context.UserGeographicScopes
-            .Where(s => s.UserId == userId)
-            .ToListAsync();
+        var regionId = report.RegionId.Value;
+        var parentId = report.Region?.ParentId
+            ?? await _context.Regions.Where(r => r.Id == regionId).Select(r => r.ParentId).FirstOrDefaultAsync();
 
-        if (report.SubstationId.HasValue)
-        {
-            var subId = report.SubstationId.Value;
-            var sub = report.Substation ?? await _context.Substations.FirstOrDefaultAsync(s => s.Id == subId);
-            if (sub != null)
-            {
-                if (scopes.Any(s => s.SubstationId == subId || (s.RegionId != null && s.RegionId == sub.RegionAssetId)))
-                {
-                    return true;
-                }
-            }
-        }
-
-        if (report.TransmissionLineId.HasValue)
-        {
-            var lineId = report.TransmissionLineId.Value;
-            var line = report.TransmissionLine ?? await _context.TransmissionLines.Include(l => l.Substation).FirstOrDefaultAsync(l => l.Id == lineId);
-            if (line != null)
-            {
-                if (scopes.Any(s => s.TransmissionLineId == lineId
-                    || (s.SubstationId != null && s.SubstationId == line.SubstationAssetId)
-                    || (s.RegionId != null && line.Substation != null && s.RegionId == line.Substation.RegionAssetId)
-                    || (s.ManagementUnitId != null && s.ManagementUnitId == line.ManagementUnitId)))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return await _context.UserGeographicScopes.AnyAsync(s => s.UserId == userId
+            && (s.RegionId == regionId || (parentId != null && s.RegionId == parentId)));
     }
 
     public async Task<(int Total, Dictionary<string, int> ByType, Dictionary<string, int> ByStatus)> GetReportStatisticsAsync(

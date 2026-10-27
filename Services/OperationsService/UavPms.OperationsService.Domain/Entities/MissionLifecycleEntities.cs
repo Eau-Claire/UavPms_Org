@@ -11,7 +11,6 @@ public class InspectionSchedule : BaseEntity
     public string RecurrenceRule { get; set; } = string.Empty;
     public TimeOnly PlannedTime { get; set; }
     public bool IsActive { get; set; } = true;
-    public Guid CreatedByUserId { get; set; }
     public virtual Region? Region { get; set; }
 }
 
@@ -27,10 +26,11 @@ public class MissionAssignment : BaseEntity
     public DateTime? RespondedAt { get; set; }
     public string? ResponseReason { get; set; }
     public uint Version { get; set; } = 1;
-    public Guid AssignedByUserId { get; set; }
+    public Guid AssignedById { get; set; }
     public DateTime? EndedAt { get; set; }
     public virtual Mission? Mission { get; set; }
     public virtual User? User { get; set; }
+    public virtual User? AssignedBy { get; set; }
 }
 
 public sealed class ResourceBooking : BaseEntity

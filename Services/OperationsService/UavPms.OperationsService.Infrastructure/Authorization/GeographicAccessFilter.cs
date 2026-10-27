@@ -8,7 +8,7 @@ using UavPms.Shared.Contracts.Constants;
 namespace UavPms.OperationsService.Infrastructure.Authorization;
 
 /// <summary>
-/// Applies the single GIS access rule in SQL: default geographic scope OR an active
+/// Applies the single GIS access rule in SQL: default geographic scope (region) OR an active
 /// assignment.  It intentionally returns IQueryable so callers cannot accidentally
 /// fetch the whole map and filter it in memory.
 /// </summary>
@@ -23,6 +23,11 @@ public sealed class GeographicAccessFilter
         _currentUser = currentUser;
     }
 
+    private bool IsSystemAdmin => _currentUser?.IsAuthenticated == true && _currentUser.Roles != null
+        && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
+
+    private bool IsAnonymous => _currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty;
+
     private bool IsManagerWithoutRestrictions(Guid userId)
     {
         if (_currentUser?.IsAuthenticated != true || _currentUser.Roles == null || !_currentUser.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))
@@ -31,108 +36,68 @@ public sealed class GeographicAccessFilter
         var hasScopes = _context.UserGeographicScopes.Any(s => s.UserId == userId);
         if (hasScopes) return false;
 
-        var hasFieldAssignment = _context.MissionTargets.Any(t => t.Mission!.InspectorId == userId
-                && t.Mission.Status != MissionStatus.Completed && t.Mission.Status != MissionStatus.Cancelled)
+        var hasFieldAssignment = _context.MissionAssignments.Any(a => a.UserId == userId
+                && a.Status == MissionAssignmentStatus.Active
+                && a.Mission!.Status != MissionStatus.Completed && a.Mission.Status != MissionStatus.Cancelled)
             || _context.MaintenanceTickets.Any(t => t.TechnicianId == userId
                 && t.Status != TicketStatus.Resolved && t.Status != TicketStatus.Closed);
 
         return !hasFieldAssignment;
     }
 
-    public IQueryable<Asset> ApplyToAssets(IQueryable<Asset> assets)
+    /// <summary>Region ids directly granted to the user, plus their direct child regions.</summary>
+    private IQueryable<Guid> ScopedRegionIds(Guid userId)
     {
-        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles != null && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return assets;
-        if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return assets.Where(_ => false);
-
-        var userId = _currentUser.UserId;
-        if (IsManagerWithoutRestrictions(userId)) return assets;
-        var scopes = _context.UserGeographicScopes.AsNoTracking().Where(s => s.UserId == userId);
-        var missionAssetIds = _context.MissionTargets.AsNoTracking()
-            .Where(t => (t.Mission!.InspectorId == userId || t.Mission.ManagerId == userId)
-                && t.Mission.Status != MissionStatus.Completed && t.Mission.Status != MissionStatus.Cancelled)
-            .Select(t => t.AssetId);
-        var missionLineIds = _context.MissionTargetLines.AsNoTracking()
-            .Where(t => (t.Mission!.InspectorId == userId || t.Mission.ManagerId == userId)
-                && t.Mission.Status != MissionStatus.Completed && t.Mission.Status != MissionStatus.Cancelled)
-            .Select(t => t.LineAssetId);
-        var ticketAssetIds = _context.MaintenanceTickets.AsNoTracking()
-            .Where(t => (t.TechnicianId == userId || t.ManagerId == userId)
-                && t.Status != TicketStatus.Resolved && t.Status != TicketStatus.Closed)
-            .Select(t => t.AssetId);
-
-        return assets.Where(asset =>
-            missionAssetIds.Contains(asset.Id)
-            || missionLineIds.Contains(asset.Tower!.LineAssetId)
-            || (asset.PowerLineId != null && missionLineIds.Contains(asset.PowerLineId.Value))
-            || ticketAssetIds.Contains(asset.Id)
-            || scopes.Any(scope =>
-                (scope.ManagementUnitId != null && (asset.ManagementUnitId == scope.ManagementUnitId || asset.Tower!.TransmissionLine!.ManagementUnitId == scope.ManagementUnitId))
-                || (scope.TransmissionLineId != null && (asset.PowerLineId == scope.TransmissionLineId || asset.Tower!.LineAssetId == scope.TransmissionLineId))
-                || (scope.SubstationId != null && asset.Tower!.TransmissionLine!.SubstationAssetId == scope.SubstationId)
-                || (scope.RegionId != null && asset.Tower!.TransmissionLine!.Substation!.RegionAssetId == scope.RegionId)));
+        var granted = _context.UserGeographicScopes.AsNoTracking()
+            .Where(s => s.UserId == userId)
+            .Select(s => s.RegionId);
+        return _context.Regions.AsNoTracking()
+            .Where(r => granted.Contains(r.Id) || (r.ParentId != null && granted.Contains(r.ParentId.Value)))
+            .Select(r => r.Id);
     }
 
-    public IQueryable<TransmissionLine> ApplyToLines(IQueryable<TransmissionLine> lines)
+    /// <summary>Towers reachable through an active mission or maintenance ticket.</summary>
+    private IQueryable<Guid> AssignedTowerIds(Guid userId)
     {
-        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles != null && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return lines;
-        if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return lines.Where(_ => false);
-
-        var userId = _currentUser.UserId;
-        if (IsManagerWithoutRestrictions(userId)) return lines;
-        var scopes = _context.UserGeographicScopes.AsNoTracking().Where(s => s.UserId == userId);
-        var assignedAssetIds = ApplyToAssets(_context.Assets.AsNoTracking()).Select(a => a.Id);
-        return lines.Where(line => _context.Assets.Any(a => assignedAssetIds.Contains(a.Id) && (a.PowerLineId == line.Id || a.Tower!.LineAssetId == line.Id))
-            || scopes.Any(scope => (scope.ManagementUnitId != null && line.ManagementUnitId == scope.ManagementUnitId)
-                || scope.TransmissionLineId == line.Id
-                || scope.SubstationId == line.SubstationAssetId
-                || (scope.RegionId != null && line.Substation!.RegionAssetId == scope.RegionId)));
+        var activeMissionIds = _context.Missions.AsNoTracking()
+            .Where(m => m.Status != MissionStatus.Completed && m.Status != MissionStatus.Cancelled
+                && (m.ManagerId == userId || m.Assignments.Any(a => a.UserId == userId && a.Status == MissionAssignmentStatus.Active)))
+            .Select(m => m.Id);
+        var missionTowerIds = _context.MissionTargets.AsNoTracking()
+            .Where(t => activeMissionIds.Contains(t.MissionId))
+            .Select(t => t.TowerId);
+        var ticketTowerIds = _context.MaintenanceTickets.AsNoTracking()
+            .Where(t => (t.TechnicianId == userId || t.ManagerId == userId)
+                && t.Status != TicketStatus.Resolved && t.Status != TicketStatus.Closed
+                && t.Anomaly!.TowerId != null)
+            .Select(t => t.Anomaly!.TowerId!.Value);
+        return missionTowerIds.Union(ticketTowerIds);
     }
 
     public IQueryable<Tower> ApplyToTowers(IQueryable<Tower> towers)
     {
-        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles != null && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return towers;
-        if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return towers.Where(_ => false);
-        var userId = _currentUser.UserId;
+        if (IsSystemAdmin) return towers;
+        if (IsAnonymous) return towers.Where(_ => false);
+        var userId = _currentUser!.UserId;
         if (IsManagerWithoutRestrictions(userId)) return towers;
-        var scopes = _context.UserGeographicScopes.Where(s => s.UserId == userId);
-        var allowedTowerIds = ApplyToAssets(_context.Assets).Select(a => a.TowerId);
-        return towers.Where(tower => allowedTowerIds.Contains(tower.Id)
-            || scopes.Any(scope => scope.TransmissionLineId == tower.LineAssetId
-                || scope.SubstationId == tower.TransmissionLine!.SubstationAssetId
-                || (scope.RegionId != null && scope.RegionId == tower.TransmissionLine!.Substation!.RegionAssetId)
-                || (scope.ManagementUnitId != null && scope.ManagementUnitId == tower.TransmissionLine!.ManagementUnitId)));
-    }
 
-    public IQueryable<Substation> ApplyToSubstations(IQueryable<Substation> substations)
-    {
-        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles != null && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return substations;
-        if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return substations.Where(_ => false);
-        var userId = _currentUser.UserId;
-        if (IsManagerWithoutRestrictions(userId)) return substations;
-        var lineSubstations = ApplyToLines(_context.TransmissionLines).Select(l => l.SubstationAssetId);
-        return substations.Where(s => lineSubstations.Contains(s.Id) || _context.UserGeographicScopes.Any(scope => scope.UserId == userId && userId != Guid.Empty && (scope.SubstationId == s.Id || scope.RegionId == s.RegionAssetId)));
+        var regionIds = ScopedRegionIds(userId);
+        var assignedTowerIds = AssignedTowerIds(userId);
+        return towers.Where(tower => regionIds.Contains(tower.RegionId) || assignedTowerIds.Contains(tower.Id));
     }
 
     public IQueryable<Region> ApplyToRegions(IQueryable<Region> regions)
     {
-        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return regions;
-        if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return regions.Where(_ => false);
-        var userId = _currentUser.UserId;
+        if (IsSystemAdmin) return regions;
+        if (IsAnonymous) return regions.Where(_ => false);
+        var userId = _currentUser!.UserId;
         if (IsManagerWithoutRestrictions(userId)) return regions;
-        var regionIds = ApplyToSubstations(_context.Substations).Select(s => s.RegionAssetId);
-        return regions.Where(r => regionIds.Contains(r.Id) || _context.UserGeographicScopes.Any(scope => scope.UserId == userId && userId != Guid.Empty && scope.RegionId == r.Id));
-    }
 
-    public IQueryable<ManagementUnit> ApplyToManagementUnits(IQueryable<ManagementUnit> units)
-    {
-        if (_currentUser?.IsAuthenticated == true && _currentUser.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)) return units;
-        if (_currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty) return units.Where(_ => false);
-        var userId = _currentUser.UserId;
-        if (IsManagerWithoutRestrictions(userId)) return units;
-        var unitIds = ApplyToLines(_context.TransmissionLines).Select(l => l.ManagementUnitId);
-        var assetUnitIds = ApplyToAssets(_context.Assets).Select(a => a.ManagementUnitId);
-        return units.Where(u => unitIds.Contains(u.Id) || assetUnitIds.Contains(u.Id)
-            || _context.UserGeographicScopes.Any(s => s.UserId == userId && userId != Guid.Empty && s.ManagementUnitId == u.Id));
+        var regionIds = ScopedRegionIds(userId);
+        var assignedTowerIds = AssignedTowerIds(userId);
+        var assignedRegionIds = _context.Towers.AsNoTracking()
+            .Where(t => assignedTowerIds.Contains(t.Id))
+            .Select(t => t.RegionId);
+        return regions.Where(r => regionIds.Contains(r.Id) || assignedRegionIds.Contains(r.Id));
     }
-
 }

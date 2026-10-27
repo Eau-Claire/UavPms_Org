@@ -28,7 +28,7 @@ public class GetRegionsQueryHandler : IRequestHandler<GetRegionsQuery, Paginated
 
         var dtos = regions.Select(r => new RegionDto(
             r.Id,
-            r.RegionName,
+            r.Name,
             r.Geom?.AsText()
         )).ToList();
 

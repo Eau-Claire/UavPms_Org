@@ -1,3 +1,4 @@
+using UavPms.OperationsService.Infrastructure.Repositories;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -36,17 +37,17 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         Guid regionId,
         DateTime plannedStart,
         DateTime plannedEnd,
-        IReadOnlyCollection<Guid> assetIds,
+        IReadOnlyCollection<Guid> towerIds,
         CancellationToken ct)
     {
-        return await CreateAsync(regionId, plannedStart, plannedEnd, assetIds, null, null, ct);
+        return await CreateAsync(regionId, plannedStart, plannedEnd, towerIds, null, null, ct);
     }
 
     public async Task<PreMissionAssessment> CreateAsync(
         Guid regionId,
         DateTime plannedStart,
         DateTime plannedEnd,
-        IReadOnlyCollection<Guid> assetIds,
+        IReadOnlyCollection<Guid> towerIds,
         string? boundaryWkt,
         string? idempotencyKey,
         CancellationToken ct)
@@ -56,7 +57,8 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         if (!string.IsNullOrWhiteSpace(idempotencyKey))
         {
             var existing = await _db.PreMissionAssessments
-                .Include(x => x.Assets)
+                .Include(a => a.Mission)
+                .Include(x => x.Towers)
                 .Include(x => x.PersonnelCandidates)
                 .Include(x => x.DroneCandidates)
                 .SingleOrDefaultAsync(x => x.IdempotencyKey == idempotencyKey, ct);
@@ -66,7 +68,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         if (plannedEnd <= plannedStart || plannedEnd <= DateTime.UtcNow)
             throw new BusinessRuleException("INVALID_PLANNED_TIME");
 
-        if (assetIds.Count == 0 || assetIds.Count != assetIds.Distinct().Count())
+        if (towerIds.Count == 0 || towerIds.Count != towerIds.Distinct().Count())
             throw new BusinessRuleException("INVALID_PROPOSED_SCOPE");
 
         var region = await _db.Regions.SingleOrDefaultAsync(x => x.Id == regionId, ct)
@@ -75,17 +77,16 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             throw new BusinessRuleException("REGION_INACTIVE");
 
         if (!_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) &&
-            !await _db.UserGeographicScopes.AnyAsync(x => x.UserId == _current.UserId && (x.RegionId == regionId || x.RegionId == null), ct))
+            !await _db.UserGeographicScopes.AnyAsync(x => x.UserId == _current.UserId && x.RegionId == regionId, ct))
             throw new ForbiddenException("REGION_MANAGEMENT_SCOPE_REQUIRED");
 
-        var canonicalAssets = await _db.Assets
-            .Where(x => assetIds.Contains(x.Id) &&
-                        (x.Status == "Active" || x.Status == "Operational") &&
-                        x.Tower!.TransmissionLine!.Substation!.RegionAssetId == regionId)
+        var canonicalAssets = await _db.Towers
+            .Where(x => towerIds.Contains(x.Id) &&
+                        (x.RegionId == regionId || x.Region!.ParentId == regionId))
             .ToListAsync(ct);
 
-        if (canonicalAssets.Count != assetIds.Count)
-            throw new ForbiddenException("ASSET_OUTSIDE_MANAGEMENT_SCOPE");
+        if (canonicalAssets.Count != towerIds.Count)
+            throw new ForbiddenException("TOWER_OUTSIDE_MANAGEMENT_SCOPE");
 
         Geometry? boundary = null;
         if (!string.IsNullOrWhiteSpace(boundaryWkt))
@@ -93,7 +94,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             boundary = SiteFeasibilityPolicy.ParseBoundary(boundaryWkt);
         }
 
-        var siteResult = SiteFeasibilityPolicy.Evaluate(region, canonicalAssets, boundary, assetIds);
+        var siteResult = SiteFeasibilityPolicy.Evaluate(region, canonicalAssets, boundary, towerIds);
         if (!siteResult.IsValid)
             throw new BusinessRuleException(siteResult.ErrorMessage ?? "SITE_FEASIBILITY_FAILED");
 
@@ -111,11 +112,11 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             IdempotencyKey = idempotencyKey
         };
 
-        assessment.Assets = assetIds
-            .Select((id, i) => new PreMissionAssessmentAsset
+        assessment.Towers = towerIds
+            .Select((id, i) => new PreMissionAssessmentTower
             {
                 Assessment = assessment,
-                AssetId = id,
+                TowerId = id,
                 Sequence = i + 1
             })
             .ToList();
@@ -129,8 +130,9 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         catch (DbUpdateException) when (!string.IsNullOrWhiteSpace(idempotencyKey))
         {
             var existing = await _db.PreMissionAssessments
+                .Include(a => a.Mission)
                 .AsNoTracking()
-                .Include(x => x.Assets)
+                .Include(x => x.Towers)
                 .Include(x => x.PersonnelCandidates)
                 .Include(x => x.DroneCandidates)
                 .SingleOrDefaultAsync(x => x.IdempotencyKey == idempotencyKey, ct);
@@ -149,7 +151,8 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         await RequireManagerOrInspector(ct);
 
         var assessment = await _db.PreMissionAssessments
-            .Include(x => x.Assets).ThenInclude(a => a.Asset)
+            .Include(a => a.Mission)
+            .Include(x => x.Towers).ThenInclude(a => a.Tower)
             .Include(x => x.PersonnelCandidates).ThenInclude(p => p.User)
             .Include(x => x.DroneCandidates).ThenInclude(d => d.Drone)
             .Include(x => x.Region)
@@ -183,14 +186,15 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         {
             userScopes = await _db.UserGeographicScopes
                 .Where(x => x.UserId == _current.UserId)
-                .Select(x => x.RegionId)
+                .Select(x => (Guid?)x.RegionId)
                 .ToListAsync(ct);
         }
 
         var hasGlobalScope = userScopes != null && userScopes.Contains(null);
 
         var query = _db.PreMissionAssessments
-            .Include(x => x.Assets)
+            .Include(a => a.Mission)
+            .Include(x => x.Towers)
             .Include(x => x.PersonnelCandidates)
             .Include(x => x.DroneCandidates)
             .Include(x => x.Region)
@@ -255,7 +259,8 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         await RequireManager(ct);
 
         var assessment = await _db.PreMissionAssessments
-            .Include(x => x.Assets)
+            .Include(a => a.Mission)
+            .Include(x => x.Towers)
             .Include(x => x.PersonnelCandidates)
             .Include(x => x.DroneCandidates)
             .Include(x => x.Region)
@@ -280,15 +285,14 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         }
 
         // Step 1: Site Feasibility
-        var assetIds = assessment.Assets.Select(x => x.AssetId).ToList();
-        var assets = await _db.Assets
-            .Where(x => assetIds.Contains(x.Id) &&
-                        (x.Status == "Active" || x.Status == "Operational") &&
-                        x.Tower!.TransmissionLine!.Substation!.RegionAssetId == assessment.RegionId)
+        var towerIds = assessment.Towers.Select(x => x.TowerId).ToList();
+        var towers = await _db.Towers
+            .Where(x => towerIds.Contains(x.Id) &&
+                        (x.RegionId == assessment.RegionId || x.Region!.ParentId == assessment.RegionId))
             .ToListAsync(ct);
 
         var region = assessment.Region ?? await _db.Regions.SingleAsync(x => x.Id == assessment.RegionId, ct);
-        var siteResult = SiteFeasibilityPolicy.Evaluate(region, assets, assessment.ProposedBoundary, assetIds);
+        var siteResult = SiteFeasibilityPolicy.Evaluate(region, towers, assessment.ProposedBoundary, towerIds);
         assessment.SiteFeasibilityStatus = siteResult.Status;
         assessment.Findings = siteResult.FindingsJson;
 
@@ -378,7 +382,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             var isTechEligible = currentHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning;
 
             // Suitability & GIS scope estimation
-            var assetCount = assessment.Assets.Count > 0 ? assessment.Assets.Count : 10;
+            var assetCount = assessment.Towers.Count > 0 ? assessment.Towers.Count : 10;
             var corridorKm = Math.Round(assetCount * 0.35, 2);
             var endurance = drone.FlightEnduranceMinutes > 0 ? drone.FlightEnduranceMinutes : 30.0;
             var effectiveFlightMinutes = endurance * 0.8;
@@ -437,7 +441,6 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                 AssessmentId = assessment.Id,
                 Drone = drone,
                 DroneId = drone.Id,
-                IsEligible = isEligible,
                 OperationalAvailabilityStatus = isOpAvailable
                     ? ResourceAvailabilityStatus.Available
                     : ResourceAvailabilityStatus.Unavailable,
@@ -516,7 +519,8 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         }
 
         var assessment = await _db.PreMissionAssessments
-            .Include(x => x.Assets)
+            .Include(a => a.Mission)
+            .Include(x => x.Towers)
             .Include(x => x.PersonnelCandidates)
             .Include(x => x.DroneCandidates)
             .SingleOrDefaultAsync(x => x.Id == request.AssessmentId, ct)
@@ -525,7 +529,6 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         await EnsureManagerHasAssessmentAccessAsync(assessment, ct);
 
         if (assessment.Status == PreMissionAssessmentStatus.Completed ||
-            assessment.ConsumedByMissionId.HasValue ||
             await _db.Missions.AnyAsync(x => x.PreMissionAssessmentId == request.AssessmentId, ct))
         {
             throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED", "Đánh giá tiền nhiệm vụ đã hoàn thành tạo nhiệm vụ bay.");
@@ -623,18 +626,15 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             Title = request.Title,
             Description = request.Description ?? string.Empty,
             ManagerId = _current.UserId,
-            InspectorId = primaryInspectorId,
             AssignedToUserId = primaryInspectorId,
             UavId = primaryDrone.Id,
             DroneCode = primaryDrone.UavCode,
             RegionId = assessment.RegionId,
             PlannedStart = assessment.PlannedStart,
             PlannedEnd = assessment.PlannedEnd,
-            ScheduledStartAt = assessment.PlannedStart,
             Priority = request.Priority,
             Objective = request.Objective,
-            PriorityDefectsJson = JsonSerializer.Serialize(request.PriorityDefects ?? (IEnumerable<string>)Array.Empty<string>()),
-            EmergencyReason = request.EmergencyReason,
+            TriggerReason = request.EmergencyReason,
             IsImmediate = request.IsImmediate,
             Status = MissionStatus.PendingAcceptance,
             PreMissionAssessmentId = assessment.Id,
@@ -643,12 +643,12 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         };
 
         // Targets
-        mission.MissionTargets = assessment.Assets
+        mission.MissionTargets = assessment.Towers
             .OrderBy(x => x.Sequence)
             .Select(x => new MissionTarget
             {
                 MissionId = mission.Id,
-                AssetId = x.AssetId,
+                TowerId = x.TowerId,
                 Sequence = x.Sequence
             })
             .ToList();
@@ -664,7 +664,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                 Status = MissionAssignmentStatus.Active,
                 ResponseStatus = MissionAssignmentResponse.Pending,
                 IsRequired = p.IsRequired,
-                AssignedByUserId = _current.UserId,
+                AssignedById = _current.UserId,
                 AssignedAt = DateTime.UtcNow
             });
         }
@@ -695,9 +695,9 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
         // Complete assessment and link mission
         assessment.Status = PreMissionAssessmentStatus.Completed;
-        assessment.ConsumedByMissionId = mission.Id;
         assessment.Version++;
 
+        await MissionRepository.ApplyPriorityDefectsAsync(_db, mission, request.PriorityDefects, ct);
         _db.Missions.Add(mission);
 
         // Gap #12: Outbox Event
@@ -724,7 +724,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             Priority = mission.Priority.ToString(),
             Objective = mission.Objective.ToString(),
             PriorityDefects = request.PriorityDefects,
-            EmergencyReason = mission.EmergencyReason,
+            EmergencyReason = mission.TriggerReason,
             IsImmediate = mission.IsImmediate
         }), "Missions");
         foreach (var p in request.Personnel)
@@ -776,7 +776,8 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         await RequireManager(ct);
 
         var assessment = await _db.PreMissionAssessments
-            .Include(x => x.Assets)
+            .Include(a => a.Mission)
+            .Include(x => x.Towers)
             .Include(x => x.PersonnelCandidates)
             .Include(x => x.DroneCandidates)
             .Include(x => x.Region)
@@ -785,7 +786,8 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
         await EnsureManagerHasAssessmentAccessAsync(assessment, ct);
 
-        if (assessment.Status == PreMissionAssessmentStatus.Completed || assessment.ConsumedByMissionId.HasValue)
+        if (assessment.Status == PreMissionAssessmentStatus.Completed
+            || await _db.Missions.AnyAsync(m => m.PreMissionAssessmentId == assessmentId && m.Id != missionId, ct))
             throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED");
 
         if (assessment.Status != PreMissionAssessmentStatus.Ready)
@@ -802,7 +804,6 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             throw new BusinessRuleException("INVALID_MISSION_REFERENCE", "Nhiệm vụ được tham chiếu không thuộc về bản đánh giá này.");
         }
 
-        assessment.ConsumedByMissionId = mission.Id;
         assessment.Status = PreMissionAssessmentStatus.Completed;
         assessment.Version++;
 
@@ -834,7 +835,8 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         await RequireManager(ct);
 
         var assessment = await _db.PreMissionAssessments
-            .Include(x => x.Assets)
+            .Include(a => a.Mission)
+            .Include(x => x.Towers)
             .Include(x => x.PersonnelCandidates)
             .Include(x => x.DroneCandidates)
             .Include(x => x.Region)
@@ -963,7 +965,6 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             ReferenceId = m.Id,
             Title = $"[MF02 ĐIỀU PHỐI] Yêu cầu xác nhận nhiệm vụ: {m.MissionCode}",
             Body = $"Bạn được phân công tham gia {roleText} trong nhiệm vụ \"{m.Title}\".{deadlineText}{instructionsText}",
-            IsRead = false,
             SentAt = DateTime.UtcNow
         });
     }

@@ -82,12 +82,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             throw new BusinessRuleException("Assigned user is not a Technician");
         }
 
-        // 5. Asset validation
-        var assetExists = await _db.Assets.AnyAsync(a => a.Id == request.AssetId && !a.IsDeleted, ct);
-        if (!assetExists)
-        {
-            throw new NotFoundException("Asset not found");
-        }
+        // 5. Cột điện của phiếu suy ra từ bất thường (anomaly.TowerId), không nhận từ request.
 
         // 6. Anomaly validation
         var anomalyExists = await _db.DetectedAnomalies.AnyAsync(a => a.Id == request.AnomalyId && !a.IsDeleted, ct);
@@ -108,7 +103,6 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             Id = Guid.NewGuid(),
             TicketCode = ticketCode,
             AnomalyId = request.AnomalyId,
-            AssetId = request.AssetId,
             ManagerId = managerId,
             TechnicianId = request.TechnicianId,
             Status = TicketStatus.Open,
@@ -203,28 +197,6 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             ticket.Status = TicketStatus.Closed;
             ticket.ResolvedAt = DateTime.UtcNow;
 
-            // Closed-Loop Recovery: Restore Asset Health Score after repair verification
-            if (ticket.AssetId != Guid.Empty)
-            {
-                var asset = await _db.Assets.FirstOrDefaultAsync(a => a.Id == ticket.AssetId, ct);
-                if (asset != null)
-                {
-                    double recoveredPoints = ticket.Priority == TicketPriority.Emergency ? 25 : (ticket.Priority == TicketPriority.High ? 20 : 15);
-                    asset.CurrentHealthScore = Math.Min(100.0, Math.Round(asset.CurrentHealthScore + recoveredPoints, 1));
-                    asset.LastInspectedAt = DateTime.UtcNow;
-
-                    var healthHistory = new AssetHealthHistory
-                    {
-                        Id = Guid.NewGuid(),
-                        AssetId = asset.Id,
-                        HealthScore = asset.CurrentHealthScore,
-                        CalculatedAt = DateTime.UtcNow,
-                        CalculationLog = $"{{\"recovered\": {recoveredPoints}, \"action\": \"MAINTENANCE_TICKET_CLOSED\", \"ticketCode\": \"{ticket.TicketCode}\"}}",
-                        RiskLevel = asset.CurrentHealthScore < 40 ? "Critical" : (asset.CurrentHealthScore < 70 ? "Medium" : "Low")
-                    };
-                    _db.AssetHealthHistories.Add(healthHistory);
-                }
-            }
         }
         else
         {
@@ -295,8 +267,8 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             Id = Guid.NewGuid(),
             TicketId = ticket.Id,
             UploadedBy = _currentUser.UserId != Guid.Empty ? _currentUser.UserId : ticket.TechnicianId,
+            ProofType = "After",
             FileUrl = fileUrl,
-            AfterRepairImageUrl = fileUrl,
             TechnicianNotes = technicianNotes ?? "",
             UploadedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
@@ -312,7 +284,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             TicketId = proof.TicketId,
             UploadedBy = proof.UploadedBy,
             FileUrl = proof.FileUrl,
-            AfterRepairImageUrl = proof.AfterRepairImageUrl,
+            AfterRepairImageUrl = proof.ProofType == "After" ? proof.FileUrl : string.Empty,
             TechnicianNotes = proof.TechnicianNotes,
             UploadedAt = proof.UploadedAt
         };
@@ -399,14 +371,6 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         {
             anomaly.ValidationStatus = "Resolved";
             anomaly.UpdatedAt = DateTime.UtcNow;
-        }
-
-        // Recalculate asset health
-        var asset = await _db.Assets.FirstOrDefaultAsync(a => a.Id == ticket.AssetId, ct);
-        if (asset != null)
-        {
-            asset.CurrentHealthScore = Math.Min(100.0, asset.CurrentHealthScore + 15.0);
-            asset.UpdatedAt = DateTime.UtcNow;
         }
 
         // Audit Log
@@ -507,8 +471,8 @@ public class MaintenanceTicketService : IMaintenanceTicketService
     public async Task<MaintenanceTicketDto> GetTicketByIdAsync(Guid ticketId, CancellationToken ct = default)
     {
         var ticket = await _db.MaintenanceTickets
-            .Include(t => t.Asset)
-            .Include(t => t.Anomaly)
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Tower)
             .Include(t => t.Manager)
             .Include(t => t.Technician)
             .Include(t => t.MaintenanceProofs)
@@ -521,9 +485,9 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         }
 
         var dto = MapToDto(ticket);
-        if (ticket.Asset != null)
+        if (ticket.Anomaly?.Tower != null)
         {
-            dto.Asset = new { ticket.Asset.Id, ticket.Asset.AssetCode, ticket.Asset.AssetType, ticket.Asset.CurrentHealthScore };
+            dto.Tower = new { ticket.Anomaly.Tower.Id, ticket.Anomaly.Tower.TowerCode, ticket.Anomaly.Tower.PoleType, ticket.Anomaly.Tower.RegionId };
         }
         if (ticket.Anomaly != null)
         {
@@ -562,8 +526,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             Id = t.Id,
             TicketCode = t.TicketCode,
             AnomalyId = t.AnomalyId,
-            AssetId = t.AssetId,
-            TowerId = t.TowerId,
+            TowerId = t.Anomaly?.TowerId,
             ManagerId = t.ManagerId,
             TechnicianId = t.TechnicianId,
             Status = t.Status.ToString(),
@@ -581,7 +544,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
                 UploadedBy = p.UploadedBy,
                 ProofType = p.ProofType,
                 FileUrl = p.FileUrl,
-                AfterRepairImageUrl = p.AfterRepairImageUrl,
+                AfterRepairImageUrl = p.ProofType == "After" ? p.FileUrl : string.Empty,
                 TechnicianNotes = p.TechnicianNotes,
                 UploadedAt = p.UploadedAt
             }).ToList() ?? new(),

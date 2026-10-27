@@ -16,7 +16,7 @@ public sealed class StartUploadedMediaAnalysisCommandHandler
     : IRequestHandler<StartUploadedMediaAnalysisCommand, Guid>
 {
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
-    private readonly IGenericRepository<AIAnalysisRequest> _requestRepository;
+    private readonly IGenericRepository<AIAnalysisRun> _requestRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IEventPublisher _publisher;
     private readonly ILogger<StartUploadedMediaAnalysisCommandHandler> _logger;
@@ -25,7 +25,7 @@ public sealed class StartUploadedMediaAnalysisCommandHandler
     [ActivatorUtilitiesConstructor]
     public StartUploadedMediaAnalysisCommandHandler(
         IGenericRepository<InspectionMedia> mediaRepository,
-        IGenericRepository<AIAnalysisRequest> requestRepository,
+        IGenericRepository<AIAnalysisRun> requestRepository,
         IUnitOfWork unitOfWork,
         IEventPublisher publisher,
         IGenericRepository<OutboxMessage> outboxRepository,
@@ -41,7 +41,7 @@ public sealed class StartUploadedMediaAnalysisCommandHandler
 
     public StartUploadedMediaAnalysisCommandHandler(
         IGenericRepository<InspectionMedia> mediaRepository,
-        IGenericRepository<AIAnalysisRequest> requestRepository,
+        IGenericRepository<AIAnalysisRun> requestRepository,
         IUnitOfWork unitOfWork,
         IEventPublisher publisher,
         ILogger<StartUploadedMediaAnalysisCommandHandler> logger)
@@ -53,7 +53,9 @@ public sealed class StartUploadedMediaAnalysisCommandHandler
         var media = await _mediaRepository.GetByIdAsync(upload.MediaId, false, cancellationToken)
             ?? throw new NotFoundException(nameof(InspectionMedia), upload.MediaId);
 
-        if (media.MissionId != upload.MissionId || media.AssetId != upload.AssetId ||
+        // TowerId is nullable (corridor media); it only has to match when the event carries one.
+        if (media.MissionId != upload.MissionId ||
+            (upload.TowerId.HasValue && media.TowerId != upload.TowerId) ||
             media.UploadedBy != upload.UploadedBy || string.IsNullOrWhiteSpace(media.FileUrl))
         {
             throw new BusinessRuleException("Inspection media event does not match the persisted media.");
@@ -67,8 +69,8 @@ public sealed class StartUploadedMediaAnalysisCommandHandler
             : AnalysisType.General;
         var model = string.IsNullOrWhiteSpace(upload.PreferredModel) ? "SERVER" : upload.PreferredModel.Trim();
 
-        var request = prior;
-        if (request == null)
+        var run = prior;
+        if (run == null)
         {
             var activeDuplicate = (await _requestRepository.FindAsync(item =>
                 item.MediaId == media.Id && item.AnalysisType == analysisType &&
@@ -77,52 +79,50 @@ public sealed class StartUploadedMediaAnalysisCommandHandler
             if (activeDuplicate != null)
                 return activeDuplicate.Id;
 
-            request = new AIAnalysisRequest
+            run = new AIAnalysisRun
             {
                 Id = Guid.NewGuid(),
                 SourceEventId = upload.EventId,
-                UploadedBy = upload.UploadedBy,
                 MediaId = media.Id,
-                MissionId = media.MissionId,
-                AssetId = media.AssetId,
-                FileUrl = media.FileUrl,
-                MediaType = media.MediaType,
+                ExecutionLocation = AIAnalysisRun.Cloud,
+                RequestedBy = upload.UploadedBy == Guid.Empty ? null : upload.UploadedBy,
                 AnalysisType = analysisType,
                 ModelName = model,
                 Status = AIAnalysisStatus.Pending,
-                CreatedBy = upload.UploadedBy
+                CreatedBy = upload.UploadedBy == Guid.Empty ? null : upload.UploadedBy
             };
-            await _requestRepository.AddAsync(request);
+            await _requestRepository.AddAsync(run);
             if (_outboxRepository != null)
             {
-                var workerEvent = ToWorkerEvent(request, media.AssetId!.Value);
+                var workerEvent = ToWorkerEvent(run, media);
                 await _outboxRepository.AddAsync(new OutboxMessage
                 {
                     Id = Guid.NewGuid(), MessageType = nameof(AIAnalysisRequestedEvent),
-                    Payload = JsonSerializer.Serialize(workerEvent), OccurredAt = DateTime.UtcNow,
-                    CreatedAt = DateTime.UtcNow, CreatedBy = upload.UploadedBy
+                    Payload = JsonSerializer.Serialize(workerEvent), OccurredAt = DateTime.UtcNow
                 });
             }
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
         if (_outboxRepository == null)
-            await _publisher.PublishAsync(ToWorkerEvent(request, media.AssetId!.Value));
-        _logger.LogInformation("Queued authoritative inspection media {MediaId} as AI request {RequestId}", media.Id, request.Id);
-        return request.Id;
+            await _publisher.PublishAsync(ToWorkerEvent(run, media));
+        _logger.LogInformation("Queued authoritative inspection media {MediaId} as AI run {RunId}", media.Id, run.Id);
+        return run.Id;
     }
 
-    private static AIAnalysisRequestedEvent ToWorkerEvent(AIAnalysisRequest request, Guid assetId) => new()
+    /// <summary>Worker payload keeps its legacy JSON shape; file/media/mission come from the media row.</summary>
+    private static AIAnalysisRequestedEvent ToWorkerEvent(AIAnalysisRun run, InspectionMedia media) => new()
     {
-        RequestId = request.Id,
-        FileUrl = request.FileUrl,
-        MediaType = request.MediaType,
-        AnalysisType = request.AnalysisType.ToString(),
-        UploadedBy = request.UploadedBy,
-        RequestedAt = request.CreatedAt,
-        MediaId = request.MediaId,
-        MissionId = request.MissionId,
-        AssetId = assetId,
-        PreferredModel = request.ModelName
+        RequestId = run.Id,
+        FileUrl = media.FileUrl,
+        MediaType = media.MediaType,
+        AnalysisType = run.AnalysisType.ToString(),
+        UploadedBy = run.RequestedBy ?? Guid.Empty,
+        RequestedAt = run.CreatedAt,
+        MediaId = run.MediaId,
+        MissionId = media.MissionId,
+        AssetId = media.TowerId,
+        TowerId = media.TowerId,
+        PreferredModel = run.ModelName
     };
 }

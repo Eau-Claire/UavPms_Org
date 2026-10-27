@@ -9,8 +9,7 @@ public record GetReportsPagedQuery(
     int PageSize = 10,
     string? Type = null,
     string? Status = null,
-    Guid? TransmissionLineId = null,
-    Guid? SubstationId = null,
+    Guid? RegionId = null,
     string? Search = null,
     string? SortBy = null,
     string? SortOrder = null

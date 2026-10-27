@@ -38,7 +38,7 @@ public class HeartbeatCommandHandler : IRequestHandler<HeartbeatCommand, object>
         }
 
         uav.BatteryLevel = request.Battery;
-        uav.Status = DroneStatus.Idle;
+        uav.FlightStatus = DroneStatus.Idle;
 
         await _uavRepository.UpdateAsync(uav);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

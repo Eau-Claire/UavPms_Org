@@ -24,6 +24,6 @@ public class GetRegionByIdQueryHandler : IRequestHandler<GetRegionByIdQuery, Reg
             throw new NotFoundException("Region", request.Id);
         }
 
-        return new RegionDto(region.Id, region.RegionName, region.Geom?.AsText());
+        return new RegionDto(region.Id, region.Name, region.Geom?.AsText());
     }
 }

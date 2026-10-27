@@ -42,7 +42,7 @@ public class RegisterDeviceCommandHandler : IRequestHandler<RegisterDeviceComman
             Id = Guid.NewGuid(),
             UavCode = request.SerialNumber,
             Model = $"Raspberry Pi (SW: {request.SoftwareVersion})",
-            Status = DroneStatus.Idle, // Thiết lập Active luôn
+            FlightStatus = DroneStatus.Idle, // Thiết lập Active luôn
             BatteryLevel = 100
         };
 

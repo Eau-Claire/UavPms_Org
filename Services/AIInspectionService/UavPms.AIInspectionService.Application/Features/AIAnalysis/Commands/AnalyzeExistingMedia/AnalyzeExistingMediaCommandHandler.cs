@@ -21,7 +21,7 @@ public class AnalyzeExistingMediaCommandHandler
 {
     private readonly IGenericRepository<Mission> _missionRepository;
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
-    private readonly IGenericRepository<AIAnalysisRequest> _aiRequestRepository;
+    private readonly IGenericRepository<AIAnalysisRun> _runRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IEventPublisher _eventPublisher;
     private readonly ICurrentUserServices _currentUser;
@@ -32,7 +32,7 @@ public class AnalyzeExistingMediaCommandHandler
     public AnalyzeExistingMediaCommandHandler(
         IGenericRepository<Mission> missionRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
-        IGenericRepository<AIAnalysisRequest> aiRequestRepository,
+        IGenericRepository<AIAnalysisRun> runRepository,
         IUnitOfWork unitOfWork,
         IEventPublisher eventPublisher,
         ICurrentUserServices currentUser,
@@ -41,7 +41,7 @@ public class AnalyzeExistingMediaCommandHandler
     {
         _missionRepository = missionRepository;
         _mediaRepository = mediaRepository;
-        _aiRequestRepository = aiRequestRepository;
+        _runRepository = runRepository;
         _unitOfWork = unitOfWork;
         _eventPublisher = eventPublisher;
         _currentUser = currentUser;
@@ -52,12 +52,12 @@ public class AnalyzeExistingMediaCommandHandler
     public AnalyzeExistingMediaCommandHandler(
         IGenericRepository<Mission> missionRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
-        IGenericRepository<AIAnalysisRequest> aiRequestRepository,
+        IGenericRepository<AIAnalysisRun> runRepository,
         IUnitOfWork unitOfWork,
         IEventPublisher eventPublisher,
         ICurrentUserServices currentUser,
         ILogger<AnalyzeExistingMediaCommandHandler> logger)
-        : this(missionRepository, mediaRepository, aiRequestRepository, unitOfWork, eventPublisher,
+        : this(missionRepository, mediaRepository, runRepository, unitOfWork, eventPublisher,
             currentUser, null!, logger) { }
 
     public async Task<AIAnalysisReanalysisResult> Handle(
@@ -92,43 +92,34 @@ public class AnalyzeExistingMediaCommandHandler
             throw new BusinessRuleException("The specified inspection media does not belong to the selected mission.");
         }
 
-        if (!media.AssetId.HasValue || media.AssetId == Guid.Empty)
-        {
-            throw new BusinessRuleException("Mission inspection media must be associated with an asset before reanalysis.");
-        }
-
-        // 4. Tạo bản ghi AIAnalysisRequest
-        var aiRequest = new AIAnalysisRequest
+        // 4. Tạo bản ghi AIAnalysisRun (Cloud). Media không gắn tower vẫn được phân tích (TowerId = null).
+        var run = new AIAnalysisRun
         {
             Id = Guid.NewGuid(),
-            UploadedBy = currentUserId,
             MediaId = media.Id,
-            MissionId = request.MissionId,
-            AssetId = media.AssetId,
+            ExecutionLocation = AIAnalysisRun.Cloud,
+            RequestedBy = currentUserId == Guid.Empty ? null : currentUserId,
             ModelName = string.IsNullOrWhiteSpace(request.PreferredModel) ? "SERVER" : request.PreferredModel.Trim(),
-            FileUrl = media.FileUrl,
-            MediaType = media.MediaType,
             AnalysisType = request.AnalysisType,
-            Notes = request.Notes,
             Status = AIAnalysisStatus.Pending,
-            CreatedBy = currentUserId
+            CreatedBy = currentUserId == Guid.Empty ? null : currentUserId
         };
-        await _aiRequestRepository.AddAsync(aiRequest);
+        await _runRepository.AddAsync(run);
 
         var workerEvent = new AIAnalysisRequestedEvent
         {
-            RequestId = aiRequest.Id, FileUrl = aiRequest.FileUrl, MediaType = aiRequest.MediaType,
-            AnalysisType = aiRequest.AnalysisType.ToString(), Notes = aiRequest.Notes,
-            UploadedBy = currentUserId, RequestedAt = aiRequest.CreatedAt, MediaId = media.Id,
-            MissionId = request.MissionId, AssetId = media.AssetId, PreferredModel = aiRequest.ModelName
+            RequestId = run.Id, FileUrl = media.FileUrl, MediaType = media.MediaType,
+            AnalysisType = run.AnalysisType.ToString(), Notes = request.Notes,
+            UploadedBy = currentUserId, RequestedAt = run.CreatedAt, MediaId = media.Id,
+            MissionId = media.MissionId, AssetId = media.TowerId, TowerId = media.TowerId,
+            PreferredModel = run.ModelName
         };
         if (_outboxRepository != null)
         {
             await _outboxRepository.AddAsync(new OutboxMessage
             {
                 Id = Guid.NewGuid(), MessageType = nameof(AIAnalysisRequestedEvent),
-                Payload = JsonSerializer.Serialize(workerEvent), OccurredAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow, CreatedBy = currentUserId
+                Payload = JsonSerializer.Serialize(workerEvent), OccurredAt = DateTime.UtcNow
             });
         }
 
@@ -136,8 +127,8 @@ public class AnalyzeExistingMediaCommandHandler
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Created AI analysis request for existing media: RequestId={RequestId}, MediaId={MediaId}, MissionId={MissionId}",
-            aiRequest.Id, media.Id, request.MissionId);
+            "Created AI analysis run for existing media: RunId={RunId}, MediaId={MediaId}, MissionId={MissionId}",
+            run.Id, media.Id, request.MissionId);
 
         // 6. Phát sự kiện AIAnalysisRequestedEvent lên RabbitMQ để Python consumer xử lý
         if (_outboxRepository == null)
@@ -145,15 +136,16 @@ public class AnalyzeExistingMediaCommandHandler
 
         return new AIAnalysisReanalysisResult
         {
-            Id = aiRequest.Id,
+            Id = run.Id,
             MediaId = media.Id,
             MissionId = media.MissionId,
-            AssetId = media.AssetId.Value,
-            FileUrl = aiRequest.FileUrl,
-            MediaType = aiRequest.MediaType,
-            AnalysisType = aiRequest.AnalysisType,
-            Status = aiRequest.Status,
-            CreatedAt = aiRequest.CreatedAt
+            TowerId = media.TowerId,
+            ExecutionLocation = run.ExecutionLocation,
+            FileUrl = media.FileUrl,
+            MediaType = media.MediaType,
+            AnalysisType = run.AnalysisType,
+            Status = run.Status,
+            CreatedAt = run.CreatedAt
         };
     }
 }

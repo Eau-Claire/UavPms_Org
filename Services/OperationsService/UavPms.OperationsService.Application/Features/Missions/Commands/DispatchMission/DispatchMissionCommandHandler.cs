@@ -52,7 +52,7 @@ public class DispatchMissionCommandHandler : IRequestHandler<DispatchMissionComm
         // 1. Mission targets prerequisite check
         if (mission.MissionTargets == null || mission.MissionTargets.Count == 0)
         {
-            throw new BusinessRuleException("MISSION_TARGETS_REQUIRED", "Cannot dispatch mission without target towers/assets.");
+            throw new BusinessRuleException("MISSION_TARGETS_REQUIRED", "Cannot dispatch mission without target towers/towers.");
         }
 
         // 2. UAV prerequisite check
@@ -159,9 +159,7 @@ public class DispatchMissionCommandHandler : IRequestHandler<DispatchMissionComm
                 Id = dispatchedEvent.EventId,
                 MessageType = nameof(MissionDispatchedEvent),
                 Payload = System.Text.Json.JsonSerializer.Serialize(dispatchedEvent),
-                OccurredAt = dispatchedEvent.DispatchedAt,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = mission.ManagerId
+                OccurredAt = dispatchedEvent.DispatchedAt
             });
         }
 
@@ -187,7 +185,7 @@ public class DispatchMissionCommandHandler : IRequestHandler<DispatchMissionComm
             Status = mission.Status.ToString(),
             Priority = mission.Priority.ToString(),
             RegionId = mission.RegionId,
-            InspectorId = mission.InspectorId,
+            InspectorId = mission.PrimaryInspectorId(),
             UavId = mission.UavId,
             ManagerId = mission.ManagerId,
             PlannedStart = mission.PlannedStart,

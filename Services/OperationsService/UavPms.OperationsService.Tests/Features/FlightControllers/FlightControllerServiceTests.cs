@@ -82,7 +82,7 @@ public class FlightControllerServiceTests
             FirmwareVersion = "4.5.1",
             PairedAt = DateTime.UtcNow.AddDays(-10),
             LastSeenAt = DateTime.UtcNow.AddDays(-1),
-            IsActive = true
+            UnpairedAt = null
         };
         db.DroneFlightControllers.Add(binding);
         await db.SaveChangesAsync();
@@ -140,7 +140,7 @@ public class FlightControllerServiceTests
         binding.IsActive.Should().BeTrue();
 
         var inDb = await db.DroneFlightControllers.SingleAsync(b => b.Id == binding.Id);
-        inDb.IsActive.Should().BeTrue();
+        inDb.UnpairedAt.Should().BeNull();
         inDb.FlightControllerUid.Should().Be("BF-F722-XYZ999");
     }
 
@@ -167,7 +167,7 @@ public class FlightControllerServiceTests
             FlightControllerUid = "OLD-FC-111",
             BoardIdentifier = "F405-OLD",
             PairedAt = DateTime.UtcNow.AddMonths(-1),
-            IsActive = true
+            UnpairedAt = null
         };
         db.DroneFlightControllers.Add(oldBinding);
         await db.SaveChangesAsync();
@@ -184,11 +184,10 @@ public class FlightControllerServiceTests
         var newBinding = await service.PairFlightControllerAsync(drone.Id, newRequest, CancellationToken.None);
 
         var oldInDb = await db.DroneFlightControllers.SingleAsync(b => b.Id == oldBinding.Id);
-        oldInDb.IsActive.Should().BeFalse();
         oldInDb.UnpairedAt.Should().NotBeNull();
 
         var newInDb = await db.DroneFlightControllers.SingleAsync(b => b.Id == newBinding.Id);
-        newInDb.IsActive.Should().BeTrue();
+        newInDb.UnpairedAt.Should().BeNull();
         newInDb.FlightControllerUid.Should().Be("NEW-FC-222");
     }
 
@@ -209,7 +208,7 @@ public class FlightControllerServiceTests
             Id = Guid.NewGuid(),
             DroneId = droneA.Id,
             FlightControllerUid = "SHARED-FC-UID",
-            IsActive = true
+            UnpairedAt = null
         };
         db.DroneFlightControllers.Add(bindingA);
         await db.SaveChangesAsync();
@@ -225,11 +224,10 @@ public class FlightControllerServiceTests
         var bindingB = await service.PairFlightControllerAsync(droneB.Id, pairToB, CancellationToken.None);
 
         var bindingAInDb = await db.DroneFlightControllers.SingleAsync(b => b.Id == bindingA.Id);
-        bindingAInDb.IsActive.Should().BeFalse();
         bindingAInDb.UnpairedAt.Should().NotBeNull();
 
         var bindingBInDb = await db.DroneFlightControllers.SingleAsync(b => b.Id == bindingB.Id);
-        bindingBInDb.IsActive.Should().BeTrue();
+        bindingBInDb.UnpairedAt.Should().BeNull();
         bindingBInDb.DroneId.Should().Be(droneB.Id);
     }
 
@@ -248,7 +246,7 @@ public class FlightControllerServiceTests
             Id = Guid.NewGuid(),
             DroneId = drone.Id,
             FlightControllerUid = "FC-TO-UNPAIR",
-            IsActive = true
+            UnpairedAt = null
         };
         db.DroneFlightControllers.Add(binding);
         await db.SaveChangesAsync();
@@ -259,7 +257,6 @@ public class FlightControllerServiceTests
         result.Should().BeTrue();
 
         var inDb = await db.DroneFlightControllers.SingleAsync(b => b.Id == binding.Id);
-        inDb.IsActive.Should().BeFalse();
         inDb.UnpairedAt.Should().NotBeNull();
     }
 
@@ -282,7 +279,7 @@ public class FlightControllerServiceTests
             Id = Guid.NewGuid(),
             DroneId = droneB.Id,
             FlightControllerUid = "FC-FOR-DRONE-B",
-            IsActive = true
+            UnpairedAt = null
         };
         db.DroneFlightControllers.Add(bindingB);
         await db.SaveChangesAsync();
@@ -353,7 +350,7 @@ public class FlightControllerServiceTests
             DroneId = drone.Id,
             FlightControllerUid = "VALID-FC-001",
             LastSeenAt = DateTime.UtcNow.AddDays(-2),
-            IsActive = true
+            UnpairedAt = null
         };
         db.DroneFlightControllers.Add(binding);
         await db.SaveChangesAsync();

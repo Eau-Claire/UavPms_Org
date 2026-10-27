@@ -20,15 +20,14 @@ public static class AssessmentMappingExtensions
             _ => entity.Status.ToString().ToUpperInvariant()
         };
 
-        var assets = entity.Assets
+        var towers = entity.Towers
             .OrderBy(a => a.Sequence)
-            .Select(a => new PreMissionAssessmentAssetDto(
+            .Select(a => new PreMissionAssessmentTowerDto(
                 a.Id,
-                a.AssetId,
+                a.TowerId,
                 a.Sequence,
-                a.Asset?.AssetCode,
-                a.Asset?.AssetType,
-                a.Asset?.Status
+                a.Tower?.TowerCode,
+                a.Tower?.PoleType
             ))
             .ToList();
 
@@ -104,19 +103,19 @@ public static class AssessmentMappingExtensions
             $"PMA-{entity.Id.ToString()[..8].ToUpperInvariant()}",
             entity.ManagerId,
             entity.RegionId,
-            entity.Region?.RegionName ?? entity.RegionId.ToString(),
+            entity.Region?.Name ?? entity.RegionId.ToString(),
             entity.PlannedStart,
             entity.PlannedEnd,
             statusStr,
             entity.OverallTechnicalHealth.ToString(),
             entity.ValidUntil,
             entity.Version,
-            entity.ConsumedByMissionId,
+            entity.Mission?.Id,
             entity.Findings,
             entity.SiteFeasibilityStatus.ToString(),
             entity.EvaluationPolicyVersion,
             entity.IdempotencyKey,
-            assets,
+            towers,
             personnel,
             drones,
             drones, // uavCandidates for backward compatibility
@@ -141,7 +140,7 @@ public static class AssessmentMappingExtensions
                 m.ValueText,
                 m.Unit,
                 m.Passed,
-                m.Critical,
+                m.Severity == "Critical",
                 m.Severity,
                 m.IsRequired
             ))
@@ -150,7 +149,7 @@ public static class AssessmentMappingExtensions
         return new DroneTechnicalInspectionDto(
             entity.Id,
             entity.DroneId,
-            entity.TechnicianUserId,
+            entity.TechnicianId,
             entity.Technician?.FullName,
             entity.Status.ToString(),
             entity.Health.ToString(),

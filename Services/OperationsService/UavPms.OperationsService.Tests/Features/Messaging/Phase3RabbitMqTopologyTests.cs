@@ -121,7 +121,7 @@ public class Phase3RabbitMqTopologyTests
             PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(2),
             MissionTargets = new List<MissionTarget>
             {
-                new() { AssetId = Guid.NewGuid() }
+                new() { TowerId = Guid.NewGuid() }
             },
             Assignments = new List<MissionAssignment>
             {
@@ -183,8 +183,7 @@ public class Phase3RabbitMqTopologyTests
         {
             Id = Guid.NewGuid(),
             MediaId = Guid.NewGuid(),
-            AssetId = Guid.NewGuid(),
-            TowerId = Guid.NewGuid().ToString(),
+            TowerId = Guid.NewGuid(),
             ValidationStatus = "Confirmed"
         };
         db.DetectedAnomalies.Add(anomaly);

@@ -46,24 +46,21 @@ public class PreMissionAssessmentServiceTests
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
-        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
-        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
-        var tower = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
-        var asset = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
-        db.Assets.Add(asset);
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        db.Towers.Add(tower);
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);
         var start = DateTime.UtcNow.AddDays(1);
         var end = start.AddHours(4);
 
-        var result = await service.CreateAsync(region.Id, start, end, new[] { asset.Id }, CancellationToken.None);
+        var result = await service.CreateAsync(region.Id, start, end, new[] { tower.Id }, CancellationToken.None);
 
         result.Should().NotBeNull();
         result.ManagerId.Should().Be(managerId);
         result.RegionId.Should().Be(region.Id);
         result.Status.Should().BeOneOf(PreMissionAssessmentStatus.Evaluating, PreMissionAssessmentStatus.NotReady);
-        result.Assets.Should().HaveCount(1);
+        result.Towers.Should().HaveCount(1);
     }
 
     [Fact]
@@ -82,13 +79,9 @@ public class PreMissionAssessmentServiceTests
         var insidePoint = geometryFactory.CreatePoint(new Coordinate(106.5, 10.5));
         var outsidePoint = geometryFactory.CreatePoint(new Coordinate(109.0, 15.0));
 
-        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
-        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
-        var tower1 = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
-        var tower2 = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
-        var assetInside = new Asset { Id = Guid.NewGuid(), Tower = tower1, Status = "Active", Location = insidePoint };
-        var assetOutside = new Asset { Id = Guid.NewGuid(), Tower = tower2, Status = "Active", Location = outsidePoint };
-        db.Assets.AddRange(assetInside, assetOutside);
+        var assetInside = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-IN", Geom = insidePoint };
+        var assetOutside = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-OUT", Geom = outsidePoint };
+        db.Towers.AddRange(assetInside, assetOutside);
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);
@@ -96,11 +89,11 @@ public class PreMissionAssessmentServiceTests
         var end = start.AddHours(4);
         var boundaryWkt = "POLYGON((106 10, 107 10, 107 11, 106 11, 106 10))";
 
-        // Asset outside boundary throws BusinessRuleException
+        // Tower outside boundary throws BusinessRuleException
         var act = () => service.CreateAsync(region.Id, start, end, new[] { assetOutside.Id }, boundaryWkt, null, CancellationToken.None);
-        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*ASSET_OUTSIDE_BOUNDARY*");
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*TOWER_OUTSIDE_BOUNDARY*");
 
-        // Asset inside boundary succeeds
+        // Tower inside boundary succeeds
         var success = await service.CreateAsync(region.Id, start, end, new[] { assetInside.Id }, boundaryWkt, null, CancellationToken.None);
         success.Should().NotBeNull();
         success.ProposedBoundary.Should().NotBeNull();
@@ -118,11 +111,8 @@ public class PreMissionAssessmentServiceTests
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
-        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
-        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
-        var tower = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
-        var asset = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
-        db.Assets.Add(asset);
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        db.Towers.Add(tower);
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);
@@ -130,8 +120,8 @@ public class PreMissionAssessmentServiceTests
         var end = start.AddHours(4);
         var key = "IDEMP-ASSESSMENT-001";
 
-        var first = await service.CreateAsync(region.Id, start, end, new[] { asset.Id }, null, key, CancellationToken.None);
-        var second = await service.CreateAsync(region.Id, start, end, new[] { asset.Id }, null, key, CancellationToken.None);
+        var first = await service.CreateAsync(region.Id, start, end, new[] { tower.Id }, null, key, CancellationToken.None);
+        var second = await service.CreateAsync(region.Id, start, end, new[] { tower.Id }, null, key, CancellationToken.None);
 
         second.Id.Should().Be(first.Id);
     }
@@ -148,11 +138,8 @@ public class PreMissionAssessmentServiceTests
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
-        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
-        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
-        var tower = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
-        var asset = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
-        db.Assets.Add(asset);
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        db.Towers.Add(tower);
 
         var key = "RACE-KEY-001";
         var existing = new PreMissionAssessment
@@ -169,7 +156,7 @@ public class PreMissionAssessmentServiceTests
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);
-        var result = await service.CreateAsync(region.Id, DateTime.UtcNow.AddDays(1), DateTime.UtcNow.AddDays(1).AddHours(4), new[] { asset.Id }, null, key, CancellationToken.None);
+        var result = await service.CreateAsync(region.Id, DateTime.UtcNow.AddDays(1), DateTime.UtcNow.AddDays(1).AddHours(4), new[] { tower.Id }, null, key, CancellationToken.None);
 
         result.Should().NotBeNull();
         result.Id.Should().Be(existing.Id);
@@ -214,11 +201,8 @@ public class PreMissionAssessmentServiceTests
 
         db.Users.AddRange(eligibleInspector, eligibleAnalyst, eligibleTech, busyInspector, outOfScopeInspector);
 
-        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
-        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
-        var tower = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
-        var asset = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
-        db.Assets.Add(asset);
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        db.Towers.Add(tower);
 
         var start = DateTime.UtcNow.AddDays(2);
         var end = start.AddHours(4);
@@ -247,7 +231,7 @@ public class PreMissionAssessmentServiceTests
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);
-        var assessment = await service.CreateAsync(region.Id, start, end, new[] { asset.Id }, CancellationToken.None);
+        var assessment = await service.CreateAsync(region.Id, start, end, new[] { tower.Id }, CancellationToken.None);
 
         var evaluated = await service.EvaluateAsync(assessment.Id, CancellationToken.None);
 
@@ -298,17 +282,14 @@ public class PreMissionAssessmentServiceTests
         });
         db.Uavs.Add(drone);
 
-        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
-        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
-        var tower = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
-        var asset = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
-        db.Assets.Add(asset);
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        db.Towers.Add(tower);
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);
         var start = DateTime.UtcNow.AddDays(1);
         var end = start.AddHours(4);
-        var assessment = await service.CreateAsync(region.Id, start, end, new[] { asset.Id }, CancellationToken.None);
+        var assessment = await service.CreateAsync(region.Id, start, end, new[] { tower.Id }, CancellationToken.None);
 
         await service.EvaluateAsync(assessment.Id, CancellationToken.None);
         var reevaluated = await service.EvaluateAsync(assessment.Id, CancellationToken.None);
@@ -452,9 +433,8 @@ public class PreMissionAssessmentServiceTests
 
         result.Should().NotBeNull();
         result.Status.Should().Be(PreMissionAssessmentStatus.Completed);
-        result.ConsumedByMissionId.Should().Be(missionId);
-        result.CompletedMissionId.Should().Be(missionId);
-        result.CompletedByMissionId.Should().Be(missionId);
+        result.Mission.Should().NotBeNull();
+        result.Mission!.Id.Should().Be(missionId);
         result.Version.Should().Be(2);
 
         var dto = result.ToDto();
@@ -566,10 +546,10 @@ public class PreMissionAssessmentServiceTests
             RegionId = region.Id,
             PlannedStart = DateTime.UtcNow.AddDays(1),
             PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
-            Status = PreMissionAssessmentStatus.Completed,
-            ConsumedByMissionId = Guid.NewGuid()
+            Status = PreMissionAssessmentStatus.Completed
         };
         db.PreMissionAssessments.Add(assessment);
+        db.Missions.Add(new Mission { Id = Guid.NewGuid(), Title = "Existing", PreMissionAssessmentId = assessment.Id });
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);

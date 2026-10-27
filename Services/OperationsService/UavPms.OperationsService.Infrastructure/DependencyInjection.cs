@@ -90,12 +90,12 @@ public static class DependencyInjection
         
         // Đăng ký các Repositories quản lý phân cấp lưới điện & tài sản
         services.AddScoped<IRegionRepository, RegionRepository>();
-        services.AddScoped<ISubstationRepository, SubstationRepository>();
-        services.AddScoped<ITransmissionLineRepository, TransmissionLineRepository>();
+
+
         
         // Đăng ký các Repositories đặc thù 
         services.AddScoped<ITowerRepository, TowerRepository>();
-        services.AddScoped<IAssetRepository, AssetRepository>();
+
         services.AddScoped<IGisRepository, GisRepository>();
         services.AddScoped<IAnomalyRepository, AnomalyRepository>();
         services.AddScoped<IMaintenanceTicketRepository, MaintenanceTicketRepository>();

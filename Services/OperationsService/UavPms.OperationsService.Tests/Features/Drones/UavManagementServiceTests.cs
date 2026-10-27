@@ -158,7 +158,7 @@ public class UavManagementServiceTests
             Id = Guid.NewGuid(),
             DroneId = droneId,
             FlightControllerUid = "FC-UID-333",
-            IsActive = true
+            UnpairedAt = null
         };
         drone.FlightControllers.Add(fc);
         db.Uavs.Add(drone);
@@ -171,7 +171,7 @@ public class UavManagementServiceTests
         refreshedDrone!.IsDeleted.Should().BeTrue();
 
         var refreshedFc = await db.DroneFlightControllers.FindAsync(fc.Id);
-        refreshedFc!.IsActive.Should().BeFalse();
+        refreshedFc!.UnpairedAt.Should().NotBeNull();
     }
 
     [Fact]

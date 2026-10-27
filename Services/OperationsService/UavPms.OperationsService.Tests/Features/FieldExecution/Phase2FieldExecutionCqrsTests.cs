@@ -74,7 +74,7 @@ public class Phase2FieldExecutionCqrsTests
             },
             MissionTargets = new List<MissionTarget>
             {
-                new() { AssetId = tower.Id }
+                new() { TowerId = tower.Id }
             }
         };
         db.Missions.Add(mission);
@@ -83,12 +83,11 @@ public class Phase2FieldExecutionCqrsTests
         var missionRepo = new MissionRepository(db);
         var accessFilter = new GeographicAccessFilter(db, userMock.Object);
         var towerRepo = new TowerRepository(db, accessFilter);
-        var assetRepo = new AssetRepository(db, accessFilter);
         var checkInRepo = new GenericRepository<MissionCheckIn>(db);
         var uow = new UnitOfWork(db);
 
         var handler = new FieldCheckInCommandHandler(
-            missionRepo, towerRepo, assetRepo, checkInRepo, userMock.Object, uow);
+            missionRepo, towerRepo, checkInRepo, userMock.Object, uow);
 
         // Pilot is located ~50 meters away
         var pilotLat = 10.8234;
@@ -134,7 +133,7 @@ public class Phase2FieldExecutionCqrsTests
             },
             MissionTargets = new List<MissionTarget>
             {
-                new() { AssetId = tower.Id }
+                new() { TowerId = tower.Id }
             }
         };
         db.Missions.Add(mission);
@@ -143,12 +142,11 @@ public class Phase2FieldExecutionCqrsTests
         var missionRepo = new MissionRepository(db);
         var accessFilter = new GeographicAccessFilter(db, userMock.Object);
         var towerRepo = new TowerRepository(db, accessFilter);
-        var assetRepo = new AssetRepository(db, accessFilter);
         var checkInRepo = new GenericRepository<MissionCheckIn>(db);
         var uow = new UnitOfWork(db);
 
         var handler = new FieldCheckInCommandHandler(
-            missionRepo, towerRepo, assetRepo, checkInRepo, userMock.Object, uow);
+            missionRepo, towerRepo, checkInRepo, userMock.Object, uow);
 
         // Pilot is located 1.5 km away (10.8350, 106.6350)
         var pilotLat = 10.8350;

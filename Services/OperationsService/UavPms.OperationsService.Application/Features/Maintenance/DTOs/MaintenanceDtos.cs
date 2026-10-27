@@ -6,7 +6,6 @@ namespace UavPms.OperationsService.Application.Features.Maintenance.DTOs;
 public class CreateMaintenanceTicketRequest
 {
     public Guid AnomalyId { get; set; }
-    public Guid AssetId { get; set; }
     public Guid TechnicianId { get; set; }
     public string Priority { get; set; } = "High";
     public string Description { get; set; } = string.Empty;
@@ -32,7 +31,6 @@ public class MaintenanceTicketDto
     public Guid Id { get; set; }
     public string TicketCode { get; set; } = string.Empty;
     public Guid AnomalyId { get; set; }
-    public Guid? AssetId { get; set; }
     public Guid? TowerId { get; set; }
     public Guid ManagerId { get; set; }
     public Guid TechnicianId { get; set; }
@@ -45,7 +43,6 @@ public class MaintenanceTicketDto
     public DateTime? ResolvedAt { get; set; }
     public DateTime CreatedAt { get; set; }
 
-    public object? Asset { get; set; }
     public object? Tower { get; set; }
     public object? Anomaly { get; set; }
     public object? Manager { get; set; }

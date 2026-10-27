@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using UavPms.OperationsService.Application.Features.Alerts.DTOs;
 using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.OperationsService.Infrastructure.Services;
@@ -136,7 +137,7 @@ public class EmergencyAlertServiceTests
         var updated = await db.EmergencyAlerts.FindAsync(alertId);
         updated.Should().NotBeNull();
         updated!.Status.Should().Be("Confirmed");
-        updated.ReviewedByUserId.Should().Be(reviewerId);
+        updated.ReviewedById.Should().Be(reviewerId);
         updated.Notes.Should().Be("Wildfire confirmed near tower base");
         updated.ResolvedAt.Should().NotBeNull();
     }
@@ -205,10 +206,16 @@ public class EmergencyAlertServiceTests
         db.Roles.Add(role);
         db.Users.Add(new User { Id = analystId, FullName = "Analyst Bob", Email = "bob@example.com", Status = "Active" });
         db.UserRoles.Add(new UserRole { UserId = analystId, RoleId = 1, Role = role });
+        // Edge alerts without an anomaly create media + Edge AI run + anomaly; media needs a mission.
+        var mission = new Mission { Id = Guid.NewGuid(), MissionCode = "MS-EDGE-01", Status = MissionStatus.InProgress };
+        db.Missions.Add(mission);
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = Guid.NewGuid(), TowerCode = "TOW-N1-05" };
+        db.Towers.Add(tower);
         await db.SaveChangesAsync();
 
         var request = new TriggerEmergencyAlertRequest
         {
+            MissionId = mission.Id,
             TowerCode = "TOW-N1-05",
             AlertType = "Wildfire / Flashover",
             Priority = "Critical",
@@ -222,6 +229,13 @@ public class EmergencyAlertServiceTests
         result.Should().NotBeNull();
         result.Status.Should().Be("Active");
         result.DeliveryLatencySeconds.Should().Be(4);
+
+        var alert = await db.EmergencyAlerts.Include(a => a.Anomaly!).ThenInclude(a => a.Media).SingleAsync();
+        alert.Anomaly!.TowerId.Should().Be(tower.Id);
+        alert.Anomaly.Media!.MissionId.Should().Be(mission.Id);
+        var run = await db.AIAnalysisRuns.SingleAsync(r => r.Id == alert.Anomaly.AnalysisRunId);
+        run.ExecutionLocation.Should().Be(AIAnalysisRun.Edge);
+        run.Status.Should().Be(AIAnalysisStatus.Completed);
 
         mockPublisher.Verify(p => p.PublishAsync(It.Is<NotificationPushEvent>(e =>
             e.UserId == analystId &&

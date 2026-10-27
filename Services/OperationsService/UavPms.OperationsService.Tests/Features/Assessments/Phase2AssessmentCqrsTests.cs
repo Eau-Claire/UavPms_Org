@@ -46,7 +46,7 @@ public class Phase2AssessmentCqrsTests
     {
         var managerId = Guid.NewGuid();
         var regionId = Guid.NewGuid();
-        var assetId = Guid.NewGuid();
+        var towerId = Guid.NewGuid();
         var user = CreateUserMock(managerId, UserRoles.Manager);
         await using var db = CreateContext(user.Object);
 
@@ -65,16 +65,9 @@ public class Phase2AssessmentCqrsTests
             RegionId = regionId
         });
 
-        var region = new Region { Id = regionId, Code = "REG-01", RegionName = "Region 1" };
+        var region = new Region { Id = regionId, Code = "REG-01", Name = "Region 1" };
         db.Regions.Add(region);
-        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = regionId };
-        db.Substations.Add(sub);
-        var line = new TransmissionLine { Id = Guid.NewGuid(), SubstationAssetId = sub.Id };
-        db.TransmissionLines.Add(line);
-        var tower = new Tower { Id = Guid.NewGuid(), LineAssetId = line.Id };
-        db.Towers.Add(tower);
-        var asset = new Asset { Id = assetId, Status = "Active", Tower = tower };
-        db.Assets.Add(asset);
+        db.Towers.Add(new Tower { Id = towerId, RegionId = regionId, TowerCode = "T-01" });
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);
@@ -82,7 +75,7 @@ public class Phase2AssessmentCqrsTests
 
         var start = DateTime.UtcNow.AddDays(1);
         var end = start.AddHours(3);
-        var command = new CreatePreMissionAssessmentCommand(regionId, start, end, new[] { assetId });
+        var command = new CreatePreMissionAssessmentCommand(regionId, start, end, new[] { towerId });
 
         var result = await handler.Handle(command, CancellationToken.None);
 

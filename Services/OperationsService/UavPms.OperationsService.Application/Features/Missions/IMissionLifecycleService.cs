@@ -19,8 +19,8 @@ public interface IMissionLifecycleService
 {
     [Obsolete("Use PreMissionAssessmentService.CreateMissionFromAssessmentAsync instead.")]
     Task<Mission> CreateAsync(Mf01CreateMission request, CancellationToken ct);
-    Task<IReadOnlyList<Asset>> ResolveScopeAsync(Guid missionId, string boundaryWkt, CancellationToken ct);
-    Task ConfirmAssetsAsync(Guid missionId, string boundaryWkt, IReadOnlyCollection<Guid> assetIds, CancellationToken ct);
+    Task<IReadOnlyList<Tower>> ResolveScopeAsync(Guid missionId, string boundaryWkt, CancellationToken ct);
+    Task ConfirmAssetsAsync(Guid missionId, string boundaryWkt, IReadOnlyCollection<Guid> towerIds, CancellationToken ct);
     Task<MissionAssignment> AssignAsync(Guid missionId, Mf01Assignment request, CancellationToken ct);
     Task RemoveAssignmentAsync(Guid missionId, Guid assignmentId, CancellationToken ct);
     Task AssignDroneAsync(Guid missionId, Guid droneId, CancellationToken ct);

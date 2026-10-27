@@ -1,3 +1,4 @@
+using UavPms.OperationsService.Domain.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,10 +35,12 @@ public class EmergencyAlertService : IEmergencyAlertService
     {
         var alerts = await _db.EmergencyAlerts
             .AsNoTracking()
-            .Include(a => a.Asset)
+            .Include(a => a.Anomaly!)
+                .ThenInclude(an => an.Tower)
+            .Include(a => a.Anomaly!)
+                .ThenInclude(an => an.Media)
             .Include(a => a.Anomaly)
                 .ThenInclude(an => an!.Category)
-            .Include(a => a.Mission)
             .Where(a => a.Status == "Active")
             .OrderByDescending(a => a.TriggeredAt)
             .ToListAsync(ct);
@@ -53,8 +56,11 @@ public class EmergencyAlertService : IEmergencyAlertService
 
         var query = _db.EmergencyAlerts
             .AsNoTracking()
-            .Include(a => a.Asset)
-            .Include(a => a.ReviewedByUser)
+            .Include(a => a.Anomaly!)
+                .ThenInclude(an => an.Tower)
+            .Include(a => a.Anomaly!)
+                .ThenInclude(an => an.Media)
+            .Include(a => a.ReviewedBy)
             .Include(a => a.Anomaly)
                 .ThenInclude(an => an!.Category)
             .AsQueryable();
@@ -74,13 +80,13 @@ public class EmergencyAlertService : IEmergencyAlertService
             .Select(a => new EmergencyAlertHistoryDto
             {
                 Id = a.Id,
-                AssetCode = a.Asset != null ? a.Asset.AssetCode : (a.Anomaly != null && a.Anomaly.TowerId != null ? a.Anomaly.TowerId : "N/A"),
+                TowerCode = a.Anomaly != null && a.Anomaly.Tower != null ? a.Anomaly.Tower.TowerCode : "N/A",
                 AlertType = a.Anomaly != null && a.Anomaly.Category != null ? a.Anomaly.Category.CategoryName : "Critical Hazard",
                 Priority = a.Priority,
                 Status = a.Status,
                 TriggeredAt = a.TriggeredAt,
                 ResolvedAt = a.ResolvedAt,
-                ReviewedBy = a.ReviewedByUser != null ? (!string.IsNullOrWhiteSpace(a.ReviewedByUser.FullName) ? a.ReviewedByUser.FullName : a.ReviewedByUser.Email) : null,
+                ReviewedBy = a.ReviewedBy != null ? (!string.IsNullOrWhiteSpace(a.ReviewedBy.FullName) ? a.ReviewedBy.FullName : a.ReviewedBy.Email) : null,
                 Notes = a.Notes
             })
             .ToListAsync(ct);
@@ -98,8 +104,11 @@ public class EmergencyAlertService : IEmergencyAlertService
     {
         var alert = await _db.EmergencyAlerts
             .AsNoTracking()
-            .Include(a => a.Asset)
-            .Include(a => a.ReviewedByUser)
+            .Include(a => a.Anomaly!)
+                .ThenInclude(an => an.Tower)
+            .Include(a => a.Anomaly!)
+                .ThenInclude(an => an.Media)
+            .Include(a => a.ReviewedBy)
             .Include(a => a.Anomaly)
                 .ThenInclude(an => an!.Category)
             .Include(a => a.AlertEscalations)
@@ -124,7 +133,7 @@ public class EmergencyAlertService : IEmergencyAlertService
 
         alert.Status = normalizedStatus;
         alert.ResolvedAt = DateTime.UtcNow;
-        alert.ReviewedByUserId = reviewerId;
+        alert.ReviewedById = reviewerId;
         alert.Notes = request.Notes;
         alert.UpdatedAt = DateTime.UtcNow;
 
@@ -136,7 +145,10 @@ public class EmergencyAlertService : IEmergencyAlertService
     public async Task<AlertEscalationDto> EscalateAlertAsync(Guid id, Guid currentUserId, EscalateEmergencyAlertRequest request, CancellationToken ct = default)
     {
         var alert = await _db.EmergencyAlerts
-            .Include(a => a.Asset)
+            .Include(a => a.Anomaly!)
+                .ThenInclude(an => an.Tower)
+            .Include(a => a.Anomaly!)
+                .ThenInclude(an => an.Media)
             .Include(a => a.Anomaly)
                 .ThenInclude(an => an!.Category)
             .FirstOrDefaultAsync(a => a.Id == id, ct);
@@ -166,7 +178,7 @@ public class EmergencyAlertService : IEmergencyAlertService
         var manager = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.EscalatedToUserId, ct);
 
         var alertTypeName = alert.Anomaly?.Category?.CategoryName ?? "Sự cố khẩn cấp";
-        var assetCode = alert.Asset?.AssetCode ?? alert.Anomaly?.TowerId ?? "vị trí kiểm tra";
+        var towerCode = alert.Anomaly?.Tower?.TowerCode ?? "vị trí kiểm tra";
 
         try
         {
@@ -178,7 +190,7 @@ public class EmergencyAlertService : IEmergencyAlertService
                 ReferenceType = "EmergencyAlert",
                 ReferenceId = alert.Id,
                 Title = $"⚡ Cảnh báo khẩn cấp được chuyển cấp: {alertTypeName}",
-                Body = $"Analyst {(escalater?.FullName ?? "hệ thống")} đã chuyển cấp cảnh báo sự cố tại {assetCode} đến bạn. Lý do: {request.Reason}",
+                Body = $"Analyst {(escalater?.FullName ?? "hệ thống")} đã chuyển cấp cảnh báo sự cố tại {towerCode} đến bạn. Lý do: {request.Reason}",
                 SentAt = DateTime.UtcNow
             });
         }
@@ -218,24 +230,57 @@ public class EmergencyAlertService : IEmergencyAlertService
         }
         else
         {
+            if (missionId == Guid.Empty)
+                throw new InvalidOperationException("An edge alert without an existing anomaly requires a mission to attach its media to.");
+
             var defaultCategory = await _db.DefectCategories.FirstOrDefaultAsync(c => c.IsEmergencyClass, ct)
                 ?? await _db.DefectCategories.FirstOrDefaultAsync(ct);
+            var mission = await _db.Missions.AsNoTracking().FirstOrDefaultAsync(m => m.Id == missionId, ct);
+            var towerId = request.TowerId;
+            if (!towerId.HasValue && !string.IsNullOrWhiteSpace(request.TowerCode))
+            {
+                towerId = await _db.Towers.Where(t => t.TowerCode == request.TowerCode)
+                    .Select(t => (Guid?)t.Id).FirstOrDefaultAsync(ct);
+            }
 
+            var now = DateTime.UtcNow;
+            var media = new InspectionMedia
+            {
+                Id = Guid.NewGuid(),
+                MissionId = missionId,
+                TowerId = towerId,
+                MediaType = "Image",
+                FileUrl = request.MediaUrl ?? "/storage/alerts/sample_emergency.jpg",
+                ValidationStatus = "Pending",
+                CapturedAt = now
+            };
+            var run = new AIAnalysisRun
+            {
+                Id = Guid.NewGuid(),
+                MediaId = media.Id,
+                ExecutionLocation = AIAnalysisRun.Edge,
+                UavId = mission?.UavId,
+                AnalysisType = AnalysisType.DefectDetection,
+                ModelName = "EdgeAI",
+                Status = AIAnalysisStatus.Completed,
+                StartedAt = now,
+                CompletedAt = now
+            };
             var newAnomaly = new DetectedAnomaly
             {
                 Id = Guid.NewGuid(),
-                AssetId = request.AssetId,
+                MediaId = media.Id,
+                AnalysisRunId = run.Id,
+                TowerId = towerId,
                 CategoryId = defaultCategory?.Id ?? 1,
                 BoundingBox = request.BoundingBox ?? "{\"x\": 100, \"y\": 100, \"w\": 150, \"h\": 150}",
-                ImageUrl = request.MediaUrl ?? "/storage/alerts/sample_emergency.jpg",
+                ImageUrl = media.FileUrl,
                 ConfidenceScore = request.ConfidenceScore ?? 0.94,
-                TowerId = request.TowerCode ?? "TOW-N1-05",
-                ValidationStatus = "Unvalidated",
-                AiSource = "EdgeAI",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                ValidationStatus = "Pending"
             };
 
+            _db.InspectionMedia.Add(media);
+            _db.AIAnalysisRuns.Add(run);
             _db.DetectedAnomalies.Add(newAnomaly);
             anomalyId = newAnomaly.Id;
         }
@@ -244,14 +289,10 @@ public class EmergencyAlertService : IEmergencyAlertService
         {
             Id = Guid.NewGuid(),
             AnomalyId = anomalyId,
-            AssetId = request.AssetId,
-            MissionId = missionId,
             Status = "Active",
             Priority = string.IsNullOrWhiteSpace(request.Priority) ? "Critical" : request.Priority,
-            DeliveryLatencySeconds = request.DeliveryLatencySeconds > 0 ? request.DeliveryLatencySeconds : 3,
             TriggeredAt = DateTime.UtcNow,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            ReceivedAt = request.DeliveryLatencySeconds > 0 ? DateTime.UtcNow.AddSeconds(request.DeliveryLatencySeconds) : null
         };
 
         _db.EmergencyAlerts.Add(alert);
@@ -269,9 +310,7 @@ public class EmergencyAlertService : IEmergencyAlertService
                 {
                     Id = Guid.NewGuid(),
                     MissionId = activeMission.Id,
-                    SenderId = Guid.Empty,
-                    SenderName = "Edge AI Safety Guard",
-                    SenderRole = "SYSTEM",
+                    SenderId = null,
                     Type = "EMERGENCY_ALERT",
                     Content = $"[CẢNH BÁO NGUY HIỂM] {request.AlertType ?? "Sự cố khẩn cấp"} tại {request.TowerCode ?? "vùng bay"}. Khuyến nghị phi công rà soát an toàn hoặc kích hoạt chế độ RTH quay về.",
                     CreatedAt = DateTime.UtcNow
@@ -292,7 +331,7 @@ public class EmergencyAlertService : IEmergencyAlertService
                 .ToListAsync(ct);
 
             var title = $"🚨 CẢNH BÁO KHẨN CẤP: {request.AlertType ?? "Sự cố nghiêm trọng"}";
-            var body = $"Edge AI phát hiện sự cố khẩn cấp tại {request.TowerCode ?? "khu vực bay"}. Độ trễ truyền tin {alert.DeliveryLatencySeconds}s. Yêu cầu kiểm tra ngay!";
+            var body = $"Edge AI phát hiện sự cố khẩn cấp tại {request.TowerCode ?? "khu vực bay"}. Độ trễ truyền tin {request.DeliveryLatencySeconds}s. Yêu cầu kiểm tra ngay!";
 
             foreach (var userId in targetUsers)
             {
@@ -324,19 +363,19 @@ public class EmergencyAlertService : IEmergencyAlertService
         {
             Id = a.Id,
             AnomalyId = a.AnomalyId,
-            AssetId = a.AssetId,
-            AssetCode = a.Asset != null ? a.Asset.AssetCode : (a.Anomaly?.TowerId ?? "N/A"),
+            TowerId = a.Anomaly?.TowerId,
+            TowerCode = a.Anomaly?.Tower?.TowerCode ?? "N/A",
             AlertType = a.Anomaly?.Category?.CategoryName ?? "Wildfire / Flashover",
             CategoryName = a.Anomaly?.Category?.CategoryName ?? "Insulator Flashover",
             Priority = string.IsNullOrWhiteSpace(a.Priority) ? "Critical" : a.Priority,
             Status = a.Status,
-            DeliveryLatencySeconds = a.DeliveryLatencySeconds,
+            DeliveryLatencySeconds = a.ReceivedAt.HasValue ? Math.Max(0, (int)(a.ReceivedAt.Value - a.TriggeredAt).TotalSeconds) : 0,
             TriggeredAt = a.TriggeredAt,
             Location = new AlertLocationDto
             {
-                Latitude = a.Asset?.Location?.Y,
-                Longitude = a.Asset?.Location?.X,
-                TowerCode = a.Anomaly?.TowerId ?? a.Asset?.AssetCode
+                Latitude = a.Anomaly?.Tower?.Geom?.Coordinate.Y ?? a.Anomaly?.Location?.Y,
+                Longitude = a.Anomaly?.Tower?.Geom?.Coordinate.X ?? a.Anomaly?.Location?.X,
+                TowerCode = a.Anomaly?.Tower?.TowerCode
             },
             Evidence = new AlertEvidenceDto
             {
@@ -353,25 +392,25 @@ public class EmergencyAlertService : IEmergencyAlertService
         {
             Id = a.Id,
             AnomalyId = a.AnomalyId,
-            AssetId = a.AssetId,
-            AssetCode = a.Asset != null ? a.Asset.AssetCode : (a.Anomaly?.TowerId ?? "N/A"),
-            MissionId = a.MissionId,
+            TowerId = a.Anomaly?.TowerId,
+            TowerCode = a.Anomaly?.Tower?.TowerCode ?? "N/A",
+            MissionId = a.Anomaly?.Media?.MissionId ?? Guid.Empty,
             AlertType = a.Anomaly?.Category?.CategoryName ?? "Wildfire / Flashover",
             CategoryName = a.Anomaly?.Category?.CategoryName ?? "Insulator Flashover",
             Priority = string.IsNullOrWhiteSpace(a.Priority) ? "Critical" : a.Priority,
             Status = a.Status,
-            DeliveryLatencySeconds = a.DeliveryLatencySeconds,
+            DeliveryLatencySeconds = a.ReceivedAt.HasValue ? Math.Max(0, (int)(a.ReceivedAt.Value - a.TriggeredAt).TotalSeconds) : 0,
             TriggeredAt = a.TriggeredAt,
             ReceivedAt = a.ReceivedAt,
             ResolvedAt = a.ResolvedAt,
-            ReviewedByUserId = a.ReviewedByUserId,
-            ReviewedByName = a.ReviewedByUser != null ? (!string.IsNullOrWhiteSpace(a.ReviewedByUser.FullName) ? a.ReviewedByUser.FullName : a.ReviewedByUser.Email) : null,
+            ReviewedByUserId = a.ReviewedById,
+            ReviewedByName = a.ReviewedBy != null ? (!string.IsNullOrWhiteSpace(a.ReviewedBy.FullName) ? a.ReviewedBy.FullName : a.ReviewedBy.Email) : null,
             Notes = a.Notes,
             Location = new AlertLocationDto
             {
-                Latitude = a.Asset?.Location?.Y,
-                Longitude = a.Asset?.Location?.X,
-                TowerCode = a.Anomaly?.TowerId ?? a.Asset?.AssetCode
+                Latitude = a.Anomaly?.Tower?.Geom?.Coordinate.Y ?? a.Anomaly?.Location?.Y,
+                Longitude = a.Anomaly?.Tower?.Geom?.Coordinate.X ?? a.Anomaly?.Location?.X,
+                TowerCode = a.Anomaly?.Tower?.TowerCode
             },
             Evidence = new AlertEvidenceDto
             {

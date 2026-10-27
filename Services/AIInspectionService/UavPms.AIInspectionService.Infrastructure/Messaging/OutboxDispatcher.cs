@@ -24,7 +24,7 @@ public sealed class OutboxDispatcher : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
-            var messages = await db.OutboxMessages.Where(x => x.PublishedAt == null && !x.IsDeleted &&
+            var messages = await db.OutboxMessages.Where(x => x.PublishedAt == null &&
                     (x.MessageType == nameof(AIAnalysisRequestedEvent) ||
                      x.MessageType == nameof(DefectDetectedEvent) ||
                      x.MessageType == nameof(AiDetectionCompletedEvent) ||
@@ -36,7 +36,6 @@ public sealed class OutboxDispatcher : BackgroundService
                 {
                     await PublishAsync(publisher, message.MessageType, message.Payload);
                     message.PublishedAt = DateTime.UtcNow;
-                    message.UpdatedAt = DateTime.UtcNow;
                 }
                 catch (Exception ex)
                 {

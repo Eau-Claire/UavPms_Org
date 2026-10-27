@@ -15,21 +15,15 @@ public class CompleteMaintenanceTicketCommandHandler : IRequestHandler<CompleteM
 {
     private readonly IGenericRepository<MaintenanceTicket> _ticketRepository;
     private readonly IGenericRepository<MaintenanceProof> _proofRepository;
-    private readonly ITowerRepository _towerRepository;
-    private readonly IGenericRepository<TowerConditionHistory> _conditionHistoryRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     public CompleteMaintenanceTicketCommandHandler(
         IGenericRepository<MaintenanceTicket> ticketRepository,
         IGenericRepository<MaintenanceProof> proofRepository,
-        ITowerRepository towerRepository,
-        IGenericRepository<TowerConditionHistory> conditionHistoryRepository,
         IUnitOfWork unitOfWork)
     {
         _ticketRepository = ticketRepository;
         _proofRepository = proofRepository;
-        _towerRepository = towerRepository;
-        _conditionHistoryRepository = conditionHistoryRepository;
         _unitOfWork = unitOfWork;
     }
 
@@ -53,34 +47,6 @@ public class CompleteMaintenanceTicketCommandHandler : IRequestHandler<CompleteM
         ticket.ResolvedAt = DateTime.UtcNow;
         ticket.UpdatedAt = DateTime.UtcNow;
 
-        // Decrement tower active defects count and record condition history
-        if (ticket.TowerId.HasValue && ticket.TowerId.Value != Guid.Empty)
-        {
-            var tower = await _towerRepository.GetByIdAsync(ticket.TowerId.Value);
-            if (tower != null)
-            {
-                tower.ActiveDefectsCount = Math.Max(0, tower.ActiveDefectsCount - 1);
-                if (tower.ActiveDefectsCount == 0)
-                {
-                    tower.RiskLevel = "Normal";
-                }
-                tower.LastInspectedAt = DateTime.UtcNow;
-                await _towerRepository.UpdateAsync(tower);
-
-                var conditionHistory = new TowerConditionHistory
-                {
-                    Id = Guid.NewGuid(),
-                    TowerId = tower.Id,
-                    RiskLevel = tower.RiskLevel,
-                    ActiveDefectsCount = tower.ActiveDefectsCount,
-                    AssessedAt = DateTime.UtcNow,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                await _conditionHistoryRepository.AddAsync(conditionHistory);
-            }
-        }
-
         await _ticketRepository.UpdateAsync(ticket);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -89,8 +55,6 @@ public class CompleteMaintenanceTicketCommandHandler : IRequestHandler<CompleteM
             Id = ticket.Id,
             TicketCode = ticket.TicketCode,
             AnomalyId = ticket.AnomalyId,
-            AssetId = ticket.AssetId,
-            TowerId = ticket.TowerId,
             ManagerId = ticket.ManagerId,
             TechnicianId = ticket.TechnicianId,
             Status = ticket.Status.ToString(),

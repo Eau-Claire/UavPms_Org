@@ -18,7 +18,8 @@ public sealed class AIAnalysisReanalysisResult
     public Guid Id { get; set; }
     public Guid MediaId { get; set; }
     public Guid MissionId { get; set; }
-    public Guid AssetId { get; set; }
+    public Guid? TowerId { get; set; }
+    public string ExecutionLocation { get; set; } = string.Empty;
     public string FileUrl { get; set; } = string.Empty;
     public string MediaType { get; set; } = string.Empty;
     public AnalysisType AnalysisType { get; set; }

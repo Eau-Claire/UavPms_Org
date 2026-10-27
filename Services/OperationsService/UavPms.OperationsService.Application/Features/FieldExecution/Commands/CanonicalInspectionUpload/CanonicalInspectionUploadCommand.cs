@@ -8,7 +8,6 @@ namespace UavPms.OperationsService.Application.Features.FieldExecution.Commands.
 public class CanonicalInspectionUploadCommand : IRequest<UploadInspectionImageResult>
 {
     public Guid MissionId { get; set; }
-    public Guid? AssetId { get; set; }
     public Guid? TowerId { get; set; }
     public DateTime CapturedAt { get; set; }
     public double? Latitude { get; set; }

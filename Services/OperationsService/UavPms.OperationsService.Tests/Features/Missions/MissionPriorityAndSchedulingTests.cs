@@ -35,6 +35,14 @@ public class MissionPriorityAndSchedulingTests
         return new ApplicationDbContext(options, user);
     }
 
+    /// <summary>Priority defects are stored as MissionPriorityDefects rows that reference DefectCategories by code.</summary>
+    private static void SeedPriorityDefectCategories(ApplicationDbContext db)
+    {
+        db.DefectCategories.AddRange(
+            new DefectCategory { Id = 901, CategoryCode = PriorityDefectCategories.Conductor, CategoryName = "Conductor" },
+            new DefectCategory { Id = 902, CategoryCode = PriorityDefectCategories.Insulator, CategoryName = "Insulator" });
+    }
+
     [Fact]
     public void Validator_ShouldFail_WhenEmergencyPriority_HasNoEmergencyReason()
     {
@@ -46,7 +54,7 @@ public class MissionPriorityAndSchedulingTests
             DroneCode: "DRONE-01",
             Status: "Pending",
             Description: "Emergency inspection",
-            TargetAssetIds: new[] { Guid.NewGuid() },
+            TargetTowerIds: new[] { Guid.NewGuid() },
             Priority: MissionPriority.Emergency,
             EmergencyReason: null
         );
@@ -67,7 +75,7 @@ public class MissionPriorityAndSchedulingTests
             DroneCode: "DRONE-01",
             Status: "Pending",
             Description: "Emergency inspection",
-            TargetAssetIds: new[] { Guid.NewGuid() },
+            TargetTowerIds: new[] { Guid.NewGuid() },
             Priority: MissionPriority.Emergency,
             EmergencyReason: "Critical conductor defect detected after lightning strike."
         );
@@ -86,12 +94,12 @@ public class MissionPriorityAndSchedulingTests
 
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
-        var asset = new Asset { Id = Guid.NewGuid(), Status = "Active" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         db.Users.Add(new User { Id = inspectorId, Status = "Active" });
         db.Regions.Add(region);
         db.Uavs.Add(drone);
-        db.Assets.Add(asset);
+        db.Towers.Add(tower);
 
         var assessment = new PreMissionAssessment
         {
@@ -102,9 +110,9 @@ public class MissionPriorityAndSchedulingTests
             Status = PreMissionAssessmentStatus.Ready,
             ValidUntil = DateTime.UtcNow.AddHours(5)
         };
-        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset.Id, Sequence = 1 });
-        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, IsEligible = true });
-        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, IsEligible = true });
+        assessment.Towers.Add(new PreMissionAssessmentTower { TowerId = tower.Id, Sequence = 1 });
+        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, EligibilityStatus = ResourceEligibilityStatus.Eligible, AvailabilityStatus = ResourceAvailabilityStatus.Available });
+        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, OperationalAvailabilityStatus = ResourceAvailabilityStatus.Available, TechnicalEligibilityStatus = ResourceEligibilityStatus.Eligible });
         db.PreMissionAssessments.Add(assessment);
         await db.SaveChangesAsync();
 
@@ -136,12 +144,13 @@ public class MissionPriorityAndSchedulingTests
 
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
-        var asset = new Asset { Id = Guid.NewGuid(), Status = "Active" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         db.Users.Add(new User { Id = inspectorId, Status = "Active" });
         db.Regions.Add(region);
+        SeedPriorityDefectCategories(db);
         db.Uavs.Add(drone);
-        db.Assets.Add(asset);
+        db.Towers.Add(tower);
 
         var assessment = new PreMissionAssessment
         {
@@ -152,9 +161,9 @@ public class MissionPriorityAndSchedulingTests
             Status = PreMissionAssessmentStatus.Ready,
             ValidUntil = DateTime.UtcNow.AddHours(5)
         };
-        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset.Id, Sequence = 1 });
-        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, IsEligible = true });
-        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, IsEligible = true });
+        assessment.Towers.Add(new PreMissionAssessmentTower { TowerId = tower.Id, Sequence = 1 });
+        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, EligibilityStatus = ResourceEligibilityStatus.Eligible, AvailabilityStatus = ResourceAvailabilityStatus.Available });
+        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, OperationalAvailabilityStatus = ResourceAvailabilityStatus.Available, TechnicalEligibilityStatus = ResourceEligibilityStatus.Eligible });
         db.PreMissionAssessments.Add(assessment);
         await db.SaveChangesAsync();
 
@@ -178,9 +187,9 @@ public class MissionPriorityAndSchedulingTests
         mission.Should().NotBeNull();
         mission.Priority.Should().Be(MissionPriority.Emergency);
         mission.Objective.Should().Be(InspectionObjective.IncidentFollowUp);
-        mission.EmergencyReason.Should().Be("Broken conductor reported by ground team.");
+        mission.TriggerReason.Should().Be("Broken conductor reported by ground team.");
         mission.IsImmediate.Should().BeTrue();
-        mission.PriorityDefectsJson.Should().Contain(PriorityDefectCategories.Conductor);
+        mission.PriorityDefectCodes().Should().Contain(PriorityDefectCategories.Conductor);
 
         // Verify Audit Log was recorded
         var audit = await db.AuditLogs.FirstOrDefaultAsync(a => a.RecordId == mission.Id && a.ActionType == "MISSION_CREATED_FROM_ASSESSMENT");
@@ -199,12 +208,12 @@ public class MissionPriorityAndSchedulingTests
 
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
-        var asset = new Asset { Id = Guid.NewGuid(), Status = "Active" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         db.Users.Add(new User { Id = inspectorId, Status = "Active" });
         db.Regions.Add(region);
         db.Uavs.Add(drone);
-        db.Assets.Add(asset);
+        db.Towers.Add(tower);
 
         var start = DateTime.UtcNow.AddHours(2);
         var end = DateTime.UtcNow.AddHours(4);
@@ -238,9 +247,9 @@ public class MissionPriorityAndSchedulingTests
             Status = PreMissionAssessmentStatus.Ready,
             ValidUntil = DateTime.UtcNow.AddHours(5)
         };
-        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset.Id, Sequence = 1 });
-        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, IsEligible = true });
-        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, IsEligible = true });
+        assessment.Towers.Add(new PreMissionAssessmentTower { TowerId = tower.Id, Sequence = 1 });
+        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, EligibilityStatus = ResourceEligibilityStatus.Eligible, AvailabilityStatus = ResourceAvailabilityStatus.Available });
+        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, OperationalAvailabilityStatus = ResourceAvailabilityStatus.Available, TechnicalEligibilityStatus = ResourceEligibilityStatus.Eligible });
         db.PreMissionAssessments.Add(assessment);
         await db.SaveChangesAsync();
 
@@ -369,16 +378,13 @@ public class MissionPriorityAndSchedulingTests
         await using var db = CreateContext(user.Object);
 
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
-        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
-        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
-        var tower = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
-        var asset1 = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
-        var asset2 = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
-        var newUnassessedAsset = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
+        var asset1 = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        var asset2 = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-02" };
+        var newUnassessedAsset = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-03" };
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
-        db.Assets.AddRange(asset1, asset2, newUnassessedAsset);
+        db.Towers.AddRange(asset1, asset2, newUnassessedAsset);
 
         var assessment = new PreMissionAssessment
         {
@@ -389,8 +395,8 @@ public class MissionPriorityAndSchedulingTests
             PlannedEnd = DateTime.UtcNow.AddHours(3),
             Status = PreMissionAssessmentStatus.Completed
         };
-        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset1.Id, Sequence = 1 });
-        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset2.Id, Sequence = 2 });
+        assessment.Towers.Add(new PreMissionAssessmentTower { TowerId = asset1.Id, Sequence = 1 });
+        assessment.Towers.Add(new PreMissionAssessmentTower { TowerId = asset2.Id, Sequence = 2 });
         db.PreMissionAssessments.Add(assessment);
 
         var mission = new Mission
@@ -408,7 +414,7 @@ public class MissionPriorityAndSchedulingTests
 
         var service = new MissionLifecycleService(db, user.Object);
 
-        // Attempt to confirm scope with an asset not present in assessment
+        // Attempt to confirm scope with an tower not present in assessment
         var act = async () => await service.ConfirmAssetsAsync(
             mission.Id,
             "POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))",
@@ -427,15 +433,12 @@ public class MissionPriorityAndSchedulingTests
         await using var db = CreateContext(user.Object);
 
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
-        var sub = new Substation { Id = Guid.NewGuid(), RegionAssetId = region.Id };
-        var line = new TransmissionLine { Id = Guid.NewGuid(), Substation = sub };
-        var tower = new Tower { Id = Guid.NewGuid(), TransmissionLine = line };
-        var asset1 = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
-        var asset2 = new Asset { Id = Guid.NewGuid(), Tower = tower, Status = "Active" };
+        var asset1 = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        var asset2 = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-02" };
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
-        db.Assets.AddRange(asset1, asset2);
+        db.Towers.AddRange(asset1, asset2);
 
         var assessment = new PreMissionAssessment
         {
@@ -446,8 +449,8 @@ public class MissionPriorityAndSchedulingTests
             PlannedEnd = DateTime.UtcNow.AddHours(3),
             Status = PreMissionAssessmentStatus.Completed
         };
-        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset1.Id, Sequence = 1 });
-        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset2.Id, Sequence = 2 });
+        assessment.Towers.Add(new PreMissionAssessmentTower { TowerId = asset1.Id, Sequence = 1 });
+        assessment.Towers.Add(new PreMissionAssessmentTower { TowerId = asset2.Id, Sequence = 2 });
         db.PreMissionAssessments.Add(assessment);
 
         var mission = new Mission
@@ -529,6 +532,7 @@ public class MissionPriorityAndSchedulingTests
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         db.Regions.Add(region);
+        SeedPriorityDefectCategories(db);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
         var mission = new Mission
@@ -559,8 +563,9 @@ public class MissionPriorityAndSchedulingTests
 
         updated.Priority.Should().Be(MissionPriority.Emergency);
         updated.Objective.Should().Be(InspectionObjective.IncidentFollowUp);
-        updated.EmergencyReason.Should().Be("Severe line damage following storm report.");
-        updated.PriorityDefectsJson.Should().Contain(PriorityDefectCategories.Insulator);
+        updated.TriggerReason.Should().Be("Severe line damage following storm report.");
+        updated.PriorityDefectCodes().Should().Contain(PriorityDefectCategories.Insulator);
+        (await db.MissionPriorityDefects.CountAsync(p => p.MissionId == mission.Id)).Should().Be(2);
 
         var audit = await db.AuditLogs.FirstOrDefaultAsync(a => a.RecordId == mission.Id && a.ActionType == "MISSION_PRIORITY_UPDATED");
         audit.Should().NotBeNull();

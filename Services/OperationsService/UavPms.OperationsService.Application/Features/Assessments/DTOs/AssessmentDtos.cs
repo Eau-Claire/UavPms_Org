@@ -6,7 +6,7 @@ public record CreateAssessmentRequest(
     Guid RegionId,
     DateTime PlannedStart,
     DateTime PlannedEnd,
-    IReadOnlyCollection<Guid> AssetIds,
+    IReadOnlyCollection<Guid> TowerIds,
     string? BoundaryWkt = null,
     string? IdempotencyKey = null
 );
@@ -71,13 +71,12 @@ public record AssessmentCheckResultDto(
     DateTime EvaluatedAt
 );
 
-public record PreMissionAssessmentAssetDto(
+public record PreMissionAssessmentTowerDto(
     Guid Id,
-    Guid AssetId,
+    Guid TowerId,
     int Sequence,
-    string? AssetCode,
-    string? AssetType,
-    string? Status
+    string? TowerCode,
+    string? PoleType
 );
 
 public record PreMissionAssessmentPersonnelDto(
@@ -126,7 +125,7 @@ public record PreMissionAssessmentDto(
     string SiteFeasibilityStatus,
     string? EvaluationPolicyVersion,
     string? IdempotencyKey,
-    IReadOnlyList<PreMissionAssessmentAssetDto> Assets,
+    IReadOnlyList<PreMissionAssessmentTowerDto> Towers,
     IReadOnlyList<PreMissionAssessmentPersonnelDto> PersonnelCandidates,
     IReadOnlyList<PreMissionAssessmentDroneDto> DroneCandidates,
     IReadOnlyList<PreMissionAssessmentDroneDto> UavCandidates,

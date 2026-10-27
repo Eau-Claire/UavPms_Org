@@ -71,7 +71,7 @@ public sealed class InspectionMediaUploadedConsumer : BackgroundService
                         var upload = JsonSerializer.Deserialize<InspectionMediaUploadedEvent>(delivery.Body.Span,
                             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                         if (upload == null || upload.EventId == Guid.Empty || upload.MediaId == Guid.Empty ||
-                            upload.MissionId == Guid.Empty || upload.AssetId == Guid.Empty || upload.UploadedBy == Guid.Empty)
+                            upload.MissionId == Guid.Empty || upload.UploadedBy == Guid.Empty)
                             throw new JsonException("Inspection media event is missing required identifiers.");
 
                         using var scope = _scopeFactory.CreateScope();

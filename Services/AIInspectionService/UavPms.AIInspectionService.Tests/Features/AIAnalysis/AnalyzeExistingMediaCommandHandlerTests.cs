@@ -20,7 +20,7 @@ public class AnalyzeExistingMediaCommandHandlerTests
 {
     private readonly Mock<IGenericRepository<Mission>> _missionRepoMock;
     private readonly Mock<IGenericRepository<InspectionMedia>> _mediaRepoMock;
-    private readonly Mock<IGenericRepository<AIAnalysisRequest>> _aiRequestRepoMock;
+    private readonly Mock<IGenericRepository<AIAnalysisRun>> _aiRequestRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IEventPublisher> _eventPublisherMock;
     private readonly Mock<ICurrentUserServices> _currentUserMock;
@@ -32,7 +32,7 @@ public class AnalyzeExistingMediaCommandHandlerTests
     {
         _missionRepoMock = new Mock<IGenericRepository<Mission>>();
         _mediaRepoMock = new Mock<IGenericRepository<InspectionMedia>>();
-        _aiRequestRepoMock = new Mock<IGenericRepository<AIAnalysisRequest>>();
+        _aiRequestRepoMock = new Mock<IGenericRepository<AIAnalysisRun>>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _eventPublisherMock = new Mock<IEventPublisher>();
         _currentUserMock = new Mock<ICurrentUserServices>();
@@ -138,7 +138,7 @@ public class AnalyzeExistingMediaCommandHandlerTests
     {
         // Arrange
         var missionId = Guid.NewGuid();
-        var assetId = Guid.NewGuid();
+        var towerId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
         var command = new AnalyzeExistingMediaCommand
@@ -155,7 +155,7 @@ public class AnalyzeExistingMediaCommandHandlerTests
         {
             Id = command.MediaId,
             MissionId = missionId,
-            AssetId = assetId,
+            TowerId = towerId,
             FileUrl = "http://storage/existing.jpg",
             MediaType = "Image"
         };
@@ -177,12 +177,13 @@ public class AnalyzeExistingMediaCommandHandlerTests
         result.MediaType.Should().Be("Image");
         result.AnalysisType.Should().Be(AnalysisType.DefectDetection);
         result.Status.Should().Be(AIAnalysisStatus.Pending);
+        result.TowerId.Should().Be(towerId);
 
-        _aiRequestRepoMock.Verify(r => r.AddAsync(It.Is<AIAnalysisRequest>(req =>
-            req.UploadedBy == userId &&
+        _aiRequestRepoMock.Verify(r => r.AddAsync(It.Is<AIAnalysisRun>(req =>
+            req.RequestedBy == userId &&
             req.MediaId == media.Id &&
-            req.MissionId == missionId &&
-            req.FileUrl == "http://storage/existing.jpg" &&
+            req.ExecutionLocation == AIAnalysisRun.Cloud &&
+            req.ModelName == "YOLO11" &&
             req.AnalysisType == AnalysisType.DefectDetection &&
             req.Status == AIAnalysisStatus.Pending
         )), Times.Once);
@@ -193,7 +194,8 @@ public class AnalyzeExistingMediaCommandHandlerTests
             evt.FileUrl == "http://storage/existing.jpg" &&
             evt.MediaId == media.Id &&
             evt.MissionId == missionId &&
-            evt.AssetId == assetId &&
+            evt.AssetId == towerId &&
+            evt.TowerId == towerId &&
             evt.PreferredModel == "YOLO11" &&
             evt.AnalysisType == "DefectDetection"
         )), Times.Once);

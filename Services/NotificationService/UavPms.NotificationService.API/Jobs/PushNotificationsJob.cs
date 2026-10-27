@@ -62,7 +62,6 @@ public class PushNotificationsJob
                     }
 
                     // Mark as pushed regardless of user email missing (to avoid infinite retries on invalid users)
-                    notification.IsPushed = true;
                     notification.PushedAt = DateTime.UtcNow;
                 }
                 catch (Exception ex)

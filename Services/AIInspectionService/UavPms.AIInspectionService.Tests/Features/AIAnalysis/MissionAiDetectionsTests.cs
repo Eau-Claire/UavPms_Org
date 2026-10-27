@@ -6,7 +6,9 @@ using FluentAssertions;
 using Moq;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
+using NetTopologySuite.Geometries;
 using UavPms.AIInspectionService.Domain.Entities;
+using UavPms.AIInspectionService.Domain.Enums;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using Xunit;
@@ -23,6 +25,13 @@ public class MissionAiDetectionsTests
         var repositoryMock = new Mock<IInspectionMediaRepository>();
         var missionRepositoryMock = new Mock<IGenericRepository<Mission>>();
         var currentUserMock = new Mock<ICurrentUserServices>();
+        var towerId = Guid.NewGuid();
+        var runId = Guid.NewGuid();
+        var run = new AIAnalysisRun
+        {
+            Id = runId, MediaId = mediaId, ExecutionLocation = AIAnalysisRun.Cloud, ModelName = "RF-DETR",
+            Status = AIAnalysisStatus.Completed
+        };
         missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Mission { Id = missionId });
         repositoryMock.Setup(r => r.GetByMissionIdWithDetailsAsync(missionId))
@@ -34,29 +43,31 @@ public class MissionAiDetectionsTests
                     MissionId = missionId,
                     MediaType = "Image",
                     FileUrl = "https://storage/pole.jpg",
-                    AiSource = "RF-DETR",
+                    TowerId = towerId,
+                    DurationSeconds = 132.5,
+                    Fps = 30,
+                    WidthPx = 1920,
+                    HeightPx = 1080,
                     ValidationStatus = "PendingReview",
+                    AnalysisRuns = new List<AIAnalysisRun> { run },
                     DetectedAnomalies = new List<DetectedAnomaly>
                     {
                         new()
                         {
                             Id = Guid.NewGuid(),
                             MediaId = mediaId,
+                            AnalysisRunId = runId,
+                            AnalysisRun = run,
                             BoundingBox = """{ "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4 }""",
                             AiDetectionId = "ai-det-001",
                             FrameIndex = 360,
-                            Timestamp = 12.03,
+                            FrameTimeSeconds = 12.03,
                             ImageUrl = "https://storage/frame-360.jpg",
                             CropUrl = "https://storage/crop-360.jpg",
-                            Gps = """{ "lat": 10.762622, "lng": 106.660172 }""",
-                            TowerId = "tower-42",
-                            VideoDuration = 132.5,
-                            VideoFps = 30,
-                            VideoWidth = 1920,
-                            VideoHeight = 1080,
+                            Location = new Point(106.660172, 10.762622) { SRID = 4326 },
+                            TowerId = towerId,
                             ConfidenceScore = 0.91,
                             ValidationStatus = "Pending",
-                            AiSource = "RF-DETR",
                             Category = new DefectCategory
                             {
                                 CategoryCode = "CORROSION",
@@ -78,7 +89,8 @@ public class MissionAiDetectionsTests
             });
 
         var handler = new GetMissionAiDetectionsQueryHandler(
-            repositoryMock.Object, missionRepositoryMock.Object, currentUserMock.Object);
+            repositoryMock.Object, missionRepositoryMock.Object,
+            Mock.Of<IGenericRepository<MissionAssignment>>(), currentUserMock.Object);
 
         var result = await handler.Handle(new GetMissionAiDetectionsQuery(missionId), CancellationToken.None);
 
@@ -86,6 +98,8 @@ public class MissionAiDetectionsTests
         var media = result[0];
         media.MediaId.Should().Be(mediaId);
         media.DetectionCount.Should().Be(1);
+        media.TowerId.Should().Be(towerId);
+        media.AiSource.Should().Be("RF-DETR");
         media.VideoMetadata.Should().NotBeNull();
         media.VideoMetadata!.Duration.Should().Be(132.5);
         media.VideoMetadata.Fps.Should().Be(30);
@@ -103,7 +117,9 @@ public class MissionAiDetectionsTests
         detection.Gps.Should().NotBeNull();
         detection.Gps!.Lat.Should().Be(10.762622);
         detection.Gps.Lng.Should().Be(106.660172);
-        detection.TowerId.Should().Be("tower-42");
+        detection.TowerId.Should().Be(towerId);
+        detection.AnalysisRunId.Should().Be(runId);
+        detection.AiSource.Should().Be("RF-DETR");
         detection.BoundingBox.Should().NotBeNull();
         var boundingBox = detection.BoundingBox!;
         boundingBox.X.Should().Be(0.1);
@@ -128,7 +144,6 @@ public class MissionAiDetectionsTests
             BoundingBox = """{ "x1": 10, "y1": 20, "x2": 30, "y2": 50 }""",
             ConfidenceScore = 0.77,
             ValidationStatus = "Pending",
-            AiSource = "RF-DETR",
             Category = new DefectCategory { CategoryCode = "BROKEN_INSULATOR", CategoryName = "Broken insulator" }
         };
 
@@ -164,6 +179,7 @@ public class MissionAiDetectionsTests
         result.BoundingBox.Should().NotBeNull();
         result.BoundingBox!.X.Should().Be(10);
         result.BoundingBox.Width.Should().Be(20);
+        result.AiSource.Should().Be("Manual");
 
         anomalyRepoMock.Verify(r => r.UpdateAsync(anomaly), Times.Once);
         unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);

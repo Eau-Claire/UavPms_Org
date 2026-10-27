@@ -35,7 +35,7 @@ public sealed class ProcessAiAnalysisResultValidationTests
 
     private static ProcessAiAnalysisResultCommand ValidCommand() => new()
     {
-        RequestId = Guid.NewGuid(), MediaId = Guid.NewGuid(), MissionId = Guid.NewGuid(), AssetId = Guid.NewGuid(),
+        RequestId = Guid.NewGuid(), MediaId = Guid.NewGuid(), MissionId = Guid.NewGuid(),
         Status = "Completed", ModelName = "server", CompletedAt = DateTime.UtcNow, Detections = []
     };
 

@@ -17,7 +17,6 @@ public class FieldCheckInCommandHandler : IRequestHandler<FieldCheckInCommand, M
 {
     private readonly IMissionRepository _missionRepository;
     private readonly ITowerRepository _towerRepository;
-    private readonly IAssetRepository _assetRepository;
     private readonly IGenericRepository<MissionCheckIn> _checkInRepository;
     private readonly ICurrentUserServices _currentUser;
     private readonly IUnitOfWork _unitOfWork;
@@ -25,14 +24,12 @@ public class FieldCheckInCommandHandler : IRequestHandler<FieldCheckInCommand, M
     public FieldCheckInCommandHandler(
         IMissionRepository missionRepository,
         ITowerRepository towerRepository,
-        IAssetRepository assetRepository,
         IGenericRepository<MissionCheckIn> checkInRepository,
         ICurrentUserServices currentUser,
         IUnitOfWork unitOfWork)
     {
         _missionRepository = missionRepository;
         _towerRepository = towerRepository;
-        _assetRepository = assetRepository;
         _checkInRepository = checkInRepository;
         _currentUser = currentUser;
         _unitOfWork = unitOfWork;
@@ -52,7 +49,7 @@ public class FieldCheckInCommandHandler : IRequestHandler<FieldCheckInCommand, M
 
         var currentUserId = _currentUser.UserId;
         var assignment = mission.Assignments.FirstOrDefault(a => a.UserId == currentUserId && a.Status == MissionAssignmentStatus.Active);
-        if (assignment == null && mission.InspectorId != currentUserId)
+        if (assignment == null)
             throw new ForbiddenException("USER_NOT_ASSIGNED: You are not assigned to this mission.");
 
         if (assignment != null && assignment.ResponseStatus != MissionAssignmentResponse.Accepted)
@@ -65,36 +62,18 @@ public class FieldCheckInCommandHandler : IRequestHandler<FieldCheckInCommand, M
         if (existingCheckIns.Count > 0)
             throw new BusinessRuleException("DUPLICATE_CHECK_IN", "User has already checked in for this mission.");
 
-        // Spatial validation: check distance to first target tower/asset <= 200m
+        // Spatial validation: check distance to first target tower/tower <= 200m
         double? targetLat = null;
         double? targetLon = null;
 
         var firstTarget = mission.MissionTargets.FirstOrDefault();
-        if (firstTarget != null && firstTarget.AssetId != Guid.Empty)
+        if (firstTarget != null && firstTarget.TowerId != Guid.Empty)
         {
-            var asset = await _assetRepository.GetByIdAsync(firstTarget.AssetId);
-            if (asset?.Location != null)
+            var tower = await _towerRepository.GetByIdAsync(firstTarget.TowerId);
+            if (tower?.Geom != null)
             {
-                targetLat = asset.Location.Y;
-                targetLon = asset.Location.X;
-            }
-            else if (asset != null && asset.TowerId != Guid.Empty)
-            {
-                var tower = await _towerRepository.GetByIdAsync(asset.TowerId);
-                if (tower?.Geom != null)
-                {
-                    targetLat = tower.Geom.Coordinate.Y;
-                    targetLon = tower.Geom.Coordinate.X;
-                }
-            }
-            else
-            {
-                var tower = await _towerRepository.GetByIdAsync(firstTarget.AssetId);
-                if (tower?.Geom != null)
-                {
-                    targetLat = tower.Geom.Coordinate.Y;
-                    targetLon = tower.Geom.Coordinate.X;
-                }
+                targetLat = tower.Geom.Coordinate.Y;
+                targetLon = tower.Geom.Coordinate.X;
             }
         }
 

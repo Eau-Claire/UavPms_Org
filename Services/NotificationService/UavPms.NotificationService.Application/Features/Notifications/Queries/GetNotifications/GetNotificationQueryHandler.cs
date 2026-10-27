@@ -26,7 +26,7 @@ public class GetNotificationQueryHandler : IRequestHandler<GetNotificationsQuery
             ReferenceId = n.ReferenceId,
             Title = n.Title,
             Body = n.Body,
-            IsRead = n.IsRead,
+            IsRead = n.ReadAt != null,
             SentAt = n.SentAt,
             ReadAt = n.ReadAt
         }).ToList();

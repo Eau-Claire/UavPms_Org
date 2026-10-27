@@ -9,7 +9,5 @@ public record CreateMaintenanceTicketCommand(
     Guid TechnicianId,
     string Priority,
     string Description,
-    Guid? TowerId = null,
-    Guid? AssetId = null,
     DateTime? DueDate = null
 ) : IRequest<MaintenanceTicketDto>;

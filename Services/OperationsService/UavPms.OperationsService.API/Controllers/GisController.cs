@@ -11,11 +11,9 @@ namespace UavPms.OperationsService.API.Controllers;
 public class GisController(ISender mediator) : ControllerBase
 {
     [HttpGet("infrastructure")]
-    public async Task<IActionResult> Infrastructure([FromQuery] Guid? administrativeAreaId, [FromQuery] Guid? managementUnitId,
-        [FromQuery] Guid? powerLineId, [FromQuery] string? voltageLevel, [FromQuery] string? assetType,
-        [FromQuery] string? status, CancellationToken cancellationToken)
+    public async Task<IActionResult> Infrastructure([FromQuery] Guid? administrativeAreaId, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GisInfrastructureQuery(administrativeAreaId, managementUnitId, powerLineId, voltageLevel, assetType, status), cancellationToken);
+        var result = await mediator.Send(new GisInfrastructureQuery(administrativeAreaId), cancellationToken);
         return Ok(new ApiResponse(true, "GIS infrastructure retrieved successfully.", result));
     }
 }

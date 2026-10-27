@@ -1,10 +1,14 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using UavPms.OperationsService.Infrastructure.Persistence;
 
 #nullable disable
 
 namespace UavPms.OperationsService.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20260929160000_AddMissionPriorityAndSchedulingFields")]
     public partial class AddMissionPriorityAndSchedulingFields : Migration
     {
         /// <inheritdoc />

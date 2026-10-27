@@ -66,32 +66,14 @@ public class CreateMaintenanceTicketCommandHandler : IRequestHandler<CreateMaint
         if (anomaly == null)
             throw new NotFoundException("DetectedAnomaly", request.AnomalyId);
 
-        Guid? towerId = request.TowerId;
-        if (!towerId.HasValue && !string.IsNullOrWhiteSpace(anomaly.TowerId) && Guid.TryParse(anomaly.TowerId, out var parsedTowerId))
-        {
-            towerId = parsedTowerId;
-        }
-
-        if (towerId.HasValue)
-        {
-            var tower = await _towerRepository.GetByIdAsync(towerId.Value);
-            if (tower != null)
-            {
-                if (anomaly.ValidationStatus != "Confirmed")
-                {
-                    tower.ActiveDefectsCount++;
-                }
-                await _towerRepository.UpdateAsync(tower);
-            }
-        }
+        // Cột điện cần sửa suy ra từ bất thường (anomaly.TowerId), không lưu trên phiếu.
+        Guid? towerId = anomaly.TowerId;
 
         var ticket = new MaintenanceTicket
         {
             Id = Guid.NewGuid(),
             TicketCode = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
             AnomalyId = request.AnomalyId,
-            AssetId = request.AssetId ?? anomaly.AssetId,
-            TowerId = towerId,
             ManagerId = _currentUser.UserId != Guid.Empty ? _currentUser.UserId : Guid.NewGuid(),
             TechnicianId = request.TechnicianId,
             Status = TicketStatus.Open,
@@ -112,7 +94,7 @@ public class CreateMaintenanceTicketCommandHandler : IRequestHandler<CreateMaint
                 TicketId = ticket.Id,
                 TicketCode = ticket.TicketCode,
                 Title = $"Phiếu bảo trì {ticket.TicketCode}",
-                TowerId = ticket.TowerId ?? Guid.Empty,
+                TowerId = towerId ?? Guid.Empty,
                 AssignedToUserId = ticket.TechnicianId,
                 Priority = ticket.Priority.ToString(),
                 AnomalyDescription = ticket.Description,
@@ -124,9 +106,7 @@ public class CreateMaintenanceTicketCommandHandler : IRequestHandler<CreateMaint
                 Id = ticketAssignedEvent.EventId,
                 MessageType = nameof(MaintenanceTicketAssignedEvent),
                 Payload = System.Text.Json.JsonSerializer.Serialize(ticketAssignedEvent),
-                OccurredAt = ticketAssignedEvent.AssignedAt,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = ticket.ManagerId
+                OccurredAt = ticketAssignedEvent.AssignedAt
             });
         }
 
@@ -137,8 +117,7 @@ public class CreateMaintenanceTicketCommandHandler : IRequestHandler<CreateMaint
             Id = ticket.Id,
             TicketCode = ticket.TicketCode,
             AnomalyId = ticket.AnomalyId,
-            AssetId = ticket.AssetId,
-            TowerId = ticket.TowerId,
+            TowerId = towerId,
             ManagerId = ticket.ManagerId,
             TechnicianId = ticket.TechnicianId,
             Status = ticket.Status.ToString(),

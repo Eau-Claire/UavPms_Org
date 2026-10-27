@@ -24,13 +24,13 @@ public class CreateRegionCommandHandler : IRequestHandler<CreateRegionCommand, R
         var region = new Region
         {
             Id = Guid.NewGuid(),
-            RegionName = request.RegionName,
+            Name = request.RegionName,
             CreatedAt = DateTime.UtcNow
         };
 
         await _regionRepository.AddAsync(region);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new RegionDto(region.Id, region.RegionName, null);
+        return new RegionDto(region.Id, region.Name, null);
     }
 }

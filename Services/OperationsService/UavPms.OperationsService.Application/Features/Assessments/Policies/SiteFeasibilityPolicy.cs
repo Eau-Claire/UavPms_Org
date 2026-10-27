@@ -52,68 +52,55 @@ public static class SiteFeasibilityPolicy
 
     public static SiteFeasibilityResult Evaluate(
         Region region,
-        IReadOnlyList<Asset> assets,
+        IReadOnlyList<Tower> towers,
         Geometry? proposedBoundary,
-        IReadOnlyCollection<Guid> requestedAssetIds)
+        IReadOnlyCollection<Guid> requestedTowerIds)
     {
         var findings = new Dictionary<string, object>();
-        var missingAssetIds = requestedAssetIds.Except(assets.Select(a => a.Id)).ToList();
+        var missingTowerIds = requestedTowerIds.Except(towers.Select(a => a.Id)).ToList();
 
-        if (missingAssetIds.Count > 0)
+        if (missingTowerIds.Count > 0)
         {
-            findings["missingAssets"] = missingAssetIds;
-            findings["error"] = "One or more requested assets do not exist or are outside region scope.";
+            findings["missingTowers"] = missingTowerIds;
+            findings["error"] = "One or more requested towers do not exist or are outside region scope.";
             return new SiteFeasibilityResult(
                 ReadinessCheckStatus.Failed,
                 JsonSerializer.Serialize(findings),
                 false,
-                "ASSETS_NOT_FOUND_OR_OUTSIDE_SCOPE"
+                "TOWERS_NOT_FOUND_OR_OUTSIDE_SCOPE"
             );
         }
 
-        var inactiveAssets = assets.Where(a => a.Status != "Active" && a.Status != "Operational").Select(a => a.Id).ToList();
-        if (inactiveAssets.Count > 0)
-        {
-            findings["inactiveAssets"] = inactiveAssets;
-            findings["error"] = "One or more assets are inactive or under maintenance.";
-            return new SiteFeasibilityResult(
-                ReadinessCheckStatus.Failed,
-                JsonSerializer.Serialize(findings),
-                false,
-                "ASSETS_INACTIVE"
-            );
-        }
-
-        var assetsWithoutLocation = assets.Where(a => a.Location == null).Select(a => a.Id).ToList();
+        var towersWithoutLocation = towers.Where(a => a.Geom == null).Select(a => a.Id).ToList();
         if (proposedBoundary != null)
         {
-            if (assetsWithoutLocation.Count > 0)
+            if (towersWithoutLocation.Count > 0)
             {
-                findings["assetsWithoutLocation"] = assetsWithoutLocation;
-                findings["error"] = "Assets missing geographic location cannot be verified against boundary.";
+                findings["towersWithoutLocation"] = towersWithoutLocation;
+                findings["error"] = "Towers missing geographic location cannot be verified against boundary.";
                 return new SiteFeasibilityResult(
                     ReadinessCheckStatus.Failed,
                     JsonSerializer.Serialize(findings),
                     false,
-                    "ASSET_MISSING_GEOLOCATION"
+                    "TOWER_MISSING_GEOLOCATION"
                 );
             }
 
-            var outsideBoundary = assets.Where(a => a.Location != null && !proposedBoundary.Covers(a.Location)).Select(a => a.Id).ToList();
+            var outsideBoundary = towers.Where(a => a.Geom != null && !proposedBoundary.Covers(a.Geom)).Select(a => a.Id).ToList();
             if (outsideBoundary.Count > 0)
             {
-                findings["assetsOutsideBoundary"] = outsideBoundary;
-                findings["error"] = "One or more assets fall outside the proposed mission boundary.";
+                findings["towersOutsideBoundary"] = outsideBoundary;
+                findings["error"] = "One or more towers fall outside the proposed mission boundary.";
                 return new SiteFeasibilityResult(
                     ReadinessCheckStatus.Failed,
                     JsonSerializer.Serialize(findings),
                     false,
-                    "ASSET_OUTSIDE_BOUNDARY"
+                    "TOWER_OUTSIDE_BOUNDARY"
                 );
             }
         }
 
-        findings["totalAssets"] = assets.Count;
+        findings["totalTowers"] = towers.Count;
         findings["regionId"] = region.Id;
         findings["hasProposedBoundary"] = proposedBoundary != null;
         findings["boundaryCheck"] = proposedBoundary != null ? "Passed" : "NotProvided";

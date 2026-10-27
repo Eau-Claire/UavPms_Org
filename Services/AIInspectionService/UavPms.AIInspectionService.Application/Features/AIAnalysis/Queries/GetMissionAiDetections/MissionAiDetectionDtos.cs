@@ -7,9 +7,10 @@ public class MissionAiDetectionMediaDto
 {
     public Guid MediaId { get; set; }
     public Guid MissionId { get; set; }
-    public Guid? AssetId { get; set; }
+    public Guid? TowerId { get; set; }
     public string MediaType { get; set; } = string.Empty;
     public string FileUrl { get; set; } = string.Empty;
+    /// <summary>Derived: model name of the latest AI run on this media, "Manual" when only manual anomalies exist.</summary>
     public string AiSource { get; set; } = string.Empty;
     public string ValidationStatus { get; set; } = string.Empty;
     public DateTime CapturedAt { get; set; }
@@ -37,7 +38,9 @@ public class MissionAiDetectionDto
 {
     public Guid Id { get; set; }
     public Guid MediaId { get; set; }
-    public Guid? AssetId { get; set; }
+    public Guid? AnalysisRunId { get; set; }
+    public string? ExecutionLocation { get; set; }
+    public Guid? SupersededById { get; set; }
     public string? AiDetectionId { get; set; }
     public string CategoryCode { get; set; } = string.Empty;
     public string Class { get; set; } = string.Empty;
@@ -48,12 +51,14 @@ public class MissionAiDetectionDto
     public double ConfidenceScore { get; set; }
     public double Confidence { get; set; }
     public int? FrameIndex { get; set; }
+    /// <summary>Frame time in seconds (column FrameTimeSeconds); JSON name kept for the frontend.</summary>
     public double? Timestamp { get; set; }
     public string? ImageUrl { get; set; }
     public string? CropUrl { get; set; }
     public MissionAiGpsDto? Gps { get; set; }
-    public string? TowerId { get; set; }
+    public Guid? TowerId { get; set; }
     public string ValidationStatus { get; set; } = string.Empty;
+    /// <summary>Derived: "Manual" when AnalysisRunId is null, otherwise the run model name.</summary>
     public string AiSource { get; set; } = string.Empty;
     public Guid? AnalystId { get; set; }
     public string AnalystNotes { get; set; } = string.Empty;

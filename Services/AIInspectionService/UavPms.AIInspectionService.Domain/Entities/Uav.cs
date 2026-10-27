@@ -9,7 +9,9 @@ public class Uav : BaseEntity
 {
     public string UavCode { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
+
+    /// <summary>Idle/Flying/Maintenance/Offline (column FlightStatus).</summary>
+    public string FlightStatus { get; set; } = string.Empty;
     public double BatteryLevel { get; set; }
     public Point? CurrentLocation { get; set; }
     public DateTime? LastMaintenanceAt { get; set; }

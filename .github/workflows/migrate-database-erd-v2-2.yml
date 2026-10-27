@@ -1,0 +1,202 @@
+name: Migrate Database (ERD v2.2)
+
+# Manual only. Applies the AlignSchemaWithErdV2_2 migration (and any other pending EF migration)
+# to the production database, then optionally redeploys the services at the same commit.
+#
+#   mode = dry-run : backup + apply the script to a throw-away copy of the production DB, report, drop the copy.
+#   mode = apply   : backup + dry run + stop writer services + apply to the real DB + (optional) deploy.
+#
+# Rollback: the migration's Down() is not supported (it drops tables/columns). Restore the backup printed
+# in the job log:  pg_restore --clean --if-exists -U uavpms -d uavpms <backup>.dump  (inside the uavpms-db container).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run (copy of the DB only) or apply (real DB)
+        required: true
+        type: choice
+        default: dry-run
+        options:
+          - dry-run
+          - apply
+      deploy_after:
+        description: After a successful apply, rebuild and restart the services at this commit
+        required: true
+        type: boolean
+        default: true
+      confirmation:
+        description: Type MIGRATE_ERD_V2_2 to confirm
+        required: true
+        type: string
+
+concurrency:
+  group: production-operations-database-update
+  cancel-in-progress: false
+
+env:
+  DB_CONTAINER: uavpms-db
+  DB_USER: uavpms
+  DB_NAME: uavpms
+  TARGET_MIGRATION: 20261027181344_AlignSchemaWithErdV2_2
+
+jobs:
+  build-script:
+    name: Build, test and generate migration SQL
+    if: ${{ inputs.confirmation == 'MIGRATE_ERD_V2_2' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Build solution
+        run: |
+          dotnet restore UavPms.sln
+          dotnet build UavPms.sln --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test UavPms.sln --configuration Release --no-build --verbosity minimal
+
+      - name: Generate idempotent migration script
+        run: |
+          dotnet tool restore
+          dotnet ef migrations script --idempotent \
+            --configuration Release \
+            --project Services/OperationsService/UavPms.OperationsService.Infrastructure \
+            --startup-project Services/OperationsService/UavPms.OperationsService.API \
+            --output migration/erd_v2_2_idempotent.sql
+          grep -q "$TARGET_MIGRATION" migration/erd_v2_2_idempotent.sql
+          echo "Script lines: $(wc -l < migration/erd_v2_2_idempotent.sql)"
+
+      - name: Upload script
+        uses: actions/upload-artifact@v4
+        with:
+          name: erd-v2-2-migration-sql
+          path: migration/erd_v2_2_idempotent.sql
+          retention-days: 30
+
+  migrate:
+    name: Backup, dry run${{ inputs.mode == 'apply' && ', apply' || '' }}
+    needs: build-script
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Download script
+        uses: actions/download-artifact@v4
+        with:
+          name: erd-v2-2-migration-sql
+          path: migration
+
+      - name: Copy script to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          source: migration/erd_v2_2_idempotent.sql
+          target: /tmp/uavpms-erd-v2-2-${{ github.run_id }}
+          strip_components: 1
+
+      - name: Backup, dry run and apply
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          GATEWAY_HEALTH_URL: ${{ secrets.GATEWAY_HEALTH_URL }}
+          MODE: ${{ inputs.mode }}
+          DEPLOY_AFTER: ${{ inputs.deploy_after }}
+          DEPLOY_COMMIT: ${{ github.sha }}
+          SCRIPT_DIR: /tmp/uavpms-erd-v2-2-${{ github.run_id }}
+          DB_CONTAINER: ${{ env.DB_CONTAINER }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_NAME: ${{ env.DB_NAME }}
+          TARGET_MIGRATION: ${{ env.TARGET_MIGRATION }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          command_timeout: 60m
+          envs: DEPLOY_PATH,GATEWAY_HEALTH_URL,MODE,DEPLOY_AFTER,DEPLOY_COMMIT,SCRIPT_DIR,DB_CONTAINER,DB_USER,DB_NAME,TARGET_MIGRATION
+          script_stop: true
+          script: |
+            set -euo pipefail
+            SCRIPT="$SCRIPT_DIR/erd_v2_2_idempotent.sql"
+            DRY_DB="${DB_NAME}_erd_v2_2_dryrun"
+            STAMP="$(date -u +%Y%m%d%H%M%S)"
+            psql_db() { docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$1" "${@:2}"; }
+
+            echo "========== PREFLIGHT =========="
+            test -n "${DEPLOY_PATH:-}" || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
+            test -s "$SCRIPT" || { echo "ERROR: migration script not found at $SCRIPT"; exit 1; }
+            [ "$(docker inspect "$DB_CONTAINER" --format '{{.State.Status}}')" = "running" ] || { echo "ERROR: $DB_CONTAINER is not running."; exit 1; }
+            APPLIED="$(psql_db "$DB_NAME" -tAc "SELECT count(*) FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$TARGET_MIGRATION'")"
+            echo "Last applied migration: $(psql_db "$DB_NAME" -tAc 'SELECT max("MigrationId") FROM "__EFMigrationsHistory"')"
+            if [ "$APPLIED" = "1" ]; then
+              echo "$TARGET_MIGRATION is already applied. Nothing to do."
+              rm -rf "$SCRIPT_DIR"
+              exit 0
+            fi
+
+            echo "========== BACKUP =========="
+            BACKUP_DIR="$DEPLOY_PATH/backups"
+            mkdir -p "$BACKUP_DIR"
+            BACKUP="$BACKUP_DIR/${DB_NAME}_before_erd_v2_2_${STAMP}.dump"
+            docker exec "$DB_CONTAINER" pg_dump -U "$DB_USER" -d "$DB_NAME" -Fc -f "/tmp/backup_${STAMP}.dump"
+            docker cp "$DB_CONTAINER:/tmp/backup_${STAMP}.dump" "$BACKUP"
+            echo "Backup written to $BACKUP ($(du -h "$BACKUP" | cut -f1))"
+
+            echo "========== DRY RUN ON A COPY =========="
+            docker exec "$DB_CONTAINER" dropdb -U "$DB_USER" --if-exists "$DRY_DB"
+            docker exec "$DB_CONTAINER" createdb -U "$DB_USER" "$DRY_DB"
+            docker exec "$DB_CONTAINER" pg_restore -U "$DB_USER" -d "$DRY_DB" --no-owner "/tmp/backup_${STAMP}.dump"
+            psql_db "$DRY_DB" -q < "$SCRIPT"
+            psql_db "$DRY_DB" -c "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" ORDER BY 1 DESC LIMIT 3;"
+            psql_db "$DRY_DB" -c "SELECT count(*) AS tables FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name NOT IN ('__EFMigrationsHistory', 'spatial_ref_sys');"
+            psql_db "$DRY_DB" -c "SELECT (SELECT count(*) FROM \"Towers\") AS towers, (SELECT count(*) FROM \"Towers\" t JOIN \"Regions\" r ON r.\"Id\" = t.\"RegionId\" WHERE r.\"Code\" = 'UNASSIGNED') AS towers_unassigned, (SELECT count(*) FROM \"AIAnalysisRuns\") AS ai_runs, (SELECT count(*) FROM \"DetectedAnomalies\" WHERE \"TowerId\" IS NULL) AS anomalies_without_tower, (SELECT count(*) FROM \"DetectedAnomalies\" WHERE \"ValidationStatus\" = 'Confirmed' AND \"TowerId\" IS NULL) AS confirmed_without_tower;"
+            docker exec "$DB_CONTAINER" dropdb -U "$DB_USER" "$DRY_DB"
+            echo "Dry run succeeded."
+
+            if [ "$MODE" != "apply" ]; then
+              echo "Mode is dry-run: the production database was not changed."
+              docker exec "$DB_CONTAINER" rm -f "/tmp/backup_${STAMP}.dump"
+              rm -rf "$SCRIPT_DIR"
+              exit 0
+            fi
+
+            echo "========== APPLY =========="
+            cd "$DEPLOY_PATH"
+            echo "Stopping services that write to the database..."
+            docker compose stop operationsservice aiinspectionservice notificationservice identityservice
+            if ! psql_db "$DB_NAME" -q < "$SCRIPT"; then
+              echo "ERROR: migration failed and was rolled back (single transaction). Restarting the previous services."
+              docker compose start operationsservice aiinspectionservice notificationservice identityservice
+              exit 1
+            fi
+            psql_db "$DB_NAME" -c "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" ORDER BY 1 DESC LIMIT 3;"
+            docker exec "$DB_CONTAINER" rm -f "/tmp/backup_${STAMP}.dump"
+            rm -rf "$SCRIPT_DIR"
+
+            if [ "$DEPLOY_AFTER" != "true" ]; then
+              echo "Migration applied. deploy_after=false: services stay stopped until the new code is deployed (old code does not match the new schema)."
+              exit 0
+            fi
+
+            echo "========== DEPLOY $DEPLOY_COMMIT =========="
+            git fetch origin main
+            git checkout main
+            git reset --hard "$DEPLOY_COMMIT"
+            RUN_MIGRATIONS=false docker compose build
+            RUN_MIGRATIONS=false docker compose up -d --remove-orphans
+            docker image prune -f
+            if [ -n "${GATEWAY_HEALTH_URL:-}" ]; then
+              curl --fail --silent --show-error --retry 10 --retry-delay 5 "$GATEWAY_HEALTH_URL"
+              echo "Health check passed."
+            fi
+            echo "Backup kept at $BACKUP"

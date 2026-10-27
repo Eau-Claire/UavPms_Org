@@ -26,14 +26,14 @@ public class NotificationRepository : GenericRepository<Notification>, INotifica
         if(notification == null)
             return;
 
-        notification.IsRead = true;
+        notification.ReadAt ??= DateTime.UtcNow;
     }
 
     public async Task<List<Notification>> GetUnpushedNotificationsWithActiveUserAsync()
     {
         return await _context.Notifications
             .Include(x => x.User)
-            .Where(x => !x.IsPushed)
+            .Where(x => x.PushedAt == null)
             .ToListAsync();
     }
 }

@@ -214,7 +214,7 @@ public class Phase4ResourceAndScopeTests
         var now = DateTime.UtcNow;
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         db.Regions.Add(new Region { Id = regionId, Code = "REG-01" });
-        db.Uavs.Add(new Uav { Id = droneId, UavCode = "DRONE-01", Model = "Matrice 300", Status = DroneStatus.Idle });
+        db.Uavs.Add(new Uav { Id = droneId, UavCode = "DRONE-01", Model = "Matrice 300", FlightStatus = DroneStatus.Idle });
 
         var otherMission = new Mission
         {
@@ -275,7 +275,7 @@ public class Phase4ResourceAndScopeTests
         var now = DateTime.UtcNow;
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         db.Regions.Add(new Region { Id = regionId, Code = "REG-01" });
-        db.Uavs.Add(new Uav { Id = droneId, UavCode = "DRONE-FREE", Model = "Matrice 350", Status = DroneStatus.Idle });
+        db.Uavs.Add(new Uav { Id = droneId, UavCode = "DRONE-FREE", Model = "Matrice 350", FlightStatus = DroneStatus.Idle });
 
         var targetMission = new Mission
         {

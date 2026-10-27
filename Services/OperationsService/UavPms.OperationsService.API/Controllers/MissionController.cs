@@ -86,7 +86,7 @@ public class MissionController : ControllerBase
             request.ScheduledStartAt ?? request.ScheduledAt,
             request.InspectorId,
             request.UavId ?? request.DroneId,
-            request.TargetAssetIds,
+            request.TargetTowerIds,
             request.Priority,
             request.Objective,
             request.PriorityDefects,
@@ -100,13 +100,13 @@ public class MissionController : ControllerBase
     [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> ResolveScope(Guid id, [FromBody] MissionScopeRequest request, CancellationToken ct)
     {
-        var assets = await _lifecycle!.ResolveScopeAsync(id, request.BoundaryWkt, ct);
-        return Ok(new ApiResponse(true, "Mission scope resolved", assets.Select(MapScopeAsset).ToList()));
+        var towers = await _lifecycle!.ResolveScopeAsync(id, request.BoundaryWkt, ct);
+        return Ok(new ApiResponse(true, "Mission scope resolved", towers.Select(MapScopeAsset).ToList()));
     }
 
-    [HttpPut("{id:guid}/assets")]
+    [HttpPut("{id:guid}/towers")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
-    public async Task<IActionResult> ConfirmAssets(Guid id, [FromBody] MissionAssetsRequest request, CancellationToken ct) { await _lifecycle!.ConfirmAssetsAsync(id, request.BoundaryWkt, request.AssetIds, ct); return Ok(new ApiResponse(true, "Mission assets confirmed")); }
+    public async Task<IActionResult> ConfirmAssets(Guid id, [FromBody] MissionAssetsRequest request, CancellationToken ct) { await _lifecycle!.ConfirmAssetsAsync(id, request.BoundaryWkt, request.TowerIds, ct); return Ok(new ApiResponse(true, "Mission towers confirmed")); }
 
     [HttpGet("{id:guid}/assignments")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
@@ -243,25 +243,19 @@ public class MissionController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadMedia(
         Guid id,
-        [FromForm] Guid assetId,
+        [FromForm] Guid? towerId,
         [FromForm] DateTime capturedAt,
         [FromForm] double? latitude,
         [FromForm] double? longitude,
         IFormFile file,
         CancellationToken ct = default)
     {
-        if (assetId == Guid.Empty)
+        if (!towerId.HasValue || towerId.Value == Guid.Empty)
         {
+            // Không chỉ định cột: dùng cột đầu tiên của nhiệm vụ nếu có (video hành lang có thể không gắn cột).
             var missionDetails = await _mediator.Send(new GetMissionDetailsQuery(id), ct);
-            var firstTarget = missionDetails?.Targets.FirstOrDefault(t => t.AssetId.HasValue && t.AssetId.Value != Guid.Empty);
-            if (firstTarget?.AssetId != null)
-            {
-                assetId = firstTarget.AssetId.Value;
-            }
-            else if (missionDetails?.Targets.FirstOrDefault()?.TowerId is Guid towerId && towerId != Guid.Empty)
-            {
-                assetId = towerId;
-            }
+            var firstTowerId = missionDetails?.Targets.Select(t => t.TowerId).FirstOrDefault(t => t != Guid.Empty);
+            towerId = firstTowerId.HasValue && firstTowerId.Value != Guid.Empty ? firstTowerId : null;
         }
 
         if (capturedAt == default)
@@ -274,7 +268,7 @@ public class MissionController : ControllerBase
         var command = new UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage.UploadInspectionImageCommand
         {
             MissionId = id,
-            AssetId = assetId,
+            TowerId = towerId,
             CapturedAt = capturedAt,
             Latitude = latitude,
             Longitude = longitude,
@@ -524,7 +518,7 @@ public class MissionController : ControllerBase
         Status = m.Status.ToString(),
         Priority = m.Priority.ToString(),
         RegionId = m.RegionId,
-        InspectorId = m.InspectorId,
+        InspectorId = m.PrimaryInspectorId(),
         UavId = m.UavId,
         ManagerId = m.ManagerId,
         PlannedStart = m.PlannedStart,
@@ -581,16 +575,13 @@ public class MissionController : ControllerBase
         CreatedAt = c.CreatedAt
     };
 
-    private static MissionScopeAssetDto MapScopeAsset(Asset a) => new()
+    private static MissionScopeTowerDto MapScopeAsset(Tower a) => new()
     {
         Id = a.Id,
-        AssetCode = a.AssetCode,
-        AssetType = a.AssetType,
-        TowerId = a.TowerId,
-        PowerLineId = a.PowerLineId,
-        ManagementUnitId = a.ManagementUnitId,
-        Latitude = a.Location?.Y,
-        Longitude = a.Location?.X
+        TowerCode = a.TowerCode,
+        RegionId = a.RegionId,
+        Latitude = a.Geom?.Coordinate.Y,
+        Longitude = a.Geom?.Coordinate.X
     };
 
     private static MissionFlightLogDto MapFlightLog(MissionFlightLog l) => new()
@@ -611,12 +602,10 @@ public class MissionController : ControllerBase
         MissionId = r.MissionId,
         ReportedBy = r.ReportedBy,
         ReporterName = r.Reporter?.FullName ?? string.Empty,
-        AssetId = r.AssetId,
         TowerId = r.TowerId,
         IncidentType = r.IncidentType,
         Severity = r.Severity,
         Description = r.Description,
-        FileUrl = r.FileUrl,
         Status = r.Status,
         ReportedAt = r.ReportedAt
     };
@@ -635,7 +624,7 @@ public record CreateMissionRequest(
     Guid? InspectorId,
     Guid? UavId,
     Guid? DroneId,
-    IReadOnlyList<Guid>? TargetAssetIds,
+    IReadOnlyList<Guid>? TargetTowerIds,
     Guid? RegionId = null,
     string? MissionType = null,
     Guid? ScheduleId = null,
@@ -654,7 +643,7 @@ public record CreateMissionRequest(
     bool IsImmediate = false);
 
 public record MissionScopeRequest(string BoundaryWkt);
-public record MissionAssetsRequest(string BoundaryWkt, IReadOnlyCollection<Guid> AssetIds);
+public record MissionAssetsRequest(string BoundaryWkt, IReadOnlyCollection<Guid> TowerIds);
 public record MissionAssignmentRequest(Guid UserId, string AssignmentRole);
 public record MissionDroneRequest(Guid DroneId);
 public record MissionHandoverRequest(Guid DroneId, Guid ReceivedBy, string Condition, bool Accepted);

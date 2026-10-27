@@ -23,7 +23,9 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         IReadOnlyList<Guid?>? allowedRegionIds = null)
     {
         var query = _context.Missions
-            .Include(m => m.Inspector)
+            .Include(m => m.Assignments.Where(a => a.Status == MissionAssignmentStatus.Active)).ThenInclude(a => a.User)
+            .Include(m => m.PriorityDefects).ThenInclude(p => p.Category)
+            .Include(m => m.Region)
             .Include(m => m.Manager)
             .AsQueryable();
 
@@ -95,12 +97,12 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     {
         return await _context.Missions
             .AsNoTracking()
-            .Include(m => m.Inspector)
+            .Include(m => m.PriorityDefects).ThenInclude(p => p.Category)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
             .Include(m => m.Region)
             .Include(m => m.Assignments.Where(a => a.Status == MissionAssignmentStatus.Active)).ThenInclude(a => a.User)
-            .Where(m => (m.InspectorId.HasValue && m.InspectorId.Value == userId) || m.Assignments.Any(a => a.UserId == userId && a.Status == MissionAssignmentStatus.Active) || m.ManagerId == userId)
+            .Where(m => m.Assignments.Any(a => a.UserId == userId && a.Status == MissionAssignmentStatus.Active) || m.ManagerId == userId)
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync();
     }
@@ -109,7 +111,7 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     {
         return await _context.Missions
             .AsSplitQuery()
-            .Include(m => m.Inspector)
+            .Include(m => m.PriorityDefects).ThenInclude(p => p.Category)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
             .Include(m => m.Region)
@@ -118,11 +120,7 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
             .Include(m => m.CheckIns)
             .Include(m => m.DroneHandovers)
             .Include(m => m.MissionTargets)
-                .ThenInclude(t => t.Asset)
-                    .ThenInclude(a => a!.PowerLine)
-            .Include(m => m.MissionTargets)
-                .ThenInclude(t => t.Asset)
-                    .ThenInclude(a => a!.Tower)
+                .ThenInclude(t => t.Tower)
             .FirstOrDefaultAsync(m => m.Id == id);
     }
 
@@ -130,7 +128,7 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     {
         if (global) return Task.FromResult(true);
         return _context.Missions.AnyAsync(m => m.Id == missionId &&
-            (m.ManagerId == userId || (m.InspectorId.HasValue && m.InspectorId.Value == userId) || m.Assignments.Any(a => a.UserId == userId && a.Status == MissionAssignmentStatus.Active)
+            (m.ManagerId == userId || m.Assignments.Any(a => a.UserId == userId && a.Status == MissionAssignmentStatus.Active)
              || _context.UserGeographicScopes.Any(s => s.UserId == userId && s.RegionId == m.RegionId)), cancellationToken);
     }
 
@@ -139,5 +137,30 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         if (global) return Task.FromResult(true);
         return _context.Missions.AnyAsync(m => m.Id == missionId &&
             _context.UserGeographicScopes.Any(s => s.UserId == userId && s.RegionId == m.RegionId), cancellationToken);
+    }
+
+    public Task SetPriorityDefectsAsync(Mission mission, IEnumerable<string>? categoryCodes, CancellationToken cancellationToken = default)
+        => ApplyPriorityDefectsAsync(_context, mission, categoryCodes, cancellationToken);
+
+    /// <summary>Resolves category codes/names to DefectCategories and replaces mission.PriorityDefects.</summary>
+    internal static async Task ApplyPriorityDefectsAsync(ApplicationDbContext context, Mission mission, IEnumerable<string>? categoryCodes, CancellationToken cancellationToken)
+    {
+        var keys = (categoryCodes ?? Enumerable.Empty<string>())
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Select(c => c.Trim().ToLower())
+            .Distinct()
+            .ToList();
+
+        var categories = keys.Count == 0
+            ? new List<DefectCategory>()
+            : await context.DefectCategories
+                .Where(c => keys.Contains(c.CategoryCode.ToLower()) || keys.Contains(c.CategoryName.ToLower()))
+                .ToListAsync(cancellationToken);
+
+        mission.PriorityDefects.Clear();
+        foreach (var category in categories)
+        {
+            mission.PriorityDefects.Add(new MissionPriorityDefect { MissionId = mission.Id, CategoryId = category.Id, Category = category });
+        }
     }
 }
