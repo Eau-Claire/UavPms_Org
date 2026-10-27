@@ -643,6 +643,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 DROP INDEX IF EXISTS "IX_DetectedAnomalies_SupersededById";
                 ALTER TABLE "DetectedAnomalies" DROP COLUMN IF EXISTS "AiSource";
                 ALTER TABLE "DetectedAnomalies" DROP COLUMN IF EXISTS "AssetId";
+                ALTER TABLE "DetectedAnomalies" DROP COLUMN IF EXISTS "ComponentId";
                 ALTER TABLE "DetectedAnomalies" DROP COLUMN IF EXISTS "Gps";
                 ALTER TABLE "DetectedAnomalies" DROP COLUMN IF EXISTS "VideoDuration";
                 ALTER TABLE "DetectedAnomalies" DROP COLUMN IF EXISTS "VideoFps";
@@ -763,6 +764,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                 DROP TABLE IF EXISTS "AssetHealthHistories" CASCADE;
                 DROP TABLE IF EXISTS "TowerConditionHistories" CASCADE;
+                DROP TABLE IF EXISTS "TowerHealthHistories" CASCADE;
                 DROP TABLE IF EXISTS "LineSegments" CASCADE;
                 DROP TABLE IF EXISTS "MissionTargetLines" CASCADE;
                 DROP TABLE IF EXISTS "PreMissionAssessmentAssets" CASCADE;
