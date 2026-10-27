@@ -72,12 +72,16 @@ jobs:
             --output migration/erd_v2_2_idempotent.sql
           grep -q "$TARGET_MIGRATION" migration/erd_v2_2_idempotent.sql
           echo "Script lines: $(wc -l < migration/erd_v2_2_idempotent.sql)"
+          # DDL of the EF model, used on the server to check the migrated copy has every expected column
+          dotnet ef dbcontext script             --configuration Release             --project Services/OperationsService/UavPms.OperationsService.Infrastructure             --startup-project Services/OperationsService/UavPms.OperationsService.API             --output migration/erd_v2_2_model.sql
 
       - name: Upload script
         uses: actions/upload-artifact@v4
         with:
           name: erd-v2-2-migration-sql
-          path: migration/erd_v2_2_idempotent.sql
+          path: |
+            migration/erd_v2_2_idempotent.sql
+            migration/erd_v2_2_model.sql
           retention-days: 30
 
   migrate:
@@ -100,7 +104,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
-          source: migration/erd_v2_2_idempotent.sql
+          source: migration/erd_v2_2_idempotent.sql,migration/erd_v2_2_model.sql
           target: /tmp/uavpms-erd-v2-2-${{ github.run_id }}
           strip_components: 1
 
@@ -128,13 +132,17 @@ jobs:
           script: |
             set -euo pipefail
             SCRIPT="$SCRIPT_DIR/erd_v2_2_idempotent.sql"
+            MODEL_SQL="$SCRIPT_DIR/erd_v2_2_model.sql"
             DRY_DB="${DB_NAME}_erd_v2_2_dryrun"
+            MODEL_DB="${DB_NAME}_erd_v2_2_model"
+            COLUMNS_SQL="SELECT table_name || '.' || column_name || ' ' || udt_name || COALESCE('(' || character_maximum_length || ')', '') || ' ' || is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name NOT IN ('spatial_ref_sys', '__EFMigrationsHistory') ORDER BY 1"
             STAMP="$(date -u +%Y%m%d%H%M%S)"
             psql_db() { docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$1" "${@:2}"; }
 
             echo "========== PREFLIGHT =========="
             test -n "${DEPLOY_PATH:-}" || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
             test -s "$SCRIPT" || { echo "ERROR: migration script not found at $SCRIPT"; exit 1; }
+            test -s "$MODEL_SQL" || { echo "ERROR: model DDL not found at $MODEL_SQL"; exit 1; }
             [ "$(docker inspect "$DB_CONTAINER" --format '{{.State.Status}}')" = "running" ] || { echo "ERROR: $DB_CONTAINER is not running."; exit 1; }
             APPLIED="$(psql_db "$DB_NAME" -tAc "SELECT count(*) FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$TARGET_MIGRATION'")"
             echo "Last applied migration: $(psql_db "$DB_NAME" -tAc 'SELECT max("MigrationId") FROM "__EFMigrationsHistory"')"
@@ -156,12 +164,32 @@ jobs:
             docker exec "$DB_CONTAINER" dropdb -U "$DB_USER" --if-exists "$DRY_DB"
             docker exec "$DB_CONTAINER" createdb -U "$DB_USER" "$DRY_DB"
             docker exec "$DB_CONTAINER" pg_restore -U "$DB_USER" -d "$DRY_DB" --no-owner "/tmp/backup_${STAMP}.dump"
+            echo "--- Current production schema (table: columns), for diagnostics ---"
+            psql_db "$DRY_DB" -tAc "SELECT table_name || ': ' || string_agg(column_name, ', ' ORDER BY column_name) FROM information_schema.columns WHERE table_schema = 'public' AND table_name <> 'spatial_ref_sys' GROUP BY table_name ORDER BY table_name"
+            echo "--- Applying migration script to the copy ---"
             psql_db "$DRY_DB" -q < "$SCRIPT"
             psql_db "$DRY_DB" -c "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" ORDER BY 1 DESC LIMIT 3;"
             psql_db "$DRY_DB" -c "SELECT count(*) AS tables FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name NOT IN ('__EFMigrationsHistory', 'spatial_ref_sys');"
             psql_db "$DRY_DB" -c "SELECT (SELECT count(*) FROM \"Towers\") AS towers, (SELECT count(*) FROM \"Towers\" t JOIN \"Regions\" r ON r.\"Id\" = t.\"RegionId\" WHERE r.\"Code\" = 'UNASSIGNED') AS towers_unassigned, (SELECT count(*) FROM \"AIAnalysisRuns\") AS ai_runs, (SELECT count(*) FROM \"DetectedAnomalies\" WHERE \"TowerId\" IS NULL) AS anomalies_without_tower, (SELECT count(*) FROM \"DetectedAnomalies\" WHERE \"ValidationStatus\" = 'Confirmed' AND \"TowerId\" IS NULL) AS confirmed_without_tower;"
+            echo "--- Comparing the migrated copy with the EF model ---"
+            docker exec "$DB_CONTAINER" dropdb -U "$DB_USER" --if-exists "$MODEL_DB"
+            docker exec "$DB_CONTAINER" createdb -U "$DB_USER" "$MODEL_DB"
+            psql_db "$MODEL_DB" -qc "CREATE EXTENSION IF NOT EXISTS postgis;"
+            psql_db "$MODEL_DB" -q < "$MODEL_SQL"
+            psql_db "$MODEL_DB" -tAc "$COLUMNS_SQL" | LC_ALL=C sort > "$SCRIPT_DIR/model_columns.txt"
+            psql_db "$DRY_DB" -tAc "$COLUMNS_SQL" | LC_ALL=C sort > "$SCRIPT_DIR/migrated_columns.txt"
+            docker exec "$DB_CONTAINER" dropdb -U "$DB_USER" "$MODEL_DB"
+            MISSING="$(comm -23 "$SCRIPT_DIR/model_columns.txt" "$SCRIPT_DIR/migrated_columns.txt")"
+            EXTRA="$(comm -13 "$SCRIPT_DIR/model_columns.txt" "$SCRIPT_DIR/migrated_columns.txt")"
+            if [ -n "$EXTRA" ]; then echo "Columns present in the DB but not in the EF model (allowed, e.g. Users.PasswordHash):"; echo "$EXTRA"; fi
+            if [ -n "$MISSING" ]; then
+              echo "ERROR: the migrated copy is missing columns (or has a different type/nullability) compared with the EF model:"
+              echo "$MISSING"
+              docker exec "$DB_CONTAINER" dropdb -U "$DB_USER" "$DRY_DB"
+              exit 1
+            fi
             docker exec "$DB_CONTAINER" dropdb -U "$DB_USER" "$DRY_DB"
-            echo "Dry run succeeded."
+            echo "Dry run succeeded: every column of the EF model exists in the migrated copy."
 
             if [ "$MODE" != "apply" ]; then
               echo "Mode is dry-run: the production database was not changed."
