@@ -4,26 +4,23 @@ using UavPms.AIInspectionService.Domain.Common;
 
 namespace UavPms.AIInspectionService.Domain.Entities;
 
+/// <summary>
+/// Subset of the shared Missions table. The inspector/pilot of a mission comes from <see cref="Assignments"/>.
+/// </summary>
 public class Mission : BaseEntity
 {
     public string MissionCode { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
-    public string RouteData { get; set; } = string.Empty;
-    public Guid AssignedToUserId { get; set; }
-    public string DroneCode { get; set; } = string.Empty;
     public Guid ManagerId { get; set; }
-    public Guid InspectorId { get; set; }
-    public Guid UavId { get; set; }
+    public Guid? UavId { get; set; }
     public string Status { get; set; } = string.Empty;
-    public DateTime? ScheduledStartAt { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; }
 
     public virtual User? Manager { get; set; }
-    public virtual User? Inspector { get; set; }
-    public virtual User? AssignedToUser { get; set; }
     public virtual Uav? Uav { get; set; }
 
     public virtual ICollection<InspectionMedia> InspectionMedias { get; set; } = new List<InspectionMedia>();
+    public virtual ICollection<MissionAssignment> Assignments { get; set; } = new List<MissionAssignment>();
 }

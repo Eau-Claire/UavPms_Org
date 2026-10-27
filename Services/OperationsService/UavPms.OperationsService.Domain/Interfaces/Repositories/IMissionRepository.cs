@@ -19,4 +19,7 @@ public interface IMissionRepository : IGenericRepository<Mission>
     Task<Mission?> GetMissionDetailsByIdAsync(Guid id);
     Task<bool> UserCanAccessAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken);
     Task<bool> UserCanManageAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken);
+
+    /// <summary>Ghi danh sách lỗi ưu tiên (mã hoặc tên DefectCategories) vào bảng MissionPriorityDefects; mã không tồn tại bị bỏ qua.</summary>
+    Task SetPriorityDefectsAsync(Mission mission, IEnumerable<string>? categoryCodes, CancellationToken cancellationToken = default);
 }

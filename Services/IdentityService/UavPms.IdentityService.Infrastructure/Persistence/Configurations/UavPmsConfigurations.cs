@@ -88,6 +88,9 @@ public class UserGeographicScopeConfiguration : IEntityTypeConfiguration<UserGeo
 
         builder.HasIndex(e => e.UserId);
         builder.HasIndex(e => e.RegionId);
+        builder.HasIndex(e => new { e.UserId, e.RegionId })
+            .IsUnique()
+            .HasFilter("NOT \"IsDeleted\"");
 
         builder.HasOne(e => e.User)
             .WithMany()

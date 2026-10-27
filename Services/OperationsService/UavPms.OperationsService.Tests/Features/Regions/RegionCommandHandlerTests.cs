@@ -43,7 +43,7 @@ public class RegionCommandHandlerTests
         // Assert
         result.Should().NotBeNull();
         result.RegionName.Should().Be("Northern Substation Region");
-        _regionRepositoryMock.Verify(r => r.AddAsync(It.Is<Region>(x => x.RegionName == "Northern Substation Region")), Times.Once);
+        _regionRepositoryMock.Verify(r => r.AddAsync(It.Is<Region>(x => x.Name == "Northern Substation Region")), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -56,7 +56,7 @@ public class RegionCommandHandlerTests
     {
         // Arrange
         var regionId = Guid.NewGuid();
-        var existingRegion = new Region { Id = regionId, RegionName = "Old Region Name", IsDeleted = false };
+        var existingRegion = new Region { Id = regionId, Name = "Old Region Name", IsDeleted = false };
         _regionRepositoryMock.Setup(r => r.GetByIdAsync(regionId, true)).ReturnsAsync(existingRegion);
 
         var handler = new UpdateRegionCommandHandler(_regionRepositoryMock.Object, _unitOfWorkMock.Object);
@@ -98,7 +98,7 @@ public class RegionCommandHandlerTests
     {
         // Arrange
         var regionId = Guid.NewGuid();
-        var existingRegion = new Region { Id = regionId, RegionName = "Region To Delete", IsDeleted = false };
+        var existingRegion = new Region { Id = regionId, Name = "Region To Delete", IsDeleted = false };
         _regionRepositoryMock.Setup(r => r.GetByIdAsync(regionId, true)).ReturnsAsync(existingRegion);
 
         var handler = new DeleteRegionCommandHandler(_regionRepositoryMock.Object, _unitOfWorkMock.Object);
@@ -138,7 +138,7 @@ public class RegionCommandHandlerTests
     {
         // Arrange
         var regionId = Guid.NewGuid();
-        var region = new Region { Id = regionId, RegionName = "Hanoi Region", IsDeleted = false };
+        var region = new Region { Id = regionId, Name = "Hanoi Region", IsDeleted = false };
         _regionRepositoryMock.Setup(r => r.GetByIdAsync(regionId, true)).ReturnsAsync(region);
 
         var handler = new GetRegionByIdQueryHandler(_regionRepositoryMock.Object);
@@ -180,8 +180,8 @@ public class RegionCommandHandlerTests
         // Arrange
         var regionsList = new List<Region>
         {
-            new Region { Id = Guid.NewGuid(), RegionName = "Region 1" },
-            new Region { Id = Guid.NewGuid(), RegionName = "Region 2" }
+            new Region { Id = Guid.NewGuid(), Name = "Region 1" },
+            new Region { Id = Guid.NewGuid(), Name = "Region 2" }
         };
         _regionRepositoryMock.Setup(r => r.GetRegionsPagedAsync(1, 10, null))
             .ReturnsAsync((regionsList, 2));

@@ -60,7 +60,7 @@ public class NotificationJobsTests
             User = user,
             Title = "Thông báo kiểm tra",
             Body = "Nhiệm vụ kiểm tra hoàn tất.",
-            IsPushed = false
+            PushedAt = null
         };
 
         var notifRepoMock = new Mock<INotificationRepository>();
@@ -82,7 +82,7 @@ public class NotificationJobsTests
 
         // Assert
         emailServiceMock.Verify(e => e.SendEmailAsync(user.Email, notification.Title, notification.Body), Times.Once);
-        notification.IsPushed.Should().BeTrue();
+        notification.PushedAt.Should().NotBeNull();
         notification.PushedAt.Should().NotBeNull();
         notification.PushedAt!.Value.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
         uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
@@ -100,7 +100,7 @@ public class NotificationJobsTests
             User = user,
             Title = "Cảnh báo khẩn cấp",
             Body = "Nội dung cảnh báo.",
-            IsPushed = false
+            PushedAt = null
         };
 
         var notifRepoMock = new Mock<INotificationRepository>();
@@ -122,7 +122,7 @@ public class NotificationJobsTests
 
         // Assert
         emailServiceMock.Verify(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-        notification.IsPushed.Should().BeTrue();
+        notification.PushedAt.Should().NotBeNull();
         notification.PushedAt.Should().NotBeNull();
         uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -161,9 +161,9 @@ public class NotificationJobsTests
         var user2 = new User { Id = Guid.NewGuid(), Email = "user2@example.com" };
         var user3 = new User { Id = Guid.NewGuid(), Email = "user3@example.com" };
 
-        var notif1 = new Notification { Id = Guid.NewGuid(), UserId = user1.Id, User = user1, Title = "T1", Body = "B1", IsPushed = false };
-        var notif2 = new Notification { Id = Guid.NewGuid(), UserId = user2.Id, User = user2, Title = "T2", Body = "B2", IsPushed = false };
-        var notif3 = new Notification { Id = Guid.NewGuid(), UserId = user3.Id, User = user3, Title = "T3", Body = "B3", IsPushed = false };
+        var notif1 = new Notification { Id = Guid.NewGuid(), UserId = user1.Id, User = user1, Title = "T1", Body = "B1", PushedAt = null };
+        var notif2 = new Notification { Id = Guid.NewGuid(), UserId = user2.Id, User = user2, Title = "T2", Body = "B2", PushedAt = null };
+        var notif3 = new Notification { Id = Guid.NewGuid(), UserId = user3.Id, User = user3, Title = "T3", Body = "B3", PushedAt = null };
 
         var notifRepoMock = new Mock<INotificationRepository>();
         var emailServiceMock = new Mock<IEmailService>();
@@ -187,9 +187,9 @@ public class NotificationJobsTests
         await job.Execute();
 
         // Assert
-        notif1.IsPushed.Should().BeTrue();
-        notif2.IsPushed.Should().BeFalse(); // Left false for retry
-        notif3.IsPushed.Should().BeTrue();
+        notif1.PushedAt.Should().NotBeNull();
+        notif2.PushedAt.Should().BeNull(); // Left false for retry
+        notif3.PushedAt.Should().NotBeNull();
         uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -205,7 +205,7 @@ public class NotificationJobsTests
             User = null, // Deleted user filtered out by query filter
             Title = "Thông báo người dùng đã xóa",
             Body = "Nội dung",
-            IsPushed = false
+            PushedAt = null
         };
 
         var notifRepoMock = new Mock<INotificationRepository>();
@@ -227,7 +227,7 @@ public class NotificationJobsTests
 
         // Assert
         emailServiceMock.Verify(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-        notification.IsPushed.Should().BeTrue(); // Marked pushed so it does not retry perpetually
+        notification.PushedAt.Should().NotBeNull(); // Marked pushed so it does not retry perpetually
         uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -246,7 +246,7 @@ public class NotificationJobsTests
                 User = user,
                 Title = $"Title {i}",
                 Body = $"Body {i}",
-                IsPushed = false
+                PushedAt = null
             });
         }
 
@@ -268,7 +268,7 @@ public class NotificationJobsTests
 
         // Assert
         emailServiceMock.Verify(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(50));
-        batch.All(n => n.IsPushed).Should().BeTrue();
+        batch.All(n => n.PushedAt != null).Should().BeTrue();
         uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -277,7 +277,7 @@ public class NotificationJobsTests
     {
         // Arrange
         var user = new User { Id = Guid.NewGuid(), Email = "user@test.com" };
-        var notif = new Notification { Id = Guid.NewGuid(), UserId = user.Id, User = user, Title = "T", Body = "B", IsPushed = false };
+        var notif = new Notification { Id = Guid.NewGuid(), UserId = user.Id, User = user, Title = "T", Body = "B", PushedAt = null };
 
         var notifRepoMock = new Mock<INotificationRepository>();
         var emailServiceMock = new Mock<IEmailService>();
@@ -299,7 +299,7 @@ public class NotificationJobsTests
 
         // Assert: Job does not crash application/Hangfire
         await act.Should().NotThrowAsync();
-        notif.IsPushed.Should().BeFalse(); // Left false for recurring retry
+        notif.PushedAt.Should().BeNull(); // Left false for recurring retry
     }
 
     [Fact]
@@ -309,7 +309,7 @@ public class NotificationJobsTests
         var title = "⚠️ Cảnh báo khẩn cấp: Kiểm tra đường dây 500kV";
         var body = "Phát hiện khuyết tật cách điện tại cột điện #105 cung đoạn Thạnh Mỹ - Pleiku.";
         var user = new User { Id = Guid.NewGuid(), Email = "inspector@test.com" };
-        var notif = new Notification { Id = Guid.NewGuid(), UserId = user.Id, User = user, Title = title, Body = body, IsPushed = false };
+        var notif = new Notification { Id = Guid.NewGuid(), UserId = user.Id, User = user, Title = title, Body = body, PushedAt = null };
 
         var notifRepoMock = new Mock<INotificationRepository>();
         var emailServiceMock = new Mock<IEmailService>();

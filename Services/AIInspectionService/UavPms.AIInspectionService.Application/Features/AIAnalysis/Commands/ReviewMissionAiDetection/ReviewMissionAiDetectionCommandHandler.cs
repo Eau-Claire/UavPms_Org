@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using UavPms.AIInspectionService.Application.Common.Exceptions;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
@@ -62,6 +63,10 @@ public class ReviewMissionAiDetectionCommandHandler
         var publishConfirmed = decision == "Accepted" && anomaly.ValidationStatus != "Confirmed";
         if (decision == "Accepted")
         {
+            // ERD v2.2: an anomaly must be linked to a tower before it can be Confirmed.
+            anomaly.TowerId ??= anomaly.Media.TowerId;
+            if (anomaly.TowerId == null)
+                throw new BusinessRuleException("The detection must be linked to a tower before it can be confirmed.");
             anomaly.Confirm(_currentUser.UserId, request.Notes ?? string.Empty);
             if (publishConfirmed && _outboxRepository != null)
             {
@@ -71,9 +76,7 @@ public class ReviewMissionAiDetectionCommandHandler
                     Id = Guid.NewGuid(),
                     MessageType = nameof(DefectDetectedEvent),
                     Payload = JsonSerializer.Serialize(confirmedEvent),
-                    OccurredAt = DateTime.UtcNow,
-                    CreatedAt = DateTime.UtcNow,
-                    CreatedBy = _currentUser.UserId
+                    OccurredAt = DateTime.UtcNow
                 });
             }
         }

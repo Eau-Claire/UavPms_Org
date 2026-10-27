@@ -13,13 +13,4 @@ public interface IReportExportService
         IReadOnlyList<DetectedAnomaly> anomalies,
         string format,
         CancellationToken cancellationToken = default);
-
-    Task<string> SaveReportFileAsync(
-        Stream fileStream,
-        string fileName,
-        CancellationToken cancellationToken = default);
-
-    Task<(Stream FileStream, string ContentType, string FileName)?> GetReportFileStreamAsync(
-        string fileUrl,
-        CancellationToken cancellationToken = default);
 }

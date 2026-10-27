@@ -14,7 +14,6 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     public async Task<(IReadOnlyList<Mission> Items, int TotalCount)> GetMissionsPagedAsync(int page, int pageSize, string? search, string? status)
     {
         var query = _context.Missions
-            .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
             .AsQueryable();
@@ -22,7 +21,7 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
         if (!string.IsNullOrWhiteSpace(search))
         {
             query = query.Where(m => m.Title.Contains(search) ||
-                                     m.Description.Contains(search) ||
+                                     (m.Description != null && m.Description.Contains(search)) ||
                                      m.MissionCode.Contains(search));
         }
 
@@ -45,10 +44,10 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     {
         return await _context.Missions
             .AsNoTracking()
-            .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
-            .Where(m => (m.InspectorId != Guid.Empty && m.InspectorId == userId) || m.ManagerId == userId || m.AssignedToUserId == userId)
+            .Where(m => m.ManagerId == userId ||
+                        m.Assignments.Any(a => a.UserId == userId && !a.IsDeleted && a.Status == MissionAssignment.ActiveStatus))
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync();
     }
@@ -56,7 +55,6 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
     public async Task<Mission?> GetMissionDetailsByIdAsync(Guid id)
     {
         return await _context.Missions
-            .Include(m => m.Inspector)
             .Include(m => m.Manager)
             .Include(m => m.Uav)
             .FirstOrDefaultAsync(m => m.Id == id);

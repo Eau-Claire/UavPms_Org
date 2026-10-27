@@ -5,8 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using NetTopologySuite.Geometries;
+using UavPms.AIInspectionService.Application.Common.Security;
 using UavPms.AIInspectionService.Application.Features.VisionBridge.DTOs;
 using UavPms.AIInspectionService.Domain.Entities;
+using UavPms.AIInspectionService.Domain.Enums;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Events;
@@ -20,6 +23,8 @@ public class ReceiveVisionDetectionCommandHandler
     private readonly IGenericRepository<Mission> _missionRepository;
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
     private readonly IGenericRepository<DetectedAnomaly> _anomalyRepository;
+    private readonly IGenericRepository<AIAnalysisRun> _runRepository;
+    private readonly IGenericRepository<MissionAssignment> _assignmentRepository;
     private readonly IGenericRepository<DefectCategory> _defectCategoryRepository;
     private readonly IUserRepository _userRepository;
     private readonly INotificationRepository _notificationRepository;
@@ -33,6 +38,8 @@ public class ReceiveVisionDetectionCommandHandler
         IGenericRepository<Mission> missionRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
         IGenericRepository<DetectedAnomaly> anomalyRepository,
+        IGenericRepository<AIAnalysisRun> runRepository,
+        IGenericRepository<MissionAssignment> assignmentRepository,
         IGenericRepository<DefectCategory> defectCategoryRepository,
         IUserRepository userRepository,
         INotificationRepository notificationRepository,
@@ -45,6 +52,8 @@ public class ReceiveVisionDetectionCommandHandler
         _missionRepository = missionRepository;
         _mediaRepository = mediaRepository;
         _anomalyRepository = anomalyRepository;
+        _runRepository = runRepository;
+        _assignmentRepository = assignmentRepository;
         _defectCategoryRepository = defectCategoryRepository;
         _userRepository = userRepository;
         _notificationRepository = notificationRepository;
@@ -52,6 +61,18 @@ public class ReceiveVisionDetectionCommandHandler
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
         _logger = logger;
+    }
+
+    /// <summary>Model name recorded on Edge runs created from VisionEdge/MQTT detections.</summary>
+    public const string EdgeModelName = "VisionEdge";
+
+    private static readonly GeometryFactory Wgs84Factory = new(new PrecisionModel(), 4326);
+
+    private static Point? ToPoint(double latitude, double longitude)
+    {
+        if ((latitude == 0 && longitude == 0) || latitude is < -90 or > 90 || longitude is < -180 or > 180)
+            return null;
+        return Wgs84Factory.CreatePoint(new Coordinate(longitude, latitude));
     }
 
     public async Task<VisionDetectionResultDto> Handle(
@@ -112,19 +133,37 @@ public class ReceiveVisionDetectionCommandHandler
             }
         }
 
+        // Edge media is not linked to a tower yet (TowerId = null); an analyst links it before confirming.
         var media = new InspectionMedia
         {
             Id = Guid.NewGuid(),
             MissionId = activeMission.Id,
-            AssetId = Guid.Empty,
+            TowerId = null,
             MediaType = "Image",
             FileUrl = savedImageUrl ?? string.Empty,
-            AiSource = "VisionEdge",
             ValidationStatus = "Pending",
             CapturedAt = DateTime.SpecifyKind(detection.Timestamp, DateTimeKind.Utc)
         };
 
         await _mediaRepository.AddAsync(media);
+
+        // ERD v2.2: one Edge AIAnalysisRun per received edge result, already Completed.
+        var now = DateTime.UtcNow;
+        var run = new AIAnalysisRun
+        {
+            Id = Guid.NewGuid(),
+            MediaId = media.Id,
+            ExecutionLocation = AIAnalysisRun.Edge,
+            UavId = activeMission.UavId ?? uav.Id,
+            RequestedBy = null,
+            AnalysisType = AnalysisType.General,
+            ModelName = EdgeModelName,
+            Status = AIAnalysisStatus.Completed,
+            StartedAt = now,
+            CompletedAt = now
+        };
+
+        await _runRepository.AddAsync(run);
 
         var boundingBoxJson = detection.BoundingBox != null
             ? JsonSerializer.Serialize(new
@@ -144,13 +183,15 @@ public class ReceiveVisionDetectionCommandHandler
         {
             Id = Guid.NewGuid(),
             MediaId = media.Id,
-            AssetId = Guid.Empty,
+            AnalysisRunId = run.Id,
+            AiDetectionId = detection.TrackId.ToString(System.Globalization.CultureInfo.InvariantCulture),
             CategoryId = categoryId,
             BoundingBox = boundingBoxJson,
             ConfidenceScore = detection.Confidence,
+            Location = ToPoint(detection.Latitude, detection.Longitude),
+            ImageUrl = savedImageUrl,
             ValidationStatus = "Pending",
-            AiSource = "VisionEdge",
-            AnalystNotes = $"Track ID: {detection.TrackId}"
+            AnalystNotes = string.Empty
         };
 
         await _anomalyRepository.AddAsync(anomaly);
@@ -175,13 +216,10 @@ public class ReceiveVisionDetectionCommandHandler
 
         try
         {
-            // Lấy thông tin những người tham gia trực tiếp vào nhiệm vụ (AssignedToUser, Manager, Inspector)
-            var participantIds = new List<Guid>
-            {
-                activeMission.AssignedToUserId,
-                activeMission.ManagerId,
-                activeMission.InspectorId
-            }
+            // Người tham gia trực tiếp: Manager + Inspector/Pilot (từ MissionAssignments)
+            var fieldOperatorIds = await MissionAssignmentAccess.GetFieldOperatorIdsAsync(_assignmentRepository, activeMission.Id);
+            var participantIds = new List<Guid> { activeMission.ManagerId }
+            .Concat(fieldOperatorIds)
             .Where(id => id != Guid.Empty)
             .Distinct()
             .ToList();
@@ -212,7 +250,6 @@ public class ReceiveVisionDetectionCommandHandler
                     ReferenceId = anomaly.Id,
                     Title = title,
                     Body = body,
-                    IsRead = false,
                     SentAt = DateTime.UtcNow
                 };
 
@@ -227,7 +264,7 @@ public class ReceiveVisionDetectionCommandHandler
                     Body = notification.Body,
                     ReferenceType = notification.ReferenceType,
                     ReferenceId = notification.ReferenceId,
-                    IsRead = notification.IsRead,
+                    IsRead = notification.ReadAt != null,
                     SentAt = notification.SentAt
                 });
 
@@ -236,7 +273,6 @@ public class ReceiveVisionDetectionCommandHandler
                 {
                     try
                     {
-                        notification.IsPushed = true;
                         notification.PushedAt = DateTime.UtcNow;
                         await _notificationRepository.UpdateAsync(notification);
                         await _unitOfWork.SaveChangesAsync(cancellationToken);

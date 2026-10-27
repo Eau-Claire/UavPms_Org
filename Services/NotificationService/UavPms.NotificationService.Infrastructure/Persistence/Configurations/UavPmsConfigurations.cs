@@ -12,7 +12,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.HasKey(e => e.Id);
 
         builder.HasIndex(e => e.UserId);
-        builder.HasIndex(e => e.IsRead);
+        builder.HasIndex(e => e.ReadAt);
         builder.HasIndex(e => e.SentAt);
 
         builder.HasOne(e => e.User)
@@ -91,16 +91,6 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.HasOne(e => e.Manager)
             .WithMany()
             .HasForeignKey(e => e.ManagerId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasOne(e => e.Inspector)
-            .WithMany()
-            .HasForeignKey(e => e.InspectorId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasOne(e => e.AssignedToUser)
-            .WithMany()
-            .HasForeignKey(e => e.AssignedToUserId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

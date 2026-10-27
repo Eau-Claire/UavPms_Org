@@ -9,8 +9,7 @@ public record UpdateReportCommand(
     Guid Id,
     string Title,
     string? Description,
-    Guid? TransmissionLineId,
-    Guid? SubstationId,
+    Guid? RegionId,
     List<Guid>? MissionIds,
     DateTimeOffset? DateFrom,
     DateTimeOffset? DateTo

@@ -100,9 +100,8 @@ public class NotificationPushConsumer : BackgroundService
                                 ReferenceId = pushEvent.ReferenceId,
                                 Title = pushEvent.Title ?? string.Empty,
                                 Body = pushEvent.Body ?? string.Empty,
-                                IsRead = pushEvent.IsRead,
+                                ReadAt = pushEvent.IsRead ? DateTime.UtcNow : null,
                                 SentAt = pushEvent.SentAt != default ? pushEvent.SentAt : DateTime.UtcNow,
-                                IsPushed = true,
                                 PushedAt = DateTime.UtcNow
                             };
 

@@ -20,7 +20,7 @@ public sealed class PreMissionAssessmentController : ControllerBase
     public async Task<IActionResult> Create(V1CreateAssessmentRequest request, CancellationToken ct)
     {
         AddSunsetHeader();
-        var assessment = await _service.CreateAsync(request.RegionId, request.PlannedStart, request.PlannedEnd, request.AssetIds, ct);
+        var assessment = await _service.CreateAsync(request.RegionId, request.PlannedStart, request.PlannedEnd, request.TowerIds, ct);
         return Ok(assessment.ToDto());
     }
 
@@ -95,5 +95,5 @@ public sealed class PreMissionAssessmentController : ControllerBase
     }
 }
 
-public sealed record V1CreateAssessmentRequest(Guid RegionId, DateTime PlannedStart, DateTime PlannedEnd, IReadOnlyCollection<Guid> AssetIds);
+public sealed record V1CreateAssessmentRequest(Guid RegionId, DateTime PlannedStart, DateTime PlannedEnd, IReadOnlyCollection<Guid> TowerIds);
 public sealed record V1CreateMissionFromAssessmentRequest(string Title, Guid InspectorId, Guid DroneId);

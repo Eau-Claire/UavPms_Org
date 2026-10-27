@@ -8,7 +8,6 @@ using UavPms.NotificationService.Domain.Interfaces.Repositories;
 using UavPms.NotificationService.Infrastructure.Repositories;
 using UavPms.NotificationService.Domain.Interfaces.Services;
 using UavPms.NotificationService.Infrastructure.Services;
-using UavPms.OperationsService.Application.Common.Options;
 
 namespace UavPms.NotificationService.Infrastructure;
 

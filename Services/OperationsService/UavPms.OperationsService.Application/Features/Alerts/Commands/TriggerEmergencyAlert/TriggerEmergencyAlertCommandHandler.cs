@@ -34,35 +34,27 @@ public class TriggerEmergencyAlertCommandHandler : IRequestHandler<TriggerEmerge
         if (anomaly == null)
             throw new NotFoundException("DetectedAnomaly", request.AnomalyId);
 
-        Guid? towerId = request.TowerId;
-        if (!towerId.HasValue && !string.IsNullOrWhiteSpace(anomaly.TowerId) && Guid.TryParse(anomaly.TowerId, out var parsedTowerId))
+        // Cột điện của cảnh báo suy ra từ bất thường; nếu bất thường chưa gắn cột thì gắn theo yêu cầu.
+        if (!anomaly.TowerId.HasValue && request.TowerId.HasValue)
         {
-            towerId = parsedTowerId;
+            anomaly.TowerId = request.TowerId;
+            await _anomalyRepository.UpdateAsync(anomaly);
         }
 
+        Guid? towerId = anomaly.TowerId;
         string towerCode = string.Empty;
         if (towerId.HasValue)
         {
-            var tower = await _towerRepository.GetByIdAsync(towerId.Value);
-            if (tower != null)
-            {
-                towerCode = tower.TowerCode;
-                tower.ActiveDefectsCount++;
-                tower.RiskLevel = "Critical";
-                await _towerRepository.UpdateAsync(tower);
-            }
+            var tower = await _towerRepository.GetByIdAsync(towerId.Value, track: false);
+            towerCode = tower?.TowerCode ?? string.Empty;
         }
 
         var alert = new EmergencyAlert
         {
             Id = Guid.NewGuid(),
             AnomalyId = request.AnomalyId,
-            AssetId = request.AssetId ?? anomaly.AssetId,
-            TowerId = towerId,
-            MissionId = request.MissionId,
             Status = "Active",
             Priority = string.IsNullOrWhiteSpace(request.Priority) ? "Emergency" : request.Priority,
-            DeliveryLatencySeconds = 2,
             TriggeredAt = DateTime.UtcNow,
             Notes = request.Notes,
             CreatedAt = DateTime.UtcNow
@@ -75,13 +67,13 @@ public class TriggerEmergencyAlertCommandHandler : IRequestHandler<TriggerEmerge
         {
             Id = alert.Id,
             AnomalyId = alert.AnomalyId,
-            AssetId = alert.AssetId,
-            AssetCode = towerCode,
+            TowerId = towerId,
+            TowerCode = towerCode,
             AlertType = "Emergency Alert",
             CategoryName = anomaly.Category?.CategoryName ?? "Critical Defect",
             Priority = alert.Priority,
             Status = alert.Status,
-            DeliveryLatencySeconds = alert.DeliveryLatencySeconds,
+            DeliveryLatencySeconds = 0,
             TriggeredAt = alert.TriggeredAt,
             Location = new AlertLocationDto
             {

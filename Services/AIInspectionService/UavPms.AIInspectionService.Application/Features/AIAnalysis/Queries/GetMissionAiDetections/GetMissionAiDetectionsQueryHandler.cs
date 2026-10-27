@@ -7,6 +7,8 @@ using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Constants;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Common.Security;
+using UavPms.AIInspectionService.Domain.Entities;
 
 namespace UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 
@@ -15,15 +17,18 @@ public class GetMissionAiDetectionsQueryHandler
 {
     private readonly IInspectionMediaRepository _inspectionMediaRepository;
     private readonly IGenericRepository<UavPms.AIInspectionService.Domain.Entities.Mission> _missionRepository;
+    private readonly IGenericRepository<MissionAssignment> _assignmentRepository;
     private readonly ICurrentUserServices _currentUser;
 
     public GetMissionAiDetectionsQueryHandler(
         IInspectionMediaRepository inspectionMediaRepository,
         IGenericRepository<UavPms.AIInspectionService.Domain.Entities.Mission> missionRepository,
+        IGenericRepository<MissionAssignment> assignmentRepository,
         ICurrentUserServices currentUser)
     {
         _inspectionMediaRepository = inspectionMediaRepository;
         _missionRepository = missionRepository;
+        _assignmentRepository = assignmentRepository;
         _currentUser = currentUser;
     }
 
@@ -34,7 +39,8 @@ public class GetMissionAiDetectionsQueryHandler
         var mission = await _missionRepository.GetByIdAsync(request.MissionId, false, cancellationToken)
             ?? throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
         var roles = _currentUser.Roles ?? Array.Empty<string>();
-        if (roles.Contains(UserRoles.Inspector) && mission.InspectorId != _currentUser.UserId)
+        if (roles.Contains(UserRoles.Inspector) &&
+            !await MissionAssignmentAccess.IsAssignedFieldOperatorAsync(_assignmentRepository, mission.Id, _currentUser.UserId))
             throw new ForbiddenException("You may only view detections for missions assigned to you.");
         if (roles.Contains(UserRoles.Manager) && mission.ManagerId != _currentUser.UserId)
             throw new ForbiddenException("You may only view detections for missions you manage.");
@@ -46,7 +52,7 @@ public class GetMissionAiDetectionsQueryHandler
             .Select(media =>
             {
                 var orderedDetections = media.DetectedAnomalies
-                    .OrderBy(anomaly => anomaly.Timestamp ?? double.MaxValue)
+                    .OrderBy(anomaly => anomaly.FrameTimeSeconds ?? double.MaxValue)
                     .ThenBy(anomaly => anomaly.FrameIndex ?? int.MaxValue)
                     .ThenByDescending(anomaly => anomaly.ConfidenceScore)
                     .ToList();
@@ -55,17 +61,15 @@ public class GetMissionAiDetectionsQueryHandler
                 {
                     MediaId = media.Id,
                     MissionId = media.MissionId,
-                    AssetId = media.AssetId,
+                    TowerId = media.TowerId,
                     MediaType = media.MediaType,
                     FileUrl = media.FileUrl,
-                    AiSource = media.AiSource,
+                    AiSource = MissionAiDetectionMapper.ResolveMediaAiSource(media),
                     ValidationStatus = media.ValidationStatus,
                     CapturedAt = media.CapturedAt,
                     CreatedAt = media.CreatedAt,
                     DetectionCount = media.DetectedAnomalies.Count,
-                    VideoMetadata = orderedDetections
-                        .Select(MissionAiDetectionMapper.MapVideoMetadata)
-                        .FirstOrDefault(metadata => metadata != null),
+                    VideoMetadata = MissionAiDetectionMapper.MapVideoMetadata(media),
                     Detections = orderedDetections
                         .Select(MissionAiDetectionMapper.MapDetection)
                         .ToList()

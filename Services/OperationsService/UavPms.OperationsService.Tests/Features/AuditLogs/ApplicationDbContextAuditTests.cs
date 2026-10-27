@@ -93,7 +93,7 @@ public class ApplicationDbContextAuditTests : IDisposable
     {
         var region = new Region
         {
-            RegionName = "Hanoi Substation Region",
+            Name = "Hanoi Substation Region",
             Geom = new Point(105.85, 21.02) { SRID = 4326 }
         };
 

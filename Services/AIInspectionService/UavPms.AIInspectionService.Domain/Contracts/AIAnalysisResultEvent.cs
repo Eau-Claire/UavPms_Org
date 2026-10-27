@@ -11,7 +11,6 @@ public class AIAnalysisResultEvent
     public Guid InspectionId { get; set; }
     public Guid? MediaId { get; set; }
     public Guid? MissionId { get; set; }
-    public Guid? AssetId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? ModelName { get; set; }
     public string? ModelVersion { get; set; }
@@ -38,7 +37,6 @@ public class AIAnalysisResultDetectionEvent
     public string? CropUrl { get; set; }
     public AIAnalysisResultGpsEvent? Gps { get; set; }
     public string? TowerId { get; set; }
-    public Guid? AssetId { get; set; }
 }
 
 public class AIAnalysisResultBoundingBoxEvent

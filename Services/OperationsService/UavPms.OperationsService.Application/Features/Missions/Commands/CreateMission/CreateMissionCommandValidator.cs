@@ -18,7 +18,7 @@ public class CreateMissionCommandValidator  : AbstractValidator<CreateMissionCom
             .Must(command => !string.IsNullOrWhiteSpace(command.DroneCode) || command.UavId.HasValue)
             .WithMessage("Drone is required");
 
-        RuleFor(command => command.TargetAssetIds)
+        RuleFor(command => command.TargetTowerIds)
             .NotEmpty().WithMessage("MISSION_TARGET_REQUIRED");
         
         RuleFor(command => command.Status)

@@ -326,8 +326,7 @@ public class AssignmentAcceptPostponeTests
             Status = MissionStatus.Assigned,
             PlannedStart = start,
             PlannedEnd = end,
-            AssignedToUserId = originalInspectorId,
-            InspectorId = originalInspectorId
+            AssignedToUserId = originalInspectorId
         };
         var assignment = new MissionAssignment
         {
@@ -369,7 +368,7 @@ public class AssignmentAcceptPostponeTests
         var updatedMission = await db.Missions.FindAsync(mission.Id);
         updatedMission!.Status.Should().Be(MissionStatus.PendingAcceptance);
         updatedMission.AssignedToUserId.Should().Be(replacementInspectorId);
-        updatedMission.InspectorId.Should().Be(replacementInspectorId);
+        updatedMission.PrimaryInspectorId().Should().Be(replacementInspectorId);
 
         // Check old booking was released
         var oldBooking = await db.ResourceBookings.FirstOrDefaultAsync(b => b.MissionId == mission.Id && b.UserId == originalInspectorId);

@@ -40,52 +40,51 @@ public class TowerRepository : GenericRepository<Tower>, ITowerRepository
             .ToListAsync();
     }
 
-    public Task<(IReadOnlyList<Tower> Items, int TotalCount)> GetTowersPagedAsync(
-        int page,
-        int pageSize,
-        Guid? lineAssetId)
-    {
-        return GetTowersPagedAsync(page, pageSize, lineAssetId, null, null, null);
-    }
-
     public async Task<(IReadOnlyList<Tower> Items, int TotalCount)> GetTowersPagedAsync(
         int page,
         int pageSize,
-        Guid? lineAssetId,
         Guid? regionId,
-        string? lineCode,
-        string? riskLevel)
+        string? search)
     {
         var query = _access.ApplyToTowers(_context.Towers.Where(t => !t.IsDeleted));
 
-        if (lineAssetId.HasValue)
-        {
-            query = query.Where(t => t.LineAssetId == lineAssetId.Value);
-        }
-
         if (regionId.HasValue)
         {
-            query = query.Where(t => t.RegionId == regionId.Value);
+            query = query.Where(t => t.RegionId == regionId.Value || t.Region!.ParentId == regionId.Value);
         }
 
-        if (!string.IsNullOrWhiteSpace(lineCode))
+        if (!string.IsNullOrWhiteSpace(search))
         {
-            query = query.Where(t => t.LineCode == lineCode);
+            var term = search.Trim().ToLower();
+            query = query.Where(t => t.TowerCode.ToLower().Contains(term)
+                || (t.Address != null && t.Address.ToLower().Contains(term)));
         }
 
-        if (!string.IsNullOrWhiteSpace(riskLevel))
-        {
-            query = query.Where(t => t.RiskLevel == riskLevel);
-        }
-
-        int totalCount = await query.CountAsync();
-        
+        var totalCount = await query.CountAsync();
         var items = await query
+            .Include(t => t.Region)
             .OrderBy(t => t.TowerCode)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
-        
+
         return (items, totalCount);
+    }
+
+    public async Task<Tower?> GetAccessibleByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _access.ApplyToTowers(_context.Towers.AsNoTracking())
+            .Include(t => t.Region)
+            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Tower>> GetTowersIntersectingAsync(Polygon polygon, Guid? regionId, CancellationToken cancellationToken = default)
+    {
+        // Boundary points are selectable, hence Intersects rather than Within.
+        var query = _access.ApplyToTowers(_context.Towers.AsNoTracking())
+            .Where(t => t.Geom != null && t.Geom.Intersects(polygon));
+        if (regionId.HasValue)
+            query = query.Where(t => t.RegionId == regionId.Value);
+        return await query.OrderBy(t => t.TowerCode).ToListAsync(cancellationToken);
     }
 }

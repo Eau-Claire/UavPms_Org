@@ -91,7 +91,7 @@ public class GlobalExceptionHandler : IExceptionHandler
             );
         }
         else if (exception is DbUpdateException dbUpdateException &&
-                 dbUpdateException.InnerException?.Message.Contains("IX_AIAnalysisRequests_ActiveLogicalAnalysis", StringComparison.Ordinal) == true)
+                 dbUpdateException.InnerException?.Message.Contains("_ActiveLogicalAnalysis", StringComparison.Ordinal) == true)
         {
             httpContext.Response.StatusCode = (int)HttpStatusCode.Conflict;
             apiResponse = new ApiResponse(false, "An equivalent AI analysis request is already active.", ErrorCode: "DUPLICATE_REQUEST");

@@ -87,7 +87,6 @@ public static class PersonnelEligibilityPolicy
         {
             UserId = user.Id,
             User = user,
-            IsEligible = isEligible,
             EligibilityStatus = eligibilityStatus,
             AvailabilityStatus = availabilityStatus,
             ReasonCode = reasonCode,

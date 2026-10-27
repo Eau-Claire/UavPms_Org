@@ -1,3 +1,4 @@
+using UavPms.OperationsService.Domain.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -54,10 +55,10 @@ public class GetInspectionsByMissionQueryHandler
         {
             Id = media.Id,
             MissionId = media.MissionId,
-            AssetId = media.AssetId,
+            TowerId = media.TowerId,
             MediaType = media.MediaType,
             FileUrl = media.FileUrl,
-            AiSource = media.AiSource,
+            AiSource = media.AnalysisRuns.OrderByDescending(r => r.CreatedAt).Select(r => r.ModelName).FirstOrDefault() ?? string.Empty,
             ValidationStatus = media.ValidationStatus,
             CapturedAt = media.CapturedAt,
             CreatedAt = media.CreatedAt,
@@ -65,12 +66,12 @@ public class GetInspectionsByMissionQueryHandler
             {
                 Id = a.Id,
                 MediaId = a.MediaId,
-                AssetId = a.AssetId,
+                TowerId = a.TowerId,
                 CategoryName = a.Category?.CategoryName ?? string.Empty,
                 DefectType = a.Category?.CategoryCode ?? string.Empty,
                 ConfidenceScore = a.ConfidenceScore,
                 ValidationStatus = a.ValidationStatus,
-                AiSource = a.AiSource,
+                AiSource = a.AnalysisRun?.ModelName ?? DetectedAnomaly.ManualSource,
                 BoundingBox = a.BoundingBox,
                 ValidatedAt = a.ValidatedAt,
                 CreatedAt = a.CreatedAt

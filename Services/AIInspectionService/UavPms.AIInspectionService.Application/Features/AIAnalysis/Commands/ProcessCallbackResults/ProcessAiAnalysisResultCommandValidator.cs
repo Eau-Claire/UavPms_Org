@@ -22,7 +22,6 @@ public class ProcessAiAnalysisResultCommandValidator : AbstractValidator<Process
 
         RuleFor(x => x.MediaId).NotEmpty().WithMessage("MediaId is required.");
         RuleFor(x => x.MissionId).NotEmpty().WithMessage("MissionId is required.");
-        RuleFor(x => x.AssetId).NotEmpty().WithMessage("AssetId is required.");
 
         When(x => "Completed".Equals(x.Status, StringComparison.OrdinalIgnoreCase), () =>
         {

@@ -42,8 +42,7 @@ public class GetReportsPagedQueryHandler : IRequestHandler<GetReportsPagedQuery,
             pageSize,
             reportType,
             reportStatus,
-            request.TransmissionLineId,
-            request.SubstationId,
+            request.RegionId,
             request.Search,
             request.SortBy,
             request.SortOrder
@@ -51,20 +50,11 @@ public class GetReportsPagedQueryHandler : IRequestHandler<GetReportsPagedQuery,
 
         int totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling((double)totalCount / pageSize);
 
-        var dtos = items.Select(r => new ReportDto(
-            r.Id,
-            r.Code,
-            r.Title,
-            r.Type.ToString().ToLowerInvariant(),
-            r.Status.ToString().ToLowerInvariant(),
-            r.CreatedAt,
-            r.TransmissionLine != null ? new ReportNestedEntityDto(r.TransmissionLine.Id, r.TransmissionLine.LineName) : null,
-            r.Substation != null ? new ReportNestedEntityDto(r.Substation.Id, r.Substation.SubstationName) : null,
-            r.CreatedByUser != null ? new ReportCreatorDto(r.CreatedByUser.Id, r.CreatedByUser.FullName) : null,
-            r.DefectCount,
-            r.PdfFileSize,
-            r.ExcelFileSize
-        )).ToList();
+        var dtos = new List<ReportDto>(items.Count);
+        foreach (var r in items)
+        {
+            dtos.Add(r.ToDto(await _reportRepository.CountAnomaliesForReportAsync(r)));
+        }
 
         var pagination = new PaginationMetaData(page, pageSize, totalCount, totalPages);
 

@@ -49,7 +49,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         {
             var cleanUid = request.FlightControllerUid.Trim().ToUpperInvariant();
             var activeBinding = await _db.DroneFlightControllers
-                .FirstOrDefaultAsync(x => x.FlightControllerUid == cleanUid && x.IsActive && !x.IsDeleted, ct);
+                .FirstOrDefaultAsync(x => x.FlightControllerUid == cleanUid && x.UnpairedAt == null && !x.IsDeleted, ct);
 
             if (activeBinding == null)
             {
@@ -101,7 +101,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         var inspection = new DroneTechnicalInspection
         {
             DroneId = drone.Id,
-            TechnicianUserId = _current.UserId,
+            TechnicianId = _current.UserId,
             StartedAt = DateTime.UtcNow,
             CompletedAt = DateTime.UtcNow,
             ValidUntil = DateTime.UtcNow.AddDays(droneSettings.InspectionValidityDays),
@@ -123,7 +123,6 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             ValueText = m.ValueText,
             Unit = m.Unit,
             Passed = m.Passed,
-            Critical = m.Critical,
             Severity = m.Severity,
             IsRequired = m.IsRequired
         }).ToList();
@@ -143,7 +142,6 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         // Update drone's technical health state
         drone.TechnicalHealth = inspection.Health;
         drone.LastTechnicalInspectionId = inspection.Id;
-        drone.TechnicalHealthUpdatedAt = DateTime.UtcNow;
         drone.Version++;
 
         // Audit log
@@ -265,7 +263,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 
         var userScopes = await _db.UserGeographicScopes
             .Where(s => s.UserId == _current.UserId)
-            .Select(s => s.RegionId)
+            .Select(s => (Guid?)s.RegionId)
             .ToListAsync(ct);
 
         if (userScopes.Count > 0 && !userScopes.Contains(null))

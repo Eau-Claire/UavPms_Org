@@ -259,7 +259,6 @@ public class AIAnalysisResultConsumer : BackgroundService
             RequestId = payload.AnalysisId,
             MediaId = payload.MediaId,
             MissionId = payload.MissionId,
-            AssetId = payload.AssetId,
             Status = payload.Status,
             ModelName = payload.ModelName,
             ModelVersion = payload.ModelVersion,
@@ -283,8 +282,7 @@ public class AIAnalysisResultConsumer : BackgroundService
                 ImageUrl = d.ImageUrl,
                 CropUrl = d.CropUrl,
                 Gps = d.Gps == null ? null : new GpsDto { Lat = d.Gps.Lat, Lng = d.Gps.Lng },
-                TowerId = d.TowerId,
-                AssetId = d.AssetId
+                TowerId = d.TowerId
             }).ToList(),
             VideoMetadata = payload.VideoMetadata == null ? null : new VideoMetadataDto
             {

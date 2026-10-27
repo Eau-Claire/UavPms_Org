@@ -21,7 +21,7 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
         {
             return await _context.Notifications
                 .AsNoTracking()
-                .Where(n => !n.IsRead)
+                .Where(n => n.ReadAt == null)
                 .OrderByDescending(n => n.SentAt)
                 .Select(n => new ActiveAlertModel
                 {
@@ -29,7 +29,7 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
                     Title = n.Title,
                     Message = n.Body,
                     CreatedAt = n.SentAt,
-                    IsRead = n.IsRead
+                    IsRead = n.ReadAt != null
                 })
                 .ToListAsync(cancellationToken);
         }

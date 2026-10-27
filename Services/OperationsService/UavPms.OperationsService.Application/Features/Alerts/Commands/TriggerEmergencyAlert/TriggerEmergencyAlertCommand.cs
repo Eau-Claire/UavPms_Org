@@ -8,7 +8,6 @@ public record TriggerEmergencyAlertCommand(
     Guid MissionId,
     Guid AnomalyId,
     Guid? TowerId = null,
-    Guid? AssetId = null,
     string Priority = "Emergency",
     string? Notes = null
 ) : IRequest<ActiveEmergencyAlertDto>;

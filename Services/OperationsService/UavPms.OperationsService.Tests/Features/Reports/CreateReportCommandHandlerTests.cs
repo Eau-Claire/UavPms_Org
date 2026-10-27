@@ -18,8 +18,7 @@ public class CreateReportCommandHandlerTests
 {
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IReportRepository> _reportRepositoryMock;
-    private readonly Mock<ITransmissionLineRepository> _transmissionLineRepositoryMock;
-    private readonly Mock<ISubstationRepository> _substationRepositoryMock;
+    private readonly Mock<IRegionRepository> _regionRepositoryMock;
     private readonly Mock<IMissionRepository> _missionRepositoryMock;
     private readonly Mock<ICurrentUserServices> _currentUserServicesMock;
     private readonly CreateReportCommandValidator _validator;
@@ -28,8 +27,7 @@ public class CreateReportCommandHandlerTests
     {
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _reportRepositoryMock = new Mock<IReportRepository>();
-        _transmissionLineRepositoryMock = new Mock<ITransmissionLineRepository>();
-        _substationRepositoryMock = new Mock<ISubstationRepository>();
+        _regionRepositoryMock = new Mock<IRegionRepository>();
         _missionRepositoryMock = new Mock<IMissionRepository>();
         _currentUserServicesMock = new Mock<ICurrentUserServices>();
         _validator = new CreateReportCommandValidator();
@@ -46,8 +44,7 @@ public class CreateReportCommandHandlerTests
         var handler = new CreateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
@@ -55,7 +52,6 @@ public class CreateReportCommandHandlerTests
         var command = new CreateReportCommand(
             "Báo cáo kiểm tra định kỳ tuyến 500kV",
             "periodic",
-            null,
             null,
             null,
             "Mô tả chi tiết",
@@ -82,18 +78,17 @@ public class CreateReportCommandHandlerTests
     {
         // Arrange
         var lineId = Guid.NewGuid();
-        _transmissionLineRepositoryMock.Setup(l => l.GetByIdAsync(lineId, true)).ReturnsAsync((TransmissionLine?)null);
+        _regionRepositoryMock.Setup(r => r.GetByIdAsync(lineId, true)).ReturnsAsync((Region?)null);
 
         var handler = new CreateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new CreateReportCommand("Báo cáo", "defect", lineId, null, null, null, null, null);
+        var command = new CreateReportCommand("Báo cáo", "defect", lineId, null, null, null, null);
 
         // Act
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
@@ -107,18 +102,17 @@ public class CreateReportCommandHandlerTests
     {
         // Arrange
         var substationId = Guid.NewGuid();
-        _substationRepositoryMock.Setup(s => s.GetByIdAsync(substationId, true)).ReturnsAsync((Substation?)null);
+        _regionRepositoryMock.Setup(r => r.GetByIdAsync(substationId, true)).ReturnsAsync((Region?)null);
 
         var handler = new CreateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new CreateReportCommand("Báo cáo", "defect", null, substationId, null, null, null, null);
+        var command = new CreateReportCommand("Báo cáo", "defect", substationId, null, null, null, null);
 
         // Act
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
@@ -134,13 +128,12 @@ public class CreateReportCommandHandlerTests
         var handler = new CreateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new CreateReportCommand("Báo cáo", "invalid_type", null, null, null, null, null, null);
+        var command = new CreateReportCommand("Báo cáo", "invalid_type", null, null, null, null, null);
 
         // Act
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
@@ -169,8 +162,7 @@ public class CreateReportCommandHandlerTests
         var handler = new CreateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
@@ -178,7 +170,6 @@ public class CreateReportCommandHandlerTests
         var command = new CreateReportCommand(
             "Báo cáo liên kết đợt bay",
             "defect",
-            null,
             null,
             new List<Guid> { validMissionId, nonExistentMissionId, validMissionId }, // Có duplicate
             null,
@@ -196,14 +187,14 @@ public class CreateReportCommandHandlerTests
     }
 
     [Fact]
-    public async Task CreateReport_ShouldCalculateDefectCountAutomatically_WhenMissionsProvided()
+    public async Task CreateReport_ShouldComputeDefectCountLive_WhenMissionsProvided()
     {
         // Arrange
         var missionId = Guid.NewGuid();
         var mission = new Mission { Id = missionId, MissionCode = "MS-001", Title = "Mission 1", IsDeleted = false };
         _missionRepositoryMock.Setup(m => m.GetByIdAsync(missionId, true)).ReturnsAsync(mission);
         _reportRepositoryMock.Setup(r => r.GetNextReportCodeAsync(It.IsAny<int>())).ReturnsAsync("BC-2026-0010");
-        _reportRepositoryMock.Setup(r => r.CountAnomaliesByMissionIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+        _reportRepositoryMock.Setup(r => r.CountAnomaliesForReportAsync(It.IsAny<Report>()))
             .ReturnsAsync(7);
 
         Report? capturedReport = null;
@@ -214,21 +205,20 @@ public class CreateReportCommandHandlerTests
         var handler = new CreateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new CreateReportCommand("Báo cáo khuyết tật", "defect", null, null, new List<Guid> { missionId }, null, null, null);
+        var command = new CreateReportCommand("Báo cáo khuyết tật", "defect", null, new List<Guid> { missionId }, null, null, null);
 
         // Act
-        await handler.Handle(command, CancellationToken.None);
+        var result = await handler.Handle(command, CancellationToken.None);
 
         // Assert
         capturedReport.Should().NotBeNull();
-        capturedReport!.DefectCount.Should().Be(7);
-        _reportRepositoryMock.Verify(r => r.CountAnomaliesByMissionIdsAsync(It.Is<IEnumerable<Guid>>(ids => ids.Contains(missionId))), Times.Once);
+        result.DefectCount.Should().Be(7);
+        _reportRepositoryMock.Verify(r => r.CountAnomaliesForReportAsync(It.Is<Report>(rep => rep.ReportMissions.Any(rm => rm.MissionId == missionId))), Times.Once);
     }
 
     [Theory]
@@ -242,7 +232,7 @@ public class CreateReportCommandHandlerTests
     public void Validator_ShouldValidateInputAppropriately(string title, string type, bool expectedValid)
     {
         // Arrange
-        var command = new CreateReportCommand(title, type, null, null, null, null, null, null);
+        var command = new CreateReportCommand(title, type, null, null, null, null, null);
 
         // Act
         var validationResult = _validator.Validate(command);

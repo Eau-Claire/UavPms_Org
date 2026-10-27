@@ -11,10 +11,12 @@ public class Notification
     public Guid? ReferenceId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Body { get; set; } = string.Empty;
-    public bool IsRead { get; set; }
     public DateTime SentAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>NULL = chưa đọc</summary>
     public DateTime? ReadAt { get; set; }
-    public bool IsPushed { get; set; } = false;
+
+    /// <summary>NULL = chưa đẩy</summary>
     public DateTime? PushedAt { get; set; }
 
     public virtual User? User { get; set; }

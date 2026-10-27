@@ -36,15 +36,15 @@ public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQu
             MissionCode = mission.MissionCode,
             Title = mission.Title,
             RouteData = string.Empty,
-            AssignedToUserId = mission.InspectorId ?? Guid.Empty,
-            AssignedToEmail = mission.Inspector?.Email ?? string.Empty,
+            AssignedToUserId = mission.PrimaryInspectorId() ?? Guid.Empty,
+            AssignedToEmail = mission.PrimaryInspector()?.Email ?? string.Empty,
             DroneCode = mission.Uav?.UavCode ?? string.Empty,
-            InspectorId = mission.InspectorId,
-            InspectorEmail = mission.Inspector?.Email ?? string.Empty,
+            InspectorId = mission.PrimaryInspectorId(),
+            InspectorEmail = mission.PrimaryInspector()?.Email ?? string.Empty,
             UavId = mission.UavId,
-            ScheduledStartAt = mission.ScheduledStartAt,
+            ScheduledStartAt = mission.PlannedStart,
             RegionId = mission.RegionId,
-            RegionName = mission.Region?.RegionName,
+            RegionName = mission.Region?.Name,
             ScheduleId = mission.ScheduleId,
             ScheduleName = mission.Schedule?.Name,
             MissionType = mission.MissionType.ToString(),
@@ -59,10 +59,8 @@ public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQu
             Status = mission.Status.ToString(),
             Priority = mission.Priority.ToString(),
             Objective = mission.Objective.ToString(),
-            PriorityDefects = !string.IsNullOrWhiteSpace(mission.PriorityDefectsJson)
-                ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(mission.PriorityDefectsJson) ?? new List<string>()
-                : new List<string>(),
-            EmergencyReason = mission.EmergencyReason,
+            PriorityDefects = mission.PriorityDefectCodes(),
+            EmergencyReason = mission.TriggerReason,
             IsImmediate = mission.IsImmediate,
             Description = mission.Description,
             ManagerId = mission.ManagerId,
@@ -71,18 +69,13 @@ public class GetMissionDetailsQueryHandler : IRequestHandler<GetMissionDetailsQu
                 .OrderBy(target => target.Sequence)
                 .Select(target => new MissionTargetDto
                 {
-                    TowerId = target.Asset?.TowerId ?? Guid.Empty,
-                    TowerCode = target.Asset?.Tower?.TowerCode ?? string.Empty,
-                    AssetId = target.AssetId,
-                    AssetCode = target.Asset?.AssetCode,
-                    AssetType = target.Asset?.AssetType,
+                    TowerId = target.TowerId,
+                    TowerCode = target.Tower?.TowerCode ?? string.Empty,
                     Sequence = target.Sequence,
                     InspectionStatus = target.InspectionStatus.ToString(),
-                    Latitude = target.Asset?.Location?.Y,
-                    Longitude = target.Asset?.Location?.X,
-                    PowerLineId = target.Asset?.PowerLineId,
-                    PowerLineCode = target.Asset?.PowerLine?.Code,
-                    PowerLineName = target.Asset?.PowerLine?.LineName
+                    Latitude = target.Tower?.Geom?.Coordinate.Y,
+                    Longitude = target.Tower?.Geom?.Coordinate.X,
+                    RegionId = target.Tower?.RegionId
                 })
                 .ToList(),
             CreatedAt = mission.CreatedAt,

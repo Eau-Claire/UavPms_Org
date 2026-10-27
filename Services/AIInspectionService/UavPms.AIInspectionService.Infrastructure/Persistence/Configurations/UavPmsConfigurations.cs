@@ -4,6 +4,9 @@ using UavPms.AIInspectionService.Domain.Entities;
 
 namespace UavPms.AIInspectionService.Infrastructure.Persistence.Configurations;
 
+// NOTE: AIInspectionService maps a subset of the shared database (ERD v2.2).
+// OperationsService owns the migrations; this model must never map a column that does not exist.
+
 public class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)
@@ -52,22 +55,11 @@ public class TowerConfiguration : IEntityTypeConfiguration<Tower>
     {
         builder.ToTable("Towers");
         builder.HasKey(e => e.Id);
+        builder.Property(e => e.TowerCode).HasMaxLength(50);
+        builder.Property(e => e.PoleType).HasMaxLength(100);
+        builder.Property(e => e.Address).HasMaxLength(500);
         builder.Property(e => e.Geom).HasColumnType("geometry");
         builder.HasIndex(e => e.Geom).HasMethod("gist");
-    }
-}
-
-public class AssetConfiguration : IEntityTypeConfiguration<Asset>
-{
-    public void Configure(EntityTypeBuilder<Asset> builder)
-    {
-        builder.ToTable("AssetComponents");
-        builder.HasKey(e => e.Id);
-
-        builder.HasOne(e => e.Tower)
-            .WithMany(t => t.Assets)
-            .HasForeignKey(e => e.TowerId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 
@@ -75,9 +67,10 @@ public class UavConfiguration : IEntityTypeConfiguration<Uav>
 {
     public void Configure(EntityTypeBuilder<Uav> builder)
     {
-        builder.ToTable("Uavs");
+        builder.ToTable("UAVs");
         builder.HasKey(e => e.Id);
         builder.HasIndex(e => e.UavCode).IsUnique();
+        builder.Property(e => e.FlightStatus).HasColumnName("FlightStatus").HasMaxLength(20);
     }
 }
 
@@ -94,9 +87,30 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
             .HasForeignKey(e => e.UavId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne(e => e.Inspector)
+        builder.HasOne(e => e.Manager)
             .WithMany()
-            .HasForeignKey(e => e.InspectorId)
+            .HasForeignKey(e => e.ManagerId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class MissionAssignmentConfiguration : IEntityTypeConfiguration<MissionAssignment>
+{
+    public void Configure(EntityTypeBuilder<MissionAssignment> builder)
+    {
+        builder.ToTable("MissionAssignments");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.AssignmentRole).HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Status).HasMaxLength(20);
+
+        builder.HasOne(e => e.Mission)
+            .WithMany(m => m.Assignments)
+            .HasForeignKey(e => e.MissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.User)
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
@@ -109,15 +123,19 @@ public class InspectionMediaConfiguration : IEntityTypeConfiguration<InspectionM
         builder.HasKey(e => e.Id);
         builder.Property(e => e.CaptureLocation).HasColumnType("geometry");
         builder.HasIndex(e => e.CaptureLocation).HasMethod("gist");
+        builder.Property(e => e.MediaType).HasMaxLength(10);
+        builder.Property(e => e.FileUrl).HasMaxLength(2048);
+        builder.Property(e => e.Checksum).HasMaxLength(64);
+        builder.HasIndex(e => e.Checksum).IsUnique().HasFilter("\"Checksum\" IS NOT NULL");
 
         builder.HasOne(e => e.Mission)
             .WithMany(m => m.InspectionMedias)
             .HasForeignKey(e => e.MissionId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(e => e.Asset)
-            .WithMany(a => a.InspectionMedias)
-            .HasForeignKey(e => e.AssetId)
+        builder.HasOne(e => e.Tower)
+            .WithMany()
+            .HasForeignKey(e => e.TowerId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Uploader)
@@ -145,16 +163,33 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
         builder.ToTable("DetectedAnomalies");
         builder.HasKey(e => e.Id);
         builder.Property(e => e.BoundingBox).HasColumnType("jsonb");
-        builder.Property(e => e.Gps).HasColumnType("jsonb");
+        builder.Property(e => e.AiDetectionId).HasMaxLength(128);
+        builder.Property(e => e.ImageUrl).HasMaxLength(2048);
+        builder.Property(e => e.CropUrl).HasMaxLength(2048);
+        builder.Property(e => e.Location).HasColumnType("geometry(Point,4326)");
+        builder.HasIndex(e => e.Location).HasMethod("gist");
+        builder.HasIndex(e => new { e.AnalysisRunId, e.AiDetectionId })
+            .IsUnique()
+            .HasFilter("\"AiDetectionId\" IS NOT NULL AND \"IsDeleted\" = false");
 
         builder.HasOne(e => e.Media)
             .WithMany(m => m.DetectedAnomalies)
             .HasForeignKey(e => e.MediaId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(e => e.Asset)
-            .WithMany(a => a.DetectedAnomalies)
-            .HasForeignKey(e => e.AssetId)
+        builder.HasOne(e => e.AnalysisRun)
+            .WithMany(r => r.DetectedAnomalies)
+            .HasForeignKey(e => e.AnalysisRunId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.SupersededBy)
+            .WithMany()
+            .HasForeignKey(e => e.SupersededById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Tower)
+            .WithMany()
+            .HasForeignKey(e => e.TowerId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Category)
@@ -199,26 +234,41 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
     }
 }
 
-public class AIAnalysisRequestConfiguration : IEntityTypeConfiguration<AIAnalysisRequest>
+public class AIAnalysisRunConfiguration : IEntityTypeConfiguration<AIAnalysisRun>
 {
-    public void Configure(EntityTypeBuilder<AIAnalysisRequest> builder)
-    {
-        builder.ToTable("AIAnalysisRequests");
-        builder.HasKey(e => e.Id);
+    /// <summary>Filtered unique index preventing two active (Pending/Processing) equivalent runs.</summary>
+    public const string ActiveLogicalAnalysisIndexName = "IX_AIAnalysisRuns_ActiveLogicalAnalysis";
 
-        builder.HasOne(e => e.Uploader)
-            .WithMany()
-            .HasForeignKey(e => e.UploadedBy)
-            .OnDelete(DeleteBehavior.Restrict);
+    public void Configure(EntityTypeBuilder<AIAnalysisRun> builder)
+    {
+        builder.ToTable("AIAnalysisRuns");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.ExecutionLocation).HasMaxLength(10).IsRequired();
+        builder.Property(e => e.AnalysisType).HasConversion<string>().HasMaxLength(40);
+        builder.Property(e => e.ModelName).HasMaxLength(100).IsRequired();
+        builder.Property(e => e.ModelVersion).HasMaxLength(50);
+        builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+
+        builder.HasIndex(e => e.SourceEventId).IsUnique().HasFilter("\"SourceEventId\" IS NOT NULL");
+        builder.HasIndex(e => new { e.MediaId, e.AnalysisType, e.ModelName })
+            .IsUnique()
+            .HasDatabaseName(ActiveLogicalAnalysisIndexName)
+            .HasFilter("\"IsDeleted\" = false AND \"Status\" IN ('Pending','Processing')");
 
         builder.HasOne(e => e.Media)
-            .WithMany()
+            .WithMany(m => m.AnalysisRuns)
             .HasForeignKey(e => e.MediaId)
+            .IsRequired()
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne(e => e.Mission)
+        builder.HasOne(e => e.Uav)
             .WithMany()
-            .HasForeignKey(e => e.MissionId)
+            .HasForeignKey(e => e.UavId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Requester)
+            .WithMany()
+            .HasForeignKey(e => e.RequestedBy)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
@@ -236,5 +286,17 @@ public class SystemSettingConfiguration : IEntityTypeConfiguration<SystemSetting
         builder.Property(e => e.DataType).HasMaxLength(20);
         builder.HasIndex(e => e.Key).IsUnique();
         builder.HasIndex(e => e.Category);
+    }
+}
+
+public class OutboxMessageConfiguration : IEntityTypeConfiguration<UavPms.Shared.Contracts.Events.OutboxMessage>
+{
+    public void Configure(EntityTypeBuilder<UavPms.Shared.Contracts.Events.OutboxMessage> builder)
+    {
+        builder.ToTable("OutboxMessages");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.MessageType).HasMaxLength(256).IsRequired();
+        builder.Property(e => e.Payload).HasColumnType("jsonb").IsRequired();
+        builder.HasIndex(e => new { e.MessageType, e.OccurredAt }).HasFilter("\"PublishedAt\" IS NULL");
     }
 }

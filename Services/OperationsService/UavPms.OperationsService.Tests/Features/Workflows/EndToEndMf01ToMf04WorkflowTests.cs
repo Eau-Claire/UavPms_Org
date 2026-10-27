@@ -87,7 +87,7 @@ public class EndToEndMf01ToMf04WorkflowTests
         );
 
         // Khởi tạo khu vực và cột điện mục tiêu (T-220kV tại tọa độ 10.8231, 106.6297)
-        var region = new Region { Id = Guid.NewGuid(), Code = "REG-HCM", RegionName = "TP. Hồ Chí Minh" };
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-HCM", Name = "TP. Hồ Chí Minh" };
         db.Regions.Add(region);
 
         var tower = new Tower
@@ -95,10 +95,7 @@ public class EndToEndMf01ToMf04WorkflowTests
             Id = Guid.NewGuid(),
             TowerCode = "TOWER-HCM-101",
             RegionId = region.Id,
-            LineAssetId = Guid.NewGuid(),
-            Geom = new Point(106.6297, 10.8231) { SRID = 4326 },
-            RiskLevel = "Low",
-            ActiveDefectsCount = 0
+            Geom = new Point(106.6297, 10.8231) { SRID = 4326 }
         };
         db.Towers.Add(tower);
 
@@ -109,7 +106,7 @@ public class EndToEndMf01ToMf04WorkflowTests
             UavCode = "DJI-M300-01",
             Name = "Matrice 300 RTK",
             Model = "Matrice 300 RTK",
-            Status = DroneStatus.Idle,
+            FlightStatus = DroneStatus.Idle,
             OperationalStatus = DroneOperationalStatus.Available,
             TechnicalHealth = TechnicalHealth.Healthy,
             AssignedRegionId = region.Id
@@ -125,7 +122,7 @@ public class EndToEndMf01ToMf04WorkflowTests
             StartedAt = DateTime.UtcNow.AddDays(-2),
             CompletedAt = DateTime.UtcNow.AddDays(-2),
             ValidUntil = DateTime.UtcNow.AddDays(28),
-            TechnicianUserId = technicianId
+            TechnicianId = technicianId
         };
         db.DroneTechnicalInspections.Add(inspection);
         uav.LastTechnicalInspectionId = inspection.Id;
@@ -148,7 +145,6 @@ public class EndToEndMf01ToMf04WorkflowTests
         {
             AssessmentId = assessment.Id,
             UserId = pilotId,
-            IsEligible = true,
             EligibilityStatus = ResourceEligibilityStatus.Eligible,
             AvailabilityStatus = ResourceAvailabilityStatus.Available
         });
@@ -156,7 +152,8 @@ public class EndToEndMf01ToMf04WorkflowTests
         {
             AssessmentId = assessment.Id,
             DroneId = uav.Id,
-            IsEligible = true,
+            OperationalAvailabilityStatus = ResourceAvailabilityStatus.Available,
+            TechnicalEligibilityStatus = ResourceEligibilityStatus.Eligible,
             Suitability = UavScopeSuitability.Suitable
         });
         db.PreMissionAssessments.Add(assessment);
@@ -188,7 +185,7 @@ public class EndToEndMf01ToMf04WorkflowTests
         mission.MissionTargets.Add(new MissionTarget
         {
             MissionId = mission.Id,
-            AssetId = tower.Id,
+            TowerId = tower.Id,
             Sequence = 1
         });
         db.Missions.Add(mission);
@@ -243,12 +240,11 @@ public class EndToEndMf01ToMf04WorkflowTests
         // =========================================================================
         var accessFilter = new GeographicAccessFilter(db, pilotUserMock.Object);
         var towerRepo = new TowerRepository(db, accessFilter);
-        var assetRepo = new AssetRepository(db, accessFilter);
         var checkInRepo = new GenericRepository<MissionCheckIn>(db);
 
         // 3.1. Phi công Check-in GPS (< 200m từ cột T-101)
         var checkInHandler = new FieldCheckInCommandHandler(
-            missionRepo, towerRepo, assetRepo, checkInRepo, pilotUserMock.Object, uow);
+            missionRepo, towerRepo, checkInRepo, pilotUserMock.Object, uow);
 
         // Tọa độ phi công cách cột ~50m (10.8234, 106.6299)
         var checkInResult = await checkInHandler.Handle(
@@ -276,7 +272,6 @@ public class EndToEndMf01ToMf04WorkflowTests
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
             TowerId = tower.Id,
-            AssetId = tower.Id,
             MediaType = "Image",
             FileUrl = "https://minio.evn.vn/inspections/flight-2026/img_tower101_01.jpg",
             CapturedAt = DateTime.UtcNow,
@@ -295,8 +290,7 @@ public class EndToEndMf01ToMf04WorkflowTests
         {
             Id = Guid.NewGuid(),
             MediaId = media.Id,
-            TowerId = tower.Id.ToString(),
-            AssetId = tower.Id,
+            TowerId = tower.Id,
             CategoryId = 1,
             ConfidenceScore = 0.94,
             BoundingBox = "{\"x\": 120, \"y\": 240, \"width\": 80, \"height\": 95}",
@@ -322,12 +316,8 @@ public class EndToEndMf01ToMf04WorkflowTests
 
         reviewResult.Status.Should().Be("Confirmed");
 
-        // Cột điện được ghi nhận lỗi và phát sinh cảnh báo khẩn cấp
-        var verifiedTower = await db.Towers.FindAsync(tower.Id);
-        verifiedTower!.ActiveDefectsCount.Should().Be(1);
-        verifiedTower.RiskLevel.Should().Be("Critical");
-
-        var emergencyAlert = await db.EmergencyAlerts.FirstOrDefaultAsync(a => a.TowerId == tower.Id);
+        // Phát sinh cảnh báo khẩn cấp; cột điện của cảnh báo suy ra qua Anomaly.TowerId
+        var emergencyAlert = await db.EmergencyAlerts.FirstOrDefaultAsync(a => a.Anomaly!.TowerId == tower.Id);
         emergencyAlert.Should().NotBeNull();
         emergencyAlert!.Priority.Should().Be("Emergency");
 
@@ -341,12 +331,12 @@ public class EndToEndMf01ToMf04WorkflowTests
                 anomaly.Id,
                 technicianId,
                 "Emergency",
-                "Sửa chữa thay thế chuỗi bát sứ cách điện bị vỡ tại cột T-101",
-                tower.Id),
+                "Sửa chữa thay thế chuỗi bát sứ cách điện bị vỡ tại cột T-101"),
             CancellationToken.None);
 
         ticketResult.Should().NotBeNull();
         ticketResult.Status.Should().Be("Open");
+        ticketResult.TowerId.Should().Be(tower.Id);
 
         // 4.4. Thợ kỹ thuật tải ảnh minh chứng sau sửa chữa (ProofType = "After")
         var proofRepo = new GenericRepository<MaintenanceProof>(db);
@@ -373,10 +363,8 @@ public class EndToEndMf01ToMf04WorkflowTests
         proofResult.Should().NotBeNull();
         proofResult.ProofType.Should().Be("After");
 
-        // 4.5. Đóng phiếu bảo trì -> Tự động giảm active_defects_count và lưu lịch sử cột điện
-        var historyRepo = new GenericRepository<TowerConditionHistory>(db);
-        var completeTicketHandler = new CompleteMaintenanceTicketCommandHandler(
-            ticketRepo, proofRepo, towerRepo, historyRepo, uow);
+        // 4.5. Đóng phiếu bảo trì
+        var completeTicketHandler = new CompleteMaintenanceTicketCommandHandler(ticketRepo, proofRepo, uow);
 
         var completedTicket = await completeTicketHandler.Handle(
             new CompleteMaintenanceTicketCommand(ticketResult.Id, "Nghiệm thu hoàn tất đạt tiêu chuẩn an toàn."),
@@ -385,15 +373,13 @@ public class EndToEndMf01ToMf04WorkflowTests
         completedTicket.Status.Should().Be("Closed");
 
         // =========================================================================
-        // KIỂM TRA ĐÍCH CUỐI: Cột điện sạch lỗi, lịch sử phục hồi được ghi nhận
+        // KIỂM TRA ĐÍCH CUỐI: phiếu bảo trì của cột đã đóng (cột suy ra qua Anomaly.TowerId)
         // =========================================================================
-        var finalTower = await db.Towers.FindAsync(tower.Id);
-        finalTower!.ActiveDefectsCount.Should().Be(0, "Hoàn tất bảo trì phải trả số lượng khuyết tật hoạt động về 0.");
-        finalTower.RiskLevel.Should().Be("Normal");
-
-        var conditionHistory = await db.TowerConditionHistories
-            .FirstOrDefaultAsync(h => h.TowerId == tower.Id);
-        conditionHistory.Should().NotBeNull("Hệ thống phải tự động lưu vết lịch sử khôi phục trạng thái cột điện.");
-        conditionHistory!.ActiveDefectsCount.Should().Be(0);
+        var finalTicket = await db.MaintenanceTickets
+            .Include(t => t.Anomaly)
+            .FirstAsync(t => t.Id == ticketResult.Id);
+        finalTicket.Status.Should().Be(TicketStatus.Closed);
+        finalTicket.ResolvedAt.Should().NotBeNull();
+        finalTicket.Anomaly!.TowerId.Should().Be(tower.Id);
     }
 }

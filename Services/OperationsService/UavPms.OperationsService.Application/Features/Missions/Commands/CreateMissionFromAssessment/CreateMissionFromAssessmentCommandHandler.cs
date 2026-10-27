@@ -30,7 +30,7 @@ public class CreateMissionFromAssessmentCommandHandler : IRequestHandler<CreateM
         Status = m.Status.ToString(),
         Priority = m.Priority.ToString(),
         RegionId = m.RegionId,
-        InspectorId = m.InspectorId,
+        InspectorId = m.PrimaryInspectorId(),
         UavId = m.UavId,
         ManagerId = m.ManagerId,
         PlannedStart = m.PlannedStart,

@@ -49,8 +49,8 @@ public class MissionCreationFromAssessmentTests
         var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
         db.Uavs.Add(drone);
 
-        var asset = new Asset { Id = Guid.NewGuid(), Status = "Active" };
-        db.Assets.Add(asset);
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        db.Towers.Add(tower);
 
         var start = DateTime.UtcNow.AddDays(1);
         var end = start.AddHours(4);
@@ -64,9 +64,9 @@ public class MissionCreationFromAssessmentTests
             Status = PreMissionAssessmentStatus.Ready,
             ValidUntil = DateTime.UtcNow.AddHours(3)
         };
-        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset.Id, Sequence = 1 });
-        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, IsEligible = true });
-        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, IsEligible = true });
+        assessment.Towers.Add(new PreMissionAssessmentTower { TowerId = tower.Id, Sequence = 1 });
+        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, EligibilityStatus = ResourceEligibilityStatus.Eligible, AvailabilityStatus = ResourceAvailabilityStatus.Available });
+        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, OperationalAvailabilityStatus = ResourceAvailabilityStatus.Available, TechnicalEligibilityStatus = ResourceEligibilityStatus.Eligible });
         db.PreMissionAssessments.Add(assessment);
         await db.SaveChangesAsync();
 
@@ -93,7 +93,7 @@ public class MissionCreationFromAssessmentTests
 
         // Verify Assessment is completed
         assessment.Status.Should().Be(PreMissionAssessmentStatus.Completed);
-        assessment.ConsumedByMissionId.Should().Be(mission.Id);
+        (await db.Missions.CountAsync(m => m.PreMissionAssessmentId == assessment.Id)).Should().Be(1);
 
         // Verify ResourceBookings were created
         var bookings = await db.ResourceBookings.Where(b => b.MissionId == mission.Id).ToListAsync();
@@ -119,10 +119,10 @@ public class MissionCreationFromAssessmentTests
         db.Users.Add(new User { Id = inspectorId, Status = "Active" });
         var region = new Region { Id = Guid.NewGuid() };
         var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
-        var asset = new Asset { Id = Guid.NewGuid(), Status = "Active" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
         db.Regions.Add(region);
         db.Uavs.Add(drone);
-        db.Assets.Add(asset);
+        db.Towers.Add(tower);
 
         var start = DateTime.UtcNow.AddDays(1);
         var end = start.AddHours(4);
@@ -136,9 +136,9 @@ public class MissionCreationFromAssessmentTests
             Status = PreMissionAssessmentStatus.Ready,
             ValidUntil = DateTime.UtcNow.AddHours(3)
         };
-        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset.Id, Sequence = 1 });
-        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, IsEligible = true });
-        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, IsEligible = true });
+        assessment.Towers.Add(new PreMissionAssessmentTower { TowerId = tower.Id, Sequence = 1 });
+        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, EligibilityStatus = ResourceEligibilityStatus.Eligible, AvailabilityStatus = ResourceAvailabilityStatus.Available });
+        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, OperationalAvailabilityStatus = ResourceAvailabilityStatus.Available, TechnicalEligibilityStatus = ResourceEligibilityStatus.Eligible });
         db.PreMissionAssessments.Add(assessment);
         await db.SaveChangesAsync();
 
@@ -171,10 +171,10 @@ public class MissionCreationFromAssessmentTests
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         var region = new Region { Id = Guid.NewGuid() };
         var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
-        var asset = new Asset { Id = Guid.NewGuid(), Status = "Active" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
         db.Regions.Add(region);
         db.Uavs.Add(drone);
-        db.Assets.Add(asset);
+        db.Towers.Add(tower);
 
         var assessment = new PreMissionAssessment
         {
@@ -185,9 +185,9 @@ public class MissionCreationFromAssessmentTests
             Status = PreMissionAssessmentStatus.Ready,
             ValidUntil = DateTime.UtcNow.AddHours(3)
         };
-        assessment.Assets.Add(new PreMissionAssessmentAsset { AssetId = asset.Id, Sequence = 1 });
-        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, IsEligible = true });
-        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, IsEligible = true });
+        assessment.Towers.Add(new PreMissionAssessmentTower { TowerId = tower.Id, Sequence = 1 });
+        assessment.PersonnelCandidates.Add(new PreMissionAssessmentPersonnel { UserId = inspectorId, EligibilityStatus = ResourceEligibilityStatus.Eligible, AvailabilityStatus = ResourceAvailabilityStatus.Available });
+        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { DroneId = drone.Id, OperationalAvailabilityStatus = ResourceAvailabilityStatus.Available, TechnicalEligibilityStatus = ResourceEligibilityStatus.Eligible });
         db.PreMissionAssessments.Add(assessment);
         await db.SaveChangesAsync();
 
@@ -225,10 +225,10 @@ public class MissionCreationFromAssessmentTests
             RegionId = region.Id,
             PlannedStart = DateTime.UtcNow.AddDays(1),
             PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
-            Status = PreMissionAssessmentStatus.Completed,
-            ConsumedByMissionId = Guid.NewGuid()
+            Status = PreMissionAssessmentStatus.Completed
         };
         db.PreMissionAssessments.Add(assessment);
+        db.Missions.Add(new Mission { Id = Guid.NewGuid(), Title = "Existing", ManagerId = managerId, PreMissionAssessmentId = assessment.Id });
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);

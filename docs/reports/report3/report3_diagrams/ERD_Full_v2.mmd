@@ -1,0 +1,662 @@
+    %% =====================================================================
+    %% UAV-PMS – Full Physical ERD (v2.2, best-practice revision)
+    %% Source of truth: OperationsService EF Core model snapshot (shared PostgreSQL 16 + PostGIS DB)
+    %% Notation : crow's foot. PK = primary key, FK = foreign key, UK = unique key.
+    %% Naming   : logical snake_case; physical tables/columns are PascalCase (EF Core default),
+    %%            e.g. tower_id -> "TowerId".
+    %% Audit    : every table carries the columns of base_entity_audit EXCEPT
+    %%            roles, user_roles, defect_categories, mission_priority_defects,
+    %%            report_missions, notifications, audit_logs, outbox_messages.
+    %% Geometry : SRID 4326 (WGS 84) for all geometry columns.
+    %% =====================================================================
+    erDiagram
+    
+        %% ================================================================
+        %% 1. IDENTITY & ACCESS CONTROL (IdentityService)
+        %% ================================================================
+        users ||--o{ user_roles : "has"
+        roles ||--o{ user_roles : "grants"
+        users ||--o{ user_geographic_scopes : "scoped by"
+        regions ||--o{ user_geographic_scopes : "scope: region"
+        users ||--o{ refresh_tokens : "owns"
+        users ||--o{ trusted_devices : "trusts"
+    
+        %% ================================================================
+        %% 2. GRID INFRASTRUCTURE (region -> tower; tower is the smallest managed unit)
+        %% ================================================================
+        regions |o--o{ regions : "parent of"
+        regions ||--o{ towers : "located in"
+    
+        %% ================================================================
+        %% 3. UAV FLEET & TECHNICAL READINESS
+        %% ================================================================
+        regions |o--o{ uavs : "home region"
+        uavs ||--o{ drone_flight_controllers : "paired with"
+        uavs ||--o{ drone_technical_inspections : "inspected in"
+        users |o--o{ drone_technical_inspections : "performed by"
+        drone_technical_inspections ||--o{ drone_technical_metrics : "measures"
+        drone_technical_inspections |o--o{ uavs : "latest inspection of"
+    
+        %% ================================================================
+        %% 4. MF01 – PLANNING & PRE-MISSION FEASIBILITY
+        %% ================================================================
+        regions ||--o{ inspection_schedules : "scheduled for"
+        users ||--o{ pre_mission_assessments : "prepared by"
+        regions ||--o{ pre_mission_assessments : "scoped to"
+        pre_mission_assessments ||--o{ pre_mission_assessment_towers : "covers"
+        towers ||--o{ pre_mission_assessment_towers : "assessed in"
+        pre_mission_assessments ||--o{ pre_mission_assessment_personnel : "evaluates"
+        users ||--o{ pre_mission_assessment_personnel : "candidate"
+        pre_mission_assessments ||--o{ pre_mission_assessment_drones : "evaluates"
+        uavs ||--o{ pre_mission_assessment_drones : "candidate"
+        drone_technical_inspections |o--o{ pre_mission_assessment_drones : "evidence"
+    
+        %% ================================================================
+        %% 5. MF02 – MISSION, ASSIGNMENT & RESOURCE BOOKING
+        %% ================================================================
+        pre_mission_assessments |o--o| missions : "realized by"
+        users ||--o{ missions : "manages"
+        uavs |o--o{ missions : "flown by"
+        regions |o--o{ missions : "covers"
+        inspection_schedules |o--o{ missions : "generates"
+        missions ||--o{ mission_priority_defects : "prioritizes"
+        defect_categories ||--o{ mission_priority_defects : "prioritized in"
+        missions ||--o{ mission_targets : "targets"
+        towers ||--o{ mission_targets : "targeted in"
+        missions ||--o{ mission_assignments : "staffed by"
+        users ||--o{ mission_assignments : "assignee"
+        users ||--o{ mission_assignments : "assigned by"
+        missions ||--o{ resource_bookings : "reserves"
+        users |o--o{ resource_bookings : "booked person"
+        uavs |o--o{ resource_bookings : "booked UAV"
+        missions ||--o{ mission_communication_logs : "discussed in"
+        users |o--o{ mission_communication_logs : "sender"
+    
+        %% ================================================================
+        %% 6. MF03 – FIELD EXECUTION & DATA INGESTION
+        %% ================================================================
+        missions ||--o{ mission_check_ins : "check-ins"
+        users ||--o{ mission_check_ins : "checks in"
+        missions ||--o{ drone_handovers : "handovers"
+        uavs ||--o{ drone_handovers : "handed over"
+        users ||--o{ drone_handovers : "handed over by"
+        users ||--o{ drone_handovers : "received by"
+        missions ||--o{ mission_flight_logs : "telemetry"
+        missions ||--o{ incident_reports : "incidents"
+        towers |o--o{ incident_reports : "incident at"
+        users ||--o{ incident_reports : "reported by"
+        missions ||--o{ inspection_media : "captures"
+        towers |o--o{ inspection_media : "depicts"
+        users |o--o{ inspection_media : "uploaded by"
+    
+        %% ================================================================
+        %% 7. MF04 – AI ANALYSIS (EDGE + CLOUD), DEFECT VALIDATION & ALERTS
+        %% ================================================================
+        inspection_media ||--o{ ai_analysis_runs : "analyzed by"
+        users |o--o{ ai_analysis_runs : "requested by"
+        uavs |o--o{ ai_analysis_runs : "edge device"
+        ai_analysis_runs |o--o{ detected_anomalies : "produces"
+        inspection_media ||--o{ detected_anomalies : "reveals"
+        detected_anomalies |o--o{ detected_anomalies : "superseded by"
+        towers |o--o{ detected_anomalies : "located on"
+        defect_categories ||--o{ detected_anomalies : "classifies"
+        users |o--o{ detected_anomalies : "validated by"
+        detected_anomalies ||--o{ emergency_alerts : "triggers"
+        users |o--o{ emergency_alerts : "reviewed by"
+        emergency_alerts ||--o{ alert_escalations : "escalated via"
+        users ||--o{ alert_escalations : "escalated by"
+        users ||--o{ alert_escalations : "escalated to"
+    
+        %% ================================================================
+        %% 8. MAINTENANCE & REPAIR
+        %% ================================================================
+        detected_anomalies ||--o{ maintenance_tickets : "initiates"
+        users ||--o{ maintenance_tickets : "managed by"
+        users ||--o{ maintenance_tickets : "assigned to"
+        maintenance_tickets ||--o{ maintenance_proofs : "proved by"
+        users ||--o{ maintenance_proofs : "uploaded by"
+        maintenance_tickets ||--o{ material_logs : "consumes"
+        users ||--o{ material_logs : "logged by"
+    
+        %% ================================================================
+        %% 9. REPORTING
+        %% ================================================================
+        users |o--o{ reports : "created by"
+        users |o--o{ reports : "approved by"
+        regions |o--o{ reports : "scope region"
+        reports ||--o{ report_missions : "includes"
+        missions ||--o{ report_missions : "reported in"
+    
+        %% ================================================================
+        %% 10. NOTIFICATION, AUDIT & SYSTEM
+        %% ================================================================
+        users ||--o{ notifications : "receives"
+        users |o--o{ audit_logs : "acted by"
+    
+        %% =====================================================================
+        %% ENTITY DEFINITIONS
+        %% =====================================================================
+    
+        base_entity_audit {
+            timestamptz created_at "NOT NULL, default now()"
+            uuid created_by "nullable, actor user id"
+            timestamptz updated_at "nullable"
+            uuid updated_by "nullable"
+            boolean is_deleted "soft delete flag, default false"
+            timestamptz deleted_at "nullable"
+        }
+    
+        %% ---------- 1. Identity & access ----------
+        users {
+            uuid id PK
+            varchar(255) email UK
+            varchar(20) phone UK
+            text password_hash "managed by IdentityService only"
+            varchar(150) full_name
+            varchar(20) status "Pending/Active/Inactive/Suspended"
+            boolean is_email_verified
+        }
+    
+        roles {
+            int id PK "identity"
+            varchar(50) role_name UK
+            varchar(255) description
+        }
+    
+        user_roles {
+            uuid user_id PK, FK
+            int role_id PK, FK
+            timestamptz assigned_at
+        }
+    
+        user_geographic_scopes {
+            uuid id PK
+            uuid user_id FK "UK with region_id"
+            uuid region_id FK
+        }
+    
+        refresh_tokens {
+            uuid id PK
+            uuid user_id FK
+            varchar(128) token_hash UK
+            varchar(255) device_info
+            timestamptz expires_at
+            timestamptz revoked_at "NULL = still valid"
+        }
+    
+        trusted_devices {
+            uuid id PK
+            uuid user_id FK
+            varchar(128) device_token_hash UK
+            varchar(512) user_agent
+            timestamptz last_used_at
+            timestamptz expires_at
+        }
+    
+        %% ---------- 2. Grid infrastructure ----------
+        regions {
+            uuid id PK
+            uuid parent_id FK "self reference"
+            varchar(50) code UK
+            varchar(150) name
+            varchar(30) type "Province/District/Area"
+            geometry geom "MultiPolygon"
+        }
+    
+        towers {
+            uuid id PK
+            uuid region_id FK
+            varchar(50) tower_code UK
+            varchar(100) pole_type
+            varchar(500) address
+            geometry geom "Point"
+        }
+    
+        %% ---------- 3. UAV fleet ----------
+        uavs {
+            uuid id PK
+            varchar(50) uav_code UK
+            varchar(100) serial_number UK
+            varchar(150) name
+            varchar(150) model
+            varchar(50) category "e.g. Hexacopter"
+            uuid assigned_region_id FK
+            uuid last_technical_inspection_id FK
+            varchar(20) flight_status "Idle/Flying/Maintenance/Offline"
+            varchar(20) operational_status "enum DroneOperationalStatus"
+            varchar(20) technical_health "Unknown/Healthy/Warning/Critical"
+            numeric flight_endurance_minutes
+            numeric operational_range_km
+            varchar(500) camera_payload_info
+            numeric battery_level "0-100 percent"
+            geometry current_location "Point"
+            timestamptz last_maintenance_at
+            bigint version "optimistic concurrency"
+        }
+    
+        drone_flight_controllers {
+            uuid id PK
+            uuid drone_id FK "UK while unpaired_at IS NULL"
+            varchar(128) flight_controller_uid "UK while unpaired_at IS NULL"
+            varchar(100) board_identifier
+            varchar(100) firmware_name
+            varchar(100) firmware_version
+            timestamptz paired_at
+            timestamptz unpaired_at "NULL = active pairing"
+            timestamptz last_seen_at
+        }
+    
+        drone_technical_inspections {
+            uuid id PK
+            uuid drone_id FK
+            uuid technician_id FK
+            varchar(20) status "enum TechInspectionStatus"
+            varchar(20) health "Unknown/Healthy/Warning/Critical"
+            varchar(20) source_type "EdgeDevice/Manual"
+            varchar(50) source_version
+            varchar(50) policy_version
+            jsonb raw_snapshot
+            text notes
+            timestamptz started_at
+            timestamptz completed_at
+            timestamptz valid_until
+            bigint version
+        }
+    
+        drone_technical_metrics {
+            uuid id PK
+            uuid inspection_id FK "UK with subsystem + metric_code"
+            varchar(100) subsystem
+            varchar(100) metric_code
+            numeric numeric_value "one of numeric/bool/text value"
+            boolean bool_value
+            text value_text
+            varchar(20) unit
+            boolean passed
+            boolean is_required
+            varchar(20) severity "Info/Warning/Critical"
+            jsonb metadata
+        }
+    
+        %% ---------- 4. MF01 planning ----------
+        inspection_schedules {
+            uuid id PK
+            uuid region_id FK
+            varchar(256) name
+            varchar(512) recurrence_rule "iCal RRULE"
+            time planned_time
+            boolean is_active
+        }
+    
+        pre_mission_assessments {
+            uuid id PK
+            uuid manager_id FK
+            uuid region_id FK
+            varchar(20) status "enum AssessmentStatus"
+            varchar(20) site_feasibility_status
+            varchar(20) overall_technical_health
+            timestamptz planned_start
+            timestamptz planned_end
+            geometry proposed_boundary "Polygon"
+            jsonb findings
+            varchar(50) evaluation_policy_version
+            timestamptz valid_until
+            varchar(100) idempotency_key UK
+            bigint version
+        }
+    
+        pre_mission_assessment_towers {
+            uuid id PK
+            uuid assessment_id FK "UK with tower_id"
+            uuid tower_id FK
+            int sequence
+        }
+    
+        pre_mission_assessment_personnel {
+            uuid id PK
+            uuid assessment_id FK "UK with user_id"
+            uuid user_id FK
+            varchar(20) availability_status "enum ResourceAvailability"
+            varchar(20) eligibility_status "enum ResourceEligibility"
+            varchar(50) reason_code
+            jsonb findings
+            timestamptz snapshot_at
+        }
+    
+        pre_mission_assessment_drones {
+            uuid id PK
+            uuid assessment_id FK "UK with drone_id"
+            uuid drone_id FK
+            uuid technical_inspection_id FK
+            varchar(20) operational_availability_status
+            varchar(20) technical_eligibility_status
+            varchar(20) technical_health "snapshot"
+            varchar(20) suitability "enum UavScopeSuitability"
+            text suitability_reason
+            numeric coverage_distance_km
+            int estimated_flights_needed
+            varchar(50) reason_code
+            timestamptz snapshot_at
+        }
+    
+        %% ---------- 5. MF02 mission ----------
+        missions {
+            uuid id PK
+            varchar(50) mission_code UK
+            varchar(256) title
+            text description
+            varchar(30) objective "enum InspectionObjective"
+            varchar(20) mission_type "Scheduled/AdHoc"
+            smallint priority "0 Normal/1 High/2 Emergency"
+            varchar(30) status "enum MissionStatus"
+            uuid manager_id FK
+            uuid uav_id FK
+            uuid region_id FK
+            uuid schedule_id FK
+            uuid pre_mission_assessment_id FK, UK
+            geometry boundary "Polygon"
+            timestamptz planned_start
+            timestamptz planned_end
+            timestamptz confirmation_deadline
+            timestamptz accepted_at
+            timestamptz started_at
+            timestamptz ended_at
+            timestamptz postponed_at
+            text postpone_reason
+            boolean is_immediate
+            text trigger_reason "emergency or incident reason"
+            text manager_instructions
+            timestamptz overdue_notified_at "NULL = not yet notified"
+            varchar(100) idempotency_key UK
+            bigint version
+        }
+    
+        mission_priority_defects {
+            uuid mission_id PK, FK
+            int category_id PK, FK
+        }
+    
+        mission_targets {
+            uuid id PK
+            uuid mission_id FK "UK with tower_id"
+            uuid tower_id FK
+            int sequence
+            varchar(20) inspection_status "enum TargetInspectionStatus"
+            text notes
+        }
+    
+        mission_assignments {
+            uuid id PK
+            uuid mission_id FK "UK with user_id (active rows)"
+            uuid user_id FK
+            uuid assigned_by_id FK
+            varchar(50) assignment_role "PILOT/INSPECTOR/OBSERVER/ANALYST/TECHNICIAN"
+            boolean is_required
+            varchar(20) status "Active/Unavailable/Revoked"
+            varchar(20) response_status "enum AssignmentResponse"
+            text response_reason
+            timestamptz assigned_at
+            timestamptz responded_at
+            timestamptz ended_at
+            bigint version
+        }
+    
+        resource_bookings {
+            uuid id PK
+            uuid mission_id FK
+            uuid user_id FK "one of user_id or drone_id"
+            uuid drone_id FK
+            timestamptz start_at "EXCLUDE overlap per resource"
+            timestamptz end_at
+            varchar(20) status "Active/Released/Cancelled"
+        }
+    
+        mission_communication_logs {
+            uuid id PK
+            uuid mission_id FK
+            uuid sender_id FK "NULL = system message"
+            varchar(50) type "Chat/System/StatusChange"
+            text content
+        }
+    
+        %% ---------- 6. MF03 field execution ----------
+        mission_check_ins {
+            uuid id PK
+            uuid mission_id FK "UK with user_id"
+            uuid user_id FK
+            geometry check_in_location "Point"
+            timestamptz checked_in_at
+            varchar(20) status "CheckedIn/Revoked"
+        }
+    
+        drone_handovers {
+            uuid id PK
+            uuid mission_id FK "UK with drone_id"
+            uuid drone_id FK
+            uuid handed_over_by FK
+            uuid received_by FK
+            varchar(20) status "Accepted/Rejected/Returned"
+            varchar(500) condition
+            jsonb initial_checklist
+            jsonb return_checklist
+            timestamptz received_at
+            timestamptz returned_at
+        }
+    
+        mission_flight_logs {
+            uuid id PK
+            uuid mission_id FK
+            jsonb gps_track "ordered points with time/alt/speed"
+            numeric min_battery_recorded
+            numeric max_altitude_m
+            int flight_duration_seconds
+            varchar(20) connection_status
+            timestamptz recorded_at
+        }
+    
+        incident_reports {
+            uuid id PK
+            uuid mission_id FK
+            uuid tower_id FK "NULL = not at a tower"
+            uuid reported_by FK
+            varchar(50) incident_type
+            varchar(20) severity
+            varchar(20) status
+            text description
+            timestamptz reported_at
+        }
+    
+        inspection_media {
+            uuid id PK
+            uuid mission_id FK
+            uuid tower_id FK "NULL = corridor video spanning towers"
+            uuid uploaded_by FK
+            varchar(10) media_type "Image/Video/Thermal"
+            varchar(2048) file_url
+            char(64) checksum UK "SHA-256, dedupe edge sync"
+            bigint file_size_bytes
+            int width_px
+            int height_px
+            numeric duration_seconds "video only"
+            numeric fps "video only"
+            geometry capture_location "PointZ"
+            timestamptz captured_at
+            varchar(20) validation_status
+        }
+    
+        %% ---------- 7. MF04 AI analysis ----------
+        ai_analysis_runs {
+            uuid id PK
+            uuid media_id FK "UK with id (target of composite FK)"
+            varchar(10) execution_location "Edge/Cloud"
+            uuid uav_id FK "Edge only: device that ran the model"
+            uuid requested_by FK "Cloud only; NULL = automatic"
+            varchar(40) analysis_type "enum AnalysisType"
+            varchar(100) model_name
+            varchar(50) model_version
+            varchar(20) status "enum AIAnalysisStatus; Edge = Completed"
+            uuid source_event_id UK "idempotent consumer"
+            uuid batch_id
+            text error_message
+            timestamptz started_at
+            timestamptz completed_at
+        }
+    
+        defect_categories {
+            int id PK "identity"
+            varchar(50) category_code UK
+            varchar(150) category_name
+            text description
+            numeric severity_weight
+            boolean is_emergency_class
+        }
+    
+        detected_anomalies {
+            uuid id PK
+            uuid media_id FK "must equal run.media_id"
+            uuid analysis_run_id FK "NULL = Manual"
+            uuid superseded_by_id FK "self: edge result replaced by cloud"
+            uuid tower_id FK "required before Confirmed"
+            int category_id FK
+            uuid analyst_id FK
+            varchar(128) ai_detection_id "UK with analysis_run_id; Edge = TrackId"
+            numeric confidence_score "0-1"
+            jsonb bounding_box "x,y,w,h"
+            int frame_index "video only"
+            numeric frame_time_seconds "video only"
+            geometry location "Point"
+            varchar(2048) image_url
+            varchar(2048) crop_url
+            varchar(20) validation_status "enum AnomalyStatus"
+            text analyst_notes
+            jsonb analyst_feedback "structured correction"
+            timestamptz validated_at
+        }
+    
+        emergency_alerts {
+            uuid id PK
+            uuid anomaly_id FK
+            uuid reviewed_by_id FK
+            varchar(20) status "enum AlertStatus"
+            varchar(20) priority "Low/Medium/High/Critical"
+            timestamptz triggered_at
+            timestamptz received_at
+            timestamptz resolved_at
+            text notes
+        }
+    
+        alert_escalations {
+            uuid id PK
+            uuid alert_id FK
+            uuid escalated_by FK
+            uuid escalated_to FK
+            text reason
+            timestamptz escalated_at
+        }
+    
+        %% ---------- 8. Maintenance ----------
+        maintenance_tickets {
+            uuid id PK
+            varchar(50) ticket_code UK
+            uuid anomaly_id FK "tower = anomaly.tower_id"
+            uuid manager_id FK
+            uuid technician_id FK
+            varchar(30) status "enum TicketStatus"
+            varchar(20) priority "Low/Medium/High/Emergency"
+            text description
+            timestamptz due_date
+            timestamptz assigned_at
+            timestamptz started_at
+            timestamptz resolved_at
+        }
+    
+        maintenance_proofs {
+            uuid id PK
+            uuid ticket_id FK
+            uuid uploaded_by FK
+            varchar(30) proof_type "Before/After/Document"
+            varchar(2048) file_url
+            text technician_notes
+            timestamptz uploaded_at
+        }
+    
+        material_logs {
+            uuid id PK
+            uuid ticket_id FK
+            uuid logged_by FK
+            varchar(50) component_code
+            varchar(150) component_name
+            int quantity_used
+            varchar(20) unit
+            text field_observations
+            timestamptz logged_at
+        }
+    
+        %% ---------- 9. Reporting ----------
+        reports {
+            uuid id PK
+            varchar(50) code UK
+            varchar(255) title
+            text description
+            varchar(50) type "Defect/Periodic/Thermal/Corridor"
+            varchar(50) status "Draft/Pending/Approved"
+            uuid region_id FK
+            uuid created_by FK
+            uuid approved_by_id FK
+            timestamptz date_from
+            timestamptz date_to "content generated live from scope; no stored file"
+            timestamptz approved_at
+            text rejection_reason
+        }
+    
+        report_missions {
+            uuid report_id PK, FK
+            uuid mission_id PK, FK
+            timestamptz added_at
+        }
+    
+        %% ---------- 10. Notification, audit & system ----------
+        notifications {
+            uuid id PK
+            uuid user_id FK
+            varchar(50) type "enum NotificationType"
+            varchar(50) reference_type "polymorphic target table"
+            uuid reference_id
+            varchar(255) title
+            text body
+            timestamptz sent_at
+            timestamptz read_at "NULL = unread"
+            timestamptz pushed_at "NULL = not pushed"
+        }
+    
+        audit_logs {
+            uuid id PK
+            uuid user_id FK
+            varchar(100) table_name
+            uuid record_id
+            varchar(20) action_type "Added/Modified/Deleted/..."
+            jsonb old_values
+            jsonb new_values
+            varchar(45) ip_address
+            varchar(512) user_agent
+            timestamptz created_at
+        }
+    
+        system_settings {
+            uuid id PK
+            varchar(100) key UK
+            varchar(2000) value
+            varchar(20) data_type "String/Int/Decimal/Bool/Json"
+            varchar(50) category
+            varchar(500) description
+        }
+    
+        outbox_messages {
+            uuid id PK
+            varchar(256) message_type
+            jsonb payload
+            timestamptz occurred_at
+            timestamptz published_at "NULL = pending"
+            int attempts
+            text last_error
+        }

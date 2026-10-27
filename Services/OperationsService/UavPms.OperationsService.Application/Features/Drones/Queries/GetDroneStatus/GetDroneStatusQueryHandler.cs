@@ -41,7 +41,7 @@ public class GetDroneStatusQueryHandler : IRequestHandler<GetDroneStatusQuery, D
             uav.Model,
             online,
             liveState?.Battery ?? uav.BatteryLevel,
-            uav.Status.ToString(),
+            uav.FlightStatus.ToString(),
             liveState?.LastSeenAt,
             liveState?.Latitude,
             liveState?.Longitude,

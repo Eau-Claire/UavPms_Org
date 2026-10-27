@@ -26,11 +26,7 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
         get
         {
             var access = new GeographicAccessFilter(_context, _context.CurrentUser);
-            object query = typeof(T) == typeof(Asset) ? access.ApplyToAssets(_context.Assets)
-                : typeof(T) == typeof(Tower) ? access.ApplyToTowers(_context.Towers)
-                : typeof(T) == typeof(TransmissionLine) ? access.ApplyToLines(_context.TransmissionLines)
-                : typeof(T) == typeof(Substation) ? access.ApplyToSubstations(_context.Substations)
-                : typeof(T) == typeof(ManagementUnit) ? access.ApplyToManagementUnits(_context.ManagementUnits)
+            object query = typeof(T) == typeof(Tower) ? access.ApplyToTowers(_context.Towers)
                 : typeof(T) == typeof(Region) ? access.ApplyToRegions(_context.Regions)
                 : _context.Set<T>();
             return (IQueryable<T>)query;

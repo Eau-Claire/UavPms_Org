@@ -18,23 +18,20 @@ public class UpdateReportCommandHandler : IRequestHandler<UpdateReportCommand, R
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IReportRepository _reportRepository;
-    private readonly ITransmissionLineRepository _transmissionLineRepository;
-    private readonly ISubstationRepository _substationRepository;
+    private readonly IRegionRepository _regionRepository;
     private readonly IMissionRepository _missionRepository;
     private readonly ICurrentUserServices _currentUserServices;
 
     public UpdateReportCommandHandler(
         IUnitOfWork unitOfWork,
         IReportRepository reportRepository,
-        ITransmissionLineRepository transmissionLineRepository,
-        ISubstationRepository substationRepository,
+        IRegionRepository regionRepository,
         IMissionRepository missionRepository,
         ICurrentUserServices currentUserServices)
     {
         _unitOfWork = unitOfWork;
         _reportRepository = reportRepository;
-        _transmissionLineRepository = transmissionLineRepository;
-        _substationRepository = substationRepository;
+        _regionRepository = regionRepository;
         _missionRepository = missionRepository;
         _currentUserServices = currentUserServices;
     }
@@ -71,28 +68,18 @@ public class UpdateReportCommandHandler : IRequestHandler<UpdateReportCommand, R
             throw new InvalidOperationException($"Chỉ có thể cập nhật báo cáo ở trạng thái Bản nháp (Draft). Trạng thái hiện tại: {report.Status}.");
         }
 
-        if (request.TransmissionLineId.HasValue)
+        if (request.RegionId.HasValue)
         {
-            var line = await _transmissionLineRepository.GetByIdAsync(request.TransmissionLineId.Value);
-            if (line == null || line.IsDeleted)
+            var region = await _regionRepository.GetByIdAsync(request.RegionId.Value);
+            if (region == null || region.IsDeleted)
             {
-                throw new NotFoundException("TransmissionLine", request.TransmissionLineId.Value);
-            }
-        }
-
-        if (request.SubstationId.HasValue)
-        {
-            var substation = await _substationRepository.GetByIdAsync(request.SubstationId.Value);
-            if (substation == null || substation.IsDeleted)
-            {
-                throw new NotFoundException("Substation", request.SubstationId.Value);
+                throw new NotFoundException("Region", request.RegionId.Value);
             }
         }
 
         report.Title = request.Title.Trim();
         report.Description = request.Description;
-        report.TransmissionLineId = request.TransmissionLineId;
-        report.SubstationId = request.SubstationId;
+        report.RegionId = request.RegionId;
         report.DateFrom = request.DateFrom;
         report.DateTo = request.DateTo;
         report.UpdatedAt = DateTime.UtcNow;
@@ -102,7 +89,6 @@ public class UpdateReportCommandHandler : IRequestHandler<UpdateReportCommand, R
         {
             report.ReportMissions.Clear();
             var distinctMissionIds = request.MissionIds.Distinct().ToList();
-            report.DefectCount = await _reportRepository.CountAnomaliesByMissionIdsAsync(distinctMissionIds);
             foreach (var missionId in distinctMissionIds)
             {
                 var mission = await _missionRepository.GetByIdAsync(missionId);
@@ -112,7 +98,7 @@ public class UpdateReportCommandHandler : IRequestHandler<UpdateReportCommand, R
                     {
                         ReportId = report.Id,
                         MissionId = mission.Id,
-                        AssignedAt = DateTimeOffset.UtcNow
+                        AddedAt = DateTimeOffset.UtcNow
                     });
                 }
             }
@@ -124,35 +110,6 @@ public class UpdateReportCommandHandler : IRequestHandler<UpdateReportCommand, R
         var detailedReport = await _reportRepository.GetReportByIdWithDetailsAsync(report.Id);
         var target = detailedReport ?? report;
 
-        return new ReportDetailDto(
-            target.Id,
-            target.Code,
-            target.Title,
-            target.Type.ToString().ToLowerInvariant(),
-            target.Status.ToString().ToLowerInvariant(),
-            target.Description,
-            target.CreatedAt,
-            target.UpdatedAt,
-            target.TransmissionLine != null ? new ReportNestedEntityDto(target.TransmissionLine.Id, target.TransmissionLine.LineName) : null,
-            target.Substation != null ? new ReportNestedEntityDto(target.Substation.Id, target.Substation.SubstationName) : null,
-            target.CreatedByUser != null ? new ReportCreatorDto(target.CreatedByUser.Id, target.CreatedByUser.FullName) : null,
-            target.DefectCount,
-            target.PdfFileSize,
-            target.ExcelFileSize,
-            target.PdfFileUrl,
-            target.ExcelFileUrl,
-            target.DateFrom,
-            target.DateTo,
-            target.RejectionReason,
-            target.ApprovedBy != null ? new ReportCreatorDto(target.ApprovedBy.Id, target.ApprovedBy.FullName) : null,
-            target.ApprovedAt,
-            target.ReportMissions.Select(rm => new ReportMissionSummaryDto(
-                rm.MissionId,
-                rm.Mission?.MissionCode ?? string.Empty,
-                rm.Mission?.Title ?? string.Empty,
-                rm.Mission?.Status.ToString().ToLowerInvariant() ?? string.Empty,
-                rm.Mission?.ScheduledStartAt
-            )).ToList()
-        );
+        return target.ToDetailDto(await _reportRepository.CountAnomaliesForReportAsync(target));
     }
 }

@@ -9,7 +9,7 @@ public sealed class InspectionMediaUploadedEvent
     public Guid EventId { get; set; } = Guid.NewGuid();
     public Guid MediaId { get; set; }
     public Guid MissionId { get; set; }
-    public Guid AssetId { get; set; }
+    public Guid? TowerId { get; set; }
     public Guid UploadedBy { get; set; }
     public string FileUrl { get; set; } = string.Empty;
     public string MediaType { get; set; } = string.Empty;

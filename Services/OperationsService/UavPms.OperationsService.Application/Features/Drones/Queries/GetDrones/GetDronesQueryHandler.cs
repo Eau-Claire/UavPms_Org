@@ -36,7 +36,7 @@ public class GetDronesQueryHandler : IRequestHandler<GetDronesQuery, IReadOnlyLi
                 && liveState.Online
                 && DateTime.UtcNow - liveState.LastSeenAt <= TimeSpan.FromSeconds(_options.OfflineTimeoutSeconds);
 
-            if (request.AvailableOnly && (!online || uav.Status != DroneStatus.Idle))
+            if (request.AvailableOnly && (!online || uav.FlightStatus != DroneStatus.Idle))
                 continue;
 
             drones.Add(new DroneDto(
@@ -45,7 +45,7 @@ public class GetDronesQueryHandler : IRequestHandler<GetDronesQuery, IReadOnlyLi
                 uav.Model,
                 online,
                 liveState?.Battery ?? uav.BatteryLevel,
-                uav.Status.ToString(),
+                uav.FlightStatus.ToString(),
                 liveState?.LastSeenAt,
                 liveState?.Latitude,
                 liveState?.Longitude,

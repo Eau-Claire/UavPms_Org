@@ -59,8 +59,8 @@ public class AnomaliesController : ControllerBase
             var s = search.Trim().ToLowerInvariant();
             anomalies = anomalies.Where(a =>
                 (a.Category?.CategoryName != null && a.Category.CategoryName.ToLowerInvariant().Contains(s)) ||
-                (a.TowerId != null && a.TowerId.ToLowerInvariant().Contains(s)) ||
-                (a.Asset?.AssetCode != null && a.Asset.AssetCode.ToLowerInvariant().Contains(s))
+                (a.Tower?.TowerCode != null && a.Tower.TowerCode.ToLowerInvariant().Contains(s)) ||
+                (a.TowerId != null && a.TowerId.Value.ToString().Contains(s))
             ).ToList();
         }
 
@@ -73,8 +73,8 @@ public class AnomaliesController : ControllerBase
             {
                 id = a.Id.ToString(),
                 mediaUrl = a.ImageUrl ?? a.Media?.FileUrl ?? "/images/defect-insulator-crack.png",
-                assetCode = a.Asset?.AssetCode ?? "INS-TOW05-01",
-                towerCode = a.TowerId ?? "TOW-220KV-042",
+                towerId = a.TowerId,
+                towerCode = a.Tower?.TowerCode ?? a.TowerId?.ToString(),
                 missionCode = a.Media?.MissionId != null ? a.Media.MissionId.ToString() : "MIS-2026-001",
                 missionName = "Khảo sát định kỳ tuyến 220kV",
                 categoryName = a.Category?.CategoryName ?? "Bát cách điện nứt vỡ (Insulator Damage)",
@@ -83,7 +83,10 @@ public class AnomaliesController : ControllerBase
                 confidenceScore = a.ConfidenceScore > 0 ? a.ConfidenceScore : 90,
                 validationStatus = string.IsNullOrWhiteSpace(a.ValidationStatus) ? "Pending" : a.ValidationStatus,
                 analystNotes = a.AnalystNotes,
-                aiModelName = a.AiSource ?? "YOLOv8-PowerGrid-v2.4",
+                aiModelName = a.GetAiSource(),
+                aiSource = a.GetAiSource(),
+                analysisRunId = a.AnalysisRunId,
+                supersededById = a.SupersededById,
                 createdAt = a.CreatedAt.ToString("o"),
                 severity = a.Category?.SeverityWeight ?? 4,
                 isEmergency = a.Category?.IsEmergencyClass == true
@@ -122,6 +125,12 @@ public class AnomaliesController : ControllerBase
         if (string.Equals(request.Status, "Confirmed", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase))
         {
+            // ERD v2.2: an anomaly must be linked to a tower before it can be Confirmed.
+            anomaly.TowerId ??= anomaly.Media?.TowerId;
+            if (anomaly.TowerId == null)
+            {
+                return BadRequest(new ApiResponse(false, "The anomaly must be linked to a tower before it can be confirmed."));
+            }
             anomaly.Confirm(analystId, notes);
         }
         else if (string.Equals(request.Status, "Rejected", StringComparison.OrdinalIgnoreCase) ||

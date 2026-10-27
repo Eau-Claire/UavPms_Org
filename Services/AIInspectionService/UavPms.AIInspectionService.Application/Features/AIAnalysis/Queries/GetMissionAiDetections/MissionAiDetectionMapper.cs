@@ -1,5 +1,7 @@
 using System;
+using System.Linq;
 using System.Text.Json;
+using NetTopologySuite.Geometries;
 using UavPms.AIInspectionService.Domain.Entities;
 
 namespace UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
@@ -12,7 +14,9 @@ public static class MissionAiDetectionMapper
         {
             Id = anomaly.Id,
             MediaId = anomaly.MediaId,
-            AssetId = anomaly.AssetId,
+            AnalysisRunId = anomaly.AnalysisRunId,
+            ExecutionLocation = anomaly.AnalysisRun?.ExecutionLocation,
+            SupersededById = anomaly.SupersededById,
             AiDetectionId = anomaly.AiDetectionId,
             CategoryCode = anomaly.Category?.CategoryCode ?? string.Empty,
             Class = anomaly.Category?.CategoryName ?? anomaly.Category?.CategoryCode ?? string.Empty,
@@ -23,15 +27,15 @@ public static class MissionAiDetectionMapper
             ConfidenceScore = anomaly.ConfidenceScore,
             Confidence = anomaly.ConfidenceScore,
             FrameIndex = anomaly.FrameIndex,
-            Timestamp = anomaly.Timestamp,
+            Timestamp = anomaly.FrameTimeSeconds,
             ImageUrl = string.IsNullOrWhiteSpace(anomaly.ImageUrl)
                 ? anomaly.Media?.FileUrl
                 : anomaly.ImageUrl,
             CropUrl = anomaly.CropUrl,
-            Gps = TryParseGps(anomaly.Gps),
+            Gps = MapGps(anomaly.Location),
             TowerId = anomaly.TowerId,
             ValidationStatus = anomaly.ValidationStatus,
-            AiSource = anomaly.AiSource,
+            AiSource = anomaly.GetAiSource(),
             AnalystId = anomaly.AnalystId,
             AnalystNotes = anomaly.AnalystNotes,
             BoundingBox = TryParseBoundingBox(anomaly.BoundingBox),
@@ -42,47 +46,53 @@ public static class MissionAiDetectionMapper
     }
 
 
-    public static MissionAiVideoMetadataDto? MapVideoMetadata(DetectedAnomaly anomaly)
+    /// <summary>Video metadata now lives on the media row (DurationSeconds/Fps/WidthPx/HeightPx).</summary>
+    public static MissionAiVideoMetadataDto? MapVideoMetadata(InspectionMedia media)
     {
-        if (anomaly.VideoDuration == null &&
-            anomaly.VideoFps == null &&
-            anomaly.VideoWidth == null &&
-            anomaly.VideoHeight == null)
+        if (media.DurationSeconds == null &&
+            media.Fps == null &&
+            media.WidthPx == null &&
+            media.HeightPx == null)
         {
             return null;
         }
 
         return new MissionAiVideoMetadataDto
         {
-            Duration = anomaly.VideoDuration,
-            Fps = anomaly.VideoFps,
-            Width = anomaly.VideoWidth,
-            Height = anomaly.VideoHeight
+            Duration = media.DurationSeconds,
+            Fps = media.Fps,
+            Width = media.WidthPx,
+            Height = media.HeightPx
         };
     }
 
-    private static MissionAiGpsDto? TryParseGps(string? rawGps)
+    /// <summary>Derived media-level AI source: latest run model name, or "Manual" when no run produced its anomalies.</summary>
+    public static string ResolveMediaAiSource(InspectionMedia media)
     {
-        if (string.IsNullOrWhiteSpace(rawGps))
+        var latestRun = media.AnalysisRuns
+            .Where(run => !run.IsDeleted)
+            .OrderByDescending(run => run.CompletedAt ?? run.CreatedAt)
+            .FirstOrDefault();
+        if (latestRun != null)
+            return string.IsNullOrWhiteSpace(latestRun.ModelName) ? latestRun.ExecutionLocation : latestRun.ModelName;
+
+        var sources = media.DetectedAnomalies.Select(a => a.GetAiSource()).Where(s => !string.IsNullOrEmpty(s)).Distinct().ToList();
+        return sources.Count == 1 ? sources[0] : string.Join(", ", sources);
+    }
+
+    private static MissionAiGpsDto? MapGps(Point? location)
+    {
+        if (location == null || location.IsEmpty)
         {
             return null;
         }
 
-        try
+        // geometry(Point,4326): X = longitude, Y = latitude
+        return new MissionAiGpsDto
         {
-            using var document = JsonDocument.Parse(rawGps);
-            var root = document.RootElement;
-
-            return new MissionAiGpsDto
-            {
-                Lat = TryGetDouble(root, "lat", out var lat) ? lat : null,
-                Lng = TryGetDouble(root, "lng", out var lng) ? lng : null
-            };
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+            Lat = location.Y,
+            Lng = location.X
+        };
     }
 
     private static MissionAiBoundingBoxDto? TryParseBoundingBox(string rawBoundingBox)

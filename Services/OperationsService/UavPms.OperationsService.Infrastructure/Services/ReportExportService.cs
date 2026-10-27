@@ -116,11 +116,11 @@ public class ReportExportService : IReportExportService
                             columns.RelativeColumn();
                         });
 
-                        table.Cell().Text("Tuyến đường dây:").Bold();
-                        table.Cell().Text(report.TransmissionLine?.LineName ?? "Không chỉ định");
+                        table.Cell().Text("Khu vực:").Bold();
+                        table.Cell().Text(report.Region?.Name ?? "Không chỉ định");
 
-                        table.Cell().Text("Trạm biến áp:").Bold();
-                        table.Cell().Text(report.Substation?.SubstationName ?? "Không chỉ định");
+                        table.Cell().Text("Thời gian:").Bold();
+                        table.Cell().Text($"{report.DateFrom?.ToString("dd/MM/yyyy") ?? "..."} - {report.DateTo?.ToString("dd/MM/yyyy") ?? "..."}");
 
                         table.Cell().Text("Người tạo:").Bold();
                         table.Cell().Text(report.CreatedByUser?.FullName ?? "N/A");
@@ -134,7 +134,7 @@ public class ReportExportService : IReportExportService
                             : "Toàn thời gian");
 
                         table.Cell().Text("Số lượng khuyết tật:").Bold();
-                        table.Cell().Text($"{report.DefectCount} phát hiện").FontColor(report.DefectCount > 0 ? Colors.Red.Darken1 : Colors.Green.Darken1).Bold();
+                        table.Cell().Text($"{anomalies.Count} phát hiện").FontColor(anomalies.Count > 0 ? Colors.Red.Darken1 : Colors.Green.Darken1).Bold();
                     });
 
                     if (!string.IsNullOrWhiteSpace(report.Description))
@@ -180,7 +180,7 @@ public class ReportExportService : IReportExportService
                                 table.Cell().Padding(3).Text(m?.MissionCode ?? "N/A");
                                 table.Cell().Padding(3).Text(m?.Title ?? "N/A");
                                 table.Cell().Padding(3).Text(m?.Status.ToString() ?? "N/A");
-                                table.Cell().Padding(3).Text(m?.ScheduledStartAt?.ToString("dd/MM/yyyy HH:mm") ?? "N/A");
+                                table.Cell().Padding(3).Text(m?.PlannedStart?.ToString("dd/MM/yyyy HH:mm") ?? "N/A");
                             }
                         });
                     }
@@ -220,7 +220,7 @@ public class ReportExportService : IReportExportService
                             foreach (var a in anomalies)
                             {
                                 table.Cell().Padding(3).Text(idx++.ToString());
-                                table.Cell().Padding(3).Text(a.Category?.CategoryName ?? a.AiSource ?? "Bất thường thiết bị");
+                                table.Cell().Padding(3).Text(a.Category?.CategoryName ?? a.AnalysisRun?.ModelName ?? "Bất thường thiết bị");
                                 table.Cell().Padding(3).Text(a.Media?.Mission?.MissionCode ?? "N/A");
                                 table.Cell().Padding(3).Text($"{a.ConfidenceScore * 100:0.0}%");
                                 table.Cell().Padding(3).Text(string.IsNullOrWhiteSpace(a.ValidationStatus) ? "Chờ xác nhận" : a.ValidationStatus);
@@ -271,10 +271,10 @@ public class ReportExportService : IReportExportService
         wsOverview.Cells["B5"].Value = report.Type.ToString();
         wsOverview.Cells["A6"].Value = "Trạng thái:";
         wsOverview.Cells["B6"].Value = report.Status.ToString();
-        wsOverview.Cells["A7"].Value = "Tuyến đường dây:";
-        wsOverview.Cells["B7"].Value = report.TransmissionLine?.LineName ?? "Không chỉ định";
-        wsOverview.Cells["A8"].Value = "Trạm biến áp:";
-        wsOverview.Cells["B8"].Value = report.Substation?.SubstationName ?? "Không chỉ định";
+        wsOverview.Cells["A7"].Value = "Khu vực:";
+        wsOverview.Cells["B7"].Value = report.Region?.Name ?? "Không chỉ định";
+        wsOverview.Cells["A8"].Value = "Thời gian:";
+        wsOverview.Cells["B8"].Value = $"{report.DateFrom?.ToString("dd/MM/yyyy") ?? "..."} - {report.DateTo?.ToString("dd/MM/yyyy") ?? "..."}";
         wsOverview.Cells["A9"].Value = "Người tạo:";
         wsOverview.Cells["B9"].Value = report.CreatedByUser?.FullName ?? "N/A";
         wsOverview.Cells["A10"].Value = "Người phê duyệt:";
@@ -282,7 +282,7 @@ public class ReportExportService : IReportExportService
         wsOverview.Cells["A11"].Value = "Ngày tạo:";
         wsOverview.Cells["B11"].Value = report.CreatedAt.ToString("dd/MM/yyyy HH:mm");
         wsOverview.Cells["A12"].Value = "Tổng số khuyết tật:";
-        wsOverview.Cells["B12"].Value = report.DefectCount;
+        wsOverview.Cells["B12"].Value = anomalies.Count;
         wsOverview.Cells["A13"].Value = "Mô tả:";
         wsOverview.Cells["B13"].Value = report.Description ?? string.Empty;
 
@@ -314,7 +314,7 @@ public class ReportExportService : IReportExportService
                 wsMissions.Cells[mRow, 2].Value = m?.MissionCode ?? "N/A";
                 wsMissions.Cells[mRow, 3].Value = m?.Title ?? "N/A";
                 wsMissions.Cells[mRow, 4].Value = m?.Status.ToString() ?? "N/A";
-                wsMissions.Cells[mRow, 5].Value = m?.ScheduledStartAt?.ToString("dd/MM/yyyy HH:mm") ?? "N/A";
+                wsMissions.Cells[mRow, 5].Value = m?.PlannedStart?.ToString("dd/MM/yyyy HH:mm") ?? "N/A";
                 mRow++;
             }
         }
@@ -338,7 +338,7 @@ public class ReportExportService : IReportExportService
             foreach (var a in anomalies)
             {
                 wsAnomalies.Cells[aRow, 1].Value = aIdx++;
-                wsAnomalies.Cells[aRow, 2].Value = a.Category?.CategoryName ?? a.AiSource ?? "Khuyết tật thiết bị";
+                wsAnomalies.Cells[aRow, 2].Value = a.Category?.CategoryName ?? a.AnalysisRun?.ModelName ?? "Khuyết tật thiết bị";
                 wsAnomalies.Cells[aRow, 3].Value = a.Media?.Mission?.MissionCode ?? "N/A";
                 wsAnomalies.Cells[aRow, 4].Value = a.ConfidenceScore * 100;
                 wsAnomalies.Cells[aRow, 5].Value = string.IsNullOrWhiteSpace(a.ValidationStatus) ? "Chờ xác nhận" : a.ValidationStatus;
@@ -352,71 +352,4 @@ public class ReportExportService : IReportExportService
         return package.GetAsByteArray();
     }
 
-    public async Task<string> SaveReportFileAsync(
-        Stream fileStream,
-        string fileName,
-        CancellationToken cancellationToken = default)
-    {
-        var safeFileName = Path.GetFileName(fileName);
-        safeFileName = Regex.Replace(safeFileName, @"[^\w\-.]", "_");
-        var uniqueFileName = $"{Guid.NewGuid():N}_{safeFileName}";
-        var filePath = Path.Combine(_storagePath, uniqueFileName);
-
-        var resolvedPath = Path.GetFullPath(filePath);
-        var resolvedStorage = Path.GetFullPath(_storagePath);
-        if (!resolvedPath.StartsWith(resolvedStorage, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Attempted path traversal detected.");
-        }
-
-        await using var outputStream = new FileStream(filePath, FileMode.Create);
-        if (fileStream.CanSeek)
-        {
-            fileStream.Position = 0;
-        }
-        await fileStream.CopyToAsync(outputStream, cancellationToken);
-
-        _logger.LogInformation("Saved report export file to {FilePath}", filePath);
-
-        var encodedFileName = Uri.EscapeDataString(uniqueFileName);
-        return $"/reports/{encodedFileName}";
-    }
-
-    public Task<(Stream FileStream, string ContentType, string FileName)?> GetReportFileStreamAsync(
-        string fileUrl,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(fileUrl))
-        {
-            return Task.FromResult<(Stream, string, string)?>(null);
-        }
-
-        var rawFileName = Path.GetFileName(fileUrl);
-        var decodedFileName = Uri.UnescapeDataString(rawFileName);
-        var filePath = Path.Combine(_storagePath, decodedFileName);
-
-        var resolvedPath = Path.GetFullPath(filePath);
-        var resolvedStorage = Path.GetFullPath(_storagePath);
-        if (!resolvedPath.StartsWith(resolvedStorage, StringComparison.OrdinalIgnoreCase))
-        {
-            _logger.LogWarning("Attempted path traversal in GetReportFileStreamAsync: {FileUrl}", fileUrl);
-            return Task.FromResult<(Stream, string, string)?>(null);
-        }
-
-        if (!File.Exists(filePath))
-        {
-            return Task.FromResult<(Stream, string, string)?>(null);
-        }
-
-        var extension = Path.GetExtension(filePath).ToLowerInvariant();
-        var contentType = extension switch
-        {
-            ".pdf" => "application/pdf",
-            ".xlsx" or ".xls" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            _ => "application/octet-stream"
-        };
-
-        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return Task.FromResult<(Stream, string, string)?>((stream, contentType, decodedFileName));
-    }
 }

@@ -13,7 +13,6 @@ public class DroneFlightController : BaseEntity
     public DateTime PairedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UnpairedAt { get; set; }
     public DateTime? LastSeenAt { get; set; }
-    public bool IsActive { get; set; } = true;
 
     public virtual Uav Drone { get; set; } = null!;
 }

@@ -20,8 +20,8 @@ public class ActiveEmergencyAlertDto
 {
     public Guid Id { get; set; }
     public Guid AnomalyId { get; set; }
-    public Guid? AssetId { get; set; }
-    public string AssetCode { get; set; } = string.Empty;
+    public Guid? TowerId { get; set; }
+    public string TowerCode { get; set; } = string.Empty;
     public string AlertType { get; set; } = string.Empty;
     public string CategoryName { get; set; } = string.Empty;
     public string Priority { get; set; } = string.Empty;
@@ -35,7 +35,7 @@ public class ActiveEmergencyAlertDto
 public class EmergencyAlertHistoryDto
 {
     public Guid Id { get; set; }
-    public string AssetCode { get; set; } = string.Empty;
+    public string TowerCode { get; set; } = string.Empty;
     public string AlertType { get; set; } = string.Empty;
     public string Priority { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
@@ -68,8 +68,8 @@ public class EmergencyAlertDetailDto
 {
     public Guid Id { get; set; }
     public Guid AnomalyId { get; set; }
-    public Guid? AssetId { get; set; }
-    public string AssetCode { get; set; } = string.Empty;
+    public Guid? TowerId { get; set; }
+    public string TowerCode { get; set; } = string.Empty;
     public Guid MissionId { get; set; }
     public string AlertType { get; set; } = string.Empty;
     public string CategoryName { get; set; } = string.Empty;
@@ -102,7 +102,7 @@ public class EscalateEmergencyAlertRequest
 public class TriggerEmergencyAlertRequest
 {
     public Guid? MissionId { get; set; }
-    public Guid? AssetId { get; set; }
+    public Guid? TowerId { get; set; }
     public Guid? AnomalyId { get; set; }
     public string? AlertType { get; set; } = "Wildfire / Flashover";
     public string? Priority { get; set; } = "Critical";

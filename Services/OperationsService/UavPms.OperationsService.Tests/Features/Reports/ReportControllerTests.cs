@@ -13,7 +13,6 @@ using UavPms.OperationsService.Application.Common.DTOs;
 using UavPms.OperationsService.Application.Features.Reports.Commands.ApproveReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.CreateReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.DeleteReport;
-using UavPms.OperationsService.Application.Features.Reports.Commands.GenerateReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.RejectReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.SubmitReport;
 using UavPms.OperationsService.Application.Features.Reports.Commands.UpdateReport;
@@ -221,22 +220,20 @@ public class ReportControllerTests
     }
 
     [Fact]
-    public async Task Generate_ShouldReturnOkWithApiResponse()
+    public async Task Generate_ShouldStreamLiveFile_SameAsDownload()
     {
-        // Arrange
+        // Arrange: báo cáo không lưu tệp, /generate sinh trực tiếp giống /download
         var reportId = Guid.NewGuid();
-        var detailDto = CreateFakeReportDetail(reportId, "BC-2026-0007", "Báo cáo xuất bản", "approved");
-        _mediatorMock.Setup(m => m.Send(It.Is<GenerateReportCommand>(c => c.Id == reportId && c.Format == "pdf"), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(detailDto);
+        var stream = new MemoryStream(Encoding.UTF8.GetBytes("live pdf"));
+        _mediatorMock.Setup(m => m.Send(It.Is<DownloadReportQuery>(q => q.Id == reportId && q.Format == "pdf"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReportFileDownloadDto(stream, "application/pdf", "BC-2026-0007.pdf"));
 
         // Act
         var result = await _controller.Generate(reportId, "pdf");
 
         // Assert
-        var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
-        var apiResponse = okResult.Value.Should().BeOfType<ApiResponse>().Subject;
-        apiResponse.Success.Should().BeTrue();
-        apiResponse.Data.Should().Be(detailDto);
+        var fileResult = result.Should().BeOfType<FileStreamResult>().Subject;
+        fileResult.FileDownloadName.Should().Be("BC-2026-0007.pdf");
     }
 
     [Fact]
@@ -269,15 +266,10 @@ public class ReportControllerTests
             status,
             "Mô tả",
             DateTime.UtcNow,
-            null,
-            null,
-            null,
-            null,
-            0,
-            null,
-            null,
-            null,
-            null,
+            null, // UpdatedAt
+            null, // Region
+            null, // Creator
+            0,    // DefectCount (computed live)
             null,
             null,
             null,

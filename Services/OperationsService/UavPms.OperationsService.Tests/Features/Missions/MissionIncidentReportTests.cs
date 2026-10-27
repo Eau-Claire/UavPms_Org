@@ -62,7 +62,7 @@ public class MissionIncidentReportTests
         _db.Regions.Add(new Region
         {
             Id = _regionId,
-            RegionName = "Central Highlands Area",
+            Name = "Central Highlands Area",
             IsDeleted = false
         });
 
@@ -73,12 +73,11 @@ public class MissionIncidentReportTests
             RegionId = _regionId
         });
 
-        _db.Assets.Add(new Asset
+        _db.Towers.Add(new Tower
         {
             Id = _assetId,
-            AssetCode = "TWR-01-INS-01",
-            AssetType = "Insulator",
-            Status = "Active"
+            TowerCode = "TWR-01-INS-01",
+            RegionId = _regionId
         });
 
         _db.SaveChanges();
@@ -96,10 +95,10 @@ public class MissionIncidentReportTests
             Title = "Mission Incident Test",
             RegionId = _regionId,
             ManagerId = _managerId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             Status = MissionStatus.InProgress
         };
-        mission.MissionTargets.Add(new MissionTarget { MissionId = missionId, AssetId = _assetId });
+        mission.MissionTargets.Add(new MissionTarget { MissionId = missionId, TowerId = _assetId });
         _db.Missions.Add(mission);
         await _db.SaveChangesAsync();
 
@@ -107,8 +106,7 @@ public class MissionIncidentReportTests
             IncidentType: "VegetationEncroachment",
             Severity: "Medium",
             Description: "Dense bamboo tree growing into line corridor span 4-5.",
-            AssetId: _assetId,
-            FileUrl: "https://storage.local/incidents/photo1.jpg"
+            TowerId: _assetId
         );
 
         // Act
@@ -118,7 +116,7 @@ public class MissionIncidentReportTests
         incident.Should().NotBeNull();
         incident.MissionId.Should().Be(missionId);
         incident.ReportedBy.Should().Be(_userId);
-        incident.AssetId.Should().Be(_assetId);
+        incident.TowerId.Should().Be(_assetId);
         incident.IncidentType.Should().Be("VegetationEncroachment");
         incident.Severity.Should().Be("Medium");
         incident.Description.Should().Be("Dense bamboo tree growing into line corridor span 4-5.");
@@ -143,10 +141,10 @@ public class MissionIncidentReportTests
             Title = "Critical Incident Mission",
             RegionId = _regionId,
             ManagerId = _managerId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             Status = MissionStatus.InProgress
         };
-        mission.MissionTargets.Add(new MissionTarget { MissionId = missionId, AssetId = _assetId });
+        mission.MissionTargets.Add(new MissionTarget { MissionId = missionId, TowerId = _assetId });
         _db.Missions.Add(mission);
         await _db.SaveChangesAsync();
 
@@ -154,7 +152,7 @@ public class MissionIncidentReportTests
             IncidentType: "DroneCrash",
             Severity: "Critical",
             Description: "UAV lost GPS lock and crashed into vegetation corridor.",
-            AssetId: _assetId
+            TowerId: _assetId
         );
 
         // Act
@@ -186,10 +184,10 @@ public class MissionIncidentReportTests
             MissionCode = "MSN-INC-VAL",
             Title = "Validation Test Mission",
             RegionId = _regionId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             Status = MissionStatus.InProgress
         };
-        mission.MissionTargets.Add(new MissionTarget { MissionId = missionId, AssetId = _assetId });
+        mission.MissionTargets.Add(new MissionTarget { MissionId = missionId, TowerId = _assetId });
         _db.Missions.Add(mission);
         await _db.SaveChangesAsync();
 
@@ -197,7 +195,7 @@ public class MissionIncidentReportTests
             IncidentType: incidentType,
             Severity: severity,
             Description: description,
-            AssetId: _assetId
+            TowerId: _assetId
         );
 
         // Act
@@ -218,7 +216,7 @@ public class MissionIncidentReportTests
             MissionCode = "MSN-INC-LIST",
             Title = "List Test Mission",
             RegionId = _regionId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             Status = MissionStatus.InProgress
         };
         _db.Missions.Add(mission);
@@ -228,7 +226,7 @@ public class MissionIncidentReportTests
             Id = Guid.NewGuid(),
             MissionId = missionId,
             ReportedBy = _userId,
-            AssetId = _assetId,
+            TowerId = _assetId,
             IncidentType = "MinorCorrosion",
             Severity = "Low",
             Description = "Initial observation note",
@@ -240,7 +238,7 @@ public class MissionIncidentReportTests
             Id = Guid.NewGuid(),
             MissionId = missionId,
             ReportedBy = _userId,
-            AssetId = _assetId,
+            TowerId = _assetId,
             IncidentType = "CableDamage",
             Severity = "High",
             Description = "Follow-up broken strand note",

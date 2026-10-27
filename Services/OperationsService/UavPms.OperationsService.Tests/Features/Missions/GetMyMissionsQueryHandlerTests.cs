@@ -69,7 +69,7 @@ public class GetMyMissionsQueryHandlerTests
                 ManagerInstructions = "Check tower 15",
                 UavId = droneId,
                 DroneCode = "DRN-M300",
-                Inspector = new User { Id = currentUserId, FullName = "Inspector John", Email = "john@example.com" }
+                Assignments = { new MissionAssignment { UserId = currentUserId, AssignmentRole = "INSPECTOR", User = new User { Id = currentUserId, FullName = "Inspector John", Email = "john@example.com" } } }
             }
         };
 

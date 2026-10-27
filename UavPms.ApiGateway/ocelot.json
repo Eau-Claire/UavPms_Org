@@ -165,34 +165,6 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/substations/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/substations/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/api/v{version}/substations",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/substations",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/api/v{version}/lines/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/lines/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/api/v{version}/lines",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/lines",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
       "DownstreamPathTemplate": "/api/v{version}/reports/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
@@ -218,20 +190,6 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/api/v{version}/towers",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/api/v{version}/assets/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/assets/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/api/v{version}/assets",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/assets",
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {

@@ -64,7 +64,6 @@ public class UploadMaintenanceProofCommandHandler : IRequestHandler<UploadMainte
             UploadedBy = _currentUser.UserId,
             ProofType = proofType,
             FileUrl = fileUrl,
-            AfterRepairImageUrl = proofType.Equals("After", StringComparison.OrdinalIgnoreCase) ? fileUrl : string.Empty,
             TechnicianNotes = request.TechnicianNotes ?? string.Empty,
             UploadedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
@@ -80,7 +79,7 @@ public class UploadMaintenanceProofCommandHandler : IRequestHandler<UploadMainte
             UploadedBy = proof.UploadedBy,
             ProofType = proof.ProofType,
             FileUrl = proof.FileUrl,
-            AfterRepairImageUrl = proof.AfterRepairImageUrl,
+            AfterRepairImageUrl = proof.ProofType.Equals("After", StringComparison.OrdinalIgnoreCase) ? proof.FileUrl : string.Empty,
             TechnicianNotes = proof.TechnicianNotes,
             UploadedAt = proof.UploadedAt
         };

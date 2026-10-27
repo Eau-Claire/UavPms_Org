@@ -127,19 +127,8 @@ public class MissionLinearWorkflowTests
         };
         db.DefectCategories.AddRange(categoryCrack, categoryRust);
 
-        var tower = new Tower { Id = Guid.NewGuid(), TowerCode = "Cột 042 (Néo)" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = Guid.NewGuid(), TowerCode = "Cột 042 (Néo)" };
         db.Towers.Add(tower);
-
-        var asset = new Asset
-        {
-            Id = Guid.NewGuid(),
-            TowerId = tower.Id,
-            Tower = tower,
-            AssetCode = "INS-220KV-042",
-            CurrentHealthScore = 90.0,
-            RiskLevel = "Low"
-        };
-        db.Assets.Add(asset);
 
         var anomaly1 = new DetectedAnomaly
         {
@@ -147,12 +136,12 @@ public class MissionLinearWorkflowTests
             MediaId = media1.Id,
             CategoryId = categoryCrack.Id,
             Category = categoryCrack,
-            AssetId = asset.Id,
-            Asset = asset,
+            TowerId = tower.Id,
+            Tower = tower,
             ConfidenceScore = 0.945,
             ValidationStatus = "Confirmed",
             BoundingBox = "{\"x\": 36.5, \"y\": 28.2, \"width\": 24.0, \"height\": 30.5}",
-            Timestamp = 74.5,
+            FrameTimeSeconds = 74.5,
             FrameIndex = 2235,
             CropUrl = "https://minio.evn.vn/media/crop-crack.jpg"
         };
@@ -162,8 +151,8 @@ public class MissionLinearWorkflowTests
             MediaId = media2.Id,
             CategoryId = categoryRust.Id,
             Category = categoryRust,
-            AssetId = asset.Id,
-            Asset = asset,
+            TowerId = tower.Id,
+            Tower = tower,
             ConfidenceScore = 0.88,
             ValidationStatus = "Rejected",
             BoundingBox = "{\"x\": 10.0, \"y\": 15.0, \"width\": 20.0, \"height\": 25.0}"
@@ -205,7 +194,7 @@ public class MissionLinearWorkflowTests
     }
 
     [Fact]
-    public async Task ReviewDetectionAsync_WhenApproved_ShouldDeductHealthScoreAndCreateMaintenanceTicket()
+    public async Task ReviewDetectionAsync_WhenApproved_ShouldConfirmAndCreateMaintenanceTicket()
     {
         // Arrange
         var analystId = Guid.NewGuid();
@@ -253,14 +242,13 @@ public class MissionLinearWorkflowTests
         };
         db.DefectCategories.Add(category);
 
-        var asset = new Asset
+        var tower = new Tower
         {
             Id = Guid.NewGuid(),
-            AssetCode = "INS-001",
-            CurrentHealthScore = 95.0,
-            RiskLevel = "Low"
+            RegionId = Guid.NewGuid(),
+            TowerCode = "INS-001"
         };
-        db.Assets.Add(asset);
+        db.Towers.Add(tower);
 
         var anomaly = new DetectedAnomaly
         {
@@ -268,8 +256,8 @@ public class MissionLinearWorkflowTests
             MediaId = media.Id,
             CategoryId = category.Id,
             Category = category,
-            AssetId = asset.Id,
-            Asset = asset,
+            TowerId = tower.Id,
+            Tower = tower,
             ValidationStatus = "Pending"
         };
         db.DetectedAnomalies.Add(anomaly);
@@ -288,7 +276,8 @@ public class MissionLinearWorkflowTests
         // Assert
         result.Status.Should().Be("Approved");
         result.MaintenanceTaskId.Should().NotBeNullOrEmpty();
-        result.NewAssetHealthScore.Should().BeLessThan(95.0);
+        // Tower health scoring was removed in ERD v2.2; the field is kept null for API compatibility.
+        result.NewAssetHealthScore.Should().BeNull();
 
         // Kiểm tra anomaly trong DB
         var updatedAnomaly = await db.DetectedAnomalies.FindAsync(anomaly.Id);
@@ -296,11 +285,7 @@ public class MissionLinearWorkflowTests
         updatedAnomaly.AnalystId.Should().Be(analystId);
         updatedAnomaly.AnalystNotes.Should().Be("Xác nhận nứt vỡ nguy hiểm cần thay thế.");
 
-        // Kiểm tra asset health history trong DB
-        var history = await db.AssetHealthHistories.FirstOrDefaultAsync(h => h.AssetId == asset.Id);
-        history.Should().NotBeNull();
-        history!.HealthScore.Should().Be(result.NewAssetHealthScore!.Value);
-
+        updatedAnomaly.TowerId.Should().Be(tower.Id);
         // Kiểm tra MaintenanceTicket được tự động sinh
         var ticket = await db.MaintenanceTickets.FirstOrDefaultAsync(t => t.AnomalyId == anomaly.Id);
         ticket.Should().NotBeNull();
@@ -309,7 +294,7 @@ public class MissionLinearWorkflowTests
     }
 
     [Fact]
-    public async Task ReviewDetectionAsync_WhenRejected_ShouldNotDeductHealthScoreAndNotCreateTicket()
+    public async Task ReviewDetectionAsync_WhenRejected_ShouldNotCreateTicket()
     {
         // Arrange
         var analystId = Guid.NewGuid();
@@ -347,14 +332,13 @@ public class MissionLinearWorkflowTests
         };
         db.InspectionMedia.Add(media);
 
-        var asset = new Asset
+        var tower = new Tower
         {
             Id = Guid.NewGuid(),
-            AssetCode = "INS-002",
-            CurrentHealthScore = 90.0,
-            RiskLevel = "Low"
+            RegionId = Guid.NewGuid(),
+            TowerCode = "INS-002"
         };
-        db.Assets.Add(asset);
+        db.Towers.Add(tower);
 
         var category = new DefectCategory
         {
@@ -373,8 +357,8 @@ public class MissionLinearWorkflowTests
             Media = media,
             CategoryId = category.Id,
             Category = category,
-            AssetId = asset.Id,
-            Asset = asset,
+            TowerId = tower.Id,
+            Tower = tower,
             ValidationStatus = "Pending"
         };
         db.DetectedAnomalies.Add(anomaly);
@@ -393,9 +377,8 @@ public class MissionLinearWorkflowTests
         result.Status.Should().Be("Rejected");
         result.MaintenanceTaskId.Should().BeNull();
 
-        var updatedAsset = await db.Assets.FindAsync(asset.Id);
-        updatedAsset!.CurrentHealthScore.Should().Be(90.0);
-
+        var updatedAnomaly = await db.DetectedAnomalies.FindAsync(anomaly.Id);
+        updatedAnomaly!.ValidationStatus.Should().Be("Rejected");
         var ticketCount = await db.MaintenanceTickets.CountAsync(t => t.AnomalyId == anomaly.Id);
         ticketCount.Should().Be(0);
     }
@@ -428,10 +411,8 @@ public class MissionLinearWorkflowTests
         };
         db.InspectionMedia.Add(media);
 
-        var tower = new Tower { Id = Guid.NewGuid(), TowerCode = "Cột 042" };
-        var asset = new Asset { Id = Guid.NewGuid(), Tower = tower, AssetCode = "INS-220KV-042-PHA-B" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = Guid.NewGuid(), TowerCode = "Cột 042" };
         db.Towers.Add(tower);
-        db.Assets.Add(asset);
 
         var category = new DefectCategory
         {
@@ -449,8 +430,8 @@ public class MissionLinearWorkflowTests
             Media = media,
             CategoryId = category.Id,
             Category = category,
-            AssetId = asset.Id,
-            Asset = asset,
+            TowerId = tower.Id,
+            Tower = tower,
             ValidationStatus = "Confirmed"
         };
         db.DetectedAnomalies.Add(anomaly);
@@ -461,8 +442,6 @@ public class MissionLinearWorkflowTests
             TicketCode = "MT-20260925-001",
             AnomalyId = anomaly.Id,
             Anomaly = anomaly,
-            AssetId = asset.Id,
-            Asset = asset,
             Priority = TicketPriority.Emergency,
             Status = TicketStatus.Open,
             Description = "Thay thế khẩn cấp bát sứ nứt vỡ chuỗi néo pha B"
@@ -481,7 +460,6 @@ public class MissionLinearWorkflowTests
         result[0].Priority.Should().Be("Urgent");
         result[0].Status.Should().Be("Pending");
         result[0].TowerCode.Should().Be("Cột 042");
-        result[0].AssetCode.Should().Be("INS-220KV-042-PHA-B");
     }
 
     [Fact]
@@ -502,7 +480,6 @@ public class MissionLinearWorkflowTests
             MissionCode = "MS-ACT-01",
             Title = "Mission Activity Stream",
             ManagerId = managerId,
-            InspectorId = inspectorId,
             Status = MissionStatus.Assigned
         };
         mission.Assignments.Add(new MissionAssignment
@@ -742,7 +719,7 @@ public class MissionLinearWorkflowTests
 
         var savedLog = await db.MissionCommunicationLogs.FirstOrDefaultAsync(l => l.MissionId == mission.Id);
         savedLog.Should().NotBeNull();
-        savedLog!.SenderRole.Should().Be("INSPECTOR");
+        savedLog!.SenderId.Should().Be(inspectorId);
     }
 
     [Fact]

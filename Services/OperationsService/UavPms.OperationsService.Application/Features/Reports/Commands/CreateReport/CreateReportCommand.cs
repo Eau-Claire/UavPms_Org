@@ -8,8 +8,7 @@ namespace UavPms.OperationsService.Application.Features.Reports.Commands.CreateR
 public record CreateReportCommand(
     string Title,
     string Type,
-    Guid? TransmissionLineId,
-    Guid? SubstationId,
+    Guid? RegionId,
     List<Guid>? MissionIds,
     string? Description,
     DateTimeOffset? DateFrom,

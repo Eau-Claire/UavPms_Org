@@ -13,10 +13,7 @@ public record ReportDto(
     string Type,
     string Status,
     DateTime CreatedAt,
-    ReportNestedEntityDto? TransmissionLine,
-    ReportNestedEntityDto? Substation,
+    ReportNestedEntityDto? Region,
     ReportCreatorDto? Creator,
-    int DefectCount,
-    long? FileSizePdf,
-    long? FileSizeExcel
+    int DefectCount
 );

@@ -1,3 +1,4 @@
+using UavPms.OperationsService.Infrastructure.Repositories;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -112,7 +113,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                             MissionId = existingMission.Id,
                             UserId = a.UserId,
                             AssignmentRole = !string.IsNullOrWhiteSpace(a.Role) ? a.Role : "PILOT",
-                            AssignedByUserId = _current.UserId,
+                            AssignedById = _current.UserId,
                             IsRequired = a.IsRequired ?? true,
                             ResponseStatus = MissionAssignmentResponse.Pending
                         });
@@ -122,15 +123,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 {
                     existingMission.UavId = resolvedDroneId.Value;
                 }
-                if (resolvedAssignedUserId.HasValue && (!existingMission.InspectorId.HasValue || existingMission.InspectorId.Value == Guid.Empty))
+                if (resolvedAssignedUserId.HasValue && (!existingMission.PrimaryInspectorId().HasValue || existingMission.PrimaryInspectorId().Value == Guid.Empty))
                 {
-                    existingMission.InspectorId = resolvedAssignedUserId.Value;
                     existingMission.AssignedToUserId = resolvedAssignedUserId.Value;
                 }
-                if (!existingMission.InspectorId.HasValue || existingMission.InspectorId.Value == Guid.Empty)
+                if (!existingMission.PrimaryInspectorId().HasValue || existingMission.PrimaryInspectorId().Value == Guid.Empty)
                 {
                     var ins = existingMission.Assignments.FirstOrDefault(x => x.AssignmentRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase) || x.AssignmentRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase));
-                    if (ins != null) existingMission.InspectorId = ins.UserId;
+                    _ = ins; // primary inspector is derived from MissionAssignments
                 }
                 await _db.SaveChangesAsync(ct);
                 return existingMission;
@@ -210,25 +210,23 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             RegionId = request.RegionId,
             ScheduleId = request.ScheduleId,
             MissionType = effectiveMissionType,
-            TriggerReason = request.TriggerReason,
+            TriggerReason = request.TriggerReason ?? request.EmergencyReason,
             PlannedStart = request.PlannedStart,
             PlannedEnd = request.PlannedEnd,
-            ScheduledStartAt = request.PlannedStart,
             Description = request.Description ?? string.Empty,
             ManagerId = _current.UserId,
             Priority = request.Priority,
             Objective = request.Objective,
-            PriorityDefectsJson = JsonSerializer.Serialize(request.PriorityDefects ?? (IEnumerable<string>)Array.Empty<string>()),
-            EmergencyReason = request.EmergencyReason,
             IsImmediate = request.IsImmediate,
             Status = status,
             ConfirmationDeadline = request.ConfirmationDeadline,
             ManagerInstructions = request.ManagerInstructions,
             AssignedToUserId = resolvedAssignedUserId ?? Guid.Empty,
-            InspectorId = resolvedAssignedUserId,
             UavId = resolvedDroneId,
             PreMissionAssessmentId = request.PreMissionAssessmentId
         };
+
+        await MissionRepository.ApplyPriorityDefectsAsync(_db, mission, request.PriorityDefects, ct);
 
         if (resolvedAssignedUserId.HasValue && resolvedAssignedUserId.Value != Guid.Empty)
         {
@@ -237,7 +235,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 MissionId = mission.Id,
                 UserId = resolvedAssignedUserId.Value,
                 AssignmentRole = "INSPECTOR",
-                AssignedByUserId = _current.UserId,
+                AssignedById = _current.UserId,
                 IsRequired = true,
                 ResponseStatus = MissionAssignmentResponse.Pending
             });
@@ -258,7 +256,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                     MissionId = mission.Id,
                     UserId = a.UserId,
                     AssignmentRole = !string.IsNullOrWhiteSpace(a.Role) ? a.Role : "INSPECTOR",
-                    AssignedByUserId = _current.UserId,
+                    AssignedById = _current.UserId,
                     IsRequired = a.IsRequired ?? true,
                     ResponseStatus = MissionAssignmentResponse.Pending
                 });
@@ -268,24 +266,23 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         if (request.PreMissionAssessmentId.HasValue)
         {
             var assessment = await _db.PreMissionAssessments
-                .Include(x => x.Assets)
+                .Include(x => x.Towers)
                 .SingleOrDefaultAsync(x => x.Id == request.PreMissionAssessmentId.Value, ct);
             if (assessment != null)
             {
-                assessment.ConsumedByMissionId = mission.Id;
                 assessment.Status = PreMissionAssessmentStatus.Completed;
                 if (mission.Boundary == null && assessment.ProposedBoundary != null)
                 {
                     mission.Boundary = assessment.ProposedBoundary;
                 }
-                if (assessment.Assets != null && assessment.Assets.Count > 0 && !mission.MissionTargets.Any())
+                if (assessment.Towers != null && assessment.Towers.Count > 0 && !mission.MissionTargets.Any())
                 {
-                    mission.MissionTargets = assessment.Assets
+                    mission.MissionTargets = assessment.Towers
                         .OrderBy(x => x.Sequence)
                         .Select(x => new MissionTarget
                         {
                             MissionId = mission.Id,
-                            AssetId = x.AssetId,
+                            TowerId = x.TowerId,
                             Sequence = x.Sequence
                         })
                         .ToList();
@@ -299,14 +296,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Priority = mission.Priority.ToString(),
             Objective = mission.Objective.ToString(),
             PriorityDefects = request.PriorityDefects,
-            EmergencyReason = mission.EmergencyReason,
+            TriggerReason = mission.TriggerReason,
             IsImmediate = mission.IsImmediate
         }));
 
         var assignedUserIds = mission.Assignments.Select(x => x.UserId).Distinct().ToList();
-        if (mission.InspectorId.HasValue && mission.InspectorId.Value != Guid.Empty && !assignedUserIds.Contains(mission.InspectorId.Value))
+        if (mission.PrimaryInspectorId().HasValue && mission.PrimaryInspectorId().Value != Guid.Empty && !assignedUserIds.Contains(mission.PrimaryInspectorId().Value))
         {
-            assignedUserIds.Add(mission.InspectorId!.Value);
+            assignedUserIds.Add(mission.PrimaryInspectorId()!.Value);
         }
 
         foreach (var userId in assignedUserIds)
@@ -320,8 +317,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
             SenderId = _current.UserId,
-            SenderName = _current.Username ?? "Quản lý",
-            SenderRole = "MANAGER",
             Type = "DISPATCH",
             Content = string.IsNullOrWhiteSpace(request.ManagerInstructions)
                 ? $"Nhiệm vụ {mission.MissionCode} đã được ban hành và giao cho phi công."
@@ -346,7 +341,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorName = _current.Username ?? "Quản lý",
                 ConfirmationDeadline = mission.ConfirmationDeadline?.ToString("o"),
                 ManagerInstructions = mission.ManagerInstructions,
-                InspectorId = mission.InspectorId != Guid.Empty ? mission.InspectorId?.ToString() ?? string.Empty : null,
+                InspectorId = mission.PrimaryInspectorId() != Guid.Empty ? mission.PrimaryInspectorId()?.ToString() ?? string.Empty : null,
                 AssignedUserIds = assignedUserIds.Select(u => u.ToString()).ToList(),
                 ManagerId = mission.ManagerId.ToString(),
                 Timestamp = DateTime.UtcNow,
@@ -354,8 +349,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 {
                     Id = dispatchLog.Id.ToString(),
                     SenderId = _current.UserId.ToString(),
-                    SenderName = dispatchLog.SenderName,
-                    SenderRole = dispatchLog.SenderRole,
+                    SenderName = _current.Username ?? "Quản lý",
+                    SenderRole = "MANAGER",
                     Type = dispatchLog.Type,
                     Content = dispatchLog.Content,
                     Timestamp = dispatchLog.CreatedAt
@@ -367,7 +362,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         return mission;
     }
 
-    public async Task<IReadOnlyList<Asset>> ResolveScopeAsync(Guid missionId, string boundaryWkt, CancellationToken ct)
+    public async Task<IReadOnlyList<Tower>> ResolveScopeAsync(Guid missionId, string boundaryWkt, CancellationToken ct)
     {
         var mission = await ManagedMission(missionId, ct);
         var boundary = ParseBoundarySafe(boundaryWkt) ?? mission.Boundary;
@@ -376,37 +371,37 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         {
             return await AssetsForRegion(regionId).ToListAsync(ct);
         }
-        return await AssetsForRegion(regionId).Where(x => x.Location != null && boundary.Covers(x.Location)).ToListAsync(ct);
+        return await AssetsForRegion(regionId).Where(x => x.Geom != null && boundary.Covers(x.Geom)).ToListAsync(ct);
     }
 
-    public async Task ConfirmAssetsAsync(Guid missionId, string boundaryWkt, IReadOnlyCollection<Guid> assetIds, CancellationToken ct)
+    public async Task ConfirmAssetsAsync(Guid missionId, string boundaryWkt, IReadOnlyCollection<Guid> towerIds, CancellationToken ct)
     {
         var mission = await ManagedMission(missionId, ct); RequirePreExecution(mission);
-        if (assetIds.Count == 0) throw new BusinessRuleException("MISSION_TARGET_REQUIRED");
-        var distinct = assetIds.Distinct().ToArray(); if (distinct.Length != assetIds.Count) throw new BusinessRuleException("DUPLICATE_ASSET");
+        if (towerIds.Count == 0) throw new BusinessRuleException("MISSION_TARGET_REQUIRED");
+        var distinct = towerIds.Distinct().ToArray(); if (distinct.Length != towerIds.Count) throw new BusinessRuleException("DUPLICATE_TOWER");
         var regionId = mission.RegionId ?? throw new BusinessRuleException("MISSION_REGION_REQUIRED");
-        var assets = await AssetsForRegion(regionId).Where(x => distinct.Contains(x.Id)).ToListAsync(ct);
-        if (assets.Count != distinct.Length) throw new ForbiddenException("ASSET_OUTSIDE_REGION_OR_SCOPE");
+        var towers = await AssetsForRegion(regionId).Where(x => distinct.Contains(x.Id)).ToListAsync(ct);
+        if (towers.Count != distinct.Length) throw new ForbiddenException("TOWER_OUTSIDE_REGION_OR_SCOPE");
 
         // BR-08: Scope Consistency - Significant scope changes require MF01 reassessment
         if (mission.PreMissionAssessmentId.HasValue)
         {
-            var assessedAssetIds = await _db.PreMissionAssessmentAssets
+            var assessedAssetIds = await _db.PreMissionAssessmentTowers
                 .Where(a => a.AssessmentId == mission.PreMissionAssessmentId.Value)
-                .Select(a => a.AssetId)
+                .Select(a => a.TowerId)
                 .ToListAsync(ct);
             if (assessedAssetIds.Count > 0 && distinct.Except(assessedAssetIds).Any())
             {
                 throw new BusinessRuleException("SCOPE_REASSESSMENT_REQUIRED",
-                    "Significant scope changes detected (assets outside MF01 assessment). Reassessment via MF01 is required.");
+                    "Significant scope changes detected (towers outside MF01 assessment). Reassessment via MF01 is required.");
             }
         }
 
         var boundary = ParseBoundarySafe(boundaryWkt) ?? mission.Boundary;
-        if (boundary == null && assets.Any(x => x.Location != null))
+        if (boundary == null && towers.Any(x => x.Geom != null))
         {
             var factory = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(4326);
-            var validPoints = assets.Where(x => x.Location != null).Select(x => x.Location is Point pt ? pt : factory.CreatePoint(x.Location!.Coordinate)).ToArray();
+            var validPoints = towers.Where(x => x.Geom != null).Select(x => x.Geom is Point pt ? pt : factory.CreatePoint(x.Geom!.Coordinate)).ToArray();
             var mp = factory.CreateMultiPoint(validPoints);
             var hull = mp.ConvexHull();
             boundary = (hull is Polygon poly) ? poly.Buffer(0.002) : hull.Buffer(0.002);
@@ -414,7 +409,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
 
         _db.MissionTargets.RemoveRange(await _db.MissionTargets.Where(x => x.MissionId == mission.Id).ToListAsync(ct));
-        _db.MissionTargets.AddRange(distinct.Select((id, i) => new MissionTarget { MissionId = mission.Id, AssetId = id, Sequence = i + 1 }));
+        _db.MissionTargets.AddRange(distinct.Select((id, i) => new MissionTarget { MissionId = mission.Id, TowerId = id, Sequence = i + 1 }));
         if (boundary != null)
         {
             mission.Boundary = boundary;
@@ -431,7 +426,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         if (!IsActive(user.Status)) throw new BusinessRuleException("ASSIGNEE_INACTIVE");
 
         // BR-07: Personnel availability and schedule conflict revalidation
-        var plannedStart = mission.PlannedStart ?? mission.ScheduledStartAt;
+        var plannedStart = mission.PlannedStart ?? mission.PlannedStart;
         var plannedEnd = mission.PlannedEnd ?? (plannedStart.HasValue ? plannedStart.Value.AddHours(2) : (DateTime?)null);
         if (plannedStart.HasValue && plannedEnd.HasValue)
         {
@@ -473,16 +468,15 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             }
             if (request.AssignmentRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase) || request.AssignmentRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
             {
-                if (!mission.InspectorId.HasValue || mission.InspectorId.Value == Guid.Empty)
+                if (!mission.PrimaryInspectorId().HasValue || mission.PrimaryInspectorId().Value == Guid.Empty)
                 {
-                    mission.InspectorId = request.UserId;
                     mission.AssignedToUserId = request.UserId;
                 }
             }
             await _db.SaveChangesAsync(ct);
             return existing;
         }
-        var assignment = new MissionAssignment { MissionId = missionId, UserId = request.UserId, AssignmentRole = request.AssignmentRole, AssignedByUserId = _current.UserId };
+        var assignment = new MissionAssignment { MissionId = missionId, UserId = request.UserId, AssignmentRole = request.AssignmentRole, AssignedById = _current.UserId };
         _db.MissionAssignments.Add(assignment);
         if (!mission.Assignments.Contains(assignment))
         {
@@ -490,9 +484,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
         if (request.AssignmentRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase) || request.AssignmentRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
         {
-            if (!mission.InspectorId.HasValue || mission.InspectorId.Value == Guid.Empty)
+            if (!mission.PrimaryInspectorId().HasValue || mission.PrimaryInspectorId().Value == Guid.Empty)
             {
-                mission.InspectorId = request.UserId;
                 mission.AssignedToUserId = request.UserId;
             }
         }
@@ -523,7 +516,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         var mission = await ManagedMission(missionId, ct, true); RequirePreExecution(mission);
         var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == droneId, ct) ?? throw new NotFoundException("Drone", droneId);
-        if (drone.Status != DroneStatus.Idle && mission.UavId != droneId) throw new BusinessRuleException("DRONE_UNAVAILABLE");
+        if (drone.FlightStatus != DroneStatus.Idle && mission.UavId != droneId) throw new BusinessRuleException("DRONE_UNAVAILABLE");
 
         // BR-07: UAV availability and technical health revalidation
         if (drone.OperationalStatus != DroneOperationalStatus.Available)
@@ -535,7 +528,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             throw new BusinessRuleException("DRONE_CRITICAL_HEALTH", $"Drone {drone.UavCode} có sức khỏe kỹ thuật báo động CRITICAL, không đủ điều kiện thực hiện nhiệm vụ bay.");
         }
 
-        var plannedStart = mission.PlannedStart ?? mission.ScheduledStartAt;
+        var plannedStart = mission.PlannedStart ?? mission.PlannedStart;
         var plannedEnd = mission.PlannedEnd ?? (plannedStart.HasValue ? plannedStart.Value.AddHours(2) : (DateTime?)null);
 
         if (plannedStart.HasValue && plannedEnd.HasValue)
@@ -681,7 +674,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorId = _current.UserId.ToString(),
                 ActorName = _current.Username ?? "Thành viên",
                 ManagerId = mission.ManagerId.ToString(),
-                InspectorId = mission.InspectorId?.ToString() ?? string.Empty,
+                InspectorId = mission.PrimaryInspectorId()?.ToString() ?? string.Empty,
                 Timestamp = DateTime.UtcNow
             };
             await _notifier.NotifyAsync(eventDto, ct);
@@ -774,7 +767,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             var drone = await _db.Uavs.FirstOrDefaultAsync(d => d.Id == m.UavId.Value, ct);
             if (drone != null)
             {
-                drone.Status = DroneStatus.Flying;
+                drone.FlightStatus = DroneStatus.Flying;
                 drone.UpdatedAt = DateTime.UtcNow;
             }
         }
@@ -793,7 +786,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorId = _current.UserId.ToString(),
                 ActorName = _current.Username ?? "Phi công",
                 ManagerId = m.ManagerId.ToString(),
-                InspectorId = m.InspectorId?.ToString() ?? string.Empty,
+                InspectorId = m.PrimaryInspectorId()?.ToString() ?? string.Empty,
                 Timestamp = DateTime.UtcNow
             };
             await _notifier.NotifyAsync(eventDto, ct);
@@ -816,9 +809,9 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         if (m.UavId.HasValue && m.UavId.Value != Guid.Empty)
         {
             var drone = await _db.Uavs.FirstOrDefaultAsync(d => d.Id == m.UavId.Value, ct);
-            if (drone != null && drone.Status == DroneStatus.Flying)
+            if (drone != null && drone.FlightStatus == DroneStatus.Flying)
             {
-                drone.Status = DroneStatus.Idle;
+                drone.FlightStatus = DroneStatus.Idle;
                 drone.UpdatedAt = DateTime.UtcNow;
             }
         }
@@ -846,7 +839,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorId = _current.UserId.ToString(),
                 ActorName = _current.Username ?? "Phi công",
                 ManagerId = m.ManagerId.ToString(),
-                InspectorId = m.InspectorId?.ToString() ?? string.Empty,
+                InspectorId = m.PrimaryInspectorId()?.ToString() ?? string.Empty,
                 Timestamp = DateTime.UtcNow
             };
             await _notifier.NotifyAsync(eventDto, ct);
@@ -892,8 +885,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
             SenderId = _current.UserId,
-            SenderName = actorName,
-            SenderRole = "INSPECTOR",
             Type = "CONFIRM",
             Content = commContent,
             CreatedAt = DateTime.UtcNow
@@ -914,14 +905,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorRole = "INSPECTOR",
                 Reason = commContent,
                 ManagerId = mission.ManagerId.ToString(),
-                InspectorId = mission.InspectorId?.ToString() ?? string.Empty,
+                InspectorId = mission.PrimaryInspectorId()?.ToString() ?? string.Empty,
                 Timestamp = DateTime.UtcNow,
                 Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
                 {
                     Id = commLog.Id.ToString(),
                     SenderId = _current.UserId.ToString(),
-                    SenderName = commLog.SenderName,
-                    SenderRole = commLog.SenderRole,
+                    SenderName = actorName,
+                    SenderRole = "INSPECTOR",
                     Type = commLog.Type,
                     Content = commLog.Content,
                     Timestamp = commLog.CreatedAt
@@ -948,9 +939,9 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
 
         Audit(mission.Id, "MISSION_SUSPENDED");
-        if (mission.InspectorId != Guid.Empty)
+        if (mission.PrimaryInspectorId() != Guid.Empty)
         {
-            Notify(mission.InspectorId ?? Guid.Empty, mission, "MISSION_SUSPENDED");
+            Notify(mission.PrimaryInspectorId() ?? Guid.Empty, mission, "MISSION_SUSPENDED");
         }
         foreach (var a in mission.Assignments.Where(x => x.Status == MissionAssignmentStatus.Active))
         {
@@ -967,8 +958,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
             SenderId = _current.UserId,
-            SenderName = actorName,
-            SenderRole = "MANAGER",
             Type = "SUSPEND",
             Content = commContent,
             CreatedAt = DateTime.UtcNow
@@ -989,14 +978,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorRole = "MANAGER",
                 Reason = reason,
                 ManagerId = mission.ManagerId.ToString(),
-                InspectorId = mission.InspectorId?.ToString() ?? string.Empty,
+                InspectorId = mission.PrimaryInspectorId()?.ToString() ?? string.Empty,
                 Timestamp = DateTime.UtcNow,
                 Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
                 {
                     Id = commLog.Id.ToString(),
                     SenderId = _current.UserId.ToString(),
-                    SenderName = commLog.SenderName,
-                    SenderRole = commLog.SenderRole,
+                    SenderName = actorName,
+                    SenderRole = "MANAGER",
                     Type = commLog.Type,
                     Content = commLog.Content,
                     Timestamp = commLog.CreatedAt
@@ -1023,9 +1012,9 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
 
         Audit(mission.Id, "MISSION_RESUMED");
-        if (mission.InspectorId != Guid.Empty)
+        if (mission.PrimaryInspectorId() != Guid.Empty)
         {
-            Notify(mission.InspectorId ?? Guid.Empty, mission, "MISSION_RESUMED");
+            Notify(mission.PrimaryInspectorId() ?? Guid.Empty, mission, "MISSION_RESUMED");
         }
         foreach (var a in mission.Assignments.Where(x => x.Status == MissionAssignmentStatus.Active))
         {
@@ -1042,8 +1031,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
             SenderId = _current.UserId,
-            SenderName = actorName,
-            SenderRole = "MANAGER",
             Type = "RESUME",
             Content = commContent,
             CreatedAt = DateTime.UtcNow
@@ -1064,14 +1051,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorRole = "MANAGER",
                 Reason = commContent,
                 ManagerId = mission.ManagerId.ToString(),
-                InspectorId = mission.InspectorId?.ToString() ?? string.Empty,
+                InspectorId = mission.PrimaryInspectorId()?.ToString() ?? string.Empty,
                 Timestamp = DateTime.UtcNow,
                 Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
                 {
                     Id = commLog.Id.ToString(),
                     SenderId = _current.UserId.ToString(),
-                    SenderName = commLog.SenderName,
-                    SenderRole = commLog.SenderRole,
+                    SenderName = actorName,
+                    SenderRole = "MANAGER",
                     Type = commLog.Type,
                     Content = commLog.Content,
                     Timestamp = commLog.CreatedAt
@@ -1097,7 +1084,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         if (!IsActive(newUser.Status)) throw new BusinessRuleException("ASSIGNEE_INACTIVE");
 
         // BR-07: Personnel availability and schedule conflict revalidation
-        var plannedStart = mission.PlannedStart ?? mission.ScheduledStartAt;
+        var plannedStart = mission.PlannedStart ?? mission.PlannedStart;
         var plannedEnd = mission.PlannedEnd ?? (plannedStart.HasValue ? plannedStart.Value.AddHours(2) : (DateTime?)null);
         if (plannedStart.HasValue && plannedEnd.HasValue)
         {
@@ -1149,7 +1136,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             targetAssignment.ResponseStatus = MissionAssignmentResponse.Pending;
             targetAssignment.ResponseReason = reason;
             targetAssignment.RespondedAt = null;
-            targetAssignment.AssignedByUserId = _current.UserId;
+            targetAssignment.AssignedById = _current.UserId;
             if (!string.IsNullOrWhiteSpace(role))
             {
                 targetAssignment.AssignmentRole = role;
@@ -1163,7 +1150,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 MissionId = mission.Id,
                 UserId = newUserId,
                 AssignmentRole = !string.IsNullOrWhiteSpace(role) ? role : "INSPECTOR",
-                AssignedByUserId = _current.UserId,
+                AssignedById = _current.UserId,
                 IsRequired = true,
                 ResponseStatus = MissionAssignmentResponse.Pending
             };
@@ -1174,9 +1161,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var effectiveRole = targetAssignment.AssignmentRole;
         if (string.Equals(effectiveRole, "INSPECTOR", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(effectiveRole, "PILOT", StringComparison.OrdinalIgnoreCase) ||
-            (oldUserId.HasValue && mission.InspectorId == oldUserId.Value))
+            (oldUserId.HasValue && mission.PrimaryInspectorId() == oldUserId.Value))
         {
-            mission.InspectorId = newUserId;
             mission.AssignedToUserId = newUserId;
         }
 
@@ -1267,8 +1253,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
             SenderId = _current.UserId,
-            SenderName = actorName,
-            SenderRole = "INSPECTOR",
             Type = "POSTPONE",
             Content = $"Phi công xin hoãn nhiệm vụ: {reason}",
             CreatedAt = DateTime.UtcNow
@@ -1289,14 +1273,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorRole = "INSPECTOR",
                 Reason = reason,
                 ManagerId = mission.ManagerId.ToString(),
-                InspectorId = mission.InspectorId?.ToString() ?? string.Empty,
+                InspectorId = mission.PrimaryInspectorId()?.ToString() ?? string.Empty,
                 Timestamp = DateTime.UtcNow,
                 Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
                 {
                     Id = commLog.Id.ToString(),
                     SenderId = _current.UserId.ToString(),
-                    SenderName = commLog.SenderName,
-                    SenderRole = commLog.SenderRole,
+                    SenderName = actorName,
+                    SenderRole = "INSPECTOR",
                     Type = commLog.Type,
                     Content = commLog.Content,
                     Timestamp = commLog.CreatedAt
@@ -1331,9 +1315,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         if (mission.PreMissionAssessmentId.HasValue)
         {
             var assessment = await _db.PreMissionAssessments.FirstOrDefaultAsync(x => x.Id == mission.PreMissionAssessmentId.Value, ct);
-            if (assessment != null && assessment.ConsumedByMissionId == mission.Id)
+            if (assessment != null)
             {
-                assessment.ConsumedByMissionId = null;
+                // Giải phóng đánh giá để có thể tạo nhiệm vụ khác từ nó (liên kết một chiều Missions.PreMissionAssessmentId).
+                mission.PreMissionAssessmentId = null;
                 if (assessment.ValidUntil > DateTime.UtcNow)
                 {
                     assessment.Status = PreMissionAssessmentStatus.Ready;
@@ -1360,8 +1345,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
             SenderId = _current.UserId,
-            SenderName = actorName,
-            SenderRole = "MANAGER",
             Type = "CANCEL",
             Content = commContent,
             CreatedAt = DateTime.UtcNow
@@ -1382,14 +1365,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorRole = "MANAGER",
                 Reason = reason,
                 ManagerId = mission.ManagerId.ToString(),
-                InspectorId = mission.InspectorId?.ToString() ?? string.Empty,
+                InspectorId = mission.PrimaryInspectorId()?.ToString() ?? string.Empty,
                 Timestamp = DateTime.UtcNow,
                 Log = new UavPms.Shared.Contracts.Events.MissionCommunicationLogDto
                 {
                     Id = commLog.Id.ToString(),
                     SenderId = _current.UserId.ToString(),
-                    SenderName = commLog.SenderName,
-                    SenderRole = commLog.SenderRole,
+                    SenderName = actorName,
+                    SenderRole = "MANAGER",
                     Type = commLog.Type,
                     Content = commLog.Content,
                     Timestamp = commLog.CreatedAt
@@ -1407,8 +1390,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var mission = await ManagedMission(missionId, ct, true);
 
         Audit(mission.Id, "MISSION_REMINDER");
-        var inspectorId = (mission.InspectorId.HasValue && mission.InspectorId.Value != Guid.Empty)
-            ? mission.InspectorId.Value
+        var inspectorId = (mission.PrimaryInspectorId().HasValue && mission.PrimaryInspectorId().Value != Guid.Empty)
+            ? mission.PrimaryInspectorId().Value
             : (mission.AssignedToUserId != Guid.Empty
                 ? mission.AssignedToUserId
                 : (mission.Assignments.FirstOrDefault(a => a.Status == MissionAssignmentStatus.Active)?.UserId ?? Guid.Empty));
@@ -1427,8 +1410,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
             SenderId = _current.UserId,
-            SenderName = actorName,
-            SenderRole = "MANAGER",
             Type = "REMINDER",
             Content = commContent,
             CreatedAt = DateTime.UtcNow
@@ -1455,8 +1436,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 {
                     Id = commLog.Id.ToString(),
                     SenderId = _current.UserId.ToString(),
-                    SenderName = commLog.SenderName,
-                    SenderRole = commLog.SenderRole,
+                    SenderName = actorName,
+                    SenderRole = "MANAGER",
                     Type = commLog.Type,
                     Content = commLog.Content,
                     Timestamp = commLog.CreatedAt
@@ -1484,8 +1465,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
             SenderId = _current.UserId,
-            SenderName = actorName,
-            SenderRole = senderRole,
             Type = "MESSAGE",
             Content = message,
             CreatedAt = DateTime.UtcNow
@@ -1493,7 +1472,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         _db.MissionCommunicationLogs.Add(commLog);
 
         var recipientId = isManager
-            ? ((mission.InspectorId.HasValue && mission.InspectorId.Value != Guid.Empty) ? mission.InspectorId.Value : mission.AssignedToUserId)
+            ? ((mission.PrimaryInspectorId().HasValue && mission.PrimaryInspectorId().Value != Guid.Empty) ? mission.PrimaryInspectorId().Value : mission.AssignedToUserId)
             : mission.ManagerId;
         if (recipientId != Guid.Empty)
         {
@@ -1514,8 +1493,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         {
             Id = commLog.Id.ToString(),
             SenderId = _current.UserId.ToString(),
-            SenderName = commLog.SenderName,
-            SenderRole = commLog.SenderRole,
+            SenderName = actorName,
+            SenderRole = senderRole,
             Type = commLog.Type,
             Content = commLog.Content,
             Timestamp = commLog.CreatedAt
@@ -1532,7 +1511,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorRole = senderRole,
                 Message = message,
                 ManagerId = mission.ManagerId.ToString(),
-                InspectorId = mission.InspectorId?.ToString() ?? string.Empty,
+                InspectorId = mission.PrimaryInspectorId()?.ToString() ?? string.Empty,
                 Timestamp = DateTime.UtcNow,
                 Log = logDto
             };
@@ -1554,8 +1533,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             {
                 Id = x.Id.ToString(),
                 SenderId = x.SenderId.HasValue ? x.SenderId.Value.ToString() : string.Empty,
-                SenderName = x.SenderName,
-                SenderRole = x.SenderRole,
+                SenderName = x.Sender != null ? x.Sender.FullName : "Hệ thống",
+                SenderRole = x.SenderId == null ? "SYSTEM" : (x.SenderId == x.Mission!.ManagerId ? "MANAGER" : "INSPECTOR"),
                 Type = x.Type,
                 Content = x.Content,
                 Timestamp = x.CreatedAt
@@ -1593,7 +1572,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
 
         var anomaliesQuery = _db.DetectedAnomalies
             .Include(a => a.Category)
-            .Include(a => a.Asset)
+            .Include(a => a.Tower)
             .Include(a => a.EmergencyAlerts)
             .Where(a => mediaIds.Contains(a.MediaId) && !a.IsDeleted);
 
@@ -1642,14 +1621,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 IsEmergency = isEmerg,
                 Status = detStatus,
                 BoundingBox = ParseBoundingBoxDto(a.BoundingBox),
-                TimestampSeconds = a.Timestamp,
-                TimestampLabel = a.Timestamp.HasValue ? TimeSpan.FromSeconds(a.Timestamp.Value).ToString(@"mm\:ss") : null,
+                TimestampSeconds = a.FrameTimeSeconds,
+                TimestampLabel = a.FrameTimeSeconds.HasValue ? TimeSpan.FromSeconds(a.FrameTimeSeconds.Value).ToString(@"mm\:ss") : null,
                 FrameIndex = a.FrameIndex,
                 ImageUrl = !string.IsNullOrWhiteSpace(a.ImageUrl) ? a.ImageUrl : (!string.IsNullOrWhiteSpace(a.CropUrl) ? a.CropUrl : media?.FileUrl),
                 SourceUrl = media?.FileUrl,
-                AssetId = a.AssetId?.ToString(),
-                Tower = a.TowerId ?? "Cột chưa xác định",
-                Gps = a.Gps,
+                TowerId = a.TowerId?.ToString(),
+                Tower = a.Tower?.TowerCode ?? "Cột chưa xác định",
+                Gps = a.Location == null ? null : JsonSerializer.Serialize(new { lat = a.Location.Y, lng = a.Location.X }),
                 Description = !string.IsNullOrWhiteSpace(a.Category?.Description) ? a.Category.Description : a.AnalystNotes,
                 DetectedAt = a.CreatedAt,
                 ReviewedByUserId = a.AnalystId?.ToString(),
@@ -1690,50 +1669,23 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             throw new BusinessRuleException("INVALID_REVIEW_STATUS", "Trạng thái phê duyệt phải là 'Approved' hoặc 'Rejected'.");
         }
 
+        if (isApproved && !anomaly.TowerId.HasValue)
+        {
+            // Bất thường phải gắn cột điện trước khi xác nhận (CK_DetectedAnomalies_ConfirmedRequiresTower).
+            anomaly.TowerId = anomaly.Media.TowerId
+                ?? throw new BusinessRuleException("TOWER_REQUIRED", "Khuyết tật phải được gắn với cột điện trước khi xác nhận.");
+        }
+
         anomaly.ValidationStatus = isApproved ? "Confirmed" : "Rejected";
         anomaly.AnalystId = _current.UserId;
         anomaly.AnalystNotes = request.ReviewNotes ?? string.Empty;
         anomaly.ValidatedAt = DateTime.UtcNow;
 
         string? createdTaskId = null;
-        double? newHealthScore = null;
+        double? newHealthScore = null; // Tính năng điểm sức khỏe đã bỏ (ERD v2.2); giữ trường null cho tương thích API.
 
         if (isApproved)
         {
-            // 1. Cập nhật giảm điểm sức khỏe của thiết bị (Asset Health Score)
-            if (anomaly.AssetId.HasValue && anomaly.AssetId.Value != Guid.Empty)
-            {
-                var asset = await _db.Assets.SingleOrDefaultAsync(x => x.Id == anomaly.AssetId.Value, ct);
-                if (asset != null)
-                {
-                    double penalty = 15;
-                    if (string.Equals(request.OverrideSeverity, "Critical Risk", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(request.OverrideSeverity, "Urgent", StringComparison.OrdinalIgnoreCase))
-                    {
-                        penalty = 25;
-                    }
-                    else if ((anomaly.Category?.SeverityWeight ?? 0) > 0)
-                    {
-                        penalty = Math.Min(30, anomaly.Category!.SeverityWeight * 3);
-                    }
-
-                    asset.CurrentHealthScore = Math.Max(0, Math.Round(asset.CurrentHealthScore - penalty, 1));
-                    asset.LastInspectedAt = DateTime.UtcNow;
-                    newHealthScore = asset.CurrentHealthScore;
-
-                    var healthHistory = new AssetHealthHistory
-                    {
-                        Id = Guid.NewGuid(),
-                        AssetId = asset.Id,
-                        HealthScore = asset.CurrentHealthScore,
-                        CalculatedAt = DateTime.UtcNow,
-                        CalculationLog = $"{{\"penalty\": {penalty}, \"action\": \"AI_DETECTION_REVIEW\", \"notes\": \"{request.ReviewNotes}\"}}",
-                        RiskLevel = asset.CurrentHealthScore < 40 ? "Critical" : (asset.CurrentHealthScore < 70 ? "Medium" : "Low")
-                    };
-                    _db.AssetHealthHistories.Add(healthHistory);
-                }
-            }
-
             // 2. Tự động sinh phiếu bảo dưỡng (MaintenanceTask) nếu chưa tồn tại
             var existingTicket = await _db.MaintenanceTickets
                 .SingleOrDefaultAsync(t => t.AnomalyId == anomaly.Id && !t.IsDeleted, ct);
@@ -1761,7 +1713,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                     Id = Guid.NewGuid(),
                     TicketCode = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
                     AnomalyId = anomaly.Id,
-                    AssetId = anomaly.AssetId ?? Guid.Empty,
                     ManagerId = mission.ManagerId,
                     TechnicianId = techAssignment?.UserId ?? Guid.Empty,
                     Status = TicketStatus.Open,
@@ -1856,7 +1807,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var tickets = await _db.MaintenanceTickets
             .Include(t => t.Anomaly)
                 .ThenInclude(a => a!.Category)
-            .Include(t => t.Asset)
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Tower)
             .Where(t => anomalyIds.Contains(t.AnomalyId) && !t.IsDeleted)
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync(ct);
@@ -1881,8 +1833,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             };
 
             var catName = t.Anomaly?.Category?.CategoryName ?? "Khuyết tật thiết bị";
-            var assetCode = t.Asset?.AssetCode ?? "INS-220KV-042-PHA-B";
-            var towerCode = t.Anomaly?.TowerId ?? "Cột 042";
+            var towerCode = t.Anomaly?.Tower?.TowerCode ?? "Cột chưa xác định";
 
             results.Add(new MissionMaintenanceTaskDto
             {
@@ -1892,7 +1843,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 Title = $"Khắc phục & sửa chữa {catName}",
                 Priority = priorityStr,
                 TowerCode = towerCode,
-                AssetCode = assetCode,
                 DefectDescription = t.Description,
                 SuggestedAction = $"Cắt điện xuất tuyến, chuẩn bị vật tư và nhân lực chuyên dụng để xử lý {catName} theo quy trình kỹ thuật an toàn.",
                 Status = statusStr,
@@ -1917,8 +1867,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 Id = x.Id.ToString(),
                 MissionId = x.MissionId.ToString(),
                 SenderUserId = x.SenderId.HasValue ? x.SenderId.Value.ToString() : string.Empty,
-                SenderName = x.SenderName,
-                SenderRole = x.SenderRole,
+                SenderName = x.Sender != null ? x.Sender.FullName : "Hệ thống",
+                SenderRole = x.SenderId == null ? "SYSTEM" : (x.SenderId == x.Mission!.ManagerId ? "MANAGER" : "INSPECTOR"),
                 Content = x.Content,
                 Timestamp = x.CreatedAt
             })
@@ -1990,8 +1940,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
             SenderId = _current.UserId,
-            SenderName = actorName,
-            SenderRole = senderRole,
             Type = "MESSAGE",
             Content = content,
             CreatedAt = DateTime.UtcNow
@@ -2005,8 +1953,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = commLog.Id.ToString(),
             MissionId = mission.Id.ToString(),
             SenderUserId = (commLog.SenderId ?? Guid.Empty).ToString(),
-            SenderName = commLog.SenderName,
-            SenderRole = commLog.SenderRole,
+            SenderName = actorName,
+            SenderRole = senderRole,
             Content = commLog.Content,
             Timestamp = commLog.CreatedAt
         };
@@ -2022,14 +1970,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 ActorRole = senderRole,
                 Message = content,
                 ManagerId = mission.ManagerId.ToString(),
-                InspectorId = mission.InspectorId?.ToString() ?? string.Empty,
+                InspectorId = mission.PrimaryInspectorId()?.ToString() ?? string.Empty,
                 Timestamp = DateTime.UtcNow,
                 Log = new MissionCommunicationLogDto
                 {
                     Id = commLog.Id.ToString(),
                     SenderId = (commLog.SenderId ?? Guid.Empty).ToString(),
-                    SenderName = commLog.SenderName,
-                    SenderRole = commLog.SenderRole,
+                    SenderName = actorName,
+                    SenderRole = senderRole,
                     Type = commLog.Type,
                     Content = commLog.Content,
                     Timestamp = commLog.CreatedAt
@@ -2107,7 +2055,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var drone = await _db.Uavs.FirstOrDefaultAsync(d => d.Id == droneId, ct);
         if (drone != null)
         {
-            drone.Status = DroneStatus.Idle;
+            drone.FlightStatus = DroneStatus.Idle;
             drone.UpdatedAt = DateTime.UtcNow;
         }
 
@@ -2193,25 +2141,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         if (string.IsNullOrWhiteSpace(request.Description) || request.Description.Trim().Length < 10)
             throw new BusinessRuleException("DESCRIPTION_TOO_SHORT", "Description must have at least 10 characters.");
 
-        Guid resolvedAssetId = Guid.Empty;
-        if (request.AssetId.HasValue && request.AssetId.Value != Guid.Empty)
+        // Sự cố có thể không xảy ra tại cột nào (TowerId NULL).
+        Guid? resolvedTowerId = null;
+        if (request.TowerId.HasValue && request.TowerId.Value != Guid.Empty)
         {
-            var assetExists = await _db.Assets.AnyAsync(a => a.Id == request.AssetId.Value, ct);
-            if (!assetExists) throw new NotFoundException("Asset", request.AssetId.Value);
-            resolvedAssetId = request.AssetId.Value;
+            var towerExists = await _db.Towers.AnyAsync(a => a.Id == request.TowerId.Value, ct);
+            if (!towerExists) throw new NotFoundException("Tower", request.TowerId.Value);
+            resolvedTowerId = request.TowerId.Value;
         }
-        else if (mission.MissionTargets.Count > 0)
-        {
-            resolvedAssetId = mission.MissionTargets.First().AssetId;
-        }
-        else
-        {
-            var firstAsset = await _db.Assets.FirstOrDefaultAsync(a => !a.IsDeleted && (mission.RegionId == null || a.Tower != null), ct);
-            if (firstAsset != null) resolvedAssetId = firstAsset.Id;
-        }
-
-        if (resolvedAssetId == Guid.Empty)
-            throw new BusinessRuleException("ASSET_REQUIRED", "An AssetId is required to associate the incident report.");
 
         var isCritical = request.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase);
 
@@ -2220,11 +2157,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Id = Guid.NewGuid(),
             MissionId = missionId,
             ReportedBy = _current.UserId,
-            AssetId = resolvedAssetId,
+            TowerId = resolvedTowerId,
             IncidentType = request.IncidentType,
             Severity = char.ToUpperInvariant(request.Severity[0]) + request.Severity[1..].ToLowerInvariant(),
             Description = request.Description.Trim(),
-            FileUrl = request.FileUrl ?? string.Empty,
             Status = "Reported",
             ReportedAt = DateTime.UtcNow,
             CreatedBy = _current.UserId
@@ -2248,7 +2184,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         await AccessibleMission(missionId, ct, false);
         return await _db.IncidentReports
             .Include(x => x.Reporter)
-            .Include(x => x.Asset)
+            .Include(x => x.Tower)
             .Where(x => x.MissionId == missionId)
             .OrderByDescending(x => x.ReportedAt)
             .ToListAsync(ct);
@@ -2294,7 +2230,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         return false;
     }
 
-    private IQueryable<Asset> AssetsForRegion(Guid regionId) => _db.Assets.Where(x => (x.Status == "Active" || x.Status == "Operational") && x.Tower!.TransmissionLine!.Substation!.RegionAssetId == regionId);
+    private IQueryable<Tower> AssetsForRegion(Guid regionId) => _db.Towers.Where(x => x.RegionId == regionId || x.Region!.ParentId == regionId);
     private static Geometry? ParseBoundarySafe(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
@@ -2337,13 +2273,12 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var uid = _current.UserId;
         var userRegionScopes = await _db.UserGeographicScopes
             .Where(x => x.UserId == uid)
-            .Select(x => x.RegionId)
+            .Select(x => (Guid?)x.RegionId)
             .ToListAsync(ct);
 
         var m = await MissionQuery(graph).SingleOrDefaultAsync(x => x.Id == id && (
             global ||
             x.ManagerId == uid ||
-            (x.InspectorId.HasValue && x.InspectorId.Value == uid) ||
             x.Assignments.Any(a => a.UserId == uid && a.Status == MissionAssignmentStatus.Active) ||
             userRegionScopes.Contains(x.RegionId)
         ), ct);
@@ -2366,7 +2301,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             return;
 
         var uid = _current.UserId;
-        var isAssigned = (m.InspectorId.HasValue && m.InspectorId.Value == uid) ||
+        var isAssigned = (m.PrimaryInspectorId().HasValue && m.PrimaryInspectorId().Value == uid) ||
                          m.Assignments.Any(a => a.UserId == uid && a.Status == MissionAssignmentStatus.Active);
 
         if (!isAssigned)
@@ -2436,7 +2371,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             ReferenceId = m.Id,
             Title = title,
             Body = body,
-            IsRead = false,
             SentAt = DateTime.UtcNow
         });
     }
@@ -2454,12 +2388,13 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             }
         }
 
+        await _db.Entry(mission).Collection(m => m.PriorityDefects).Query().Include(p => p.Category).LoadAsync(ct);
         var oldValues = JsonSerializer.Serialize(new
         {
             Priority = mission.Priority.ToString(),
             Objective = mission.Objective.ToString(),
-            mission.PriorityDefectsJson,
-            mission.EmergencyReason
+            PriorityDefects = mission.PriorityDefectCodes(),
+            mission.TriggerReason
         });
 
         mission.Priority = request.Priority;
@@ -2469,18 +2404,19 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
         if (request.PriorityDefects != null)
         {
-            mission.PriorityDefectsJson = JsonSerializer.Serialize(request.PriorityDefects);
+            await MissionRepository.ApplyPriorityDefectsAsync(_db, mission, request.PriorityDefects, ct);
         }
-        mission.EmergencyReason = request.Priority == MissionPriority.Emergency
-            ? request.EmergencyReason?.Trim()
-            : null;
+        if (request.Priority == MissionPriority.Emergency)
+        {
+            mission.TriggerReason = request.EmergencyReason?.Trim();
+        }
 
         var newValues = JsonSerializer.Serialize(new
         {
             Priority = mission.Priority.ToString(),
             Objective = mission.Objective.ToString(),
-            mission.PriorityDefectsJson,
-            mission.EmergencyReason
+            PriorityDefects = mission.PriorityDefectCodes(),
+            mission.TriggerReason
         });
 
         // BR-09: Mission priority creation and changes must be recorded in Audit Log

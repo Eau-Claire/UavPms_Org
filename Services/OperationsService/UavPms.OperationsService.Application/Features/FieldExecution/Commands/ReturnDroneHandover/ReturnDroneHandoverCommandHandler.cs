@@ -60,7 +60,7 @@ public class ReturnDroneHandoverCommandHandler : IRequestHandler<ReturnDroneHand
         if (drone != null)
         {
             drone.OperationalStatus = DroneOperationalStatus.Available;
-            drone.Status = DroneStatus.Idle;
+            drone.FlightStatus = DroneStatus.Idle;
             drone.UpdatedAt = DateTime.UtcNow;
             await _uavRepository.UpdateAsync(drone);
         }

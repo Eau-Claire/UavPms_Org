@@ -20,7 +20,7 @@ public class UploadInspectionImageCommandHandler
     : IRequestHandler<UploadInspectionImageCommand, UploadInspectionImageResult>
 {
     private readonly IGenericRepository<Mission> _missionRepository;
-    private readonly IGenericRepository<Asset> _assetRepository;
+    private readonly IGenericRepository<Tower> _towerRepository;
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
     private readonly IGenericRepository<MissionTarget> _missionTargetRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -34,7 +34,7 @@ public class UploadInspectionImageCommandHandler
 
     public UploadInspectionImageCommandHandler(
         IGenericRepository<Mission> missionRepository,
-        IGenericRepository<Asset> assetRepository,
+        IGenericRepository<Tower> towerRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
         IGenericRepository<MissionTarget> missionTargetRepository,
         IUnitOfWork unitOfWork,
@@ -47,7 +47,7 @@ public class UploadInspectionImageCommandHandler
         IMissionRealtimeNotifier? notifier = null)
     {
         _missionRepository = missionRepository;
-        _assetRepository = assetRepository;
+        _towerRepository = towerRepository;
         _mediaRepository = mediaRepository;
         _missionTargetRepository = missionTargetRepository;
         _unitOfWork = unitOfWork;
@@ -62,7 +62,7 @@ public class UploadInspectionImageCommandHandler
 
     public UploadInspectionImageCommandHandler(
         IGenericRepository<Mission> missionRepository,
-        IGenericRepository<Asset> assetRepository,
+        IGenericRepository<Tower> towerRepository,
         IGenericRepository<InspectionMedia> mediaRepository,
         IGenericRepository<MissionTarget> missionTargetRepository,
         IUnitOfWork unitOfWork,
@@ -70,7 +70,7 @@ public class UploadInspectionImageCommandHandler
         IEventPublisher eventPublisher,
         ICurrentUserServices currentUser,
         ILogger<UploadInspectionImageCommandHandler> logger)
-        : this(missionRepository, assetRepository, mediaRepository, missionTargetRepository, unitOfWork,
+        : this(missionRepository, towerRepository, mediaRepository, missionTargetRepository, unitOfWork,
             fileStorageService, eventPublisher, null!, currentUser, logger, null, null) { }
 
     public async Task<UploadInspectionImageResult> Handle(
@@ -95,16 +95,19 @@ public class UploadInspectionImageCommandHandler
             throw new BusinessRuleException("MISSION_CANCELLED", "Cannot upload inspection media for cancelled mission.");
         }
 
-        // 1c. Kiểm tra Asset tồn tại
-        var asset = await _assetRepository.GetByIdAsync(request.AssetId, track: false);
-        if (asset == null)
+        // 1c. Kiểm tra cột điện (không bắt buộc: video hành lang có thể đi qua nhiều cột)
+        if (request.TowerId.HasValue)
         {
-            throw new KeyNotFoundException($"Asset with ID '{request.AssetId}' was not found.");
+            var tower = await _towerRepository.GetByIdAsync(request.TowerId.Value, track: false);
+            if (tower == null)
+            {
+                throw new KeyNotFoundException($"Tower with ID '{request.TowerId}' was not found.");
+            }
         }
 
         // 2. Kiểm tra quyền: chỉ Inspector được giao mới có quyền upload
         var currentUserId = _currentUser.UserId;
-        var isAssigned = mission.InspectorId == currentUserId;
+        var isAssigned = mission.PrimaryInspectorId() == currentUserId;
         if (!isAssigned && _assignmentRepository != null)
         {
             var activeAssignments = await _assignmentRepository.FindAsync(
@@ -120,12 +123,14 @@ public class UploadInspectionImageCommandHandler
             throw new ForbiddenException("You are not assigned to this mission.");
         }
 
-        var targets = await _missionTargetRepository.FindAsync(
-            target => target.MissionId == request.MissionId && target.AssetId == request.AssetId,
-            track: false);
-        if (targets.Count == 0)
+        var targets = request.TowerId.HasValue
+            ? await _missionTargetRepository.FindAsync(
+                target => target.MissionId == request.MissionId && target.TowerId == request.TowerId.Value,
+                track: false)
+            : null;
+        if (targets != null && targets.Count == 0)
         {
-            throw new BusinessRuleException("The asset is not included in the mission inspection scope.");
+            throw new BusinessRuleException("The tower is not included in the mission inspection scope.");
         }
 
         // 2b. Auto-extract EXIF GPS & timestamp if missing
@@ -166,15 +171,13 @@ public class UploadInspectionImageCommandHandler
         {
             Id = Guid.NewGuid(),
             MissionId = request.MissionId,
-            AssetId = request.AssetId,
-            TowerId = request.TowerId ?? (asset.TowerId != Guid.Empty ? (Guid?)asset.TowerId : (request.AssetId != Guid.Empty ? (Guid?)request.AssetId : null)),
+            TowerId = request.TowerId,
             UploadedBy = currentUserId,
             CaptureLocation = effectiveLat.HasValue && effectiveLng.HasValue
                 ? new Point(effectiveLng.Value, effectiveLat.Value) { SRID = 4326 }
                 : null,
             MediaType = mediaType,
             FileUrl = fileUrl,
-            AiSource = string.Empty,
             ValidationStatus = "Pending",
             CapturedAt = effectiveCapturedAt,
             CreatedBy = currentUserId
@@ -185,7 +188,7 @@ public class UploadInspectionImageCommandHandler
             EventId = Guid.NewGuid(),
             MediaId = media.Id,
             MissionId = media.MissionId,
-            AssetId = request.AssetId,
+            TowerId = request.TowerId,
             FileUrl = media.FileUrl,
             MediaType = media.MediaType,
             UploadedBy = currentUserId,
@@ -202,9 +205,7 @@ public class UploadInspectionImageCommandHandler
                 Id = integrationEvent.EventId,
                 MessageType = nameof(InspectionMediaUploadedEvent),
                 Payload = JsonSerializer.Serialize(integrationEvent),
-                OccurredAt = integrationEvent.OccurredAt,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = currentUserId
+                OccurredAt = integrationEvent.OccurredAt
             });
         }
         try

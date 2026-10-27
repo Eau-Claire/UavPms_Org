@@ -20,8 +20,7 @@ public class UpdateAndDeleteReportCommandHandlerTests
 {
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IReportRepository> _reportRepositoryMock;
-    private readonly Mock<ITransmissionLineRepository> _transmissionLineRepositoryMock;
-    private readonly Mock<ISubstationRepository> _substationRepositoryMock;
+    private readonly Mock<IRegionRepository> _regionRepositoryMock;
     private readonly Mock<IMissionRepository> _missionRepositoryMock;
     private readonly Mock<ICurrentUserServices> _currentUserServicesMock;
 
@@ -29,8 +28,7 @@ public class UpdateAndDeleteReportCommandHandlerTests
     {
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _reportRepositoryMock = new Mock<IReportRepository>();
-        _transmissionLineRepositoryMock = new Mock<ITransmissionLineRepository>();
-        _substationRepositoryMock = new Mock<ISubstationRepository>();
+        _regionRepositoryMock = new Mock<IRegionRepository>();
         _missionRepositoryMock = new Mock<IMissionRepository>();
         _currentUserServicesMock = new Mock<ICurrentUserServices>();
     }
@@ -58,13 +56,12 @@ public class UpdateAndDeleteReportCommandHandlerTests
         var handler = new UpdateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new UpdateReportCommand(reportId, "New Title", "New Desc", null, null, null, null, null);
+        var command = new UpdateReportCommand(reportId, "New Title", "New Desc", null, null, null, null);
 
         // Act
         var result = await handler.Handle(command, CancellationToken.None);
@@ -98,13 +95,12 @@ public class UpdateAndDeleteReportCommandHandlerTests
         var handler = new UpdateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new UpdateReportCommand(reportId, "New Title", null, null, null, null, null, null);
+        var command = new UpdateReportCommand(reportId, "New Title", null, null, null, null, null);
 
         // Act
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
@@ -135,13 +131,12 @@ public class UpdateAndDeleteReportCommandHandlerTests
         var handler = new UpdateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new UpdateReportCommand(reportId, "New Title By Manager", null, null, null, null, null, null);
+        var command = new UpdateReportCommand(reportId, "New Title By Manager", null, null, null, null, null);
 
         // Act
         var result = await handler.Handle(command, CancellationToken.None);
@@ -174,13 +169,12 @@ public class UpdateAndDeleteReportCommandHandlerTests
         var handler = new UpdateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new UpdateReportCommand(reportId, "New Title By Manager", null, null, null, null, null, null);
+        var command = new UpdateReportCommand(reportId, "New Title By Manager", null, null, null, null, null);
 
         // Act
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
@@ -190,17 +184,17 @@ public class UpdateAndDeleteReportCommandHandlerTests
     }
 
     [Fact]
-    public async Task UpdateReport_ShouldRecalculateDefectCount_WhenMissionsUpdated()
+    public async Task UpdateReport_ShouldComputeDefectCountLive_WhenMissionsUpdated()
     {
         // Arrange
         var reportId = Guid.NewGuid();
         var missionId = Guid.NewGuid();
         var creatorId = Guid.NewGuid();
         var mission = new Mission { Id = missionId, MissionCode = "MS-002", Title = "Mission 2", IsDeleted = false };
-        var report = new Report { Id = reportId, Title = "Title", Status = ReportStatus.Draft, DefectCount = 2, CreatedBy = creatorId };
+        var report = new Report { Id = reportId, Title = "Title", Status = ReportStatus.Draft, CreatedBy = creatorId };
         _reportRepositoryMock.Setup(r => r.GetReportByIdWithDetailsAsync(reportId)).ReturnsAsync(report);
         _missionRepositoryMock.Setup(m => m.GetByIdAsync(missionId, true)).ReturnsAsync(mission);
-        _reportRepositoryMock.Setup(r => r.CountAnomaliesByMissionIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+        _reportRepositoryMock.Setup(r => r.CountAnomaliesForReportAsync(It.IsAny<Report>()))
             .ReturnsAsync(9);
         _currentUserServicesMock.Setup(c => c.UserId).Returns(creatorId);
         _currentUserServicesMock.Setup(c => c.Roles).Returns(new List<string> { UserRoles.Inspector });
@@ -208,20 +202,20 @@ public class UpdateAndDeleteReportCommandHandlerTests
         var handler = new UpdateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new UpdateReportCommand(reportId, "New Title", null, null, null, new List<Guid> { missionId }, null, null);
+        var command = new UpdateReportCommand(reportId, "New Title", null, null, new List<Guid> { missionId }, null, null);
 
         // Act
-        await handler.Handle(command, CancellationToken.None);
+        var result = await handler.Handle(command, CancellationToken.None);
 
         // Assert
-        report.DefectCount.Should().Be(9);
-        _reportRepositoryMock.Verify(r => r.CountAnomaliesByMissionIdsAsync(It.Is<IEnumerable<Guid>>(ids => ids.Contains(missionId))), Times.Once);
+        result.DefectCount.Should().Be(9);
+        report.ReportMissions.Should().ContainSingle(rm => rm.MissionId == missionId);
+        _reportRepositoryMock.Verify(r => r.CountAnomaliesForReportAsync(It.Is<Report>(rep => rep.Id == reportId)), Times.Once);
     }
 
     [Theory]
@@ -240,13 +234,12 @@ public class UpdateAndDeleteReportCommandHandlerTests
         var handler = new UpdateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new UpdateReportCommand(reportId, "New Title", null, null, null, null, null, null);
+        var command = new UpdateReportCommand(reportId, "New Title", null, null, null, null, null);
 
         // Act
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
@@ -265,13 +258,12 @@ public class UpdateAndDeleteReportCommandHandlerTests
         var handler = new UpdateReportCommandHandler(
             _unitOfWorkMock.Object,
             _reportRepositoryMock.Object,
-            _transmissionLineRepositoryMock.Object,
-            _substationRepositoryMock.Object,
+            _regionRepositoryMock.Object,
             _missionRepositoryMock.Object,
             _currentUserServicesMock.Object
         );
 
-        var command = new UpdateReportCommand(reportId, "New Title", null, null, null, null, null, null);
+        var command = new UpdateReportCommand(reportId, "New Title", null, null, null, null, null);
 
         // Act
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);

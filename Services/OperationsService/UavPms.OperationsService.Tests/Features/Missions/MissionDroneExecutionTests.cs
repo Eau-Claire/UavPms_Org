@@ -66,7 +66,7 @@ public class MissionDroneExecutionTests
         _db.Regions.Add(new Region
         {
             Id = _regionId,
-            RegionName = "Mekong Grid Area",
+            Name = "Mekong Grid Area",
             IsDeleted = false
         });
 
@@ -82,7 +82,7 @@ public class MissionDroneExecutionTests
             Id = _droneId,
             UavCode = "UAV-DRONE-01",
             Model = "DJI Matrice 300 RTK",
-            Status = DroneStatus.Idle,
+            FlightStatus = DroneStatus.Idle,
             BatteryLevel = 98.0
         });
 
@@ -101,7 +101,7 @@ public class MissionDroneExecutionTests
             Title = "Flight Execution Test",
             RegionId = _regionId,
             ManagerId = _managerId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             UavId = _droneId,
             Status = MissionStatus.Ready
         };
@@ -116,7 +116,7 @@ public class MissionDroneExecutionTests
         mission.StartedAt.Should().NotBeNull();
 
         var drone = await _db.Uavs.FindAsync(_droneId);
-        drone!.Status.Should().Be(DroneStatus.Flying);
+        drone!.FlightStatus.Should().Be(DroneStatus.Flying);
 
         _notifierMock.Verify(n => n.NotifyAsync(
             It.Is<MissionLifecycleEventDto>(e => e.MissionId == missionId.ToString() && e.Type == "STARTED" && e.Status == "IN_PROGRESS"),
@@ -137,7 +137,7 @@ public class MissionDroneExecutionTests
             MissionCode = "MSN-NOTREADY-01",
             Title = "Not Ready Mission",
             RegionId = _regionId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             UavId = _droneId,
             Status = MissionStatus.Pending // Pending cannot be started directly
         };
@@ -164,7 +164,7 @@ public class MissionDroneExecutionTests
             Title = "Complete Test Mission",
             RegionId = _regionId,
             ManagerId = _managerId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             UavId = _droneId,
             Status = MissionStatus.InProgress,
             StartedAt = DateTime.UtcNow.AddHours(-1)
@@ -173,7 +173,7 @@ public class MissionDroneExecutionTests
 
         // Set drone flying
         var drone = await _db.Uavs.FindAsync(_droneId);
-        drone!.Status = DroneStatus.Flying;
+        drone!.FlightStatus = DroneStatus.Flying;
 
         // Add active resource booking
         _db.ResourceBookings.Add(new ResourceBooking
@@ -195,7 +195,7 @@ public class MissionDroneExecutionTests
         mission.Status.Should().Be(MissionStatus.Completed);
         mission.EndedAt.Should().NotBeNull();
 
-        drone.Status.Should().Be(DroneStatus.Idle);
+        drone.FlightStatus.Should().Be(DroneStatus.Idle);
 
         var booking = await _db.ResourceBookings.FirstOrDefaultAsync(b => b.MissionId == missionId);
         booking!.Status.Should().Be(ResourceBookingStatus.Released);
@@ -219,7 +219,7 @@ public class MissionDroneExecutionTests
             MissionCode = "MSN-HANDOVER-RET",
             Title = "Return Handover Mission",
             RegionId = _regionId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             UavId = _droneId,
             Status = MissionStatus.Completed,
             EndedAt = DateTime.UtcNow
@@ -240,7 +240,7 @@ public class MissionDroneExecutionTests
         _db.Missions.Add(mission);
 
         var drone = await _db.Uavs.FindAsync(_droneId);
-        drone!.Status = DroneStatus.Flying;
+        drone!.FlightStatus = DroneStatus.Flying;
 
         await _db.SaveChangesAsync();
 
@@ -251,7 +251,7 @@ public class MissionDroneExecutionTests
         result.ReturnedAt.Should().NotBeNull();
         result.Condition.Should().Contain("Returned safely with 25% battery remaining");
 
-        drone.Status.Should().Be(DroneStatus.Idle);
+        drone.FlightStatus.Should().Be(DroneStatus.Idle);
 
         var audit = await _db.AuditLogs.FirstOrDefaultAsync(a => a.RecordId == missionId && a.ActionType == "DRONE_HANDOVER_RETURNED");
         audit.Should().NotBeNull();
@@ -268,7 +268,7 @@ public class MissionDroneExecutionTests
             MissionCode = "MSN-NOHANDOVER",
             Title = "No Handover Mission",
             RegionId = _regionId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             UavId = _droneId,
             Status = MissionStatus.Completed
         };
@@ -303,7 +303,7 @@ public class MissionDroneExecutionTests
             MissionCode = "MSN-IDOR-START",
             Title = "Another Inspector Mission",
             RegionId = _regionId,
-            InspectorId = anotherInspectorId,
+            Assignments = { new MissionAssignment { UserId = anotherInspectorId, AssignmentRole = "INSPECTOR" } },
             UavId = _droneId,
             Status = MissionStatus.Assigned
         };
@@ -338,7 +338,7 @@ public class MissionDroneExecutionTests
             MissionCode = "MSN-IDOR-COMPLETE",
             Title = "Another Inspector Mission",
             RegionId = _regionId,
-            InspectorId = anotherInspectorId,
+            Assignments = { new MissionAssignment { UserId = anotherInspectorId, AssignmentRole = "INSPECTOR" } },
             UavId = _droneId,
             Status = MissionStatus.InProgress
         };

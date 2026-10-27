@@ -14,6 +14,10 @@ namespace UavPms.NotificationService.API.Jobs;
 
 public class MissionConfirmationOverdueJob
 {
+    private const string SystemSenderName = "Hệ Thống";
+    private const string SystemSenderRole = "SYSTEM";
+    private const string ActiveAssignmentStatus = "Active";
+
     private readonly ILogger<MissionConfirmationOverdueJob> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
 
@@ -39,7 +43,7 @@ public class MissionConfirmationOverdueJob
 
             var overdueMissions = await db.Missions
                 .Where(m => !m.IsDeleted
-                    && !m.IsOverdueNotified
+                    && m.OverdueNotifiedAt == null
                     && m.ConfirmationDeadline != null
                     && m.ConfirmationDeadline <= now
                     && (m.Status == "PENDING_CONFIRMATION" || m.Status == "PendingAcceptance" || m.Status == "Pending"))
@@ -53,11 +57,30 @@ public class MissionConfirmationOverdueJob
 
             _logger.LogWarning("Found {Count} overdue missions requiring notification.", overdueMissions.Count);
 
-            var eventsToBroadcast = new System.Collections.Generic.List<(string MissionGroup, Guid ManagerId, MissionLifecycleEventDto EventDto)>();
+            // Missions no longer store InspectorId: derive the inspector from the active
+            // INSPECTOR/PILOT assignment (INSPECTOR preferred, earliest assignment first).
+            var missionIds = overdueMissions.Select(m => m.Id).ToList();
+            var inspectorAssignments = await db.MissionAssignments
+                .AsNoTracking()
+                .Where(a => missionIds.Contains(a.MissionId)
+                    && !a.IsDeleted
+                    && a.Status == ActiveAssignmentStatus
+                    && (a.AssignmentRole.ToUpper() == "INSPECTOR" || a.AssignmentRole.ToUpper() == "PILOT"))
+                .Select(a => new { a.MissionId, a.UserId, a.AssignmentRole, a.AssignedAt })
+                .ToListAsync();
+            var inspectorIds = inspectorAssignments
+                .GroupBy(a => a.MissionId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderBy(a => string.Equals(a.AssignmentRole, "INSPECTOR", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                          .ThenBy(a => a.AssignedAt)
+                          .First().UserId);
+
+            var eventsToBroadcast =new System.Collections.Generic.List<(string MissionGroup, Guid ManagerId, MissionLifecycleEventDto EventDto)>();
 
             foreach (var mission in overdueMissions)
             {
-                mission.IsOverdueNotified = true;
+                mission.OverdueNotifiedAt = now;
                 mission.UpdatedAt = now;
 
                 // 1. Create urgent Notification for Manager
@@ -72,7 +95,6 @@ public class MissionConfirmationOverdueJob
                         ReferenceId = mission.Id,
                         Title = $"[MF02] Nhiệm vụ {mission.MissionCode} quá hạn tiếp nhận",
                         Body = $"Phi công chưa xác nhận tiếp nhận nhiệm vụ '{mission.Title}' trước thời hạn ({mission.ConfirmationDeadline:yyyy-MM-dd HH:mm} UTC).",
-                        IsRead = false,
                         SentAt = now
                     };
                     db.Notifications.Add(notification);
@@ -83,8 +105,6 @@ public class MissionConfirmationOverdueJob
                 {
                     Id = Guid.NewGuid(),
                     MissionId = mission.Id,
-                    SenderName = "Hệ Thống",
-                    SenderRole = "SYSTEM",
                     Type = "OVERDUE",
                     Content = $"Nhiệm vụ đã quá hạn xác nhận tiếp nhận lúc {mission.ConfirmationDeadline:yyyy-MM-dd HH:mm:ss} UTC.",
                     CreatedAt = now
@@ -98,16 +118,16 @@ public class MissionConfirmationOverdueJob
                     Type = "OVERDUE",
                     Status = mission.Status,
                     ConfirmationDeadline = mission.ConfirmationDeadline?.ToString("o"),
-                    ActorRole = "SYSTEM",
-                    ActorName = "Hệ Thống",
+                    ActorRole = SystemSenderRole,
+                    ActorName = SystemSenderName,
                     Timestamp = now,
                     ManagerId = mission.ManagerId.ToString(),
-                    InspectorId = mission.InspectorId.ToString(),
+                    InspectorId = inspectorIds.TryGetValue(mission.Id, out var inspectorId) ? inspectorId.ToString() : null,
                     Log = new MissionCommunicationLogDto
                     {
                         Id = commLog.Id.ToString(),
-                        SenderName = commLog.SenderName,
-                        SenderRole = commLog.SenderRole,
+                        SenderName = SystemSenderName,
+                        SenderRole = SystemSenderRole,
                         Type = commLog.Type,
                         Content = commLog.Content,
                         Timestamp = commLog.CreatedAt

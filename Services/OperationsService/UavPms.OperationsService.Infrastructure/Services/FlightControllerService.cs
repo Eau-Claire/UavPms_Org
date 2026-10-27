@@ -42,7 +42,7 @@ public sealed class FlightControllerService : IFlightControllerService
 
         var binding = await _db.DroneFlightControllers
             .Include(x => x.Drone)
-            .FirstOrDefaultAsync(x => x.FlightControllerUid == cleanUid && x.IsActive && !x.IsDeleted, ct);
+            .FirstOrDefaultAsync(x => x.FlightControllerUid == cleanUid && x.UnpairedAt == null && !x.IsDeleted, ct);
 
         if (binding == null || binding.Drone == null || binding.Drone.IsDeleted)
         {
@@ -95,23 +95,21 @@ public sealed class FlightControllerService : IFlightControllerService
 
         // BR-02 & BR-03: Deactivate any currently active binding on this drone
         var existingDroneBindings = await _db.DroneFlightControllers
-            .Where(x => x.DroneId == droneId && x.IsActive && !x.IsDeleted)
+            .Where(x => x.DroneId == droneId && x.UnpairedAt == null && !x.IsDeleted)
             .ToListAsync(ct);
 
         foreach (var b in existingDroneBindings)
         {
-            b.IsActive = false;
             b.UnpairedAt = now;
         }
 
         // BR-01: Deactivate any currently active binding of this FlightControllerUid on ANY other drone
         var existingUidBindings = await _db.DroneFlightControllers
-            .Where(x => x.FlightControllerUid == cleanUid && x.IsActive && !x.IsDeleted)
+            .Where(x => x.FlightControllerUid == cleanUid && x.UnpairedAt == null && !x.IsDeleted)
             .ToListAsync(ct);
 
         foreach (var b in existingUidBindings)
         {
-            b.IsActive = false;
             b.UnpairedAt = now;
         }
 
@@ -124,8 +122,7 @@ public sealed class FlightControllerService : IFlightControllerService
             FirmwareName = string.IsNullOrWhiteSpace(request.FirmwareName) ? "Betaflight" : request.FirmwareName.Trim(),
             FirmwareVersion = request.FirmwareVersion?.Trim(),
             PairedAt = now,
-            LastSeenAt = now,
-            IsActive = true
+            LastSeenAt = now
         };
 
         _db.DroneFlightControllers.Add(newBinding);
@@ -159,13 +156,12 @@ public sealed class FlightControllerService : IFlightControllerService
         await RequireTechnicianOrManager(ct);
 
         var activeBinding = await _db.DroneFlightControllers
-            .FirstOrDefaultAsync(x => x.DroneId == droneId && x.IsActive && !x.IsDeleted, ct);
+            .FirstOrDefaultAsync(x => x.DroneId == droneId && x.UnpairedAt == null && !x.IsDeleted, ct);
 
         if (activeBinding == null)
             return false;
 
         var now = DateTime.UtcNow;
-        activeBinding.IsActive = false;
         activeBinding.UnpairedAt = now;
 
         _db.AuditLogs.Add(new AuditLog
@@ -194,7 +190,7 @@ public sealed class FlightControllerService : IFlightControllerService
     public async Task<FlightControllerBindingDto?> GetActiveBindingForDroneAsync(Guid droneId, CancellationToken ct = default)
     {
         var binding = await _db.DroneFlightControllers
-            .FirstOrDefaultAsync(x => x.DroneId == droneId && x.IsActive && !x.IsDeleted, ct);
+            .FirstOrDefaultAsync(x => x.DroneId == droneId && x.UnpairedAt == null && !x.IsDeleted, ct);
 
         return binding == null ? null : MapToBindingDto(binding);
     }
@@ -221,7 +217,7 @@ public sealed class FlightControllerService : IFlightControllerService
             PairedAt: entity.PairedAt,
             UnpairedAt: entity.UnpairedAt,
             LastSeenAt: entity.LastSeenAt,
-            IsActive: entity.IsActive
+            IsActive: entity.UnpairedAt == null
         );
     }
 

@@ -37,7 +37,7 @@ public class AlertsControllerTests
             {
                 Id = Guid.NewGuid(),
                 AnomalyId = Guid.NewGuid(),
-                AssetCode = "TOW-N1-05",
+                TowerCode = "TOW-N1-05",
                 AlertType = "Wildfire",
                 Priority = "Critical",
                 Status = "Active"
@@ -69,7 +69,7 @@ public class AlertsControllerTests
                 new()
                 {
                     Id = Guid.NewGuid(),
-                    AssetCode = "TOW-N1-05",
+                    TowerCode = "TOW-N1-05",
                     AlertType = "Wildfire",
                     Priority = "Critical",
                     Status = "Confirmed"
@@ -96,7 +96,7 @@ public class AlertsControllerTests
         var mockDetail = new EmergencyAlertDetailDto
         {
             Id = alertId,
-            AssetCode = "TOW-N1-05",
+            TowerCode = "TOW-N1-05",
             Status = "Active",
             Priority = "Critical"
         };
@@ -215,7 +215,7 @@ public class AlertsControllerTests
         var mockResult = new EmergencyAlertDetailDto
         {
             Id = Guid.NewGuid(),
-            AssetCode = "TOW-N1-05",
+            TowerCode = "TOW-N1-05",
             Status = "Active"
         };
         _alertServiceMock.Setup(s => s.TriggerAlertAsync(request, It.IsAny<CancellationToken>()))

@@ -146,7 +146,7 @@ public class Phase2MissionAndResourceBookingCqrsTests
         {
             Id = missionId,
             UavId = droneId,
-            MissionTargets = new List<MissionTarget> { new() { AssetId = Guid.NewGuid() } },
+            MissionTargets = new List<MissionTarget> { new() { TowerId = Guid.NewGuid() } },
             Assignments = new List<MissionAssignment>
             {
                 new()

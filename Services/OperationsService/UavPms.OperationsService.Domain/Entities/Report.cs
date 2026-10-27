@@ -5,6 +5,9 @@ using UavPms.OperationsService.Domain.Enums;
 
 namespace UavPms.OperationsService.Domain.Entities;
 
+/// <summary>
+/// Báo cáo không lưu tệp: nội dung luôn sinh trực tiếp từ phạm vi DateFrom/DateTo/RegionId/ReportMissions.
+/// </summary>
 public class Report : BaseEntity
 {
     public string Code { get; set; } = string.Empty;
@@ -12,22 +15,14 @@ public class Report : BaseEntity
     public ReportType Type { get; set; } = ReportType.Defect;
     public ReportStatus Status { get; set; } = ReportStatus.Draft;
     public string? Description { get; set; }
-    public Guid? TransmissionLineId { get; set; }
-    public Guid? SubstationId { get; set; }
+    public Guid? RegionId { get; set; }
     public DateTimeOffset? DateFrom { get; set; }
     public DateTimeOffset? DateTo { get; set; }
-    public int DefectCount { get; set; } = 0;
-    public string? PdfFileUrl { get; set; }
-    public long? PdfFileSize { get; set; }
-    public string? ExcelFileUrl { get; set; }
-    public long? ExcelFileSize { get; set; }
     public string? RejectionReason { get; set; }
     public Guid? ApprovedById { get; set; }
     public DateTimeOffset? ApprovedAt { get; set; }
 
-    // Navigation properties
-    public virtual TransmissionLine? TransmissionLine { get; set; }
-    public virtual Substation? Substation { get; set; }
+    public virtual Region? Region { get; set; }
     public virtual User? ApprovedBy { get; set; }
     public virtual User? CreatedByUser { get; set; }
     public virtual ICollection<ReportMission> ReportMissions { get; set; } = new List<ReportMission>();

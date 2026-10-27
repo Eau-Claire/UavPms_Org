@@ -17,21 +17,6 @@ public class PreMissionAssessment : BaseEntity
     public PreMissionAssessmentStatus Status { get; set; } = PreMissionAssessmentStatus.Draft;
     public TechnicalHealth OverallTechnicalHealth { get; set; } = TechnicalHealth.Unknown;
     public DateTime? ValidUntil { get; set; }
-    public Guid? ConsumedByMissionId { get; set; }
-
-    [NotMapped]
-    public Guid? CompletedByMissionId
-    {
-        get => ConsumedByMissionId;
-        set => ConsumedByMissionId = value;
-    }
-
-    [NotMapped]
-    public Guid? CompletedMissionId
-    {
-        get => ConsumedByMissionId;
-        set => ConsumedByMissionId = value;
-    }
 
     public uint Version { get; set; } = 1;
     public string Findings { get; set; } = "{}";
@@ -39,25 +24,27 @@ public class PreMissionAssessment : BaseEntity
     public string? IdempotencyKey { get; set; }
     public virtual Region? Region { get; set; }
     public virtual User? Manager { get; set; }
-    public ICollection<PreMissionAssessmentAsset> Assets { get; set; } = new List<PreMissionAssessmentAsset>();
+
+    /// <summary>Nhiệm vụ được tạo từ đánh giá này (Missions.PreMissionAssessmentId).</summary>
+    public virtual Mission? Mission { get; set; }
+    public ICollection<PreMissionAssessmentTower> Towers { get; set; } = new List<PreMissionAssessmentTower>();
     public ICollection<PreMissionAssessmentPersonnel> PersonnelCandidates { get; set; } = new List<PreMissionAssessmentPersonnel>();
     public ICollection<PreMissionAssessmentDrone> DroneCandidates { get; set; } = new List<PreMissionAssessmentDrone>();
 }
 
-public sealed class PreMissionAssessmentAsset : BaseEntity
+public sealed class PreMissionAssessmentTower : BaseEntity
 {
     public Guid AssessmentId { get; set; }
-    public Guid AssetId { get; set; }
+    public Guid TowerId { get; set; }
     public int Sequence { get; set; }
     public PreMissionAssessment? Assessment { get; set; }
-    public Asset? Asset { get; set; }
+    public Tower? Tower { get; set; }
 }
 
 public sealed class PreMissionAssessmentPersonnel : BaseEntity
 {
     public Guid AssessmentId { get; set; }
     public Guid UserId { get; set; }
-    public bool IsEligible { get; set; }
     public ResourceEligibilityStatus EligibilityStatus { get; set; } = ResourceEligibilityStatus.Unknown;
     public ResourceAvailabilityStatus AvailabilityStatus { get; set; } = ResourceAvailabilityStatus.Unknown;
     public string? ReasonCode { get; set; }
@@ -65,6 +52,11 @@ public sealed class PreMissionAssessmentPersonnel : BaseEntity
     public string Findings { get; set; } = "{}";
     public PreMissionAssessment? Assessment { get; set; }
     public User? User { get; set; }
+
+    /// <summary>Suy ra từ trạng thái: đủ điều kiện và đang rảnh.</summary>
+    [NotMapped]
+    public bool IsEligible => EligibilityStatus == ResourceEligibilityStatus.Eligible
+        && AvailabilityStatus == ResourceAvailabilityStatus.Available;
 
     [NotMapped]
     public string Role
@@ -119,7 +111,6 @@ public sealed class PreMissionAssessmentDrone : BaseEntity
 {
     public Guid AssessmentId { get; set; }
     public Guid DroneId { get; set; }
-    public bool IsEligible { get; set; }
     public ResourceAvailabilityStatus OperationalAvailabilityStatus { get; set; } = ResourceAvailabilityStatus.Unknown;
     public ResourceEligibilityStatus TechnicalEligibilityStatus { get; set; } = ResourceEligibilityStatus.Unknown;
     public UavScopeSuitability Suitability { get; set; } = UavScopeSuitability.Suitable;
@@ -133,12 +124,18 @@ public sealed class PreMissionAssessmentDrone : BaseEntity
     public PreMissionAssessment? Assessment { get; set; }
     public Uav? Drone { get; set; }
     public DroneTechnicalInspection? TechnicalInspection { get; set; }
+
+    /// <summary>Suy ra từ trạng thái: sẵn sàng vận hành, đạt kỹ thuật và phù hợp phạm vi.</summary>
+    [NotMapped]
+    public bool IsEligible => OperationalAvailabilityStatus == ResourceAvailabilityStatus.Available
+        && TechnicalEligibilityStatus == ResourceEligibilityStatus.Eligible
+        && Suitability != UavScopeSuitability.Unsuitable;
 }
 
 public sealed class DroneTechnicalInspection : BaseEntity
 {
     public Guid DroneId { get; set; }
-    public Guid? TechnicianUserId { get; set; }
+    public Guid? TechnicianId { get; set; }
     public DroneTechnicalInspectionStatus Status { get; set; } = DroneTechnicalInspectionStatus.Pending;
     public TechnicalHealth Health { get; set; } = TechnicalHealth.Unknown;
     public string SourceType { get; set; } = "manual";
@@ -162,7 +159,6 @@ public sealed class DroneTechnicalMetric : BaseEntity
     public string Subsystem { get; set; } = string.Empty;
     public decimal? NumericValue { get; set; }
     public bool Passed { get; set; }
-    public bool Critical { get; set; }
     public string? ValueText { get; set; }
     public bool? BoolValue { get; set; }
     public string? Unit { get; set; }

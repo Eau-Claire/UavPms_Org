@@ -76,7 +76,7 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Message: keyNotFoundException.Message,
                 Data: null,
                 Errors: null
-                , ErrorCode: keyNotFoundException.Message.StartsWith("Mission", StringComparison.OrdinalIgnoreCase) ? "MISSION_NOT_FOUND" : "ASSET_NOT_FOUND"
+                , ErrorCode: keyNotFoundException.Message.StartsWith("Mission", StringComparison.OrdinalIgnoreCase) ? "MISSION_NOT_FOUND" : "TOWER_NOT_FOUND"
             );
         }
         else if (exception is DbUpdateConcurrencyException concurrencyException)
@@ -95,7 +95,7 @@ public class GlobalExceptionHandler : IExceptionHandler
             var code = !string.IsNullOrWhiteSpace(businessRuleException.Code)
                 ? businessRuleException.Code
                 : (businessRuleException.Message.Contains("mission inspection scope", StringComparison.OrdinalIgnoreCase)
-                    ? "INVALID_MISSION_ASSET"
+                    ? "INVALID_MISSION_TOWER"
                     : "BUSINESS_RULE_VIOLATION");
 
             var isConflict = code is "INVALID_MISSION_STATE"

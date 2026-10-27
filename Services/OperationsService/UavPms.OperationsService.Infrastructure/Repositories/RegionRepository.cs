@@ -24,13 +24,13 @@ public class RegionRepository : GenericRepository<Region>, IRegionRepository
 
         if (!string.IsNullOrEmpty(searchTerm))
         {
-            query = query.Where(r => r.RegionName.Contains(searchTerm));
+            query = query.Where(r => r.Name.Contains(searchTerm));
         }
 
         int totalCount = await query.CountAsync();
 
         var items = await query
-            .OrderBy(r => r.RegionName)
+            .OrderBy(r => r.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();

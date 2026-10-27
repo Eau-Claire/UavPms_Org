@@ -28,7 +28,7 @@ public class MissionDetectionDto
     public int? FrameIndex { get; set; }
     public string? ImageUrl { get; set; }
     public string? SourceUrl { get; set; }
-    public string? AssetId { get; set; }
+    public string? TowerId { get; set; }
     public string? Tower { get; set; }
     public string? Gps { get; set; }
     public string? Description { get; set; }
@@ -62,7 +62,6 @@ public class MissionMaintenanceTaskDto
     public string Title { get; set; } = string.Empty;
     public string Priority { get; set; } = "Medium"; // "Urgent" | "High" | "Medium" | "Low"
     public string TowerCode { get; set; } = string.Empty;
-    public string AssetCode { get; set; } = string.Empty;
     public string DefectDescription { get; set; } = string.Empty;
     public string SuggestedAction { get; set; } = string.Empty;
     public string Status { get; set; } = "Pending"; // "Pending" | "Approved" | "InProgress" | "Completed"
@@ -176,14 +175,11 @@ public class MissionCheckInResponseDto
     public DateTime CreatedAt { get; set; }
 }
 
-public class MissionScopeAssetDto
+public class MissionScopeTowerDto
 {
     public Guid Id { get; set; }
-    public string AssetCode { get; set; } = string.Empty;
-    public string AssetType { get; set; } = string.Empty;
-    public Guid TowerId { get; set; }
-    public Guid? PowerLineId { get; set; }
-    public Guid? ManagementUnitId { get; set; }
+    public string TowerCode { get; set; } = string.Empty;
+    public Guid RegionId { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
 }
@@ -213,12 +209,10 @@ public class IncidentReportDto
     public Guid MissionId { get; set; }
     public Guid ReportedBy { get; set; }
     public string ReporterName { get; set; } = string.Empty;
-    public Guid? AssetId { get; set; }
     public Guid? TowerId { get; set; }
     public string IncidentType { get; set; } = string.Empty;
     public string Severity { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public string FileUrl { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public DateTime ReportedAt { get; set; }
 }
@@ -227,9 +221,7 @@ public record SubmitIncidentReportRequest(
     string IncidentType,
     string Severity,
     string Description,
-    Guid? AssetId = null,
-    Guid? TowerId = null,
-    string? FileUrl = null);
+    Guid? TowerId = null);
 
 public record ReturnDroneHandoverRequest(
     Guid DroneId,

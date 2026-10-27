@@ -14,7 +14,7 @@ public record CreateMissionCommand(
     DateTime? ScheduledStartAt = null,
     Guid? InspectorId = null,
     Guid? UavId = null,
-    IReadOnlyList<Guid>? TargetAssetIds = null,
+    IReadOnlyList<Guid>? TargetTowerIds = null,
     MissionPriority Priority = MissionPriority.Normal,
     InspectionObjective Objective = InspectionObjective.PeriodicInspection,
     IReadOnlyList<string>? PriorityDefects = null,

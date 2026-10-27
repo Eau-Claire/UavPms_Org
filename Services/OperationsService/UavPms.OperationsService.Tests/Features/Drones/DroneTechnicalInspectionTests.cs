@@ -135,7 +135,7 @@ public class DroneTechnicalInspectionTests
     }
 
     [Fact]
-    public async Task SubmitInspection_EmptyMetrics_ThrowsBusinessRuleException()
+    public async Task SubmitInspection_EmptyMetrics_FallsBackToDefaultBistMetrics()
     {
         var techId = Guid.NewGuid();
         var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
@@ -149,8 +149,13 @@ public class DroneTechnicalInspectionTests
         var service = new DroneTechnicalInspectionService(db, user.Object);
         var request = new DroneInspectionSubmitRequest(drone.Id, "No metrics", new List<DroneMetricSubmitDto>());
 
-        var act = () => service.SubmitInspectionAsync(request, CancellationToken.None);
-        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*METRICS_REQUIRED*");
+        // Since 3caa4ef an empty submission is evaluated against the default healthy BIST metric set.
+        var inspection = await service.SubmitInspectionAsync(request, CancellationToken.None);
+
+        inspection.Metrics.Should().HaveCount(6);
+        inspection.Metrics.Should().Contain(m => m.MetricCode == "BATTERY_HEALTH");
+        inspection.TechnicianId.Should().Be(techId);
+        (await db.Uavs.FindAsync(drone.Id))!.LastTechnicalInspectionId.Should().Be(inspection.Id);
     }
 
     [Fact]

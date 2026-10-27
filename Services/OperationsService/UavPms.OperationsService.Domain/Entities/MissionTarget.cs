@@ -1,14 +1,16 @@
+using UavPms.OperationsService.Domain.Common;
+using UavPms.OperationsService.Domain.Enums;
+
 namespace UavPms.OperationsService.Domain.Entities;
 
-public class MissionTarget : UavPms.OperationsService.Domain.Common.BaseEntity
+public class MissionTarget : BaseEntity
 {
     public Guid MissionId { get; set; }
-    public Guid AssetId { get; set; }
+    public Guid TowerId { get; set; }
     public int Sequence { get; set; }
-    public UavPms.OperationsService.Domain.Enums.MissionTargetInspectionStatus InspectionStatus { get; set; }
-        = UavPms.OperationsService.Domain.Enums.MissionTargetInspectionStatus.Pending;
+    public MissionTargetInspectionStatus InspectionStatus { get; set; } = MissionTargetInspectionStatus.Pending;
     public string? Notes { get; set; }
 
     public virtual Mission? Mission { get; set; }
-    public virtual Asset? Asset { get; set; }
+    public virtual Tower? Tower { get; set; }
 }

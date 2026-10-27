@@ -9,7 +9,7 @@ public record CreatePreMissionAssessmentCommand(
     Guid RegionId,
     DateTime PlannedStart,
     DateTime PlannedEnd,
-    IReadOnlyCollection<Guid> AssetIds,
+    IReadOnlyCollection<Guid> TowerIds,
     string? BoundaryWkt = null,
     string? IdempotencyKey = null
 ) : IRequest<PreMissionAssessmentDto>;

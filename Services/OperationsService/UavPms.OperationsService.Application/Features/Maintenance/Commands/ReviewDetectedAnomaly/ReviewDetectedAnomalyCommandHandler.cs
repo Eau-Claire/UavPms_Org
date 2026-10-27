@@ -53,6 +53,15 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
         if (!isApproved && !isRejected)
             throw new BusinessRuleException("INVALID_STATUS", "Status must be either 'Confirmed' (or Approved) or 'Rejected'.");
 
+        if (isApproved && !anomaly.TowerId.HasValue)
+        {
+            // Bất thường phải gắn cột điện trước khi xác nhận; lấy theo media nếu media đã gắn cột.
+            var media = anomaly.Media ?? (await _anomalyRepository.GetByIdWithDetailAsync(anomaly.Id))?.Media;
+            anomaly.TowerId = media?.TowerId;
+            if (!anomaly.TowerId.HasValue)
+                throw new BusinessRuleException("TOWER_REQUIRED", "The anomaly must be linked to a tower before it can be confirmed.");
+        }
+
         anomaly.ValidationStatus = isApproved ? "Confirmed" : "Rejected";
         anomaly.AnalystId = _currentUser.UserId;
         anomaly.AnalystNotes = request.ReviewNotes ?? string.Empty;
@@ -60,11 +69,7 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
         anomaly.ValidatedAt = DateTime.UtcNow;
 
         string? createdTaskId = null;
-        Guid? resolvedTowerId = null;
-        if (!string.IsNullOrWhiteSpace(anomaly.TowerId) && Guid.TryParse(anomaly.TowerId, out var tid))
-        {
-            resolvedTowerId = tid;
-        }
+        Guid? resolvedTowerId = anomaly.TowerId;
 
         if (isApproved)
         {
@@ -83,29 +88,13 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
                     {
                         Id = Guid.NewGuid(),
                         AnomalyId = anomaly.Id,
-                        AssetId = anomaly.AssetId,
-                        TowerId = resolvedTowerId,
-                        MissionId = request.MissionId,
                         Status = "Active",
                         Priority = "Emergency",
-                        DeliveryLatencySeconds = 2,
                         TriggeredAt = DateTime.UtcNow,
                         Notes = $"Auto-generated on anomaly review: {request.ReviewNotes}",
                         CreatedAt = DateTime.UtcNow
                     };
                     await _alertRepository.AddAsync(alert);
-                }
-            }
-
-            // 2. Increment Tower active defects count if tower exists
-            if (resolvedTowerId.HasValue)
-            {
-                var tower = await _towerRepository.GetByIdAsync(resolvedTowerId.Value);
-                if (tower != null)
-                {
-                    tower.ActiveDefectsCount++;
-                    if (isEmergency) tower.RiskLevel = "Critical";
-                    await _towerRepository.UpdateAsync(tower);
                 }
             }
 
@@ -121,8 +110,6 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
                     Id = Guid.NewGuid(),
                     TicketCode = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
                     AnomalyId = anomaly.Id,
-                    AssetId = anomaly.AssetId,
-                    TowerId = resolvedTowerId,
                     ManagerId = managerId,
                     TechnicianId = Guid.Empty,
                     Status = TicketStatus.Open,

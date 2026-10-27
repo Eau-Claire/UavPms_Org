@@ -27,8 +27,11 @@ public class InspectionMediaRepository : GenericRepository<InspectionMedia>, IIn
         return await _context.InspectionMedia
             .Include(m => m.Mission)
             .Include(m => m.Tower)
+            .Include(m => m.AnalysisRuns)
             .Include(m => m.DetectedAnomalies)
                 .ThenInclude(a => a.Category)
+            .Include(m => m.DetectedAnomalies)
+                .ThenInclude(a => a.AnalysisRun)
             .FirstOrDefaultAsync(m => m.Id == id);
     }
 
@@ -37,8 +40,11 @@ public class InspectionMediaRepository : GenericRepository<InspectionMedia>, IIn
         return await _context.InspectionMedia
             .Include(m => m.Mission)
             .Include(m => m.Tower)
+            .Include(m => m.AnalysisRuns)
             .Include(m => m.DetectedAnomalies)
                 .ThenInclude(a => a.Category)
+            .Include(m => m.DetectedAnomalies)
+                .ThenInclude(a => a.AnalysisRun)
             .Where(m => m.MissionId == missionId)
             .OrderByDescending(m => m.CapturedAt)
             .ToListAsync();

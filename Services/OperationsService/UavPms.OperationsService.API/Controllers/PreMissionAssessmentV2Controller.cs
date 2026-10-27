@@ -36,7 +36,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
             request.RegionId,
             request.PlannedStart,
             request.PlannedEnd,
-            request.AssetIds,
+            request.TowerIds,
             request.BoundaryWkt,
             request.IdempotencyKey,
             ct);

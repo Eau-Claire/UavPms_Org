@@ -8,4 +8,5 @@ public interface IMaintenanceTicketRepository : IGenericRepository<MaintenanceTi
     Task<MaintenanceTicket?> GetByCodeWithDetailsAsync(string ticketCode);
     Task<IReadOnlyList<MaintenanceTicket>> GetAllWithDetailsAsync();
     Task<IReadOnlyList<MaintenanceTicket>> GetByTechnicianIdWithDetailsAsync(Guid technicianId);
+    Task<IReadOnlyList<MaintenanceTicket>> GetByTowerIdWithDetailsAsync(Guid towerId);
 }

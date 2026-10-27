@@ -53,7 +53,7 @@ public class MissionFlightLogTests
         _db.Regions.Add(new Region
         {
             Id = _regionId,
-            RegionName = "Southern Transmission Area",
+            Name = "Southern Transmission Area",
             IsDeleted = false
         });
 
@@ -78,7 +78,7 @@ public class MissionFlightLogTests
             MissionCode = "MSN-LOG-01",
             Title = "Mission For Flight Log",
             RegionId = _regionId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             Status = MissionStatus.InProgress,
             StartedAt = DateTime.UtcNow.AddHours(-1)
         };
@@ -123,7 +123,7 @@ public class MissionFlightLogTests
             MissionCode = "MSN-LOG-DRAFT",
             Title = "Draft Mission",
             RegionId = _regionId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             Status = MissionStatus.Draft
         };
         _db.Missions.Add(mission);
@@ -156,7 +156,7 @@ public class MissionFlightLogTests
             MissionCode = "MSN-LOG-MALFORMED",
             Title = "Mission Malformed",
             RegionId = _regionId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             Status = MissionStatus.InProgress
         };
         _db.Missions.Add(mission);
@@ -189,7 +189,7 @@ public class MissionFlightLogTests
             MissionCode = "MSN-LOG-BATTERY",
             Title = "Mission Battery",
             RegionId = _regionId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             Status = MissionStatus.InProgress
         };
         _db.Missions.Add(mission);
@@ -231,7 +231,7 @@ public class MissionFlightLogTests
             MissionCode = "MSN-LOG-LIST",
             Title = "Mission List",
             RegionId = _regionId,
-            InspectorId = _userId,
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             Status = MissionStatus.InProgress
         };
         _db.Missions.Add(mission);

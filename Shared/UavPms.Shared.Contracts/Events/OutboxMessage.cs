@@ -10,10 +10,4 @@ public sealed class OutboxMessage
     public DateTime? PublishedAt { get; set; }
     public int Attempts { get; set; }
     public string? LastError { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public DateTime? UpdatedAt { get; set; }
-    public Guid? CreatedBy { get; set; }
-    public Guid? UpdatedBy { get; set; }
-    public bool IsDeleted { get; set; }
-    public DateTime? DeletedAt { get; set; }
 }

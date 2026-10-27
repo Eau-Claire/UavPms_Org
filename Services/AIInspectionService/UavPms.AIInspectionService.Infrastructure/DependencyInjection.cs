@@ -12,7 +12,6 @@ using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.AIInspectionService.Infrastructure.Services;
 using UavPms.Grpc.InspectionEvaluation;
 using UavPms.AIInspectionService.Application.Common.Options;
-using UavPms.OperationsService.Application.Common.Options;
 using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.AIInspectionService.Infrastructure;

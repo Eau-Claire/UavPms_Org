@@ -15,13 +15,13 @@ namespace UavPms.AIInspectionService.Infrastructure.Persistence;
 public class ApplicationDbContext : DbContext
 {
     private readonly ICurrentUserServices? _currentUserServices;
-    public DbSet<AIAnalysisRequest> AIAnalysisRequests => Set<AIAnalysisRequest>();
+    public DbSet<AIAnalysisRun> AIAnalysisRuns => Set<AIAnalysisRun>();
     public DbSet<DetectedAnomaly> DetectedAnomalies => Set<DetectedAnomaly>();
     public DbSet<DefectCategory> DefectCategories => Set<DefectCategory>();
     public DbSet<InspectionMedia> InspectionMedia => Set<InspectionMedia>();
     public DbSet<Tower> Towers => Set<Tower>();
-    public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<Mission> Missions => Set<Mission>();
+    public DbSet<MissionAssignment> MissionAssignments => Set<MissionAssignment>();
     public DbSet<Uav> Uavs => Set<Uav>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();

@@ -153,18 +153,28 @@ public class AiDetectionCompletedConsumer : BackgroundService
             return;
         }
 
+        // AIInspectionService đã ghi run + anomaly vào CSDL dùng chung; nhánh này chỉ bù khi bản ghi chưa có.
+        var runExists = detection.RequestId != Guid.Empty
+            && await db.AIAnalysisRuns.AnyAsync(r => r.Id == detection.RequestId && r.MediaId == detection.MediaId, ct);
+        var categoryId = await db.DefectCategories
+            .Where(c => c.CategoryCode == detection.CategoryCode)
+            .Select(c => (int?)c.Id)
+            .FirstOrDefaultAsync(ct)
+            ?? await db.DefectCategories.Select(c => (int?)c.Id).FirstOrDefaultAsync(ct)
+            ?? 1;
+
         var anomaly = new DetectedAnomaly
         {
             Id = detection.AnomalyId != Guid.Empty ? detection.AnomalyId : Guid.NewGuid(),
             MediaId = detection.MediaId,
-            AssetId = detection.AssetId != Guid.Empty ? detection.AssetId : (Guid?)null,
-            TowerId = detection.TowerId?.ToString(),
+            AnalysisRunId = runExists ? detection.RequestId : null,
+            TowerId = detection.TowerId,
+            CategoryId = categoryId,
             AiDetectionId = detection.AnomalyId.ToString(),
             ImageUrl = detection.ImageUrl,
             CropUrl = detection.CropUrl,
             ConfidenceScore = detection.Confidence > 0 ? detection.Confidence : 0.9,
             ValidationStatus = "Pending",
-            AiSource = "AIInspectionService",
             AnalystNotes = $"Detected defect: {detection.DefectType} ({detection.Severity})",
             CreatedAt = detection.DetectedAt != default ? detection.DetectedAt : DateTime.UtcNow
         };
@@ -178,28 +188,14 @@ public class AiDetectionCompletedConsumer : BackgroundService
             {
                 Id = Guid.NewGuid(),
                 AnomalyId = anomaly.Id,
-                AssetId = anomaly.AssetId,
-                TowerId = detection.TowerId,
-                MissionId = detection.MissionId,
                 Status = "Active",
                 Priority = "Emergency",
-                DeliveryLatencySeconds = 2,
                 TriggeredAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow
             };
             db.EmergencyAlerts.Add(alert);
         }
 
-        // Increment active defect count on tower if tower exists
-        if (detection.TowerId.HasValue)
-        {
-            var tower = await db.Towers.FindAsync(new object[] { detection.TowerId.Value }, ct);
-            if (tower != null)
-            {
-                tower.ActiveDefectsCount++;
-                tower.UpdatedAt = DateTime.UtcNow;
-            }
-        }
 
         await db.SaveChangesAsync(ct);
         _logger.LogInformation("Recorded defect anomaly {AnomalyId} in OperationsService.", anomaly.Id);

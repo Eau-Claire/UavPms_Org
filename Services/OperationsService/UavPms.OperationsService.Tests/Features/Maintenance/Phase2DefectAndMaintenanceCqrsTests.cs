@@ -44,6 +44,19 @@ public class Phase2DefectAndMaintenanceCqrsTests
         return new ApplicationDbContext(options, user);
     }
 
+    private static ReviewDetectedAnomalyCommandHandler CreateReviewHandler(ApplicationDbContext db, ICurrentUserServices user)
+    {
+        var accessFilter = new GeographicAccessFilter(db, user);
+        return new ReviewDetectedAnomalyCommandHandler(
+            new AnomalyRepository(db),
+            new MissionRepository(db),
+            new TowerRepository(db, accessFilter),
+            new GenericRepository<EmergencyAlert>(db),
+            new GenericRepository<MaintenanceTicket>(db),
+            user,
+            new UnitOfWork(db));
+    }
+
     [Fact]
     public async Task ReviewDetectedAnomaly_StoresAnalystFeedbackAndEscalatesEmergency()
     {
@@ -52,30 +65,20 @@ public class Phase2DefectAndMaintenanceCqrsTests
         await using var db = CreateContext(userMock.Object);
 
         var towerId = Guid.NewGuid();
-        var tower = new Tower { Id = towerId, TowerCode = "T-100", ActiveDefectsCount = 0 };
-        db.Towers.Add(tower);
+        db.Towers.Add(new Tower { Id = towerId, RegionId = Guid.NewGuid(), TowerCode = "T-100" });
 
         var missionId = Guid.NewGuid();
         var anomaly = new DetectedAnomaly
         {
             Id = Guid.NewGuid(),
-            TowerId = towerId.ToString(),
+            TowerId = towerId,
             ConfidenceScore = 0.95,
             ValidationStatus = "Pending"
         };
         db.DetectedAnomalies.Add(anomaly);
         await db.SaveChangesAsync();
 
-        var anomalyRepo = new AnomalyRepository(db);
-        var missionRepo = new MissionRepository(db);
-        var accessFilter = new GeographicAccessFilter(db, userMock.Object);
-        var towerRepo = new TowerRepository(db, accessFilter);
-        var alertRepo = new GenericRepository<EmergencyAlert>(db);
-        var ticketRepo = new GenericRepository<MaintenanceTicket>(db);
-        var uow = new UnitOfWork(db);
-
-        var handler = new ReviewDetectedAnomalyCommandHandler(
-            anomalyRepo, missionRepo, towerRepo, alertRepo, ticketRepo, userMock.Object, uow);
+        var handler = CreateReviewHandler(db, userMock.Object);
 
         var feedbackJson = "{\"rootCause\": \"Insulator Crack\", \"riskOfArcing\": true}";
         var command = new ReviewDetectedAnomalyCommand(
@@ -85,31 +88,78 @@ public class Phase2DefectAndMaintenanceCqrsTests
 
         result.Should().NotBeNull();
         result.Status.Should().Be("Confirmed");
+        result.MaintenanceTaskId.Should().NotBeNullOrEmpty();
 
         var updatedAnomaly = await db.DetectedAnomalies.FindAsync(anomaly.Id);
         updatedAnomaly!.ValidationStatus.Should().Be("Confirmed");
         updatedAnomaly.AnalystFeedback.Should().Be(feedbackJson);
+        updatedAnomaly.TowerId.Should().Be(towerId);
 
-        var updatedTower = await db.Towers.FindAsync(towerId);
-        updatedTower!.ActiveDefectsCount.Should().Be(1);
-        updatedTower.RiskLevel.Should().Be("Critical");
-
-        var createdAlert = await db.EmergencyAlerts.FirstOrDefaultAsync(a => a.AnomalyId == anomaly.Id);
+        // The alert's tower is derived through the anomaly (EmergencyAlert has no TowerId column).
+        var createdAlert = await db.EmergencyAlerts.Include(a => a.Anomaly).FirstOrDefaultAsync(a => a.AnomalyId == anomaly.Id);
         createdAlert.Should().NotBeNull();
-        createdAlert!.TowerId.Should().Be(towerId);
+        createdAlert!.Anomaly!.TowerId.Should().Be(towerId);
+
+        // The ticket's tower is ticket.Anomaly.TowerId.
+        var ticket = await db.MaintenanceTickets.Include(t => t.Anomaly).FirstOrDefaultAsync(t => t.AnomalyId == anomaly.Id);
+        ticket.Should().NotBeNull();
+        ticket!.Anomaly!.TowerId.Should().Be(towerId);
     }
 
     [Fact]
-    public async Task TriggerEmergencyAlert_CreatesAlertAndIncrementsDefects()
+    public async Task ReviewDetectedAnomaly_Confirm_FallsBackToMediaTower()
     {
         var userMock = CreateUserMock(Guid.NewGuid());
         await using var db = CreateContext(userMock.Object);
 
         var towerId = Guid.NewGuid();
-        var tower = new Tower { Id = towerId, TowerCode = "T-200", ActiveDefectsCount = 1 };
-        db.Towers.Add(tower);
+        db.Towers.Add(new Tower { Id = towerId, RegionId = Guid.NewGuid(), TowerCode = "T-101" });
+        var media = new InspectionMedia { Id = Guid.NewGuid(), MissionId = Guid.NewGuid(), TowerId = towerId, FileUrl = "/m.jpg", MediaType = "Image" };
+        db.InspectionMedia.Add(media);
+        var anomaly = new DetectedAnomaly { Id = Guid.NewGuid(), MediaId = media.Id, ConfidenceScore = 0.8, ValidationStatus = "Pending" };
+        db.DetectedAnomalies.Add(anomaly);
+        await db.SaveChangesAsync();
 
-        var anomaly = new DetectedAnomaly { Id = Guid.NewGuid(), TowerId = towerId.ToString() };
+        var handler = CreateReviewHandler(db, userMock.Object);
+        var result = await handler.Handle(
+            new ReviewDetectedAnomalyCommand(media.MissionId, anomaly.Id, "Confirmed", "ok"), CancellationToken.None);
+
+        result.Status.Should().Be("Confirmed");
+        (await db.DetectedAnomalies.FindAsync(anomaly.Id))!.TowerId.Should().Be(towerId);
+    }
+
+    [Fact]
+    public async Task ReviewDetectedAnomaly_Confirm_WithoutAnyTower_ThrowsTowerRequired()
+    {
+        var userMock = CreateUserMock(Guid.NewGuid());
+        await using var db = CreateContext(userMock.Object);
+
+        var media = new InspectionMedia { Id = Guid.NewGuid(), MissionId = Guid.NewGuid(), TowerId = null, FileUrl = "/v.mp4", MediaType = "Video" };
+        db.InspectionMedia.Add(media);
+        var anomaly = new DetectedAnomaly { Id = Guid.NewGuid(), MediaId = media.Id, ConfidenceScore = 0.8, ValidationStatus = "Pending" };
+        db.DetectedAnomalies.Add(anomaly);
+        await db.SaveChangesAsync();
+
+        var handler = CreateReviewHandler(db, userMock.Object);
+        var act = async () => await handler.Handle(
+            new ReviewDetectedAnomalyCommand(media.MissionId, anomaly.Id, "Confirmed", "ok"), CancellationToken.None);
+
+        (await act.Should().ThrowAsync<BusinessRuleException>()).Which.Message.Should().Contain("tower");
+        db.ChangeTracker.Clear();
+        (await db.DetectedAnomalies.FindAsync(anomaly.Id))!.ValidationStatus.Should().Be("Pending");
+        (await db.MaintenanceTickets.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task TriggerEmergencyAlert_CreatesAlertWithTowerDerivedFromAnomaly()
+    {
+        var userMock = CreateUserMock(Guid.NewGuid());
+        await using var db = CreateContext(userMock.Object);
+
+        var towerId = Guid.NewGuid();
+        db.Towers.Add(new Tower { Id = towerId, RegionId = Guid.NewGuid(), TowerCode = "T-200" });
+
+        var anomaly = new DetectedAnomaly { Id = Guid.NewGuid(), TowerId = towerId };
         db.DetectedAnomalies.Add(anomaly);
         await db.SaveChangesAsync();
 
@@ -120,20 +170,42 @@ public class Phase2DefectAndMaintenanceCqrsTests
         var uow = new UnitOfWork(db);
 
         var handler = new TriggerEmergencyAlertCommandHandler(alertRepo, towerRepo, anomalyRepo, uow);
-        var command = new TriggerEmergencyAlertCommand(Guid.NewGuid(), anomaly.Id, towerId, null, "Emergency", "Flashover warning");
+        var command = new TriggerEmergencyAlertCommand(Guid.NewGuid(), anomaly.Id, null, "Emergency", "Flashover warning");
 
         var result = await handler.Handle(command, CancellationToken.None);
 
         result.Should().NotBeNull();
         result.AnomalyId.Should().Be(anomaly.Id);
         result.Priority.Should().Be("Emergency");
-
-        var updatedTower = await db.Towers.FindAsync(towerId);
-        updatedTower!.ActiveDefectsCount.Should().Be(2);
+        result.TowerId.Should().Be(towerId);
+        result.TowerCode.Should().Be("T-200");
+        (await db.EmergencyAlerts.CountAsync(a => a.AnomalyId == anomaly.Id)).Should().Be(1);
     }
 
     [Fact]
-    public async Task CreateMaintenanceTicket_LinksToTowerDirectly()
+    public async Task TriggerEmergencyAlert_LinksRequestedTower_WhenAnomalyHasNone()
+    {
+        var userMock = CreateUserMock(Guid.NewGuid());
+        await using var db = CreateContext(userMock.Object);
+
+        var towerId = Guid.NewGuid();
+        db.Towers.Add(new Tower { Id = towerId, RegionId = Guid.NewGuid(), TowerCode = "T-201" });
+        var anomaly = new DetectedAnomaly { Id = Guid.NewGuid(), TowerId = null };
+        db.DetectedAnomalies.Add(anomaly);
+        await db.SaveChangesAsync();
+
+        var accessFilter = new GeographicAccessFilter(db, userMock.Object);
+        var handler = new TriggerEmergencyAlertCommandHandler(
+            new GenericRepository<EmergencyAlert>(db), new TowerRepository(db, accessFilter), new AnomalyRepository(db), new UnitOfWork(db));
+
+        var result = await handler.Handle(new TriggerEmergencyAlertCommand(Guid.NewGuid(), anomaly.Id, towerId), CancellationToken.None);
+
+        result.TowerId.Should().Be(towerId);
+        (await db.DetectedAnomalies.FindAsync(anomaly.Id))!.TowerId.Should().Be(towerId);
+    }
+
+    [Fact]
+    public async Task CreateMaintenanceTicket_TowerIsDerivedFromAnomaly()
     {
         var techId = Guid.NewGuid();
         var userMock = CreateUserMock(Guid.NewGuid());
@@ -142,10 +214,9 @@ public class Phase2DefectAndMaintenanceCqrsTests
         db.Users.Add(new User { Id = techId, FullName = "Technician A", Status = "Active" });
 
         var towerId = Guid.NewGuid();
-        var tower = new Tower { Id = towerId, TowerCode = "T-300", ActiveDefectsCount = 0 };
-        db.Towers.Add(tower);
+        db.Towers.Add(new Tower { Id = towerId, RegionId = Guid.NewGuid(), TowerCode = "T-300" });
 
-        var anomaly = new DetectedAnomaly { Id = Guid.NewGuid(), TowerId = towerId.ToString() };
+        var anomaly = new DetectedAnomaly { Id = Guid.NewGuid(), TowerId = towerId };
         db.DetectedAnomalies.Add(anomaly);
         await db.SaveChangesAsync();
 
@@ -160,7 +231,7 @@ public class Phase2DefectAndMaintenanceCqrsTests
             ticketRepo, towerRepo, anomalyRepo, userRepo, userMock.Object, uow);
 
         var command = new CreateMaintenanceTicketCommand(
-            anomaly.Id, techId, "High", "Replace cracked insulator", towerId);
+            anomaly.Id, techId, "High", "Replace cracked insulator");
 
         var result = await handler.Handle(command, CancellationToken.None);
 
@@ -168,9 +239,6 @@ public class Phase2DefectAndMaintenanceCqrsTests
         result.TowerId.Should().Be(towerId);
         result.TechnicianId.Should().Be(techId);
         result.Status.Should().Be("Open");
-
-        var updatedTower = await db.Towers.FindAsync(towerId);
-        updatedTower!.ActiveDefectsCount.Should().Be(1);
     }
 
     [Fact]
@@ -211,20 +279,16 @@ public class Phase2DefectAndMaintenanceCqrsTests
     }
 
     [Fact]
-    public async Task CompleteMaintenanceTicket_RequiresProof_DecrementsTowerDefects_AndLogsHistory()
+    public async Task CompleteMaintenanceTicket_RequiresProof_ThenCloses()
     {
         var techId = Guid.NewGuid();
         var userMock = CreateUserMock(techId);
         await using var db = CreateContext(userMock.Object);
 
-        var towerId = Guid.NewGuid();
-        var tower = new Tower { Id = towerId, TowerCode = "T-500", ActiveDefectsCount = 1, RiskLevel = "Medium" };
-        db.Towers.Add(tower);
-
         var ticket = new MaintenanceTicket
         {
             Id = Guid.NewGuid(),
-            TowerId = towerId,
+            AnomalyId = Guid.NewGuid(),
             Status = TicketStatus.InProgress
         };
         db.MaintenanceTickets.Add(ticket);
@@ -232,13 +296,9 @@ public class Phase2DefectAndMaintenanceCqrsTests
 
         var ticketRepo = new GenericRepository<MaintenanceTicket>(db);
         var proofRepo = new GenericRepository<MaintenanceProof>(db);
-        var accessFilter = new GeographicAccessFilter(db, userMock.Object);
-        var towerRepo = new TowerRepository(db, accessFilter);
-        var conditionRepo = new GenericRepository<TowerConditionHistory>(db);
         var uow = new UnitOfWork(db);
 
-        var handler = new CompleteMaintenanceTicketCommandHandler(
-            ticketRepo, proofRepo, towerRepo, conditionRepo, uow);
+        var handler = new CompleteMaintenanceTicketCommandHandler(ticketRepo, proofRepo, uow);
 
         // Attempt completion without proof -> should throw
         var command = new CompleteMaintenanceTicketCommand(ticket.Id);
@@ -260,14 +320,6 @@ public class Phase2DefectAndMaintenanceCqrsTests
 
         result.Should().NotBeNull();
         result.Status.Should().Be("Closed");
-
-        var updatedTower = await db.Towers.FindAsync(towerId);
-        updatedTower!.ActiveDefectsCount.Should().Be(0);
-        updatedTower.RiskLevel.Should().Be("Normal");
-
-        var histories = await db.TowerConditionHistories.Where(h => h.TowerId == towerId).ToListAsync();
-        histories.Should().HaveCount(1);
-        histories[0].ActiveDefectsCount.Should().Be(0);
-        histories[0].RiskLevel.Should().Be("Normal");
+        result.ResolvedAt.Should().NotBeNull();
     }
 }

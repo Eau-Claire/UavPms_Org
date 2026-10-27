@@ -33,7 +33,6 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
             ReferenceId = request.ReferenceId,
             Title = request.Title,
             Body = request.Body,
-            IsRead = false,
             SentAt = DateTime.UtcNow
         };
 
@@ -51,7 +50,7 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
             ReferenceId = n.ReferenceId,
             Title = n.Title,
             Body = n.Body,
-            IsRead = n.IsRead,
+            IsRead = n.ReadAt != null,
             SentAt = n.SentAt
         };
     }

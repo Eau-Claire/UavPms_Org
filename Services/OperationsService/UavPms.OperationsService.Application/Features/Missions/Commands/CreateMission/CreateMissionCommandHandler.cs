@@ -17,7 +17,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
     private readonly IMissionRepository _missionRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUavRepository _uavRepository;
-    private readonly IAssetRepository _assetRepository;
+    private readonly ITowerRepository _towerRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserServices _currentUserServices;
     private readonly IEventPublisher _eventPublisher;
@@ -27,7 +27,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
         IMissionRepository missionRepository,
         IUserRepository userRepository,
         IUavRepository uavRepository,
-        IAssetRepository assetRepository,
+        ITowerRepository towerRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserServices currentUserServices,
         IEventPublisher eventPublisher,
@@ -36,7 +36,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
         _missionRepository = missionRepository;
         _userRepository = userRepository;
         _uavRepository = uavRepository;
-        _assetRepository = assetRepository;
+        _towerRepository = towerRepository;
         _unitOfWork = unitOfWork;
         _currentUserServices = currentUserServices;
         _eventPublisher = eventPublisher;
@@ -51,15 +51,15 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             throw new BusinessRuleException("Inspector is required");
         }
 
-        var targetAssetIds = request.TargetAssetIds ?? Array.Empty<Guid>();
-        if (targetAssetIds.Count == 0)
+        var targetTowerIds = request.TargetTowerIds ?? Array.Empty<Guid>();
+        if (targetTowerIds.Count == 0)
         {
             throw new BusinessRuleException("MISSION_TARGET_REQUIRED");
         }
 
-        if (targetAssetIds.Count != targetAssetIds.Distinct().Count())
+        if (targetTowerIds.Count != targetTowerIds.Distinct().Count())
         {
-            throw new BusinessRuleException("Duplicate target assets are not allowed.");
+            throw new BusinessRuleException("Duplicate target towers are not allowed.");
         }
 
         var assignedUser = await _userRepository.GetByIdWithRolesAsync(inspectorId);
@@ -82,24 +82,19 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             throw new NotFoundException("Drone", request.UavId?.ToString() ?? request.DroneCode ?? string.Empty);
         }
 
-        if (uav.Status != DroneStatus.Idle)
+        if (uav.FlightStatus != DroneStatus.Idle)
         {
             throw new BusinessRuleException("Drone is not available for assignment.");
         }
 
-        var targetAssets = await _assetRepository.GetAssetsByIdsAsync(targetAssetIds, cancellationToken);
-        if (targetAssets.Count != targetAssetIds.Count)
+        var targetAssets = await _towerRepository.FindAsync(t => targetTowerIds.Contains(t.Id));
+        if (targetAssets.Count != targetTowerIds.Count)
         {
-            throw new NotFoundException("Asset", "ASSET_NOT_FOUND");
+            throw new NotFoundException("Tower", "TOWER_NOT_FOUND");
         }
 
-        if (targetAssets.Any(asset => asset.Status is not ("Active" or "Operational")))
-        {
-            throw new BusinessRuleException("ASSET_NOT_AVAILABLE");
-        }
-
-        var targetAssetsById = targetAssets.ToDictionary(asset => asset.Id);
-        var orderedTargetAssets = targetAssetIds.Select(assetId => targetAssetsById[assetId]).ToList();
+        var targetAssetsById = targetAssets.ToDictionary(tower => tower.Id);
+        var orderedTargetAssets = targetTowerIds.Select(towerId => targetAssetsById[towerId]).ToList();
 
         var missionCode = $"MS-{DateTime.UtcNow:yyyyMMddHHmmss}";
 
@@ -122,22 +117,20 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             Status = MissionStatus.Draft,
             Priority = request.Priority,
             Objective = request.Objective,
-            PriorityDefectsJson = JsonSerializer.Serialize(request.PriorityDefects ?? (IEnumerable<string>)Array.Empty<string>()),
-            EmergencyReason = request.EmergencyReason,
+            TriggerReason = request.EmergencyReason,
             IsImmediate = request.IsImmediate,
             Description = request.Description ?? string.Empty,
             ManagerId = _currentUserServices.UserId != Guid.Empty ? _currentUserServices.UserId : Guid.Empty,
-            InspectorId = inspectorId,
             UavId = uav.Id,
-            ScheduledStartAt = request.ScheduledStartAt,
+            PlannedStart = request.ScheduledStartAt,
             CreatedAt = DateTime.UtcNow,
         };
 
-        mission.MissionTargets = orderedTargetAssets.Select((asset, index) => new MissionTarget
+        mission.MissionTargets = orderedTargetAssets.Select((tower, index) => new MissionTarget
         {
             Id = Guid.NewGuid(),
             MissionId = mission.Id,
-            AssetId = asset.Id,
+            TowerId = tower.Id,
             Sequence = index + 1,
             InspectionStatus = MissionTargetInspectionStatus.Pending
         }).ToList();
@@ -151,9 +144,11 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             Status = MissionAssignmentStatus.Active,
             ResponseStatus = MissionAssignmentResponse.Pending,
             IsRequired = true,
-            AssignedByUserId = _currentUserServices.UserId != Guid.Empty ? _currentUserServices.UserId : Guid.Empty,
+            AssignedById = _currentUserServices.UserId != Guid.Empty ? _currentUserServices.UserId : Guid.Empty,
             AssignedAt = DateTime.UtcNow
         });
+
+        await _missionRepository.SetPriorityDefectsAsync(mission, request.PriorityDefects, cancellationToken);
 
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
@@ -170,7 +165,6 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
                     Type = "MISSION_DISPATCH",
                     ReferenceType = "MISSION",
                     ReferenceId = mission.Id,
-                    IsRead = false,
                     SentAt = DateTime.UtcNow
                 };
                 await _notificationRepository.AddAsync(notif);
@@ -189,7 +183,7 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             MissionCode = mission.MissionCode,
             Title = mission.Title,
             RouteData = string.Empty,
-            AssignedToUserId = mission.InspectorId ?? Guid.Empty,
+            AssignedToUserId = inspectorId,
             ManagerId = mission.ManagerId,
             DroneCode = uav.UavCode,
             Status = mission.Status.ToString(),
@@ -205,41 +199,34 @@ public class CreateMissionCommandHandler : IRequestHandler<CreateMissionCommand,
             MissionCode = mission.MissionCode,
             Title = mission.Title,
             RouteData = string.Empty,
-            AssignedToUserId = mission.InspectorId ?? Guid.Empty,
+            AssignedToUserId = inspectorId,
             AssignedToEmail = assignedUser.Email,
             DroneCode = uav.UavCode,
             Status = mission.Status.ToString(),
             Description = mission.Description,
             ManagerId = mission.ManagerId,
             ManagerEmail = _currentUserServices.Email ?? string.Empty,
-            ScheduledStartAt = mission.ScheduledStartAt,
+            ScheduledStartAt = mission.PlannedStart,
             InspectorId = inspectorId,
             InspectorEmail = assignedUser.Email,
             UavId = uav.Id,
             Priority = mission.Priority.ToString(),
             Objective = mission.Objective.ToString(),
-            PriorityDefects = !string.IsNullOrWhiteSpace(mission.PriorityDefectsJson)
-                ? JsonSerializer.Deserialize<List<string>>(mission.PriorityDefectsJson) ?? new List<string>()
-                : new List<string>(),
-            EmergencyReason = mission.EmergencyReason,
+            PriorityDefects = mission.PriorityDefectCodes(),
+            EmergencyReason = mission.TriggerReason,
             IsImmediate = mission.IsImmediate,
             Targets = mission.MissionTargets.OrderBy(x => x.Sequence).Select(target =>
             {
-                var asset = orderedTargetAssets.First(a => a.Id == target.AssetId);
+                var tower = orderedTargetAssets.First(a => a.Id == target.TowerId);
                 return new MissionTargetDto
                 {
-                    TowerId = asset.TowerId,
-                    TowerCode = asset.Tower?.TowerCode ?? string.Empty,
-                    AssetId = asset.Id,
-                    AssetCode = asset.AssetCode,
+                    TowerId = tower.Id,
+                    TowerCode = tower.TowerCode,
                     Sequence = target.Sequence,
-                    AssetType = asset.AssetType,
                     InspectionStatus = target.InspectionStatus.ToString(),
-                    Latitude = asset.Location?.Y,
-                    Longitude = asset.Location?.X,
-                    PowerLineId = asset.PowerLineId,
-                    PowerLineCode = asset.PowerLine?.Code,
-                    PowerLineName = asset.PowerLine?.LineName
+                    Latitude = tower.Geom?.Coordinate.Y,
+                    Longitude = tower.Geom?.Coordinate.X,
+                    RegionId = tower.RegionId
                 };
             }).ToList(),
             CreatedAt = mission.CreatedAt,

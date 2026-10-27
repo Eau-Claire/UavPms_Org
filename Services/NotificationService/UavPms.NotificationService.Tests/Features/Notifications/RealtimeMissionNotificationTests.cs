@@ -230,9 +230,18 @@ public class RealtimeMissionNotificationTests
             Status = "PENDING_CONFIRMATION",
             ManagerId = managerId,
             ConfirmationDeadline = DateTime.UtcNow.AddMinutes(-10),
-            IsOverdueNotified = false
+            OverdueNotifiedAt = null
         };
         db.Missions.Add(overdueMission);
+        var inspectorId = Guid.NewGuid();
+        db.MissionAssignments.Add(new MissionAssignment
+        {
+            Id = Guid.NewGuid(),
+            MissionId = missionId,
+            UserId = inspectorId,
+            AssignmentRole = "INSPECTOR",
+            Status = "Active"
+        });
         await db.SaveChangesAsync();
 
         var serviceProviderMock = new Mock<IServiceProvider>();
@@ -253,7 +262,7 @@ public class RealtimeMissionNotificationTests
 
         // Assert
         var updatedMission = await db.Missions.FirstAsync(m => m.Id == missionId);
-        updatedMission.IsOverdueNotified.Should().BeTrue();
+        updatedMission.OverdueNotifiedAt.Should().NotBeNull();
 
         var notifications = await db.Notifications.ToListAsync();
         notifications.Should().ContainSingle();
@@ -263,5 +272,14 @@ public class RealtimeMissionNotificationTests
         var logs = await db.MissionCommunicationLogs.ToListAsync();
         logs.Should().ContainSingle();
         logs[0].Type.Should().Be("OVERDUE");
+        logs[0].SenderId.Should().BeNull();
+
+        _clientProxyMock.Verify(p => p.SendCoreAsync(
+            "MissionLifecycleEvent",
+            It.Is<object[]>(args => args.Length == 1
+                && args[0] is MissionLifecycleEventDto
+                && ((MissionLifecycleEventDto)args[0]).InspectorId == inspectorId.ToString()
+                && ((MissionLifecycleEventDto)args[0]).Log!.SenderName == "Hệ Thống"),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }
