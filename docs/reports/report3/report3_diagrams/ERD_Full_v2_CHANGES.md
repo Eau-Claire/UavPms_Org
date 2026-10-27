@@ -268,12 +268,14 @@ ERD v2.2 đã được áp dụng vào toàn bộ backend. Chi tiết tên bản
    - `CHECK (ValidationStatus <> 'Confirmed' OR TowerId IS NOT NULL)` tạo `NOT VALID`: dữ liệu cũ được giữ nguyên, mọi dòng mới hoặc sửa đều bị kiểm tra.
 4. Contract: drop 8 bảng ở mục 1a, các cột dư ở mục 5, cột lỗi thời ngoài ERD (`Missions.AssignedToUserId/DroneCode/RouteData`, `Users.Username`), cột audit của `OutboxMessages`. Đổi tên các constraint do script SQL cũ tạo theo quy ước EF. `IX_Users_Email` chỉ được tạo khi không có email trùng.
 
+**Chịu được schema lệch:** CSDL production từng được sửa tay (các workflow repair), nên schema có thể khác lịch sử migration. Mỗi lệnh backfill chỉ chạy khi bảng/cột cũ mà nó đọc còn tồn tại. Mọi lệnh thêm/xóa/đổi tên cột, index và constraint đều idempotent. Nếu cả cột cũ và cột mới cùng tồn tại, dữ liệu được chép từ cột cũ sang rồi xóa cột cũ.
+
 `Down()` không hỗ trợ vì migration xóa dữ liệu. Rollback bằng cách restore bản `pg_dump` do workflow tạo trước khi migrate.
 
 **Đã kiểm thử trên PostgreSQL 16 + PostGIS 3.4:** nạp `scripts/production_dump.sql` cộng dữ liệu tổng hợp phủ mọi nhánh backfill, rồi chạy migration. Schema kết quả trùng với schema chạy toàn bộ chuỗi migration trên DB rỗng và khớp model EF. Chênh lệch còn lại là chủ ý: FK ghép, CHECK `NOT VALID`, ràng buộc EXCLUDE chống trùng lịch, `Users.PasswordHash` chỉ IdentityService map.
 
 **Chạy trên production:** workflow thủ công `.github/workflows/migrate-database-erd-v2-2.yml` (Actions → *Migrate Database (ERD v2.2)*):
-- `mode = dry-run`: build, chạy test, sinh script idempotent, `pg_dump` CSDL production, áp script lên một bản sao rồi xóa bản sao. CSDL thật không đổi.
+- `mode = dry-run`: build, chạy test, sinh script idempotent và DDL của model EF, `pg_dump` CSDL production, in schema hiện tại để chẩn đoán, áp script lên một bản sao, so cột của bản sao với model EF (thiếu cột thì báo lỗi), rồi xóa bản sao. CSDL thật không đổi.
 - `mode = apply`: làm như dry-run, sau đó dừng các service ghi DB, áp script lên CSDL thật trong một transaction. Nếu `deploy_after = true` thì build và khởi động lại các service ở cùng commit.
 - Ô xác nhận phải nhập `MIGRATE_ERD_V2_2`.
 
