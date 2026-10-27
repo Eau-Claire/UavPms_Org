@@ -179,8 +179,8 @@ jobs:
             psql_db "$MODEL_DB" -tAc "$COLUMNS_SQL" | LC_ALL=C sort > "$SCRIPT_DIR/model_columns.txt"
             psql_db "$DRY_DB" -tAc "$COLUMNS_SQL" | LC_ALL=C sort > "$SCRIPT_DIR/migrated_columns.txt"
             docker exec "$DB_CONTAINER" dropdb -U "$DB_USER" "$MODEL_DB"
-            MISSING="$(comm -23 "$SCRIPT_DIR/model_columns.txt" "$SCRIPT_DIR/migrated_columns.txt")"
-            EXTRA="$(comm -13 "$SCRIPT_DIR/model_columns.txt" "$SCRIPT_DIR/migrated_columns.txt")"
+            MISSING="$(LC_ALL=C comm -23 "$SCRIPT_DIR/model_columns.txt" "$SCRIPT_DIR/migrated_columns.txt")"
+            EXTRA="$(LC_ALL=C comm -13 "$SCRIPT_DIR/model_columns.txt" "$SCRIPT_DIR/migrated_columns.txt")"
             if [ -n "$EXTRA" ]; then echo "Columns present in the DB but not in the EF model (allowed, e.g. Users.PasswordHash):"; echo "$EXTRA"; fi
             if [ -n "$MISSING" ]; then
               echo "ERROR: the migrated copy is missing columns (or has a different type/nullability) compared with the EF model:"
