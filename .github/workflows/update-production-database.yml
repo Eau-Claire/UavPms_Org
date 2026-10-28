@@ -75,14 +75,55 @@ jobs:
               echo "Run 'Migrate Database (ERD v2.2)' first (it takes a backup and handles data conversion)."
               exit 1
             fi
-            echo "Applying pending OperationsService migrations..."
-            RUN_MIGRATIONS=true docker compose up -d --build --force-recreate operationsservice
-            echo "Waiting for OperationsService startup..."
-            for attempt in $(seq 1 30); do docker inspect uav-operations-service --format '{{.State.Running}}' | grep -qx true && break; sleep 2; done
-            docker inspect uav-operations-service --format '{{.State.Running}}' | grep -qx true
-            echo "Restoring normal OperationsService configuration..."
-            RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice
+            # Migrations come from the deployment checkout, so it must already be at origin/main (run Deploy first).
+            git fetch --quiet origin main
+            DEPLOYED="$(git rev-parse HEAD)"
+            LATEST="$(git rev-parse origin/main)"
+            echo "Deployment checkout: $(git log -1 --format='%h %s' "$DEPLOYED")"
+            if [ "$DEPLOYED" != "$LATEST" ]; then
+              echo "ERROR: deployment checkout is not at origin/main ($(git log -1 --format='%h %s' "$LATEST"))."
+              echo "Run the Deploy workflow for the latest commit first, then re-run this workflow."
+              exit 1
+            fi
+            MIGRATIONS_DIR="Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations"
+            CODE_MIGRATIONS="$(ls "$MIGRATIONS_DIR" | grep -E '^[0-9]{14}_.*\.cs$' | grep -v '\.Designer\.cs$' | sed 's/\.cs$//' | LC_ALL=C sort)"
+            applied_migrations() {
+              docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc 'SELECT "MigrationId" FROM "__EFMigrationsHistory"' | LC_ALL=C sort
+            }
+            PENDING="$(LC_ALL=C comm -23 <(printf '%s\n' "$CODE_MIGRATIONS") <(applied_migrations))"
+            if [ -z "$PENDING" ]; then
+              echo "No pending OperationsService migrations. Nothing to do."
+              exit 0
+            fi
+            echo "Pending migrations:"
+            printf '  %s\n' $PENDING
+
+            echo "========== BACKUP =========="
+            STAMP="$(date -u +%Y%m%d%H%M%S)"
+            mkdir -p "$DEPLOY_PATH/backups"
+            BACKUP="$DEPLOY_PATH/backups/uavpms_before_migrations_${STAMP}.dump"
+            docker exec uavpms-db pg_dump -U uavpms -d uavpms -Fc -f "/tmp/backup_${STAMP}.dump"
+            docker cp "uavpms-db:/tmp/backup_${STAMP}.dump" "$BACKUP"
+            docker exec uavpms-db rm -f "/tmp/backup_${STAMP}.dump"
+            echo "Backup written to $BACKUP ($(du -h "$BACKUP" | cut -f1))"
+
+            echo "========== APPLYING MIGRATIONS =========="
+            docker compose build operationsservice
+            # One-off container in migration-only mode: blocks until Database.Migrate() returns and exits non-zero
+            # (failing this job) when a migration throws, e.g. "Users has duplicate Email values".
+            RUN_MIGRATIONS=true MIGRATION_ONLY=true docker compose run --rm --no-deps operationsservice
+
             echo "========== MIGRATION HISTORY =========="
-            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId";'
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 5;'
+            STILL_PENDING="$(LC_ALL=C comm -23 <(printf '%s\n' "$CODE_MIGRATIONS") <(applied_migrations))"
+            if [ -n "$STILL_PENDING" ]; then
+              echo "ERROR: migrations still missing from history:"
+              printf '  %s\n' $STILL_PENDING
+              exit 1
+            fi
+
+            echo "Restarting OperationsService with the new image..."
+            RUN_MIGRATIONS=false MIGRATION_ONLY=false docker compose up -d --force-recreate operationsservice
             echo "========== OPERATIONS SERVICE LOGS =========="
-            docker compose logs --tail=100 operationsservice
+            sleep 15
+            docker compose logs --tail=50 operationsservice
