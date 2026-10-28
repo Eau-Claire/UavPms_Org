@@ -105,6 +105,79 @@ public class TowerHandlersTests
     }
 
     [Fact]
+    public async Task GetTowerHistory_PagesFiltersAndCountsStatsOverWholeTower()
+    {
+        var user = CreateUserMock(Guid.NewGuid());
+        await using var db = CreateContext(user.Object);
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-01", Name = "Region 1" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-300" };
+        db.Regions.Add(region);
+        db.Towers.Add(tower);
+        var category = new DefectCategory { Id = 1, CategoryCode = "DEF", CategoryName = "Defect" };
+        db.DefectCategories.Add(category);
+        var mission = new Mission { Id = Guid.NewGuid(), Status = MissionStatus.Completed };
+        db.Missions.Add(mission);
+        var lastCapture = new DateTime(2026, 10, 20, 8, 0, 0, DateTimeKind.Utc);
+        var media = new InspectionMedia { Id = Guid.NewGuid(), MissionId = mission.Id, TowerId = tower.Id, MediaType = "Image", FileUrl = "/a.jpg", CapturedAt = lastCapture.AddDays(-5) };
+        var latest = new InspectionMedia { Id = Guid.NewGuid(), MissionId = mission.Id, TowerId = tower.Id, MediaType = "Image", FileUrl = "/b.jpg", CapturedAt = lastCapture };
+        db.InspectionMedia.AddRange(media, latest);
+
+        DetectedAnomaly Anomaly(string status, int day) => new()
+        {
+            Id = Guid.NewGuid(), MediaId = media.Id, TowerId = tower.Id, CategoryId = category.Id, ValidationStatus = status,
+            CreatedAt = new DateTime(2026, 10, day, 0, 0, 0, DateTimeKind.Utc)
+        };
+        var pending1 = Anomaly("Pending", 1);
+        var pending2 = Anomaly("Pending", 2);
+        var pending3 = Anomaly("Pending", 3);
+        var confirmed = Anomaly("Confirmed", 4);
+        var rejected = Anomaly("Rejected", 5);
+        db.DetectedAnomalies.AddRange(pending1, pending2, pending3, confirmed, rejected);
+        db.MaintenanceTickets.AddRange(
+            new MaintenanceTicket { Id = Guid.NewGuid(), TicketCode = "T1", AnomalyId = confirmed.Id, Status = TicketStatus.Open },
+            new MaintenanceTicket { Id = Guid.NewGuid(), TicketCode = "T2", AnomalyId = confirmed.Id, Status = TicketStatus.PendingVerification },
+            new MaintenanceTicket { Id = Guid.NewGuid(), TicketCode = "T3", AnomalyId = confirmed.Id, Status = TicketStatus.Closed });
+        await db.SaveChangesAsync();
+        // CreatedAt is overwritten on insert by the audit hook; restore the test timeline.
+        foreach (var (a, day) in new[] { (pending1, 1), (pending2, 2), (pending3, 3), (confirmed, 4), (rejected, 5) })
+            db.Entry(a).Property(x => x.CreatedAt).CurrentValue = new DateTime(2026, 10, day, 0, 0, 0, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var handler = new GetTowerHistoryQueryHandler(
+            new TowerRepository(db, new GeographicAccessFilter(db, user.Object)),
+            new AnomalyRepository(db),
+            new MaintenanceTicketRepository(db),
+            new InspectionMediaRepository(db));
+
+        var page2 = await handler.Handle(
+            new GetTowerHistoryQuery(tower.Id, Page: 2, PageSize: 2, ValidationStatus: "pending"), CancellationToken.None);
+
+        page2.Anomalies.Select(a => a.Id).Should().Equal(pending1.Id); // newest first: pending3, pending2 | pending1
+        page2.AnomaliesPagination.Should().Be(new UavPms.OperationsService.Application.Common.DTOs.PaginationMetaData(2, 2, 3, 2));
+        page2.MaintenancePagination.TotalItems.Should().Be(3);
+        page2.Stats.Should().Be(new UavPms.OperationsService.Application.Features.Towers.DTOs.TowerHistoryStatsDto(
+            TotalAnomalies: 5, PendingAnomalies: 3, ConfirmedAnomalies: 1, OpenAnomalies: 4,
+            TotalTickets: 3, OpenTickets: 1, InProgressTickets: 1, ActiveTickets: 2, LastInspectedAt: lastCapture));
+
+        var window = await handler.Handle(new GetTowerHistoryQuery(tower.Id,
+            From: new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc), To: new DateTime(2026, 10, 4, 0, 0, 0, DateTimeKind.Utc)), CancellationToken.None);
+        window.Anomalies.Select(a => a.Id).Should().Equal(confirmed.Id, pending3.Id, pending2.Id);
+    }
+
+    [Fact]
+    public void GetTowerHistoryValidator_RejectsUnknownStatusAndInvertedRange()
+    {
+        var validator = new GetTowerHistoryQueryValidator();
+        var id = Guid.NewGuid();
+
+        validator.Validate(new GetTowerHistoryQuery(id, ValidationStatus: "confirmed")).IsValid.Should().BeTrue();
+        validator.Validate(new GetTowerHistoryQuery(id, ValidationStatus: "Approved")).IsValid.Should().BeFalse();
+        validator.Validate(new GetTowerHistoryQuery(id, PageSize: 101)).IsValid.Should().BeFalse();
+        validator.Validate(new GetTowerHistoryQuery(id, From: DateTime.UtcNow, To: DateTime.UtcNow.AddDays(-1))).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task GetTowerHistory_ReturnsCurrentAnomaliesExcludingSuperseded_AndTicketsOfTower()
     {
         var user = CreateUserMock(Guid.NewGuid());
@@ -164,7 +237,8 @@ public class TowerHandlersTests
         var handler = new GetTowerHistoryQueryHandler(
             new TowerRepository(db, new GeographicAccessFilter(db, user.Object)),
             new AnomalyRepository(db),
-            new MaintenanceTicketRepository(db));
+            new MaintenanceTicketRepository(db),
+            new InspectionMediaRepository(db));
 
         var history = await handler.Handle(new GetTowerHistoryQuery(tower.Id), CancellationToken.None);
 
@@ -196,7 +270,8 @@ public class TowerHandlersTests
         var handler = new GetTowerHistoryQueryHandler(
             new TowerRepository(db, new GeographicAccessFilter(db, user.Object)),
             new AnomalyRepository(db),
-            new MaintenanceTicketRepository(db));
+            new MaintenanceTicketRepository(db),
+            new InspectionMediaRepository(db));
 
         var act = () => handler.Handle(new GetTowerHistoryQuery(hidden.Id), CancellationToken.None);
         await act.Should().ThrowAsync<NotFoundException>();

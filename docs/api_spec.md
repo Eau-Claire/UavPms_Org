@@ -76,6 +76,7 @@ Hệ thống định nghĩa 6 vai trò tiêu chuẩn (`UserRoles`):
 graph TD
     Client[Web Frontend / Mobile App / Vision Edge] -->|HTTP / WebSocket| Gateway[UavPms.ApiGateway :5194]
     Gateway -->|/api/v1/auth, /api/v1/users| Identity[IdentityService :8080]
+    Gateway -->|/api/v1/users/{id}/geographic-scopes| Operations
     Gateway -->|/api/v1/regions, /towers, /gis, /uavs, /missions, /maintenance, /reports...| Operations[OperationsService :8080]
     Gateway -->|/api/v2/assessments| Operations
     Gateway -->|/api/v1/ai-analysis, /api/v1/missions/{id}/ai-analysis, /api/v1/vision| AIInspection[AIInspectionService :8080]
@@ -154,6 +155,23 @@ graph TD
 
 #### 1.5. [GET] `/api/v1/users/{id}`
 - **Mô tả**: Xem thông tin chi tiết một người dùng, quyền hạn và khu vực địa lý được phân quyền.
+
+#### 1.6. [GET|PUT] `/api/v1/users/{id}/geographic-scopes` (OperationsService)
+- **Mô tả**: Phạm vi địa lý mặc định của người dùng (bảng `user_geographic_scopes`). Gateway chuyển riêng đường dẫn này sang OperationsService (route `Priority: 100`); các đường dẫn `/users` khác vẫn đi IdentityService. Bộ lọc GIS cho phép người dùng thấy các khu vực được gán **và các khu vực con trực tiếp** của chúng, cộng với cột điện của nhiệm vụ/phiếu bảo trì đang được giao.
+- **[GET] Phân quyền**: `SystemAdmin`, `Manager` xem của mọi người; vai trò khác chỉ xem của chính mình (người khác → `403`).
+- **[PUT] Phân quyền**: `SystemAdmin`, `Manager`. Manager không được sửa phạm vi của chính mình (`403`), vì Manager không có phạm vi nào được xem toàn bộ bản đồ.
+- **[PUT] Request Body**: thay **toàn bộ** phạm vi bằng danh sách gửi lên; `[]` = bỏ hết (Manager không có phạm vi → xem toàn bộ; vai trò khác không có phạm vi → chỉ thấy theo nhiệm vụ/phiếu được giao).
+  ```json
+  { "regionIds": ["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"] }
+  ```
+  - `regionId` trùng được gộp; `00000000-...` → `400 INVALID_REGION`; khu vực không tồn tại → `404`; người dùng không tồn tại → `404`.
+- **Response `200 OK`** (`data`, cả GET và PUT):
+  ```json
+  {
+    "userId": "11111111-1111-1111-1111-111111111111",
+    "regions": [ { "regionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "code": "North", "name": "Miền Bắc", "type": "Region" } ]
+  }
+  ```
 
 ---
 
@@ -251,10 +269,22 @@ graph TD
           "proofs": [ { "id": "...", "proofType": "After", "fileUrl": "https://...", "technicianNotes": "Đã thay", "uploadedAt": "2026-10-17T05:50:00Z" } ],
           "materials": [ { "id": "...", "componentCode": "INS-U70", "componentName": "Bát sứ U70", "quantityUsed": 3, "unit": "cái", "loggedAt": "2026-10-17T05:40:00Z" } ]
         }
-      ]
+      ],
+      "stats": {
+        "totalAnomalies": 5, "pendingAnomalies": 3, "confirmedAnomalies": 1, "openAnomalies": 4,
+        "totalTickets": 3, "openTickets": 1, "inProgressTickets": 1, "activeTickets": 2,
+        "lastInspectedAt": "2026-10-20T08:00:00Z"
+      },
+      "anomaliesPagination": { "page": 1, "pageSize": 20, "totalItems": 3, "totalPages": 1 },
+      "maintenancePagination": { "page": 1, "pageSize": 20, "totalItems": 3, "totalPages": 1 }
     }
   }
   ```
+- **Query Params** (tùy chọn):
+  - `page` (mặc định `1`), `pageSize` (mặc định `20`, tối đa `100`): áp dụng **riêng** cho từng danh sách `anomalies` và `maintenanceHistory`, mỗi danh sách có phần `...Pagination` của mình.
+  - `validationStatus`: `Pending`, `Confirmed`, `Rejected`, `Resolved` (không phân biệt hoa thường), chỉ lọc `anomalies`.
+  - `from`, `to` (ISO 8601): lọc theo thời điểm tạo (`createdAt`) của cả bất thường và phiếu bảo trì; `to` không được trước `from`. Sai tham số → `400` lỗi validation.
+- **`stats`**: đếm trực tiếp trên **toàn bộ** cột, không theo bộ lọc/trang; không lưu cột tổng hợp. Bất thường đã bị thay thế không được đếm. `openAnomalies` = `Pending` + `Confirmed`; `inProgressTickets` = `InProgress` + `PendingVerification`; `activeTickets` = `openTickets` + `inProgressTickets`; `lastInspectedAt` = `capturedAt` mới nhất của media gắn cột này.
 
 #### 2.5. [POST] `/api/v1/towers/spatial-query`
 - **Mô tả**: Tìm các cột điện giao với một đa giác (GeoJSON Polygon, WGS 84), có thể lọc thêm theo khu vực.
@@ -627,18 +657,27 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
       "towerId": null,
       "fileUrl": "https://storage.uavpms.com/media/img-01.jpg",
       "mediaType": "Image",
-      "capturedAt": "2026-10-25T08:15:00Z"
+      "capturedAt": "2026-10-25T08:15:00Z",
+      "checksum": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "fileSizeBytes": 2483011,
+      "widthPx": 4000,
+      "heightPx": 3000,
+      "durationSeconds": null,
+      "fps": null,
+      "isDuplicate": false
     }
   }
   ```
-- **Lỗi**: `404` khi `towerId` không tồn tại; `400 INVALID_MISSION_TOWER` khi cột không nằm trong `mission_targets` của nhiệm vụ; `403` khi người gọi không được phân công vào nhiệm vụ.
+  - `checksum`: SHA-256 (hex thường) của tệp; `fileSizeBytes`: kích thước tệp. `widthPx/heightPx` đọc từ ảnh JPEG/PNG/WebP/TIFF hoặc track video của MP4; `durationSeconds/fps` chỉ có với MP4. Tệp không đọc được metadata thì các trường này `null`.
+  - **Chống trùng (idempotent)**: tải lại đúng tệp đã có (cùng `checksum`) vào **cùng nhiệm vụ** trả về media cũ với `isDuplicate: true`, không lưu tệp, không tạo bản ghi, không phát lại sự kiện phân tích AI. Dùng cho thiết bị edge thử lại khi đồng bộ.
+- **Lỗi**: `404` khi `towerId` không tồn tại; `400 INVALID_MISSION_TOWER` khi cột không nằm trong `mission_targets` của nhiệm vụ; `403` khi người gọi không được phân công vào nhiệm vụ; `409 DUPLICATE_MEDIA` khi tệp đã được tải lên cho **nhiệm vụ khác** (`checksum` là duy nhất toàn hệ thống).
 
 ---
 
 ### MODULE 7: MF04 - PHÂN TÍCH AI & THẨM ĐỊNH KHUYẾT TẬT
 
 > [!NOTE]
-> **Mô hình dữ liệu ERD v2.2**: mỗi lần chạy model trên một media là một `ai_analysis_runs` (`executionLocation` = `Edge` hoặc `Cloud`). Mỗi bất thường (`detected_anomalies`) trỏ về lần chạy sinh ra nó qua `analysisRunId` (NULL = tạo tay). Bản edge được kết quả cloud thay thế có `supersededById` trỏ sang bản cloud. Trường `aiSource` trong mọi API là **giá trị suy ra**: tên model của lần chạy (`ai_analysis_runs.model_name`, nếu trống thì `executionLocation`), hoặc `"Manual"` khi `analysisRunId = null`. `towerId` của bất thường là `uuid` (nullable cho tới khi xác nhận).
+> **Mô hình dữ liệu ERD v2.2**: mỗi lần chạy model trên một media là một `ai_analysis_runs` (`executionLocation` = `Edge` hoặc `Cloud`). Mỗi bất thường (`detected_anomalies`) trỏ về lần chạy sinh ra nó qua `analysisRunId` (NULL = tạo tay). Bản edge được kết quả cloud thay thế có `supersededById` trỏ sang bản cloud. Một bản edge bị thay thế khi bản cloud trên **cùng media** có **cùng loại lỗi**, khung hình (video) cách nhau không quá 1 giây và bounding box chồng lấn **IoU ≥ 0.5**. Box chuẩn hóa (0–1) được quy đổi sang pixel theo kích thước media trước khi so; nếu thiếu box hoặc không quy đổi được (media chưa có kích thước) thì chỉ xét cùng loại lỗi. Trường `aiSource` trong mọi API là **giá trị suy ra**: tên model của lần chạy (`ai_analysis_runs.model_name`, nếu trống thì `executionLocation`), hoặc `"Manual"` khi `analysisRunId = null`. `towerId` của bất thường là `uuid` (nullable cho tới khi xác nhận).
 
 #### 7.1. [GET] `/api/v1/ai-analysis/{id}` (AIInspectionService)
 - **Mô tả**: Xem một lần chạy AI (`ai_analysis_runs`).
@@ -770,6 +809,31 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 
 #### 7.8. [POST] `/api/v1/vision/detections`
 - **Mô tả**: Webhook tiếp nhận phát hiện thời gian thực từ Edge Device (Camera drone / Vision Edge AI). Mỗi lô kết quả edge ghi một `ai_analysis_runs` với `executionLocation = "Edge"`, `uavId` = drone của nhiệm vụ, `status = "Completed"`; các bất thường mang `analysisRunId` của lần chạy đó và `aiDetectionId` = TrackId của edge.
+
+#### 7.9. [PUT] `/api/v1/anomalies/{id}/tower` (AIInspectionService)
+- **Mô tả**: Gán cột điện cho bất thường, dùng trước khi xác nhận (bất thường `Confirmed` bắt buộc có `towerId`). Áp dụng cho bất thường `Pending`, `Rejected` hoặc `Confirmed` (sửa cột gán nhầm).
+- **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`
+- **Request Body**: `{ "towerId": "22222222-2222-2222-2222-222222222222" }`
+- **Response `200 OK`** (`data`): `{ "anomalyId": "...", "towerId": "...", "towerCode": "NPC_HP_01_001", "validationStatus": "Pending" }`
+- **Lỗi** (`400`, `errorCode`): `INVALID_TOWER` (GUID rỗng); `ANOMALY_SUPERSEDED` (bản edge đã bị cloud thay thế, gán trên bản thay thế); `ANOMALY_RESOLVED` (đã sửa xong, không đổi được). `404` khi bất thường hoặc cột không tồn tại.
+
+#### 7.10. [GET] `/api/v1/anomalies/{id}/tower-suggestions?radiusMeters=300&limit=5` (AIInspectionService)
+- **Mô tả**: Gợi ý cột điện gần nhất cho bất thường, xếp theo khoảng cách. Điểm gốc là GPS của bất thường (`source = "Anomaly"`), nếu không có thì vị trí chụp của media (`source = "Media"`). Lọc sơ bộ bằng `ST_DWithin` trên chỉ mục GiST của `towers.geom`, rồi tính khoảng cách mặt cầu (mét).
+- **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`
+- **Query Params**: `radiusMeters` (mặc định `300`, tối đa `5000`), `limit` (mặc định `5`, tối đa `20`).
+- **Response `200 OK`** (`data`):
+  ```json
+  {
+    "anomalyId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "currentTowerId": null,
+    "source": "Anomaly",
+    "latitude": 21.0285, "longitude": 105.8542, "radiusMeters": 300,
+    "towers": [
+      { "towerId": "22222222-2222-2222-2222-222222222222", "towerCode": "NPC_HN_01_014", "regionId": "33333333-3333-3333-3333-333333333333", "address": "...", "latitude": 21.029, "longitude": 105.8542, "distanceMeters": 55.6, "isCurrent": false }
+    ]
+  }
+  ```
+- **Lỗi**: `400 LOCATION_UNKNOWN` khi cả bất thường và media đều không có tọa độ; `404` khi bất thường không tồn tại.
 
 ---
 

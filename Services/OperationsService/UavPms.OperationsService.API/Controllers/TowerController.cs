@@ -45,12 +45,19 @@ public class TowerController : ControllerBase
     }
 
     /// <summary>
-    /// Trang chi tiết cột điện: danh sách bất thường (detected_anomalies) và lịch sử bảo trì.
+    /// Trang chi tiết cột điện: danh sách bất thường (detected_anomalies) và lịch sử bảo trì, có phân trang,
+    /// lọc theo validationStatus (bất thường) và khoảng thời gian tạo, kèm thống kê của cột.
     /// </summary>
     [HttpGet("{id:guid}/history")]
-    public async Task<IActionResult> GetHistory(Guid id)
+    public async Task<IActionResult> GetHistory(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? validationStatus = null,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
     {
-        var result = await _mediator.Send(new GetTowerHistoryQuery(id));
+        var result = await _mediator.Send(new GetTowerHistoryQuery(id, page, pageSize, validationStatus, from, to));
         return Ok(new ApiResponse(true, "Lấy lịch sử cột điện thành công.", result));
     }
 

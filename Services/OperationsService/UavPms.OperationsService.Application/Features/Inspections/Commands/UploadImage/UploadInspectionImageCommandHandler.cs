@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
@@ -11,6 +12,7 @@ using UavPms.Shared.Contracts.Events;
 using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Common.Interfaces;
+using UavPms.OperationsService.Application.Common.Utilities;
 using UavPms.OperationsService.Domain.Enums;
 using System.Text.Json;
 
@@ -133,6 +135,19 @@ public class UploadInspectionImageCommandHandler
             throw new BusinessRuleException("The tower is not included in the mission inspection scope.");
         }
 
+        // 2a. Checksum: the same file uploaded twice (e.g. an edge sync retry) returns the existing media.
+        var hasContent = request.FileStream is { CanSeek: true } && request.FileStream.Length > 0;
+        var checksum = hasContent ? MediaMetadataExtractor.ComputeSha256(request.FileStream) : null;
+        if (checksum != null)
+        {
+            var duplicate = await FindByChecksumAsync(checksum, request.MissionId);
+            if (duplicate != null)
+            {
+                _logger.LogInformation("Duplicate inspection media upload: Checksum={Checksum}, MediaId={MediaId}", checksum, duplicate.Id);
+                return UploadInspectionImageResult.From(duplicate, isDuplicate: true);
+            }
+        }
+
         // 2b. Auto-extract EXIF GPS & timestamp if missing
         double? effectiveLat = request.Latitude;
         double? effectiveLng = request.Longitude;
@@ -165,6 +180,7 @@ public class UploadInspectionImageCommandHandler
         var mediaType = request.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
             ? "Video"
             : "Image";
+        var metadata = MediaMetadataExtractor.Extract(request.FileStream, request.ContentType);
 
         // 5. Tạo bản ghi InspectionMedia
         var media = new InspectionMedia
@@ -180,7 +196,13 @@ public class UploadInspectionImageCommandHandler
             FileUrl = fileUrl,
             ValidationStatus = "Pending",
             CapturedAt = effectiveCapturedAt,
-            CreatedBy = currentUserId
+            CreatedBy = currentUserId,
+            Checksum = checksum,
+            FileSizeBytes = hasContent ? request.FileStream.Length : null,
+            WidthPx = metadata.WidthPx,
+            HeightPx = metadata.HeightPx,
+            DurationSeconds = metadata.DurationSeconds,
+            Fps = metadata.Fps
         };
 
         var integrationEvent = new InspectionMediaUploadedEvent
@@ -214,6 +236,12 @@ public class UploadInspectionImageCommandHandler
         }
         catch (Exception ex)
         {
+            // A concurrent upload of the same file won the unique checksum index: return its media.
+            var concurrent = checksum != null ? await FindByChecksumAsync(checksum, request.MissionId) : null;
+            if (concurrent != null)
+            {
+                return UploadInspectionImageResult.From(concurrent, isDuplicate: true);
+            }
             throw new InfrastructureOperationException("DATABASE_FAILURE", "Failed to persist inspection media.", ex);
         }
 
@@ -243,14 +271,21 @@ public class UploadInspectionImageCommandHandler
             "Inspection image uploaded: MediaId={MediaId}, MissionId={MissionId}, Url={FileUrl}",
             media.Id, media.MissionId, media.FileUrl);
 
-        return new UploadInspectionImageResult
+        return UploadInspectionImageResult.From(media);
+    }
+
+    /// <summary>
+    /// Existing media with this checksum. The checksum is unique across all missions, so the same file
+    /// already stored for another mission is a conflict rather than a duplicate to return.
+    /// </summary>
+    private async Task<InspectionMedia?> FindByChecksumAsync(string checksum, Guid missionId)
+    {
+        var existing = (await _mediaRepository.FindAsync(m => m.Checksum == checksum, track: false))?.FirstOrDefault();
+        if (existing != null && existing.MissionId != missionId)
         {
-            MediaId = media.Id,
-            MissionId = media.MissionId,
-            TowerId = media.TowerId,
-            FileUrl = media.FileUrl,
-            MediaType = media.MediaType,
-            CapturedAt = media.CapturedAt
-        };
+            throw new BusinessRuleException("DUPLICATE_MEDIA",
+                $"This file was already uploaded to another mission (media {existing.Id}, mission {existing.MissionId}).");
+        }
+        return existing;
     }
 }

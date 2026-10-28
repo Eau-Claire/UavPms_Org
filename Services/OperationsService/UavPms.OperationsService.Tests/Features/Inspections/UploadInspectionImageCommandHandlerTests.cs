@@ -311,4 +311,86 @@ public class UploadInspectionImageCommandHandlerTests
             .WithMessage("*mission inspection scope*");
         _mediaRepositoryMock.Verify(x => x.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
     }
+
+    // Minimal PNG: signature + IHDR (1920x1080) + IEND.
+    private static byte[] Png1920x1080() =>
+    [
+        137, 80, 78, 71, 13, 10, 26, 10,
+        0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R', 0, 0, 0x07, 0x80, 0, 0, 0x04, 0x38, 8, 2, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
+    ];
+
+    private (Guid MissionId, Guid InspectorId) ArrangeAssignedMissionWithoutTower()
+    {
+        var missionId = Guid.NewGuid();
+        var inspectorId = Guid.NewGuid();
+        _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false))
+            .ReturnsAsync(new Mission { Id = missionId, Status = MissionStatus.InProgress, Assignments = { new MissionAssignment { UserId = inspectorId, AssignmentRole = "INSPECTOR" } } });
+        _currentUserServicesMock.SetupGet(x => x.UserId).Returns(inspectorId);
+        _fileStorageServiceMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("/images/pole.png");
+        return (missionId, inspectorId);
+    }
+
+    [Fact]
+    public async Task Handle_StoresChecksumSizeAndImageDimensions()
+    {
+        var (missionId, _) = ArrangeAssignedMissionWithoutTower();
+        var bytes = Png1920x1080();
+        _mediaRepositoryMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<InspectionMedia, bool>>>(), false))
+            .ReturnsAsync(Array.Empty<InspectionMedia>());
+
+        var result = await _handler.Handle(new UploadInspectionImageCommand
+        {
+            MissionId = missionId, CapturedAt = DateTime.UtcNow,
+            FileName = "pole.png", ContentType = "image/png", FileStream = new MemoryStream(bytes)
+        }, CancellationToken.None);
+
+        var expectedChecksum = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
+        result.IsDuplicate.Should().BeFalse();
+        result.Checksum.Should().Be(expectedChecksum);
+        _mediaRepositoryMock.Verify(r => r.AddAsync(It.Is<InspectionMedia>(m =>
+            m.Checksum == expectedChecksum && m.FileSizeBytes == bytes.Length && m.WidthPx == 1920 && m.HeightPx == 1080
+            && m.TowerId == null && m.DurationSeconds == null)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_SameFileSameMission_ReturnsExistingMediaWithoutStoringAgain()
+    {
+        var (missionId, _) = ArrangeAssignedMissionWithoutTower();
+        var existing = new InspectionMedia { Id = Guid.NewGuid(), MissionId = missionId, FileUrl = "/images/old.png", MediaType = "Image", Checksum = "abc" };
+        _mediaRepositoryMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<InspectionMedia, bool>>>(), false))
+            .ReturnsAsync(new[] { existing });
+
+        var result = await _handler.Handle(new UploadInspectionImageCommand
+        {
+            MissionId = missionId, CapturedAt = DateTime.UtcNow,
+            FileName = "pole.png", ContentType = "image/png", FileStream = new MemoryStream(Png1920x1080())
+        }, CancellationToken.None);
+
+        result.IsDuplicate.Should().BeTrue();
+        result.MediaId.Should().Be(existing.Id);
+        result.FileUrl.Should().Be("/images/old.png");
+        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
+        _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<InspectionMediaUploadedEvent>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_SameFileOtherMission_ThrowsDuplicateMedia()
+    {
+        var (missionId, _) = ArrangeAssignedMissionWithoutTower();
+        var existing = new InspectionMedia { Id = Guid.NewGuid(), MissionId = Guid.NewGuid(), FileUrl = "/images/old.png", MediaType = "Image" };
+        _mediaRepositoryMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<InspectionMedia, bool>>>(), false))
+            .ReturnsAsync(new[] { existing });
+
+        var act = () => _handler.Handle(new UploadInspectionImageCommand
+        {
+            MissionId = missionId, CapturedAt = DateTime.UtcNow,
+            FileName = "pole.png", ContentType = "image/png", FileStream = new MemoryStream(Png1920x1080())
+        }, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be("DUPLICATE_MEDIA");
+        _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
+    }
 }

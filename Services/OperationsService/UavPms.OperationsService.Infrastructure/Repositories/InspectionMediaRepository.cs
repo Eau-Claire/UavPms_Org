@@ -49,4 +49,11 @@ public class InspectionMediaRepository : GenericRepository<InspectionMedia>, IIn
             .OrderByDescending(m => m.CapturedAt)
             .ToListAsync();
     }
+
+    public async Task<DateTime?> GetLastCapturedAtByTowerAsync(Guid towerId, CancellationToken cancellationToken = default)
+    {
+        return await _context.InspectionMedia.AsNoTracking()
+            .Where(m => m.TowerId == towerId)
+            .MaxAsync(m => (DateTime?)m.CapturedAt, cancellationToken);
+    }
 }
