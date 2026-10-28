@@ -20,7 +20,7 @@ Physical names are PascalCase (EF default). "Audit" = `CreatedAt, CreatedBy, Upd
 
 | Table | Change |
 | :-- | :-- |
-| `Users` | unchanged (`PasswordHash` only mapped by IdentityService) |
+| `Users` | unchanged (`PasswordHash` only mapped by IdentityService). Unique `IX_Users_Email (Email)` and `IX_Users_Phone (Phone) WHERE Phone <> ''` (migration `AddUsersEmailPhoneUniqueIndexes`, run `scripts/db/cleanup_duplicate_users.sql` first) |
 | `UserGeographicScopes` | Drop `SubstationId`, `TransmissionLineId`, `ManagementUnitId`. `RegionId` is **NOT NULL**, FK → `Regions`. Unique `(UserId, RegionId)` where `NOT IsDeleted` |
 | `Regions` | Rename `RegionName` → `Name` |
 | `Towers` | Drop `LineAssetId`, `LineCode`, `Voltage`, `RiskLevel`, `ActiveDefectsCount`, `LastInspectedAt`. `RegionId` **NOT NULL** |

@@ -69,11 +69,10 @@ jobs:
               echo "ERROR: uavpms-db is not running."
               exit 1
             fi
-            ASSET_COMPONENTS_EXISTS="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'AssetComponents');")"
-            GIS_MIGRATION_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20260902033000_AddGisAssetSelection');")"
-            if [ "$ASSET_COMPONENTS_EXISTS" = "t" ] && [ "$GIS_MIGRATION_APPLIED" != "t" ]; then
-              echo "ERROR: AssetComponents exists but the GIS migration is absent from history."
-              echo "Run 'Repair Production AssetComponents Schema' before planning a reconciliation migration."
+            ERD_V2_2_APPLIED="$(docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -tAc "SELECT EXISTS (SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '20261027181344_AlignSchemaWithErdV2_2');")"
+            if [ "$ERD_V2_2_APPLIED" != "t" ]; then
+              echo "ERROR: ERD v2.2 migration is absent from history."
+              echo "Run 'Migrate Database (ERD v2.2)' first (it takes a backup and handles data conversion)."
               exit 1
             fi
             echo "Applying pending OperationsService migrations..."
@@ -85,7 +84,5 @@ jobs:
             RUN_MIGRATIONS=false docker compose up -d --force-recreate operationsservice
             echo "========== MIGRATION HISTORY =========="
             docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId";'
-            echo "========== ASSET SCHEMA =========="
-            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'SELECT to_regclass('\''public."AssetComponents"'\'') AS asset_components_table;'
             echo "========== OPERATIONS SERVICE LOGS =========="
             docker compose logs --tail=100 operationsservice

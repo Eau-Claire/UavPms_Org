@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
+using UavPms.AIInspectionService.Application.Common.Exceptions;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using NetTopologySuite.Geometries;
@@ -183,5 +184,40 @@ public class MissionAiDetectionsTests
 
         anomalyRepoMock.Verify(r => r.UpdateAsync(anomaly), Times.Once);
         unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReviewMissionAiDetection_AcceptWithoutTower_ThrowsTowerRequired()
+    {
+        var missionId = Guid.NewGuid();
+        var detectionId = Guid.NewGuid();
+        var mediaId = Guid.NewGuid();
+        var anomaly = new DetectedAnomaly
+        {
+            Id = detectionId,
+            MediaId = mediaId,
+            Media = new InspectionMedia { Id = mediaId, MissionId = missionId, TowerId = null },
+            ValidationStatus = "Pending"
+        };
+
+        var anomalyRepoMock = new Mock<IAnomalyRepository>();
+        anomalyRepoMock.Setup(r => r.GetByIdWithDetailAsync(detectionId)).ReturnsAsync(anomaly);
+        var unitOfWorkMock = new Mock<IUnitOfWork>();
+
+        var handler = new ReviewMissionAiDetectionCommandHandler(
+            anomalyRepoMock.Object,
+            unitOfWorkMock.Object,
+            Mock.Of<ICurrentUserServices>());
+
+        var act = () => handler.Handle(new ReviewMissionAiDetectionCommand
+        {
+            MissionId = missionId,
+            DetectionId = detectionId,
+            Decision = "Accepted"
+        }, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be("TOWER_REQUIRED");
+        anomaly.ValidationStatus.Should().Be("Pending");
+        unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }

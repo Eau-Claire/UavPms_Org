@@ -2458,6 +2458,10 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
+                    b.HasIndex("Phone")
+                        .IsUnique()
+                        .HasFilter("\"Phone\" <> ''");
+
                     b.ToTable("Users", (string)null);
                 });
 

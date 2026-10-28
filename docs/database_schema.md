@@ -155,8 +155,8 @@ Cột audit chung không được liệt kê lại trong từng bảng (xem mụ
 | Tên cột | Kiểu dữ liệu | Khóa / Ràng buộc | Mô tả |
 |---|---|---|---|
 | `id` | `uuid` | PK | Mã định danh người dùng |
-| `email` | `varchar(255)` | UK | Email đăng nhập |
-| `phone` | `varchar(20)` | UK | Số điện thoại |
+| `email` | `varchar(255)` | UK (`IX_Users_Email`) | Email đăng nhập, lưu dạng `trim + lower` |
+| `phone` | `varchar(20)` | UK partial (`IX_Users_Phone`, `WHERE phone <> ''`) | Số điện thoại; `''` = không có |
 | `password_hash` | `text` | | Băm mật khẩu. Chỉ IdentityService map cột này |
 | `full_name` | `varchar(150)` | | Họ và tên |
 | `status` | `varchar(20)` | | `UserStatus`: `Pending`, `Active`, `Inactive`, `Suspended` |

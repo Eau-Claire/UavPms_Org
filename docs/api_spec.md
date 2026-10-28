@@ -614,7 +614,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 
 **[POST] `/api/v1/inspections/upload`**
 - **Phân quyền**: `Inspector`
-- **Form Data**: `missionId` (GUID), `towerId` (GUID), `capturedAt`, `latitude?`, `longitude?`, `file`. Ở endpoint này `towerId` được bind kiểu `Guid` không nullable nên phải gửi một cột hợp lệ (giá trị rỗng bị từ chối với lỗi `Tower ID is invalid.`). Dùng `/missions/{id}/media` khi cần tải media không gắn cột.
+- **Form Data**: `missionId` (GUID), `towerId?` (GUID, tùy chọn; không gửi thì media không gắn cột, NULL = video hành lang; nếu gửi thì cột phải thuộc `mission_targets`), `capturedAt`, `latitude?`, `longitude?`, `file`. Gửi GUID rỗng (`00000000-...`) bị từ chối với lỗi `Tower ID is invalid.`.
 
 - **Response `200 OK`** (cả hai endpoint):
   ```json
@@ -718,7 +718,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
   ```
   - `decision`: `Accepted` (chấp nhận cả `Accept`, `Confirmed`, `Confirm`, `Approved`) hoặc `Rejected` (chấp nhận cả `Reject`, `Denied`).
 - **Response `200 OK`**: `data` là phát hiện sau khi thẩm định (cấu trúc một phần tử `detections` ở mục 7.2).
-- **Quy tắc cột điện**: Khi chấp nhận, nếu bất thường chưa có `towerId`, hệ thống lấy `towerId` của media. Nếu vẫn không có cột, trả `400` với message `The detection must be linked to a tower before it can be confirmed.`
+- **Quy tắc cột điện**: Khi chấp nhận, nếu bất thường chưa có `towerId`, hệ thống lấy `towerId` của media. Nếu vẫn không có cột, trả `400` với `errorCode: "TOWER_REQUIRED"` (cùng mã với OperationsService, mục 7.4), message `TOWER_REQUIRED: The detection must be linked to a tower before it can be confirmed.`
 
 #### 7.4. [POST|PUT] `/api/v1/missions/{missionId}/detections/{detectionId}/review` (OperationsService)
 - **Mô tả**: Thẩm định phát hiện trong ngữ cảnh nhiệm vụ. Khi xác nhận, hệ thống tự sinh phiếu bảo trì nếu bất thường chưa có phiếu.
@@ -761,7 +761,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
   }
   ```
   - `status`: `Confirmed` / `Approved`, `Rejected` / `Dismissed`, hoặc giá trị khác được ghi thẳng vào `validationStatus`.
-- **Quy tắc cột điện**: Khi xác nhận mà bất thường và media đều không có `towerId`, trả `400` với message `The anomaly must be linked to a tower before it can be confirmed.`
+- **Quy tắc cột điện**: Khi xác nhận mà bất thường và media đều không có `towerId`, trả `400` với `errorCode: "TOWER_REQUIRED"`, message `TOWER_REQUIRED: The anomaly must be linked to a tower before it can be confirmed.`
 
 #### 7.7. [POST] `/api/v1/missions/{missionId}/ai-analysis/from-media/{mediaId}` (AIInspectionService)
 - **Mô tả**: Yêu cầu phân tích cloud cho một media đã có trong nhiệm vụ. Tạo một `ai_analysis_runs` `Pending` với `executionLocation = "Cloud"`, `requestedBy` = người gọi.
