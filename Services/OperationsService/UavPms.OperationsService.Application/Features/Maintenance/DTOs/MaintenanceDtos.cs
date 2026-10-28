@@ -33,7 +33,7 @@ public class MaintenanceTicketDto
     public Guid AnomalyId { get; set; }
     public Guid? TowerId { get; set; }
     public Guid ManagerId { get; set; }
-    public Guid TechnicianId { get; set; }
+    public Guid? TechnicianId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string Priority { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;

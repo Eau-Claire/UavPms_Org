@@ -31,7 +31,7 @@ public class InspectionController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadImage(
         [FromForm] Guid missionId,
-        [FromForm] Guid towerId,
+        [FromForm] Guid? towerId,
         [FromForm] DateTime capturedAt,
         [FromForm] double? latitude,
         [FromForm] double? longitude,

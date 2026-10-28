@@ -13,11 +13,7 @@ on:
         type: string
       region_codes:
         description: Comma-separated Region codes, for example North,Central,South.
-        required: false
-        type: string
-      management_unit_codes:
-        description: Comma-separated ManagementUnit codes, for example EVNCPC,EVNSPC.
-        required: false
+        required: true
         type: string
 
 concurrency:
@@ -39,7 +35,6 @@ jobs:
           CONFIRMATION: ${{ inputs.confirmation }}
           USER_EMAIL: ${{ inputs.user_email }}
           REGION_CODES: ${{ inputs.region_codes }}
-          MANAGEMENT_UNIT_CODES: ${{ inputs.management_unit_codes }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
@@ -48,7 +43,7 @@ jobs:
           debug: true
           timeout: 60s
           command_timeout: 10m
-          envs: DEPLOY_PATH,CONFIRMATION,USER_EMAIL,REGION_CODES,MANAGEMENT_UNIT_CODES
+          envs: DEPLOY_PATH,CONFIRMATION,USER_EMAIL,REGION_CODES
           # Scope assignment remains idempotent; keep the SSH session alive so database diagnostics are visible.
           script_stop: false
           script: |
@@ -56,7 +51,7 @@ jobs:
             if [ "${CONFIRMATION:-}" != ASSIGN_PRODUCTION_GIS_SCOPE ]; then echo "ERROR: confirmation mismatch."; exit 1; fi
             if [ -z "${DEPLOY_PATH:-}" ]; then echo "ERROR: DEPLOY_PATH is not configured."; exit 1; fi
             if [[ ! "${USER_EMAIL:-}" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$ ]]; then echo "ERROR: invalid user email."; exit 1; fi
-            if [ -z "${REGION_CODES//[[:space:],]/}" ] && [ -z "${MANAGEMENT_UNIT_CODES//[[:space:],]/}" ]; then echo "ERROR: provide region_codes or management_unit_codes."; exit 1; fi
+            if [ -z "${REGION_CODES//[[:space:],]/}" ]; then echo "ERROR: provide region_codes."; exit 1; fi
             cd "$DEPLOY_PATH"
             if [ "$(git branch --show-current)" != main ]; then echo "ERROR: deployment checkout must be on main."; exit 1; fi
             EXCLUDE_FILE="$DEPLOY_PATH/.git/info/exclude"
@@ -69,19 +64,31 @@ jobs:
             DB_ARGS=(-X -v ON_ERROR_STOP=1 -U uavpms -d uavpms)
             USER_ID="$(docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -c "SELECT \"Id\" FROM public.\"Users\" WHERE lower(\"Email\") = lower('${USER_EMAIL}') AND NOT \"IsDeleted\";")"
             if [ -z "$USER_ID" ]; then echo "ERROR: user was not found."; exit 1; fi
+            if [ "$(printf '%s\n' "$USER_ID" | wc -l)" -ne 1 ]; then echo "ERROR: more than one active user has this email."; exit 1; fi
             echo "Assigning scopes to user: $USER_EMAIL"
             IFS=',' read -r -a REGIONS <<< "${REGION_CODES:-}"
             for raw_code in "${REGIONS[@]}"; do
               CODE="$(printf '%s' "$raw_code" | xargs)"
               [ -z "$CODE" ] && continue
               if [[ ! "$CODE" =~ ^[A-Za-z0-9_-]+$ ]]; then echo "ERROR: invalid region code."; exit 1; fi
-              if docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -c "INSERT INTO public.\"UserGeographicScopes\" (\"Id\",\"UserId\",\"RegionId\",\"CreatedAt\",\"IsDeleted\") SELECT md5('${USER_ID}' || ':region:' || '${CODE}')::uuid, '${USER_ID}'::uuid, r.\"Id\", now(), false FROM public.\"Regions\" r WHERE r.\"Code\" = '${CODE}' ON CONFLICT (\"Id\") DO UPDATE SET \"RegionId\" = EXCLUDED.\"RegionId\", \"IsDeleted\" = false, \"DeletedAt\" = NULL RETURNING 1;" 2>&1; then echo "region scope applied: $CODE"; else echo "ERROR: region scope SQL failed for $CODE"; exit 1; fi
+              # ERD v2.2: one active row per (UserId, RegionId); reactivate a soft-deleted row before inserting a new one.
+              SQL="DO \$\$
+              DECLARE v_region uuid; v_user uuid := '${USER_ID}'::uuid;
+              BEGIN
+                SELECT \"Id\" INTO v_region FROM public.\"Regions\" WHERE \"Code\" = '${CODE}' AND NOT \"IsDeleted\";
+                IF v_region IS NULL THEN RAISE EXCEPTION 'Region code ${CODE} was not found'; END IF;
+                IF EXISTS (SELECT 1 FROM public.\"UserGeographicScopes\" WHERE \"UserId\" = v_user AND \"RegionId\" = v_region AND NOT \"IsDeleted\") THEN
+                  RAISE NOTICE 'region scope already active: ${CODE}';
+                ELSIF EXISTS (SELECT 1 FROM public.\"UserGeographicScopes\" WHERE \"UserId\" = v_user AND \"RegionId\" = v_region) THEN
+                  UPDATE public.\"UserGeographicScopes\" SET \"IsDeleted\" = false, \"DeletedAt\" = NULL, \"UpdatedAt\" = now()
+                  WHERE \"Id\" = (SELECT \"Id\" FROM public.\"UserGeographicScopes\" WHERE \"UserId\" = v_user AND \"RegionId\" = v_region ORDER BY \"CreatedAt\" DESC LIMIT 1);
+                  RAISE NOTICE 'region scope reactivated: ${CODE}';
+                ELSE
+                  INSERT INTO public.\"UserGeographicScopes\" (\"Id\",\"UserId\",\"RegionId\",\"CreatedAt\",\"IsDeleted\")
+                  VALUES (gen_random_uuid(), v_user, v_region, now(), false);
+                  RAISE NOTICE 'region scope added: ${CODE}';
+                END IF;
+              END \$\$;"
+              if docker exec uavpms-db psql "${DB_ARGS[@]}" -c "$SQL" 2>&1; then echo "region scope applied: $CODE"; else echo "ERROR: region scope SQL failed for $CODE"; exit 1; fi
             done
-            IFS=',' read -r -a UNITS <<< "${MANAGEMENT_UNIT_CODES:-}"
-            for raw_code in "${UNITS[@]}"; do
-              CODE="$(printf '%s' "$raw_code" | xargs)"
-              [ -z "$CODE" ] && continue
-              if [[ ! "$CODE" =~ ^[A-Za-z0-9_-]+$ ]]; then echo "ERROR: invalid management unit code."; exit 1; fi
-              if docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -c "INSERT INTO public.\"UserGeographicScopes\" (\"Id\",\"UserId\",\"ManagementUnitId\",\"CreatedAt\",\"IsDeleted\") SELECT md5('${USER_ID}' || ':management-unit:' || '${CODE}')::uuid, '${USER_ID}'::uuid, u.\"Id\", now(), false FROM public.\"ManagementUnits\" u WHERE u.\"Code\" = '${CODE}' ON CONFLICT (\"Id\") DO UPDATE SET \"ManagementUnitId\" = EXCLUDED.\"ManagementUnitId\", \"IsDeleted\" = false, \"DeletedAt\" = NULL RETURNING 1;" 2>&1; then echo "management unit scope applied: $CODE"; else echo "ERROR: management unit scope SQL failed for $CODE"; exit 1; fi
-            done
-            docker exec uavpms-db psql "${DB_ARGS[@]}" -c "SELECT s.\"Id\", s.\"RegionId\", s.\"ManagementUnitId\", s.\"IsDeleted\" FROM public.\"UserGeographicScopes\" s WHERE s.\"UserId\" = '${USER_ID}'::uuid ORDER BY s.\"CreatedAt\";"
+            docker exec uavpms-db psql "${DB_ARGS[@]}" -c "SELECT s.\"Id\", r.\"Code\" AS region_code, r.\"Name\" AS region_name, s.\"IsDeleted\" FROM public.\"UserGeographicScopes\" s JOIN public.\"Regions\" r ON r.\"Id\" = s.\"RegionId\" WHERE s.\"UserId\" = '${USER_ID}'::uuid ORDER BY s.\"CreatedAt\";"

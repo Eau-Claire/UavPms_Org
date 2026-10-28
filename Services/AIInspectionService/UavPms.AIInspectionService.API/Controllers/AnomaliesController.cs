@@ -7,6 +7,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using UavPms.AIInspectionService.Application.Common.Exceptions;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Constants;
@@ -129,7 +130,7 @@ public class AnomaliesController : ControllerBase
             anomaly.TowerId ??= anomaly.Media?.TowerId;
             if (anomaly.TowerId == null)
             {
-                return BadRequest(new ApiResponse(false, "The anomaly must be linked to a tower before it can be confirmed."));
+                throw new BusinessRuleException("TOWER_REQUIRED", "The anomaly must be linked to a tower before it can be confirmed.");
             }
             anomaly.Confirm(analystId, notes);
         }

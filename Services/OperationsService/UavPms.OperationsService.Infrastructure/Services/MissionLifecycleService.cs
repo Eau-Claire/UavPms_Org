@@ -1714,11 +1714,11 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                     TicketCode = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
                     AnomalyId = anomaly.Id,
                     ManagerId = mission.ManagerId,
-                    TechnicianId = techAssignment?.UserId ?? Guid.Empty,
+                    TechnicianId = techAssignment?.UserId,
                     Status = TicketStatus.Open,
                     Priority = priority,
                     Description = $"[Khuyến nghị từ Giám định AI] {anomaly.Category?.CategoryName ?? "Khuyết tật đường dây"}. {request.ReviewNotes ?? anomaly.AnalystNotes}",
-                    AssignedAt = DateTime.UtcNow,
+                    AssignedAt = techAssignment != null ? DateTime.UtcNow : null,
                     DueDate = DateTime.UtcNow.AddDays(priority == TicketPriority.Emergency ? 1 : 7)
                 };
 

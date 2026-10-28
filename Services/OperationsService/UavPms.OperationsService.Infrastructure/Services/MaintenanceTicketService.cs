@@ -163,6 +163,10 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             {
                 throw new BusinessRuleException($"Cannot start progress on ticket in status '{ticket.Status}'. Must be Open.");
             }
+            if (ticket.TechnicianId == null)
+            {
+                throw new BusinessRuleException("Cannot start progress on a ticket that has no technician assigned.");
+            }
             ticket.Status = TicketStatus.InProgress;
             ticket.StartedAt = DateTime.UtcNow;
         }
@@ -266,7 +270,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         {
             Id = Guid.NewGuid(),
             TicketId = ticket.Id,
-            UploadedBy = _currentUser.UserId != Guid.Empty ? _currentUser.UserId : ticket.TechnicianId,
+            UploadedBy = _currentUser.UserId != Guid.Empty ? _currentUser.UserId : ticket.TechnicianId ?? ticket.ManagerId,
             ProofType = "After",
             FileUrl = fileUrl,
             TechnicianNotes = technicianNotes ?? "",
@@ -314,7 +318,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         {
             Id = Guid.NewGuid(),
             TicketId = ticket.Id,
-            LoggedBy = _currentUser.UserId != Guid.Empty ? _currentUser.UserId : ticket.TechnicianId,
+            LoggedBy = _currentUser.UserId != Guid.Empty ? _currentUser.UserId : ticket.TechnicianId ?? ticket.ManagerId,
             ComponentName = request.ComponentName,
             ComponentCode = request.ComponentCode ?? "",
             QuantityUsed = request.QuantityUsed,

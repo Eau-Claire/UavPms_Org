@@ -155,8 +155,8 @@ Cột audit chung không được liệt kê lại trong từng bảng (xem mụ
 | Tên cột | Kiểu dữ liệu | Khóa / Ràng buộc | Mô tả |
 |---|---|---|---|
 | `id` | `uuid` | PK | Mã định danh người dùng |
-| `email` | `varchar(255)` | UK | Email đăng nhập |
-| `phone` | `varchar(20)` | UK | Số điện thoại |
+| `email` | `varchar(255)` | UK (`IX_Users_Email`) | Email đăng nhập, lưu dạng `trim + lower` |
+| `phone` | `varchar(20)` | UK partial (`IX_Users_Phone`, `WHERE phone <> ''`) | Số điện thoại; `''` = không có |
 | `password_hash` | `text` | | Băm mật khẩu. Chỉ IdentityService map cột này |
 | `full_name` | `varchar(150)` | | Họ và tên |
 | `status` | `varchar(20)` | | `UserStatus`: `Pending`, `Active`, `Inactive`, `Suspended` |
@@ -656,7 +656,7 @@ Cột điện, nhiệm vụ của cảnh báo suy ra qua `anomaly_id → detecte
 | `ticket_code` | `varchar(50)` | UK | Mã phiếu |
 | `anomaly_id` | `uuid` | FK → `detected_anomalies(id)` | Bất thường cần sửa; cột điện = `detected_anomalies.tower_id` |
 | `manager_id` | `uuid` | FK → `users(id)` | Quản lý giao phiếu |
-| `technician_id` | `uuid` | FK → `users(id)` | Kỹ thuật viên nhận việc |
+| `technician_id` | `uuid` | FK → `users(id)`, Nullable | Kỹ thuật viên nhận việc. NULL = chưa giao (phiếu tự sinh khi duyệt bất thường), phiếu giữ trạng thái `Open` đến khi có kỹ thuật viên |
 | `status` | `varchar(30)` | | `TicketStatus`: `Open`, `InProgress`, `PendingVerification`, `Resolved`, `Closed` |
 | `priority` | `varchar(20)` | | `Low`, `Medium`, `High`, `Emergency` |
 | `description` | `text` | | Yêu cầu sửa chữa |

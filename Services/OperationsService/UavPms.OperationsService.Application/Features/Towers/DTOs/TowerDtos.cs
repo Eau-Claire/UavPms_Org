@@ -70,7 +70,7 @@ public record TowerMaintenanceDto(
     string Priority,
     string Description,
     Guid ManagerId,
-    Guid TechnicianId,
+    Guid? TechnicianId,
     DateTime CreatedAt,
     DateTime? DueDate,
     DateTime? StartedAt,

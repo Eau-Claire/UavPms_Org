@@ -13,7 +13,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
     {
         builder.ToTable("Users");
         builder.HasKey(e => e.Id);
-        builder.HasIndex(e => e.Phone).IsUnique();
+        builder.HasIndex(e => e.Phone).IsUnique().HasFilter("\"Phone\" <> ''");
         builder.HasIndex(e => e.Email).IsUnique();
         builder.Property(e => e.Status).HasConversion<string>();
     }

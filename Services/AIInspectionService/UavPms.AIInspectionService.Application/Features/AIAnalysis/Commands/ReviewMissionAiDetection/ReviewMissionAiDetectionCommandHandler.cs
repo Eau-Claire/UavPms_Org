@@ -66,7 +66,7 @@ public class ReviewMissionAiDetectionCommandHandler
             // ERD v2.2: an anomaly must be linked to a tower before it can be Confirmed.
             anomaly.TowerId ??= anomaly.Media.TowerId;
             if (anomaly.TowerId == null)
-                throw new BusinessRuleException("The detection must be linked to a tower before it can be confirmed.");
+                throw new BusinessRuleException("TOWER_REQUIRED", "The detection must be linked to a tower before it can be confirmed.");
             anomaly.Confirm(_currentUser.UserId, request.Notes ?? string.Empty);
             if (publishConfirmed && _outboxRepository != null)
             {

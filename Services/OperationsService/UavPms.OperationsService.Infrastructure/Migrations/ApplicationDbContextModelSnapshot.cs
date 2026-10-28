@@ -1007,7 +1007,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("TechnicianId")
+                    b.Property<Guid?>("TechnicianId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("TicketCode")
@@ -2458,6 +2458,10 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
+                    b.HasIndex("Phone")
+                        .IsUnique()
+                        .HasFilter("\"Phone\" <> ''");
+
                     b.ToTable("Users", (string)null);
                 });
 
@@ -2854,8 +2858,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasOne("UavPms.OperationsService.Domain.Entities.User", "Technician")
                         .WithMany()
                         .HasForeignKey("TechnicianId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Anomaly");
 

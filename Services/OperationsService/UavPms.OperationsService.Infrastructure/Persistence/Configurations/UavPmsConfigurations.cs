@@ -13,6 +13,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.ToTable("Users");
         builder.HasKey(e => e.Id);
         builder.HasIndex(e => e.Email).IsUnique();
+        // Phone is optional (stored as ''), so only non-empty phones must be unique.
+        builder.HasIndex(e => e.Phone).IsUnique().HasFilter("\"Phone\" <> ''");
     }
 }
 
@@ -650,6 +652,7 @@ public class MaintenanceTicketConfiguration : IEntityTypeConfiguration<Maintenan
         builder.HasOne(e => e.Technician)
             .WithMany()
             .HasForeignKey(e => e.TechnicianId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

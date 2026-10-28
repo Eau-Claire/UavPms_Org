@@ -87,7 +87,7 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Message: businessRuleException.Message,
                 Data: null,
                 Errors: null
-                , ErrorCode: "INVALID_AI_RESPONSE"
+                , ErrorCode: businessRuleException.Code ?? "INVALID_AI_RESPONSE"
             );
         }
         else if (exception is DbUpdateException dbUpdateException &&
