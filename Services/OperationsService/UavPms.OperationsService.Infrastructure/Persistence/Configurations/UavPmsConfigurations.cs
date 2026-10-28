@@ -650,6 +650,7 @@ public class MaintenanceTicketConfiguration : IEntityTypeConfiguration<Maintenan
         builder.HasOne(e => e.Technician)
             .WithMany()
             .HasForeignKey(e => e.TechnicianId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -42,7 +42,7 @@ Physical names are PascalCase (EF default). "Audit" = `CreatedAt, CreatedBy, Upd
 | `AIAnalysisRuns` (was `AIAnalysisRequests`) | Columns: `Id, MediaId (NOT NULL), ExecutionLocation ('Edge'/'Cloud'), UavId (NULL, FK UAVs), RequestedBy (NULL, FK Users; was UploadedBy), AnalysisType (string), ModelName, ModelVersion, Status (string: Pending/Processing/Completed/Failed), SourceEventId (unique), BatchId, ErrorMessage (was Notes), StartedAt, CompletedAt` + audit. Dropped: `FileUrl, MediaType, MissionId, AssetId, Result` |
 | `DetectedAnomalies` | Add `AnalysisRunId uuid NULL` (FK `AIAnalysisRuns`, NULL = manual), `SupersededById uuid NULL` (self FK). `TowerId` becomes **uuid NULL FK `Towers`** (was varchar). Rename `Timestamp` → `FrameTimeSeconds`. `Gps jsonb` → `Location geometry(Point,4326)`. Drop `AssetId`, `AiSource`, `VideoDuration`, `VideoFps`, `VideoWidth`, `VideoHeight`. Unique `(AnalysisRunId, AiDetectionId)`. CHECK `ValidationStatus <> 'Confirmed' OR TowerId IS NOT NULL` (NOT VALID for legacy rows) |
 | `EmergencyAlerts` | Drop `AssetId`, `TowerId`, `MissionId`, `DeliveryLatencySeconds`. Rename `ReviewedByUserId` → `ReviewedById` |
-| `MaintenanceTickets` | Drop `AssetId`, `TowerId` (tower = `Anomaly.TowerId`) |
+| `MaintenanceTickets` | Drop `AssetId`, `TowerId` (tower = `Anomaly.TowerId`). `TechnicianId` **NULL** = not assigned yet (migration `MakeMaintenanceTicketTechnicianNullable`) |
 | `MaintenanceProofs` | Drop `AfterRepairImageUrl` (one row per file, `ProofType` Before/After/Document) |
 | `Notifications` | Drop `IsRead`, `IsPushed` (use `ReadAt`, `PushedAt`) |
 | `Reports` | Drop `PdfFileUrl`, `PdfFileSize`, `ExcelFileUrl`, `ExcelFileSize`, `DefectCount`, `SubstationId`, `TransmissionLineId`. Add `RegionId uuid NULL` FK `Regions` |
@@ -69,5 +69,7 @@ MaterialLogs, Reports, ReportMissions, Notifications, AuditLogs, SystemSettings,
 - "AI source" shown in APIs is derived: `run.ExecutionLocation`/`run.ModelName`, or `"Manual"` when `AnalysisRunId IS NULL`.
 - Anomaly must have `TowerId` before it can be `Confirmed`.
 - Maintenance ticket tower = `ticket.Anomaly.TowerId`.
+- Tickets auto-created on anomaly approval get the mission's active technician, or `TechnicianId = NULL`
+  and `AssignedAt = NULL`. An unassigned ticket stays `Open`; it cannot move to `InProgress`.
 - Reports have no stored files; PDF/Excel are generated on download from `DateFrom/DateTo/RegionId/ReportMissions`.
 - Incident reports have no file attachment.

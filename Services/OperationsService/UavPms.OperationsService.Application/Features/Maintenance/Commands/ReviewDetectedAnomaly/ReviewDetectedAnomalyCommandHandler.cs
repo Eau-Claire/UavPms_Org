@@ -111,11 +111,10 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
                     TicketCode = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
                     AnomalyId = anomaly.Id,
                     ManagerId = managerId,
-                    TechnicianId = Guid.Empty,
+                    TechnicianId = null, // assigned later by the manager
                     Status = TicketStatus.Open,
                     Priority = isEmergency ? TicketPriority.Emergency : TicketPriority.High,
                     Description = $"[AI Review] {anomaly.Category?.CategoryName ?? "Defect"}: {request.ReviewNotes ?? anomaly.AnalystNotes}",
-                    AssignedAt = DateTime.UtcNow,
                     DueDate = DateTime.UtcNow.AddDays(isEmergency ? 1 : 7),
                     CreatedAt = DateTime.UtcNow
                 };

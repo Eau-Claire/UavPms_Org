@@ -560,7 +560,7 @@
             varchar(50) ticket_code UK
             uuid anomaly_id FK "tower = anomaly.tower_id"
             uuid manager_id FK
-            uuid technician_id FK
+            uuid technician_id FK "NULL = not assigned yet"
             varchar(30) status "enum TicketStatus"
             varchar(20) priority "Low/Medium/High/Emergency"
             text description

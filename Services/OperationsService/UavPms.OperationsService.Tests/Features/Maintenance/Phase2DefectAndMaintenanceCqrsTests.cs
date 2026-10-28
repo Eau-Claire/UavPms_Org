@@ -104,6 +104,26 @@ public class Phase2DefectAndMaintenanceCqrsTests
         var ticket = await db.MaintenanceTickets.Include(t => t.Anomaly).FirstOrDefaultAsync(t => t.AnomalyId == anomaly.Id);
         ticket.Should().NotBeNull();
         ticket!.Anomaly!.TowerId.Should().Be(towerId);
+
+        // Auto-created ticket is unassigned: NULL technician (FK-safe), stays Open.
+        ticket.TechnicianId.Should().BeNull();
+        ticket.AssignedAt.Should().BeNull();
+        ticket.Status.Should().Be(TicketStatus.Open);
+    }
+
+    [Fact]
+    public void MaintenanceTicket_StartProgress_WithoutTechnician_Throws()
+    {
+        var ticket = new MaintenanceTicket { Id = Guid.NewGuid(), Status = TicketStatus.Open, TechnicianId = null };
+
+        var act = () => ticket.StartProgress();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*no technician*");
+        ticket.Status.Should().Be(TicketStatus.Open);
+
+        ticket.AssignToTechnician(Guid.NewGuid());
+        ticket.StartProgress();
+        ticket.Status.Should().Be(TicketStatus.InProgress);
     }
 
     [Fact]

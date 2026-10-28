@@ -95,7 +95,7 @@ public class CreateMaintenanceTicketCommandHandler : IRequestHandler<CreateMaint
                 TicketCode = ticket.TicketCode,
                 Title = $"Phiếu bảo trì {ticket.TicketCode}",
                 TowerId = towerId ?? Guid.Empty,
-                AssignedToUserId = ticket.TechnicianId,
+                AssignedToUserId = request.TechnicianId,
                 Priority = ticket.Priority.ToString(),
                 AnomalyDescription = ticket.Description,
                 AssignedAt = ticket.AssignedAt ?? DateTime.UtcNow

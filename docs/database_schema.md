@@ -656,7 +656,7 @@ Cột điện, nhiệm vụ của cảnh báo suy ra qua `anomaly_id → detecte
 | `ticket_code` | `varchar(50)` | UK | Mã phiếu |
 | `anomaly_id` | `uuid` | FK → `detected_anomalies(id)` | Bất thường cần sửa; cột điện = `detected_anomalies.tower_id` |
 | `manager_id` | `uuid` | FK → `users(id)` | Quản lý giao phiếu |
-| `technician_id` | `uuid` | FK → `users(id)` | Kỹ thuật viên nhận việc |
+| `technician_id` | `uuid` | FK → `users(id)`, Nullable | Kỹ thuật viên nhận việc. NULL = chưa giao (phiếu tự sinh khi duyệt bất thường), phiếu giữ trạng thái `Open` đến khi có kỹ thuật viên |
 | `status` | `varchar(30)` | | `TicketStatus`: `Open`, `InProgress`, `PendingVerification`, `Resolved`, `Closed` |
 | `priority` | `varchar(20)` | | `Low`, `Medium`, `High`, `Emergency` |
 | `description` | `text` | | Yêu cầu sửa chữa |

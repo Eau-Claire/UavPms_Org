@@ -10,7 +10,8 @@ public class MaintenanceTicket : BaseEntity
     public string TicketCode { get; set; } = string.Empty;
     public Guid AnomalyId { get; set; }
     public Guid ManagerId { get; set; }
-    public Guid TechnicianId { get; set; }
+    // NULL while no technician is assigned yet (tickets auto-created on anomaly approval).
+    public Guid? TechnicianId { get; set; }
     public TicketStatus Status { get; set; } = TicketStatus.Open;
     public TicketPriority Priority { get; set; } = TicketPriority.Medium;
     public string Description { get; set; } = string.Empty;
@@ -37,6 +38,10 @@ public class MaintenanceTicket : BaseEntity
         if (Status != TicketStatus.Open)
         {
             throw new InvalidOperationException($"Cannot start progress on ticket in status '{Status}'. Must be Open.");
+        }
+        if (TechnicianId == null)
+        {
+            throw new InvalidOperationException("Cannot start progress on a ticket that has no technician assigned.");
         }
         Status = TicketStatus.InProgress;
         StartedAt = DateTime.UtcNow;
