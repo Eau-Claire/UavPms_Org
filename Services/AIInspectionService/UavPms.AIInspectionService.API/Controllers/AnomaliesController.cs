@@ -4,15 +4,19 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Asp.Versioning;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Features.Anomalies;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.AIInspectionService.API.Controllers;
+
+public record AssignAnomalyTowerRequest(Guid TowerId);
 
 public record AnomalyValidateRequestDto(
     string Status,
@@ -28,15 +32,47 @@ public class AnomaliesController : ControllerBase
     private readonly IAnomalyRepository _anomalyRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserServices _currentUserServices;
+    private readonly ISender _mediator;
 
     public AnomaliesController(
         IAnomalyRepository anomalyRepository,
         IUnitOfWork unitOfWork,
-        ICurrentUserServices currentUserServices)
+        ICurrentUserServices currentUserServices,
+        ISender mediator)
     {
         _anomalyRepository = anomalyRepository;
         _unitOfWork = unitOfWork;
         _currentUserServices = currentUserServices;
+        _mediator = mediator;
+    }
+
+    /// <summary>
+    /// Gán cột điện cho bất thường (bắt buộc trước khi xác nhận)
+    /// </summary>
+    [HttpPut("{id:guid}/tower")]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    public async Task<IActionResult> AssignTower(
+        [FromRoute] Guid id,
+        [FromBody] AssignAnomalyTowerRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(new AssignAnomalyTowerCommand(id, request.TowerId), cancellationToken);
+        return Ok(new ApiResponse(true, "Tower assigned to anomaly.", result));
+    }
+
+    /// <summary>
+    /// Gợi ý cột điện gần nhất theo vị trí GPS của bất thường (hoặc vị trí chụp của media)
+    /// </summary>
+    [HttpGet("{id:guid}/tower-suggestions")]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    public async Task<IActionResult> GetTowerSuggestions(
+        [FromRoute] Guid id,
+        [FromQuery] double radiusMeters = 300,
+        [FromQuery] int limit = 5,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(new GetAnomalyTowerSuggestionsQuery(id, radiusMeters, limit), cancellationToken);
+        return Ok(new ApiResponse(true, "Tower suggestions retrieved.", result));
     }
 
     /// <summary>

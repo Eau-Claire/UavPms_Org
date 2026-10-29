@@ -290,6 +290,14 @@
       "Priority": 100
     },
     {
+      "DownstreamPathTemplate": "/api/v{version}/users/{id}/geographic-scopes",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v{version}/users/{id}/geographic-scopes",
+      "UpstreamHttpMethod": ["GET", "PUT", "OPTIONS"],
+      "Priority": 100
+    },
+    {
       "DownstreamPathTemplate": "/api/v{version}/flight-controllers/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],

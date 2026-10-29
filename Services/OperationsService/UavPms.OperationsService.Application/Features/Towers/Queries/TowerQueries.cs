@@ -6,6 +6,7 @@ using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Common.Validation;
 using UavPms.OperationsService.Application.Features.Towers.DTOs;
 using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 
 namespace UavPms.OperationsService.Application.Features.Towers.Queries;
@@ -18,14 +19,42 @@ public record GetTowersQuery(
 
 public record GetTowerByIdQuery(Guid Id) : IRequest<TowerDto>;
 
-/// <summary>Trang chi tiết cột điện: bất thường (bỏ bản đã bị thay thế) và lịch sử bảo trì.</summary>
-public record GetTowerHistoryQuery(Guid Id) : IRequest<TowerHistoryDto>;
+/// <summary>
+/// Trang chi tiết cột điện: bất thường (bỏ bản đã bị thay thế) và lịch sử bảo trì.
+/// <see cref="ValidationStatus"/> lọc bất thường; <see cref="From"/>/<see cref="To"/> lọc theo thời điểm tạo của cả hai danh sách.
+/// </summary>
+public record GetTowerHistoryQuery(
+    Guid Id,
+    int Page = 1,
+    int PageSize = 20,
+    string? ValidationStatus = null,
+    DateTime? From = null,
+    DateTime? To = null) : IRequest<TowerHistoryDto>;
 
 public record SpatialTowerQuery(Polygon Polygon, Guid? RegionId) : IRequest<SpatialTowerQueryResponse>;
 
 public sealed class GetTowersQueryValidator : AbstractValidator<GetTowersQuery>
 {
     public GetTowersQueryValidator() => PaginationRules.Apply(this, query => query.Page, query => query.PageSize);
+}
+
+public sealed class GetTowerHistoryQueryValidator : AbstractValidator<GetTowerHistoryQuery>
+{
+    /// <summary>detected_anomalies.validation_status values.</summary>
+    public static readonly string[] ValidationStatuses = ["Pending", "Confirmed", "Rejected", "Resolved"];
+
+    public GetTowerHistoryQueryValidator()
+    {
+        PaginationRules.Apply(this, query => query.Page, query => query.PageSize);
+        RuleFor(query => query.ValidationStatus)
+            .Must(status => ValidationStatuses.Contains(status!, StringComparer.OrdinalIgnoreCase))
+            .When(query => !string.IsNullOrWhiteSpace(query.ValidationStatus))
+            .WithMessage($"validationStatus must be one of: {string.Join(", ", ValidationStatuses)}.");
+        RuleFor(query => query.To)
+            .GreaterThanOrEqualTo(query => query.From!.Value)
+            .When(query => query.From.HasValue && query.To.HasValue)
+            .WithMessage("'to' must not be earlier than 'from'.");
+    }
 }
 
 public class GetTowersQueryHandler : IRequestHandler<GetTowersQuery, PaginatedTowersResponse>
@@ -64,15 +93,18 @@ public class GetTowerHistoryQueryHandler : IRequestHandler<GetTowerHistoryQuery,
     private readonly ITowerRepository _towerRepository;
     private readonly IAnomalyRepository _anomalyRepository;
     private readonly IMaintenanceTicketRepository _ticketRepository;
+    private readonly IInspectionMediaRepository _mediaRepository;
 
     public GetTowerHistoryQueryHandler(
         ITowerRepository towerRepository,
         IAnomalyRepository anomalyRepository,
-        IMaintenanceTicketRepository ticketRepository)
+        IMaintenanceTicketRepository ticketRepository,
+        IInspectionMediaRepository mediaRepository)
     {
         _towerRepository = towerRepository;
         _anomalyRepository = anomalyRepository;
         _ticketRepository = ticketRepository;
+        _mediaRepository = mediaRepository;
     }
 
     public async Task<TowerHistoryDto> Handle(GetTowerHistoryQuery request, CancellationToken cancellationToken)
@@ -80,8 +112,38 @@ public class GetTowerHistoryQueryHandler : IRequestHandler<GetTowerHistoryQuery,
         var tower = await _towerRepository.GetAccessibleByIdAsync(request.Id, cancellationToken)
             ?? throw new NotFoundException("Tower", request.Id);
 
-        var anomalies = await _anomalyRepository.GetByTowerIdWithDetailsAsync(tower.Id);
-        var tickets = await _ticketRepository.GetByTowerIdWithDetailsAsync(tower.Id);
+        // Stored values are capitalised (Pending, Confirmed, ...); accept any casing from the query string.
+        var validationStatus = string.IsNullOrWhiteSpace(request.ValidationStatus)
+            ? null
+            : GetTowerHistoryQueryValidator.ValidationStatuses.FirstOrDefault(s =>
+                  string.Equals(s, request.ValidationStatus.Trim(), StringComparison.OrdinalIgnoreCase))
+              ?? request.ValidationStatus.Trim();
+
+        var (anomalies, anomalyTotal) = await _anomalyRepository.GetByTowerIdPagedAsync(
+            tower.Id, validationStatus, request.From, request.To, request.Page, request.PageSize, cancellationToken);
+        var (tickets, ticketTotal) = await _ticketRepository.GetByTowerIdPagedAsync(
+            tower.Id, request.From, request.To, request.Page, request.PageSize, cancellationToken);
+
+        var anomalyCounts = await _anomalyRepository.CountByTowerGroupedByStatusAsync(tower.Id, cancellationToken);
+        var ticketCounts = await _ticketRepository.CountByTowerGroupedByStatusAsync(tower.Id, cancellationToken);
+        var lastInspectedAt = await _mediaRepository.GetLastCapturedAtByTowerAsync(tower.Id, cancellationToken);
+
+        int AnomalyCount(string status) => anomalyCounts.TryGetValue(status, out var n) ? n : 0;
+        int TicketCount(TicketStatus status) => ticketCounts.TryGetValue(status, out var n) ? n : 0;
+        var pending = AnomalyCount("Pending");
+        var confirmed = AnomalyCount("Confirmed");
+        var openTickets = TicketCount(TicketStatus.Open);
+        var inProgressTickets = TicketCount(TicketStatus.InProgress) + TicketCount(TicketStatus.PendingVerification);
+        var stats = new TowerHistoryStatsDto(
+            anomalyCounts.Values.Sum(),
+            pending,
+            confirmed,
+            pending + confirmed,
+            ticketCounts.Values.Sum(),
+            openTickets,
+            inProgressTickets,
+            openTickets + inProgressTickets,
+            lastInspectedAt);
 
         return new TowerHistoryDto(
             TowerDto.From(tower),
@@ -115,8 +177,14 @@ public class GetTowerHistoryQueryHandler : IRequestHandler<GetTowerHistoryQuery,
                     .Select(p => new TowerMaintenanceProofDto(p.Id, p.ProofType, p.FileUrl, p.TechnicianNotes, p.UploadedAt)).ToList(),
                 t.MaterialLogs.Where(m => !m.IsDeleted)
                     .Select(m => new TowerMaterialLogDto(m.Id, m.ComponentCode, m.ComponentName, m.QuantityUsed, m.Unit, m.LoggedAt)).ToList()))
-                .ToList());
+                .ToList(),
+            stats,
+            Pagination(request, anomalyTotal),
+            Pagination(request, ticketTotal));
     }
+
+    private static PaginationMetaData Pagination(GetTowerHistoryQuery request, int total)
+        => new(request.Page, request.PageSize, total, (int)Math.Ceiling((double)total / request.PageSize));
 }
 
 public class SpatialTowerQueryHandler : IRequestHandler<SpatialTowerQuery, SpatialTowerQueryResponse>

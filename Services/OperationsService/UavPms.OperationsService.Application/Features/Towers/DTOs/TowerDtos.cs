@@ -42,11 +42,32 @@ public record SpatialTowerDto(
     public Guid Id => TowerId;
 }
 
-/// <summary>Trang chi tiết cột điện: danh sách bất thường và lịch sử bảo trì.</summary>
+/// <summary>
+/// Trang chi tiết cột điện: một trang bất thường và một trang lịch sử bảo trì (cùng page/pageSize, phân trang riêng),
+/// kèm thống kê đếm trực tiếp trên toàn bộ cột (không theo bộ lọc, không lưu cột tổng hợp).
+/// </summary>
 public record TowerHistoryDto(
     TowerDto Tower,
     IReadOnlyList<TowerAnomalyDto> Anomalies,
-    IReadOnlyList<TowerMaintenanceDto> MaintenanceHistory);
+    IReadOnlyList<TowerMaintenanceDto> MaintenanceHistory,
+    TowerHistoryStatsDto Stats,
+    PaginationMetaData AnomaliesPagination,
+    PaginationMetaData MaintenancePagination);
+
+/// <summary>
+/// Open anomalies = Pending + Confirmed (not yet rejected or resolved); superseded edge results are excluded.
+/// Active tickets = Open + InProgress + PendingVerification.
+/// </summary>
+public record TowerHistoryStatsDto(
+    int TotalAnomalies,
+    int PendingAnomalies,
+    int ConfirmedAnomalies,
+    int OpenAnomalies,
+    int TotalTickets,
+    int OpenTickets,
+    int InProgressTickets,
+    int ActiveTickets,
+    DateTime? LastInspectedAt);
 
 public record TowerAnomalyDto(
     Guid Id,

@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
 using UavPms.Shared.Contracts.Events;
+using UavPms.AIInspectionService.Application.Common.Utilities;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
 using UavPms.AIInspectionService.Application.Interfaces;
 using UavPms.AIInspectionService.Domain.Entities;
@@ -187,8 +188,12 @@ public class ProcessAiAnalysisResultCommandHandler
                     await _anomalyRepo.AddAsync(anomaly);
                     savedDetections++;
 
-                    // Cloud result replaces a matching (same media + same category) edge result.
-                    foreach (var edge in edgeCandidates.Where(e => e.CategoryId == category.Id).ToList())
+                    // Cloud result replaces the edge results of the same defect: same media and category,
+                    // nearby frame and overlapping box (IoU >= 0.5), see DetectionMatcher.
+                    foreach (var edge in edgeCandidates
+                                 .Where(e => e.CategoryId == category.Id &&
+                                             DetectionMatcher.IsSameDefect(e, anomaly, media.WidthPx, media.HeightPx))
+                                 .ToList())
                     {
                         edge.SupersededById = anomaly.Id;
                         edge.UpdatedAt = DateTime.UtcNow;

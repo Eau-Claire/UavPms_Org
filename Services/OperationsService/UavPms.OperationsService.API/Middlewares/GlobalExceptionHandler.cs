@@ -102,7 +102,8 @@ public class GlobalExceptionHandler : IExceptionHandler
                 or "RESOURCE_BOOKING_CONFLICT"
                 or "MISSION_CONCURRENCY_CONFLICT"
                 or "ASSESSMENT_CONCURRENCY_CONFLICT"
-                or "IDEMPOTENCY_CONFLICT";
+                or "IDEMPOTENCY_CONFLICT"
+                or "DUPLICATE_MEDIA";
 
             httpContext.Response.StatusCode = isConflict ? (int)HttpStatusCode.Conflict : (int)HttpStatusCode.BadRequest;
             apiResponse = new ApiResponse(

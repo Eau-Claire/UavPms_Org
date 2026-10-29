@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using UavPms.OperationsService.Domain.Entities;
+using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Infrastructure.Persistence;
 
@@ -67,16 +68,32 @@ public class MaintenanceTicketRepository : GenericRepository<MaintenanceTicket>,
             .ToListAsync();
     }
 
-    public async Task<IReadOnlyList<MaintenanceTicket>> GetByTowerIdWithDetailsAsync(Guid towerId)
+    public async Task<(IReadOnlyList<MaintenanceTicket> Items, int TotalCount)> GetByTowerIdPagedAsync(
+        Guid towerId, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        return await _context.MaintenanceTickets
-            .AsNoTracking()
+        var query = _context.MaintenanceTickets.AsNoTracking().Where(t => t.Anomaly!.TowerId == towerId);
+        if (from.HasValue) query = query.Where(t => t.CreatedAt >= from.Value);
+        if (to.HasValue) query = query.Where(t => t.CreatedAt <= to.Value);
+
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query
             .Include(t => t.Anomaly!)
                 .ThenInclude(a => a.Category)
             .Include(t => t.MaintenanceProofs)
             .Include(t => t.MaterialLogs)
+            .OrderByDescending(t => t.CreatedAt).ThenBy(t => t.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+        return (items, total);
+    }
+
+    public async Task<IReadOnlyDictionary<TicketStatus, int>> CountByTowerGroupedByStatusAsync(Guid towerId, CancellationToken cancellationToken = default)
+    {
+        return await _context.MaintenanceTickets.AsNoTracking()
             .Where(t => t.Anomaly!.TowerId == towerId)
-            .OrderByDescending(t => t.CreatedAt)
-            .ToListAsync();
+            .GroupBy(t => t.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
     }
 }
