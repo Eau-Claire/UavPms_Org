@@ -244,7 +244,7 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/pre-mission-assessments/{everything}",
+      "DownstreamPathTemplate": "/api/v{version}/assessments/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/api/v{version}/assessments/{everything}",
@@ -252,7 +252,7 @@
       "Priority": 100
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/pre-mission-assessments",
+      "DownstreamPathTemplate": "/api/v{version}/assessments",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/api/v{version}/assessments",
@@ -326,14 +326,14 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/drones/{everything}",
+      "DownstreamPathTemplate": "/api/v{version}/uavs/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/api/v{version}/uavs/{everything}",
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/drones",
+      "DownstreamPathTemplate": "/api/v{version}/uavs",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/api/v{version}/uavs",

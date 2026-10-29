@@ -22,6 +22,7 @@ namespace UavPms.OperationsService.API.Controllers;
 [ApiController]
 [Route("api/v{version:apiVersion}/missions")]
 [ApiVersion("1.0")]
+[ApiVersion("2.0")]
 [Authorize]
 public class MissionController : ControllerBase
 {

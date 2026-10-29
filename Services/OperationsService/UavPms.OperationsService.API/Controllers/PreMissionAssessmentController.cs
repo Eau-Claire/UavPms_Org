@@ -8,9 +8,9 @@ using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
 
-[ApiController, ApiVersion("0.9", Deprecated = true), Route("api/v{version:apiVersion}/pre-mission-assessments")]
+[ApiController, ApiVersion("1.0"), Route("api/v{version:apiVersion}/pre-mission-assessments")]
 [Authorize(Roles = UserRoles.AdminAndManager)]
-[Obsolete("Legacy assessment endpoint. Use /api/v1/pre-mission-assessments instead.")]
+[Obsolete("Use /api/v2/pre-mission-assessments instead.")]
 public sealed class PreMissionAssessmentController : ControllerBase
 {
     private readonly PreMissionAssessmentService _service;

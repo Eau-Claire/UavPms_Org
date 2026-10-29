@@ -17,7 +17,11 @@ namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/drones")]
+[Route("api/v{version:apiVersion}/uavs")]
+[Route("api/drones")]
+[Route("api/uavs")]
 [ApiVersion("1.0")]
+[ApiVersion("2.0")]
 [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
 public class DronesController : ControllerBase
 {

@@ -11,7 +11,9 @@ namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]
+[ApiVersion("2.0")]
 [Route("api/v{version:apiVersion}/flight-controllers")]
+[Route("api/flight-controllers")]
 [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
 public sealed class FlightControllersController : ControllerBase
 {
