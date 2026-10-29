@@ -1,0 +1,60 @@
+    %% =====================================================================
+    %% UAV-PMS – Conceptual ERD (v2.2, core)
+    %% Business view of the physical ERD ERD_Full_v2.mmd (42 tables), reduced to 14 core entities
+    %% that still carry every flow: infrastructure -> MF01 -> MF02 -> MF03 -> MF04 -> maintenance -> report.
+    %% No attributes; association tables are drawn as many-to-many relationships.
+    %% Folded into a core entity (details in the physical ERD):
+    %%   USER                   <- roles, user_roles, refresh_tokens, trusted_devices, notifications
+    %%   UAV                    <- drone_flight_controllers, drone_technical_inspections, drone_technical_metrics
+    %%   PRE_MISSION_ASSESSMENT <- inspection_schedules, pre_mission_assessment_towers / _personnel / _drones
+    %%   MISSION                <- mission_assignments, mission_targets, mission_priority_defects,
+    %%                             resource_bookings, mission_communication_logs, mission_check_ins,
+    %%                             drone_handovers, mission_flight_logs
+    %%   EMERGENCY_ALERT        <- alert_escalations
+    %%   MAINTENANCE_TICKET     <- maintenance_proofs, material_logs
+    %%   REPORT                 <- report_missions
+    %% Omitted as technical: audit_logs, system_settings, outbox_messages.
+    %% Notation : crow's foot.
+    %% =====================================================================
+    erDiagram
+
+        %% ---------- Infrastructure and access scope ----------
+        REGION |o--o{ REGION : "contains"
+        REGION ||--o{ TOWER : "contains"
+        USER }o--o{ REGION : "is scoped to"
+
+        %% ---------- MF01 Pre-mission feasibility ----------
+        USER ||--o{ PRE_MISSION_ASSESSMENT : "prepares"
+        PRE_MISSION_ASSESSMENT }o--o{ TOWER : "covers"
+        PRE_MISSION_ASSESSMENT }o--o{ UAV : "evaluates"
+
+        %% ---------- MF02 Mission and assignment ----------
+        PRE_MISSION_ASSESSMENT |o--o| MISSION : "is realized by"
+        USER ||--o{ MISSION : "manages"
+        MISSION }o--o{ USER : "is assigned to"
+        UAV |o--o{ MISSION : "flies"
+        MISSION }o--o{ TOWER : "targets"
+
+        %% ---------- MF03 Field execution ----------
+        MISSION ||--o{ INCIDENT_REPORT : "has"
+        MISSION ||--o{ INSPECTION_MEDIA : "captures"
+        TOWER |o--o{ INSPECTION_MEDIA : "is depicted in"
+
+        %% ---------- MF04 AI analysis (edge + cloud) and validation ----------
+        INSPECTION_MEDIA ||--o{ AI_ANALYSIS_RUN : "is analyzed by"
+        UAV |o--o{ AI_ANALYSIS_RUN : "runs edge AI"
+        AI_ANALYSIS_RUN |o--o{ DETECTED_ANOMALY : "produces"
+        INSPECTION_MEDIA ||--o{ DETECTED_ANOMALY : "reveals"
+        DETECTED_ANOMALY |o--o{ DETECTED_ANOMALY : "supersedes"
+        DEFECT_CATEGORY ||--o{ DETECTED_ANOMALY : "classifies"
+        TOWER |o--o{ DETECTED_ANOMALY : "has"
+        USER |o--o{ DETECTED_ANOMALY : "validates"
+        DETECTED_ANOMALY ||--o{ EMERGENCY_ALERT : "triggers"
+
+        %% ---------- Maintenance ----------
+        DETECTED_ANOMALY ||--o{ MAINTENANCE_TICKET : "requires"
+        USER |o--o{ MAINTENANCE_TICKET : "is assigned"
+
+        %% ---------- Reporting ----------
+        REGION |o--o{ REPORT : "scopes"
+        REPORT }o--o{ MISSION : "includes"
