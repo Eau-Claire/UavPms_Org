@@ -54,7 +54,8 @@ public class MaintenanceTicketController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadProof(
         [FromRoute] Guid id,
-        [FromForm] IFormFile file,
+        // No [FromForm] on IFormFile: Swashbuckle rejects it and the whole swagger.json fails (500).
+        IFormFile file,
         [FromForm] string? technicianNotes,
         CancellationToken ct)
     {
