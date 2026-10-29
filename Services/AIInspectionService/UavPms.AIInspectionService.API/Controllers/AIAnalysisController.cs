@@ -106,7 +106,7 @@ public class AIAnalysisController : ControllerBase
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     [Consumes("multipart/form-data")]
     public IActionResult UploadStandaloneAnalysis(
-        [FromForm] List<IFormFile> files,
+        List<IFormFile> files,
         [FromForm] string? analysisType,
         [FromForm] string? notes,
         CancellationToken cancellationToken = default)
