@@ -112,7 +112,7 @@
         %% ================================================================
         detected_anomalies ||--o{ maintenance_tickets : "initiates"
         users ||--o{ maintenance_tickets : "managed by"
-        users ||--o{ maintenance_tickets : "assigned to"
+        users |o--o{ maintenance_tickets : "assigned to"
         maintenance_tickets ||--o{ maintenance_proofs : "proved by"
         users ||--o{ maintenance_proofs : "uploaded by"
         maintenance_tickets ||--o{ material_logs : "consumes"
