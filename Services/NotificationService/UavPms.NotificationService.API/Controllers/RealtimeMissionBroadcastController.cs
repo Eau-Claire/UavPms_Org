@@ -18,7 +18,6 @@ namespace UavPms.NotificationService.API.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/notifications/realtime")]
-[Route("api/notifications/realtime")]
 public class RealtimeMissionBroadcastController : ControllerBase
 {
     private readonly IHubContext<NotificationHub> _hubContext;

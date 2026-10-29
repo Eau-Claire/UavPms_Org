@@ -9,7 +9,6 @@ namespace UavPms.OperationsService.API.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]
-[ApiVersion("2.0")]
 [Route("api/v{version:apiVersion}/drone-technical-inspections")]
 [Authorize]
 public sealed class DroneTechnicalInspectionController : ControllerBase
