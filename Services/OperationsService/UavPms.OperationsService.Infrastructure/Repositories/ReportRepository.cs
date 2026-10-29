@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using UavPms.OperationsService.Domain.Entities;
@@ -148,7 +149,26 @@ public class ReportRepository : GenericRepository<Report>, IReportRepository
         return query;
     }
 
-    public Task<int> CountAnomaliesForReportAsync(Report report) => AnomaliesInScope(report).CountAsync();
+    public Task<int> CountAnomaliesForReportAsync(Report report)
+    {
+        if (report.Status == ReportStatus.Approved && !string.IsNullOrWhiteSpace(report.Snapshot))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(report.Snapshot);
+                if (doc.RootElement.TryGetProperty("totalAnomalies", out var totalElem) && totalElem.TryGetInt32(out int total))
+                {
+                    return Task.FromResult(total);
+                }
+            }
+            catch
+            {
+                // Fallback to query if snapshot JSON is corrupted
+            }
+        }
+
+        return AnomaliesInScope(report).CountAsync();
+    }
 
     public async Task<IReadOnlyList<DetectedAnomaly>> GetAnomaliesForReportAsync(Report report)
     {

@@ -798,6 +798,7 @@ public class ReportConfiguration : IEntityTypeConfiguration<Report>
         builder.Property(e => e.Title).HasMaxLength(255).IsRequired();
         builder.Property(e => e.Type).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Snapshot).HasColumnType("jsonb");
 
         builder.HasOne(e => e.Region)
             .WithMany()

@@ -22,6 +22,11 @@ public class Report : BaseEntity
     public Guid? ApprovedById { get; set; }
     public DateTimeOffset? ApprovedAt { get; set; }
 
+    /// <summary>
+    /// Bản chụp JSONB đông cứng số liệu báo cáo lúc approved_at để bảo đảm tính toàn vẹn kiểm toán.
+    /// </summary>
+    public string? Snapshot { get; set; }
+
     public virtual Region? Region { get; set; }
     public virtual User? ApprovedBy { get; set; }
     public virtual User? CreatedByUser { get; set; }

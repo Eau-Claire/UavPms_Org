@@ -188,11 +188,92 @@ public class ReportWorkflowTests
 
         // Assert
         result.Status.Should().Be("approved");
+        result.HasSnapshot.Should().BeTrue();
         report.Status.Should().Be(ReportStatus.Approved);
         report.ApprovedById.Should().Be(approverId);
         report.ApprovedAt.Should().NotBeNull();
+        report.Snapshot.Should().NotBeNullOrWhiteSpace();
         _reportRepositoryMock.Verify(r => r.UpdateAsync(report), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApproveReport_ShouldFreezeSnapshot_WithAnomaliesAndMissions()
+    {
+        // Arrange
+        var reportId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var missionId = Guid.NewGuid();
+        var report = new Report
+        {
+            Id = reportId,
+            Code = "BC-2026-0005",
+            Title = "Báo cáo đóng băng kiểm toán",
+            Type = ReportType.Periodic,
+            Status = ReportStatus.Pending,
+            ReportMissions = new List<ReportMission>
+            {
+                new ReportMission
+                {
+                    MissionId = missionId,
+                    Mission = new Mission
+                    {
+                        Id = missionId,
+                        MissionCode = "MS-05",
+                        Title = "Nhiệm vụ kiểm tra trạm",
+                        Status = MissionStatus.Completed
+                    }
+                }
+            }
+        };
+
+        var anomalies = new List<DetectedAnomaly>
+        {
+            new DetectedAnomaly
+            {
+                Id = Guid.NewGuid(),
+                ConfidenceScore = 0.95,
+                ValidationStatus = "Confirmed",
+                Category = new DefectCategory { CategoryName = "Nứt đầu cốt" },
+                Tower = new Tower { TowerCode = "T-101" }
+            }
+        };
+
+        _reportRepositoryMock.Setup(r => r.GetReportByIdWithDetailsAsync(reportId)).ReturnsAsync(report);
+        _reportRepositoryMock.Setup(r => r.GetAnomaliesForReportAsync(report)).ReturnsAsync(anomalies);
+        _reportRepositoryMock.Setup(r => r.CountAnomaliesForReportAsync(report)).ReturnsAsync(1);
+        _currentUserServicesMock.Setup(c => c.UserId).Returns(adminId);
+        _currentUserServicesMock.Setup(c => c.Username).Returns("admin_tester");
+        _currentUserServicesMock.Setup(c => c.Roles).Returns(new List<string> { UserRoles.SystemAdmin });
+
+        var handler = new ApproveReportCommandHandler(
+            _unitOfWorkMock.Object,
+            _reportRepositoryMock.Object,
+            _currentUserServicesMock.Object
+        );
+
+        // Act
+        var result = await handler.Handle(new ApproveReportCommand(reportId), CancellationToken.None);
+
+        // Assert
+        result.Status.Should().Be("approved");
+        result.HasSnapshot.Should().BeTrue();
+        report.Snapshot.Should().NotBeNullOrWhiteSpace();
+
+        // Verify JSON contents
+        using var doc = System.Text.Json.JsonDocument.Parse(report.Snapshot!);
+        doc.RootElement.GetProperty("totalAnomalies").GetInt32().Should().Be(1);
+        doc.RootElement.GetProperty("code").GetString().Should().Be("BC-2026-0005");
+        doc.RootElement.GetProperty("approvedByName").GetString().Should().Be("admin_tester");
+
+        var missionsElem = doc.RootElement.GetProperty("missions");
+        missionsElem.GetArrayLength().Should().Be(1);
+        missionsElem[0].GetProperty("missionCode").GetString().Should().Be("MS-05");
+
+        var anomaliesElem = doc.RootElement.GetProperty("anomalies");
+        anomaliesElem.GetArrayLength().Should().Be(1);
+        anomaliesElem[0].GetProperty("categoryName").GetString().Should().Be("Nứt đầu cốt");
+        anomaliesElem[0].GetProperty("towerCode").GetString().Should().Be("T-101");
     }
 
     [Fact]

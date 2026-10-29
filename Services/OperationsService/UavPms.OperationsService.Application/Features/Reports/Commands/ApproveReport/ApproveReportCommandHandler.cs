@@ -1,10 +1,12 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Reports.DTOs;
+using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
 using UavPms.OperationsService.Domain.Interfaces.Services;
@@ -62,6 +64,20 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         report.ApprovedById = _currentUserServices.UserId != Guid.Empty ? _currentUserServices.UserId : null;
         report.ApprovedAt = DateTimeOffset.UtcNow;
         report.UpdatedAt = DateTime.UtcNow;
+
+        // Sinh snapshot bất biến cho báo cáo đã duyệt (kiểm toán toàn vẹn dữ liệu theo thời gian)
+        var anomalies = await _reportRepository.GetAnomaliesForReportAsync(report);
+        var snapshot = ReportSnapshot.FromReport(report, anomalies);
+        if (string.IsNullOrWhiteSpace(snapshot.ApprovedByName))
+        {
+            snapshot.ApprovedByName = _currentUserServices.Username ?? _currentUserServices.Email;
+        }
+
+        report.Snapshot = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = false
+        });
 
         await _reportRepository.UpdateAsync(report);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

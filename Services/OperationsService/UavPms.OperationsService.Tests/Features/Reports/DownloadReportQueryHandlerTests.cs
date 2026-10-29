@@ -185,4 +185,45 @@ public class DownloadReportQueryHandlerTests
         // Assert
         await act.Should().ThrowAsync<ForbiddenException>().WithMessage("*chỉ có thể tải báo cáo do chính mình tạo ra*");
     }
+
+    [Fact]
+    public async Task DownloadReport_ShouldGenerateFromSnapshot_WhenReportIsApprovedAndHasSnapshot()
+    {
+        // Arrange
+        var reportId = Guid.NewGuid();
+        var snapshotJson = "{\"reportId\":\"" + reportId + "\",\"code\":\"BC-2026-0003\",\"title\":\"Báo cáo đã duyệt\",\"totalAnomalies\":2}";
+        var report = new Report
+        {
+            Id = reportId,
+            Code = "BC-2026-0003",
+            Title = "Báo cáo đã duyệt",
+            Status = ReportStatus.Approved,
+            Snapshot = snapshotJson
+        };
+        _reportRepositoryMock.Setup(r => r.GetReportByIdWithDetailsAsync(reportId)).ReturnsAsync(report);
+
+        _reportExportServiceMock.Setup(s => s.GenerateReportFileFromSnapshotAsync(snapshotJson, "pdf", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Encoding.UTF8.GetBytes("frozen snapshot pdf content"), "application/pdf", "BC-2026-0003.pdf"));
+
+        _currentUserServicesMock.Setup(c => c.Roles).Returns(new List<string> { UserRoles.SystemAdmin });
+
+        var handler = new DownloadReportQueryHandler(
+            _reportRepositoryMock.Object,
+            _reportExportServiceMock.Object,
+            _currentUserServicesMock.Object
+        );
+
+        // Act
+        var result = await handler.Handle(new DownloadReportQuery(reportId, "pdf"), CancellationToken.None);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.ContentType.Should().Be("application/pdf");
+        result.FileName.Should().Be("BC-2026-0003.pdf");
+        result.FileStream.Should().NotBeNull();
+        result.FileStream.Length.Should().BeGreaterThan(0);
+
+        _reportExportServiceMock.Verify(s => s.GenerateReportFileFromSnapshotAsync(snapshotJson, "pdf", It.IsAny<CancellationToken>()), Times.Once);
+        _reportRepositoryMock.Verify(r => r.GetAnomaliesForReportAsync(It.IsAny<Report>()), Times.Never);
+    }
 }

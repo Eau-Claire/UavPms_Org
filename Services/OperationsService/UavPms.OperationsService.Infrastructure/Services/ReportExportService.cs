@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,22 +47,49 @@ public class ReportExportService : IReportExportService
         string format,
         CancellationToken cancellationToken = default)
     {
+        var snapshot = ReportSnapshot.FromReport(report, anomalies);
+        return GenerateReportFileFromSnapshotAsync(snapshot, format, cancellationToken);
+    }
+
+    public Task<(byte[] FileBytes, string ContentType, string FileName)> GenerateReportFileFromSnapshotAsync(
+        string snapshotJson,
+        string format,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(snapshotJson))
+        {
+            throw new ArgumentException("Snapshot JSON cannot be null or empty.", nameof(snapshotJson));
+        }
+
+        var snapshot = JsonSerializer.Deserialize<ReportSnapshot>(snapshotJson, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        }) ?? throw new InvalidOperationException("Không thể giải mã dữ liệu snapshot của báo cáo.");
+
+        return GenerateReportFileFromSnapshotAsync(snapshot, format, cancellationToken);
+    }
+
+    public Task<(byte[] FileBytes, string ContentType, string FileName)> GenerateReportFileFromSnapshotAsync(
+        ReportSnapshot snapshot,
+        string format,
+        CancellationToken cancellationToken = default)
+    {
         bool isExcel = string.Equals(format, "excel", StringComparison.OrdinalIgnoreCase) ||
                        string.Equals(format, "xlsx", StringComparison.OrdinalIgnoreCase);
 
         if (isExcel)
         {
-            var excelBytes = GenerateExcelReport(report, anomalies);
-            var excelFileName = $"{report.Code}.xlsx";
+            var excelBytes = GenerateExcelReport(snapshot);
+            var excelFileName = $"{snapshot.Code}.xlsx";
             return Task.FromResult((excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelFileName));
         }
 
-        var pdfBytes = GeneratePdfReport(report, anomalies);
-        var pdfFileName = $"{report.Code}.pdf";
+        var pdfBytes = GeneratePdfReport(snapshot);
+        var pdfFileName = $"{snapshot.Code}.pdf";
         return Task.FromResult((pdfBytes, "application/pdf", pdfFileName));
     }
 
-    private byte[] GeneratePdfReport(Report report, IReadOnlyList<DetectedAnomaly> anomalies)
+    private byte[] GeneratePdfReport(ReportSnapshot snapshot)
     {
         var document = Document.Create(container =>
         {
@@ -84,8 +112,8 @@ public class ReportExportService : IReportExportService
 
                         row.ConstantItem(150).AlignRight().Column(metaCol =>
                         {
-                            metaCol.Item().Text($"Mã BC: {report.Code}").Bold().FontSize(9);
-                            metaCol.Item().Text($"Ngày tạo: {report.CreatedAt:dd/MM/yyyy}").FontSize(8).FontColor(Colors.Grey.Darken1);
+                            metaCol.Item().Text($"Mã BC: {snapshot.Code}").Bold().FontSize(9);
+                            metaCol.Item().Text($"Ngày tạo: {snapshot.CreatedAt:dd/MM/yyyy}").FontSize(8).FontColor(Colors.Grey.Darken1);
                         });
                     });
 
@@ -95,10 +123,10 @@ public class ReportExportService : IReportExportService
                 page.Content().PaddingVertical(10).Column(content =>
                 {
                     // Report Title
-                    content.Item().AlignCenter().Text(report.Title.ToUpperInvariant())
+                    content.Item().AlignCenter().Text(snapshot.Title.ToUpperInvariant())
                         .Bold().FontSize(15).FontColor(Colors.Blue.Darken3);
 
-                    content.Item().PaddingTop(4).AlignCenter().Text($"Loại báo cáo: {report.Type.ToString().ToUpperInvariant()} | Trạng thái: {report.Status.ToString().ToUpperInvariant()}")
+                    content.Item().PaddingTop(4).AlignCenter().Text($"Loại báo cáo: {snapshot.Type.ToUpperInvariant()} | Trạng thái: {snapshot.Status.ToUpperInvariant()}")
                         .FontSize(10).FontColor(Colors.Grey.Darken2);
 
                     content.Item().PaddingTop(12).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten3);
@@ -117,36 +145,36 @@ public class ReportExportService : IReportExportService
                         });
 
                         table.Cell().Text("Khu vực:").Bold();
-                        table.Cell().Text(report.Region?.Name ?? "Không chỉ định");
+                        table.Cell().Text(snapshot.RegionName ?? "Không chỉ định");
 
                         table.Cell().Text("Thời gian:").Bold();
-                        table.Cell().Text($"{report.DateFrom?.ToString("dd/MM/yyyy") ?? "..."} - {report.DateTo?.ToString("dd/MM/yyyy") ?? "..."}");
+                        table.Cell().Text($"{snapshot.DateFrom?.ToString("dd/MM/yyyy") ?? "..."} - {snapshot.DateTo?.ToString("dd/MM/yyyy") ?? "..."}");
 
                         table.Cell().Text("Người tạo:").Bold();
-                        table.Cell().Text(report.CreatedByUser?.FullName ?? "N/A");
+                        table.Cell().Text(snapshot.CreatedByName ?? "N/A");
 
                         table.Cell().Text("Người phê duyệt:").Bold();
-                        table.Cell().Text(report.ApprovedBy?.FullName ?? "Chưa phê duyệt");
+                        table.Cell().Text(snapshot.ApprovedByName ?? "Chưa phê duyệt");
 
                         table.Cell().Text("Khoảng thời gian:").Bold();
-                        table.Cell().Text(report.DateFrom.HasValue || report.DateTo.HasValue
-                            ? $"{report.DateFrom:dd/MM/yyyy} - {report.DateTo:dd/MM/yyyy}"
+                        table.Cell().Text(snapshot.DateFrom.HasValue || snapshot.DateTo.HasValue
+                            ? $"{snapshot.DateFrom:dd/MM/yyyy} - {snapshot.DateTo:dd/MM/yyyy}"
                             : "Toàn thời gian");
 
                         table.Cell().Text("Số lượng khuyết tật:").Bold();
-                        table.Cell().Text($"{anomalies.Count} phát hiện").FontColor(anomalies.Count > 0 ? Colors.Red.Darken1 : Colors.Green.Darken1).Bold();
+                        table.Cell().Text($"{snapshot.TotalAnomalies} phát hiện").FontColor(snapshot.TotalAnomalies > 0 ? Colors.Red.Darken1 : Colors.Green.Darken1).Bold();
                     });
 
-                    if (!string.IsNullOrWhiteSpace(report.Description))
+                    if (!string.IsNullOrWhiteSpace(snapshot.Description))
                     {
                         content.Item().PaddingTop(8).Text("Mô tả / Ghi chú:").Bold();
-                        content.Item().Text(report.Description).Italic().FontColor(Colors.Grey.Darken2);
+                        content.Item().Text(snapshot.Description).Italic().FontColor(Colors.Grey.Darken2);
                     }
 
                     // Missions section
                     content.Item().PaddingTop(14).Text("2. DANH SÁCH ĐỢT BAY KHẢO SÁT LIÊN QUAN").Bold().FontSize(11).FontColor(Colors.Blue.Darken2);
 
-                    if (report.ReportMissions == null || !report.ReportMissions.Any())
+                    if (snapshot.Missions == null || !snapshot.Missions.Any())
                     {
                         content.Item().PaddingTop(4).Text("Không có đợt bay nào được liên kết với báo cáo này.").Italic().FontColor(Colors.Grey.Darken1);
                     }
@@ -173,14 +201,13 @@ public class ReportExportService : IReportExportService
                             });
 
                             int index = 1;
-                            foreach (var rm in report.ReportMissions)
+                            foreach (var m in snapshot.Missions)
                             {
-                                var m = rm.Mission;
                                 table.Cell().Padding(3).Text(index++.ToString());
-                                table.Cell().Padding(3).Text(m?.MissionCode ?? "N/A");
-                                table.Cell().Padding(3).Text(m?.Title ?? "N/A");
-                                table.Cell().Padding(3).Text(m?.Status.ToString() ?? "N/A");
-                                table.Cell().Padding(3).Text(m?.PlannedStart?.ToString("dd/MM/yyyy HH:mm") ?? "N/A");
+                                table.Cell().Padding(3).Text(m.MissionCode);
+                                table.Cell().Padding(3).Text(m.Title);
+                                table.Cell().Padding(3).Text(m.Status);
+                                table.Cell().Padding(3).Text(m.PlannedStart?.ToString("dd/MM/yyyy HH:mm") ?? "N/A");
                             }
                         });
                     }
@@ -188,7 +215,7 @@ public class ReportExportService : IReportExportService
                     // Anomalies section
                     content.Item().PaddingTop(14).Text("3. BẢNG TỔNG HỢP KHUYẾT TẬT & BẤT THƯỜNG").Bold().FontSize(11).FontColor(Colors.Blue.Darken2);
 
-                    if (anomalies == null || !anomalies.Any())
+                    if (snapshot.Anomalies == null || !snapshot.Anomalies.Any())
                     {
                         content.Item().PaddingTop(4).Text("Không ghi nhận khuyết tật hoặc bất thường nào trong phạm vi báo cáo.").Italic().FontColor(Colors.Green.Darken2);
                     }
@@ -217,11 +244,11 @@ public class ReportExportService : IReportExportService
                             });
 
                             int idx = 1;
-                            foreach (var a in anomalies)
+                            foreach (var a in snapshot.Anomalies)
                             {
                                 table.Cell().Padding(3).Text(idx++.ToString());
-                                table.Cell().Padding(3).Text(a.Category?.CategoryName ?? a.AnalysisRun?.ModelName ?? "Bất thường thiết bị");
-                                table.Cell().Padding(3).Text(a.Media?.Mission?.MissionCode ?? "N/A");
+                                table.Cell().Padding(3).Text(a.CategoryName);
+                                table.Cell().Padding(3).Text(a.MissionCode);
                                 table.Cell().Padding(3).Text($"{a.ConfidenceScore * 100:0.0}%");
                                 table.Cell().Padding(3).Text(string.IsNullOrWhiteSpace(a.ValidationStatus) ? "Chờ xác nhận" : a.ValidationStatus);
                                 table.Cell().Padding(3).Text(a.CreatedAt.ToString("dd/MM/yyyy"));
@@ -251,7 +278,7 @@ public class ReportExportService : IReportExportService
         return document.GeneratePdf();
     }
 
-    private byte[] GenerateExcelReport(Report report, IReadOnlyList<DetectedAnomaly> anomalies)
+    private byte[] GenerateExcelReport(ReportSnapshot snapshot)
     {
         using var package = new ExcelPackage();
 
@@ -261,30 +288,30 @@ public class ReportExportService : IReportExportService
         wsOverview.Cells["A1"].Style.Font.Bold = true;
         wsOverview.Cells["A1"].Style.Font.Size = 14;
 
-        wsOverview.Cells["A2"].Value = $"BÁO CÁO: {report.Title}";
+        wsOverview.Cells["A2"].Value = $"BÁO CÁO: {snapshot.Title}";
         wsOverview.Cells["A2"].Style.Font.Bold = true;
         wsOverview.Cells["A2"].Style.Font.Size = 12;
 
         wsOverview.Cells["A4"].Value = "Mã báo cáo:";
-        wsOverview.Cells["B4"].Value = report.Code;
+        wsOverview.Cells["B4"].Value = snapshot.Code;
         wsOverview.Cells["A5"].Value = "Loại báo cáo:";
-        wsOverview.Cells["B5"].Value = report.Type.ToString();
+        wsOverview.Cells["B5"].Value = snapshot.Type;
         wsOverview.Cells["A6"].Value = "Trạng thái:";
-        wsOverview.Cells["B6"].Value = report.Status.ToString();
+        wsOverview.Cells["B6"].Value = snapshot.Status;
         wsOverview.Cells["A7"].Value = "Khu vực:";
-        wsOverview.Cells["B7"].Value = report.Region?.Name ?? "Không chỉ định";
+        wsOverview.Cells["B7"].Value = snapshot.RegionName ?? "Không chỉ định";
         wsOverview.Cells["A8"].Value = "Thời gian:";
-        wsOverview.Cells["B8"].Value = $"{report.DateFrom?.ToString("dd/MM/yyyy") ?? "..."} - {report.DateTo?.ToString("dd/MM/yyyy") ?? "..."}";
+        wsOverview.Cells["B8"].Value = $"{snapshot.DateFrom?.ToString("dd/MM/yyyy") ?? "..."} - {snapshot.DateTo?.ToString("dd/MM/yyyy") ?? "..."}";
         wsOverview.Cells["A9"].Value = "Người tạo:";
-        wsOverview.Cells["B9"].Value = report.CreatedByUser?.FullName ?? "N/A";
+        wsOverview.Cells["B9"].Value = snapshot.CreatedByName ?? "N/A";
         wsOverview.Cells["A10"].Value = "Người phê duyệt:";
-        wsOverview.Cells["B10"].Value = report.ApprovedBy?.FullName ?? "Chưa phê duyệt";
+        wsOverview.Cells["B10"].Value = snapshot.ApprovedByName ?? "Chưa phê duyệt";
         wsOverview.Cells["A11"].Value = "Ngày tạo:";
-        wsOverview.Cells["B11"].Value = report.CreatedAt.ToString("dd/MM/yyyy HH:mm");
+        wsOverview.Cells["B11"].Value = snapshot.CreatedAt.ToString("dd/MM/yyyy HH:mm");
         wsOverview.Cells["A12"].Value = "Tổng số khuyết tật:";
-        wsOverview.Cells["B12"].Value = anomalies.Count;
+        wsOverview.Cells["B12"].Value = snapshot.TotalAnomalies;
         wsOverview.Cells["A13"].Value = "Mô tả:";
-        wsOverview.Cells["B13"].Value = report.Description ?? string.Empty;
+        wsOverview.Cells["B13"].Value = snapshot.Description ?? string.Empty;
 
         for (int r = 4; r <= 13; r++)
         {
@@ -304,17 +331,16 @@ public class ReportExportService : IReportExportService
         }
 
         int mRow = 2;
-        if (report.ReportMissions != null)
+        if (snapshot.Missions != null)
         {
             int mIdx = 1;
-            foreach (var rm in report.ReportMissions)
+            foreach (var m in snapshot.Missions)
             {
-                var m = rm.Mission;
                 wsMissions.Cells[mRow, 1].Value = mIdx++;
-                wsMissions.Cells[mRow, 2].Value = m?.MissionCode ?? "N/A";
-                wsMissions.Cells[mRow, 3].Value = m?.Title ?? "N/A";
-                wsMissions.Cells[mRow, 4].Value = m?.Status.ToString() ?? "N/A";
-                wsMissions.Cells[mRow, 5].Value = m?.PlannedStart?.ToString("dd/MM/yyyy HH:mm") ?? "N/A";
+                wsMissions.Cells[mRow, 2].Value = m.MissionCode;
+                wsMissions.Cells[mRow, 3].Value = m.Title;
+                wsMissions.Cells[mRow, 4].Value = m.Status;
+                wsMissions.Cells[mRow, 5].Value = m.PlannedStart?.ToString("dd/MM/yyyy HH:mm") ?? "N/A";
                 mRow++;
             }
         }
@@ -332,14 +358,14 @@ public class ReportExportService : IReportExportService
         }
 
         int aRow = 2;
-        if (anomalies != null)
+        if (snapshot.Anomalies != null)
         {
             int aIdx = 1;
-            foreach (var a in anomalies)
+            foreach (var a in snapshot.Anomalies)
             {
                 wsAnomalies.Cells[aRow, 1].Value = aIdx++;
-                wsAnomalies.Cells[aRow, 2].Value = a.Category?.CategoryName ?? a.AnalysisRun?.ModelName ?? "Khuyết tật thiết bị";
-                wsAnomalies.Cells[aRow, 3].Value = a.Media?.Mission?.MissionCode ?? "N/A";
+                wsAnomalies.Cells[aRow, 2].Value = a.CategoryName;
+                wsAnomalies.Cells[aRow, 3].Value = a.MissionCode;
                 wsAnomalies.Cells[aRow, 4].Value = a.ConfidenceScore * 100;
                 wsAnomalies.Cells[aRow, 5].Value = string.IsNullOrWhiteSpace(a.ValidationStatus) ? "Chờ xác nhận" : a.ValidationStatus;
                 wsAnomalies.Cells[aRow, 6].Value = a.CreatedAt.ToString("dd/MM/yyyy HH:mm");
@@ -351,5 +377,4 @@ public class ReportExportService : IReportExportService
 
         return package.GetAsByteArray();
     }
-
 }

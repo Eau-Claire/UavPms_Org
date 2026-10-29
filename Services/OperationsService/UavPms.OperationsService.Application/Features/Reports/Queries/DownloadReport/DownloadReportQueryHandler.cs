@@ -60,13 +60,27 @@ public class DownloadReportQueryHandler : IRequestHandler<DownloadReportQuery, R
         bool isExcel = string.Equals(request.Format, "excel", StringComparison.OrdinalIgnoreCase) ||
                        string.Equals(request.Format, "xlsx", StringComparison.OrdinalIgnoreCase);
 
-        // Báo cáo không lưu tệp: luôn sinh PDF/Excel trực tiếp từ dữ liệu hiện tại theo phạm vi báo cáo.
-        var anomalies = await _reportRepository.GetAnomaliesForReportAsync(report);
-        var (fileBytes, contentType, fileName) = await _reportExportService.GenerateReportFileAsync(
-            report,
-            anomalies,
-            isExcel ? "excel" : "pdf",
-            cancellationToken);
+        byte[] fileBytes;
+        string contentType;
+        string fileName;
+
+        // Báo cáo đã duyệt không đổi theo thời gian: nếu đã duyệt và có snapshot thì xuất trực tiếp từ snapshot
+        if (report.Status == ReportStatus.Approved && !string.IsNullOrWhiteSpace(report.Snapshot))
+        {
+            (fileBytes, contentType, fileName) = await _reportExportService.GenerateReportFileFromSnapshotAsync(
+                report.Snapshot,
+                isExcel ? "excel" : "pdf",
+                cancellationToken);
+        }
+        else
+        {
+            var anomalies = await _reportRepository.GetAnomaliesForReportAsync(report);
+            (fileBytes, contentType, fileName) = await _reportExportService.GenerateReportFileAsync(
+                report,
+                anomalies,
+                isExcel ? "excel" : "pdf",
+                cancellationToken);
+        }
 
         return new ReportFileDownloadDto(new MemoryStream(fileBytes), contentType, fileName);
     }

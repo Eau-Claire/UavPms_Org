@@ -146,4 +146,77 @@ public class ReportExportServiceTests : IDisposable
         fileBytes[0].Should().Be(0x50);
         fileBytes[1].Should().Be(0x4B);
     }
+
+    [Fact]
+    public async Task GenerateReportFileFromSnapshotAsync_ShouldGenerateValidPdf_WhenSnapshotProvided()
+    {
+        // Arrange
+        var snapshot = new ReportSnapshot
+        {
+            ReportId = Guid.NewGuid(),
+            Code = "BC-2026-FROZEN",
+            Title = "Báo cáo đóng băng định kỳ",
+            Type = "Periodic",
+            Status = "Approved",
+            RegionName = "Khu vực Tây Bắc",
+            ApprovedByName = "Trần Trưởng Phòng",
+            TotalAnomalies = 1,
+            Missions = new List<ReportSnapshotMission>
+            {
+                new() { MissionId = Guid.NewGuid(), MissionCode = "MS-FROZEN-01", Title = "Bay kiểm tra tuyến A", Status = "Completed" }
+            },
+            Anomalies = new List<ReportSnapshotAnomaly>
+            {
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    CategoryName = "Ăn mòn ty néo",
+                    TowerCode = "T-501",
+                    ConfidenceScore = 0.91,
+                    ValidationStatus = "Confirmed",
+                    CreatedAt = DateTime.UtcNow
+                }
+            }
+        };
+
+        // Act
+        var (fileBytes, contentType, fileName) = await _service.GenerateReportFileFromSnapshotAsync(snapshot, "pdf");
+
+        // Assert
+        fileBytes.Should().NotBeNullOrEmpty();
+        contentType.Should().Be("application/pdf");
+        fileName.Should().Be("BC-2026-FROZEN.pdf");
+        var header = Encoding.ASCII.GetString(fileBytes, 0, 4);
+        header.Should().Be("%PDF");
+    }
+
+    [Fact]
+    public async Task GenerateReportFileFromSnapshotAsync_ShouldGenerateValidExcel_WhenSnapshotJsonProvided()
+    {
+        // Arrange
+        var snapshot = new ReportSnapshot
+        {
+            ReportId = Guid.NewGuid(),
+            Code = "BC-2026-EXCEL-FROZEN",
+            Title = "Báo cáo Excel từ snapshot JSON",
+            Type = "Specialized",
+            Status = "Approved",
+            RegionName = "Khu vực Đông Bắc",
+            TotalAnomalies = 0
+        };
+        var snapshotJson = System.Text.Json.JsonSerializer.Serialize(snapshot, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        });
+
+        // Act
+        var (fileBytes, contentType, fileName) = await _service.GenerateReportFileFromSnapshotAsync(snapshotJson, "excel");
+
+        // Assert
+        fileBytes.Should().NotBeNullOrEmpty();
+        contentType.Should().Be("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        fileName.Should().Be("BC-2026-EXCEL-FROZEN.xlsx");
+        fileBytes[0].Should().Be(0x50);
+        fileBytes[1].Should().Be(0x4B);
+    }
 }

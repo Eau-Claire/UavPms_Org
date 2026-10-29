@@ -13,4 +13,14 @@ public interface IReportExportService
         IReadOnlyList<DetectedAnomaly> anomalies,
         string format,
         CancellationToken cancellationToken = default);
+
+    Task<(byte[] FileBytes, string ContentType, string FileName)> GenerateReportFileFromSnapshotAsync(
+        ReportSnapshot snapshot,
+        string format,
+        CancellationToken cancellationToken = default);
+
+    Task<(byte[] FileBytes, string ContentType, string FileName)> GenerateReportFileFromSnapshotAsync(
+        string snapshotJson,
+        string format,
+        CancellationToken cancellationToken = default);
 }

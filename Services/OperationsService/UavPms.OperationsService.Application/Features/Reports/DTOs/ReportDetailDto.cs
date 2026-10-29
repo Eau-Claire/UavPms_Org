@@ -34,7 +34,8 @@ public record ReportDetailDto(
     string? RejectionReason,
     ReportCreatorDto? ApprovedBy,
     DateTimeOffset? ApprovedAt,
-    List<ReportMissionSummaryDto> Missions
+    List<ReportMissionSummaryDto> Missions,
+    bool HasSnapshot = false
 );
 
 public static class ReportMapping
@@ -62,7 +63,8 @@ public static class ReportMapping
             rm.Mission?.Title ?? string.Empty,
             rm.Mission?.Status.ToString().ToLowerInvariant() ?? string.Empty,
             rm.Mission?.PlannedStart
-        )).ToList());
+        )).ToList(),
+        !string.IsNullOrWhiteSpace(report.Snapshot));
 
     public static ReportDto ToDto(this Report report, int defectCount) => new(
         report.Id,
@@ -73,5 +75,6 @@ public static class ReportMapping
         report.CreatedAt,
         report.Region != null ? new ReportNestedEntityDto(report.Region.Id, report.Region.Name) : null,
         report.CreatedByUser != null ? new ReportCreatorDto(report.CreatedByUser.Id, report.CreatedByUser.FullName) : null,
-        defectCount);
+        defectCount,
+        !string.IsNullOrWhiteSpace(report.Snapshot));
 }

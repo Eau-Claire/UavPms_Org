@@ -15,5 +15,6 @@ public record ReportDto(
     DateTime CreatedAt,
     ReportNestedEntityDto? Region,
     ReportCreatorDto? Creator,
-    int DefectCount
+    int DefectCount,
+    bool HasSnapshot = false
 );

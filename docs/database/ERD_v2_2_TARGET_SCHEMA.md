@@ -45,7 +45,7 @@ Physical names are PascalCase (EF default). "Audit" = `CreatedAt, CreatedBy, Upd
 | `MaintenanceTickets` | Drop `AssetId`, `TowerId` (tower = `Anomaly.TowerId`). `TechnicianId` **NULL** = not assigned yet (migration `MakeMaintenanceTicketTechnicianNullable`) |
 | `MaintenanceProofs` | Drop `AfterRepairImageUrl` (one row per file, `ProofType` Before/After/Document) |
 | `Notifications` | Drop `IsRead`, `IsPushed` (use `ReadAt`, `PushedAt`) |
-| `Reports` | Drop `PdfFileUrl`, `PdfFileSize`, `ExcelFileUrl`, `ExcelFileSize`, `DefectCount`, `SubstationId`, `TransmissionLineId`. Add `RegionId uuid NULL` FK `Regions` |
+| `Reports` | Drop `PdfFileUrl`, `PdfFileSize`, `ExcelFileUrl`, `ExcelFileSize`, `DefectCount`, `SubstationId`, `TransmissionLineId`. Add `RegionId uuid NULL` FK `Regions`, `Snapshot jsonb NULL` (frozen metadata + missions + anomalies upon approval) |
 | `ReportMissions` | Rename `AssignedAt` → `AddedAt` |
 | `OutboxMessages` | Drop audit columns (`CreatedAt, CreatedBy, UpdatedAt, UpdatedBy, IsDeleted, DeletedAt`) |
 
@@ -71,5 +71,5 @@ MaterialLogs, Reports, ReportMissions, Notifications, AuditLogs, SystemSettings,
 - Maintenance ticket tower = `ticket.Anomaly.TowerId`.
 - Tickets auto-created on anomaly approval get the mission's active technician, or `TechnicianId = NULL`
   and `AssignedAt = NULL`. An unassigned ticket stays `Open`; it cannot move to `InProgress`.
-- Reports have no stored files; PDF/Excel are generated on download from `DateFrom/DateTo/RegionId/ReportMissions`.
+- Reports have no stored files; PDF/Excel are generated on download from `DateFrom/DateTo/RegionId/ReportMissions` (or read from `Snapshot` if status is `Approved` for audit immutability).
 - Incident reports have no file attachment.

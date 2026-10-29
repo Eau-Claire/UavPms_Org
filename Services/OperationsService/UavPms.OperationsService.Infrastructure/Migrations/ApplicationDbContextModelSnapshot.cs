@@ -2004,6 +2004,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Property<string>("RejectionReason")
                         .HasColumnType("text");
 
+                    b.Property<string>("Snapshot")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
