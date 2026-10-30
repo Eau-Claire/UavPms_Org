@@ -200,6 +200,11 @@ public class Phase2DefectAndMaintenanceCqrsTests
         result.TowerId.Should().Be(towerId);
         result.TowerCode.Should().Be("T-200");
         (await db.EmergencyAlerts.CountAsync(a => a.AnomalyId == anomaly.Id)).Should().Be(1);
+
+        // A second Active alert for the same anomaly would break UX_EmergencyAlerts_ActivePerAnomaly.
+        var again = () => handler.Handle(command, CancellationToken.None);
+        (await again.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be("ALERT_ALREADY_ACTIVE");
+        (await db.EmergencyAlerts.CountAsync(a => a.AnomalyId == anomaly.Id)).Should().Be(1);
     }
 
     [Fact]

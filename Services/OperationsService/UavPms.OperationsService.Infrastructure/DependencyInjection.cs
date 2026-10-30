@@ -149,6 +149,9 @@ public static class DependencyInjection
             services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(StackExchange.Redis.ConnectionMultiplexer.Connect(configOptions));
         }
 
+        // Media URL columns store Supabase object keys and are rebuilt from Supabase:Url on read (plan item 2.8).
+        UavPms.Shared.Contracts.Settings.StorageKeys.Configure(configuration["Supabase:Url"]);
+
         // Đăng ký File Storage Service (Tự động chọn Supabase nếu có ApiKey, ngược lại dùng Local)
         var supabaseKey = configuration["Supabase:ApiKey"];
         if (!string.IsNullOrEmpty(supabaseKey) && !supabaseKey.Contains("YOUR_SUPABASE_SERVICE_ROLE_KEY"))

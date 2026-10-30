@@ -34,6 +34,12 @@ public class TriggerEmergencyAlertCommandHandler : IRequestHandler<TriggerEmerge
         if (anomaly == null)
             throw new NotFoundException("DetectedAnomaly", request.AnomalyId);
 
+        // UX_EmergencyAlerts_ActivePerAnomaly: at most one Active alert per anomaly.
+        var active = await _alertRepository.FindAsync(a => a.AnomalyId == request.AnomalyId && a.Status == "Active");
+        if (active.Count > 0)
+            throw new BusinessRuleException("ALERT_ALREADY_ACTIVE",
+                $"Anomaly {request.AnomalyId} already has an active emergency alert ({active[0].Id}).");
+
         // Cột điện của cảnh báo suy ra từ bất thường; nếu bất thường chưa gắn cột thì gắn theo yêu cầu.
         if (!anomaly.TowerId.HasValue && request.TowerId.HasValue)
         {

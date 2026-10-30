@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Alerts;
 using UavPms.OperationsService.Application.Features.Alerts.DTOs;
 using UavPms.OperationsService.Domain.Entities;
@@ -156,6 +157,10 @@ public class EmergencyAlertService : IEmergencyAlertService
         if (alert == null)
             throw new KeyNotFoundException($"Emergency alert with ID {id} was not found.");
 
+        // CK_AlertEscalations_DifferentUsers
+        if (request.EscalatedToUserId == currentUserId)
+            throw new BusinessRuleException("INVALID_ESCALATION_TARGET", "An alert cannot be escalated to the user escalating it.");
+
         alert.Status = "Escalated";
         alert.UpdatedAt = DateTime.UtcNow;
 
@@ -284,6 +289,15 @@ public class EmergencyAlertService : IEmergencyAlertService
             _db.DetectedAnomalies.Add(newAnomaly);
             anomalyId = newAnomaly.Id;
         }
+
+        // UX_EmergencyAlerts_ActivePerAnomaly: at most one Active alert per anomaly.
+        var activeAlertId = await _db.EmergencyAlerts
+            .Where(a => a.AnomalyId == anomalyId && a.Status == "Active")
+            .Select(a => (Guid?)a.Id)
+            .FirstOrDefaultAsync(ct);
+        if (activeAlertId.HasValue)
+            throw new BusinessRuleException("ALERT_ALREADY_ACTIVE",
+                $"Anomaly {anomalyId} already has an active emergency alert ({activeAlertId}).");
 
         var alert = new EmergencyAlert
         {

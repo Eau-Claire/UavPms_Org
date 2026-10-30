@@ -277,6 +277,30 @@ public class ReportWorkflowTests
     }
 
     [Fact]
+    public async Task ApproveReport_SnapshotStoresApproverFullName_NotLoginName()
+    {
+        var reportId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var report = new Report { Id = reportId, Code = "BC-2026-0006", Title = "R", Status = ReportStatus.Pending };
+        _reportRepositoryMock.Setup(r => r.GetReportByIdWithDetailsAsync(reportId)).ReturnsAsync(report);
+        _reportRepositoryMock.Setup(r => r.GetAnomaliesForReportAsync(report)).ReturnsAsync(new List<DetectedAnomaly>());
+        _currentUserServicesMock.Setup(c => c.UserId).Returns(adminId);
+        _currentUserServicesMock.Setup(c => c.Username).Returns("admin_tester");
+        _currentUserServicesMock.Setup(c => c.Roles).Returns(new List<string> { UserRoles.SystemAdmin });
+        var userRepository = new Mock<IUserRepository>();
+        userRepository.Setup(r => r.GetByIdAsync(adminId, false)).ReturnsAsync(new User { Id = adminId, FullName = "Nguyễn Văn Duyệt" });
+
+        var handler = new ApproveReportCommandHandler(
+            _unitOfWorkMock.Object, _reportRepositoryMock.Object, _currentUserServicesMock.Object, userRepository.Object);
+
+        await handler.Handle(new ApproveReportCommand(reportId), CancellationToken.None);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(report.Snapshot!);
+        doc.RootElement.GetProperty("approvedByName").GetString().Should().Be("Nguyễn Văn Duyệt");
+        doc.RootElement.GetProperty("status").GetString().Should().Be("Approved");
+    }
+
+    [Fact]
     public async Task ApproveReport_ShouldThrowForbiddenException_WhenUserIsNotManagerOrAdmin()
     {
         // Arrange

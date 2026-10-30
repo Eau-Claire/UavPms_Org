@@ -845,8 +845,13 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 #### 8.2. [PUT] `/api/v1/emergency-alerts/{id}/resolve`
 - **Mô tả**: Xử lý / Đóng cảnh báo khẩn cấp (Chuyển sang `Resolved` hoặc `FalsePositive` kèm biên bản).
 
-#### 8.3. [POST] `/api/v1/emergency-alerts/{id}/escalate`
-- **Mô tả**: Leo thang cảnh báo lên cấp quản lý cao hơn khi quá hạn thời gian xử lý chuẩn.
+#### 8.3. [POST] `/api/v1/alerts/{id}/escalate`
+- **Mô tả**: Leo thang cảnh báo lên cấp quản lý cao hơn khi quá hạn thời gian xử lý chuẩn. Body: `escalatedToUserId`, `reason`.
+- **Lỗi**: `400 INVALID_ESCALATION_TARGET` khi `escalatedToUserId` là chính người gọi (CHECK `CK_AlertEscalations_DifferentUsers`).
+
+#### 8.3a. [POST] `/api/v1/alerts/trigger`
+- **Mô tả**: Kích hoạt cảnh báo khẩn cấp cho một bất thường (hoặc tạo bất thường edge mới nếu không gửi `anomalyId`).
+- **Lỗi**: `409 ALERT_ALREADY_ACTIVE` khi bất thường đã có một cảnh báo `Active` (mỗi bất thường tối đa một cảnh báo `Active`, index `UX_EmergencyAlerts_ActivePerAnomaly`). Cảnh báo đã `Escalated`/`Resolved` không chặn việc kích hoạt mới.
 
 #### 8.4. [POST] `/api/v1/maintenance/tickets`
 - **Mô tả**: Quản lý tạo phiếu sửa chữa / bảo trì từ một bất thường. Request **không có `towerId`**: cột điện của phiếu luôn là cột của bất thường (`detected_anomalies.tower_id`), không lưu riêng trên phiếu. Mã phiếu sinh tự động dạng `TCK-yyyyMMdd-NNN`.
@@ -917,7 +922,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 > [!NOTE]
 > Theo ERD v2.2, báo cáo **không lưu tệp** và không lưu số liệu đóng băng. Bảng `reports` chỉ lưu phạm vi: `dateFrom`, `dateTo`, `regionId` và danh sách nhiệm vụ (`report_missions`). Không còn `transmissionLineId`, `substationId`, `pdfFileUrl`, `pdfFileSize`, `excelFileUrl`, `excelFileSize`. `defectCount` được **tính trực tiếp** mỗi lần đọc: số `detected_anomalies` chưa xóa, chưa bị thay thế (`supersededById IS NULL`), không ở trạng thái `Rejected`, nằm trong phạm vi báo cáo (theo nhiệm vụ nếu có danh sách nhiệm vụ; theo cột thuộc `regionId` hoặc khu vực con; theo `createdAt` trong `[dateFrom, dateTo]`). Báo cáo không có phạm vi nào thì `defectCount = 0`.
 >
-> Hệ quả: báo cáo đã duyệt không đóng băng nội dung. Nếu sau khi duyệt có bất thường bị bác bỏ, xóa mềm hoặc gán lại cột, lần tải sau sẽ ra số liệu khác bản đã duyệt.
+> **Đóng băng khi duyệt (mục 2.6)**: lúc `approve`, hệ thống ghi `reports.snapshot` (jsonb) gồm metadata báo cáo (người tạo, người duyệt theo họ tên, khu vực, khoảng thời gian), danh sách nhiệm vụ và danh sách bất thường tại thời điểm duyệt. Với báo cáo `approved` có snapshot, `defectCount` và tệp `/download` lấy từ snapshot nên **không đổi theo thời gian**, kể cả khi sau đó bất thường bị bác bỏ, xóa mềm hoặc gán lại cột. Báo cáo `draft`/`pending`, và báo cáo đã duyệt **trước** khi có tính năng này (`hasSnapshot = false`), vẫn tính trực tiếp như trên.
 
 `type` và `status` trong response viết thường: `type` ∈ `defect`, `periodic`, `thermal`, `corridor`; `status` ∈ `draft`, `pending`, `approved`.
 
@@ -925,7 +930,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 - **Mô tả**: Danh sách báo cáo có phân trang, tìm kiếm, lọc và sắp xếp.
 - **Phân quyền**: Toàn bộ người dùng đã xác thực.
 - **Query Params**: `page` (mặc định `1`), `pageSize` (mặc định `10`), `type`, `status`, `regionId`, `search`, `sortBy`, `sortOrder`
-- **Response `200 OK`** (`data`): `items[]`, `pagination` (`page`, `pageSize`, `totalItems`, `totalPages`). Mỗi item: `id`, `code`, `title`, `type`, `status`, `createdAt`, `region` (`{ id, name }` hoặc `null`), `creator` (`{ id, fullName }`), `defectCount`.
+- **Response `200 OK`** (`data`): `items[]`, `pagination` (`page`, `pageSize`, `totalItems`, `totalPages`). Mỗi item: `id`, `code`, `title`, `type`, `status`, `createdAt`, `region` (`{ id, name }` hoặc `null`), `creator` (`{ id, fullName }`), `defectCount` (từ snapshot nếu đã duyệt), `hasSnapshot`.
 
 #### 11.2. [GET] `/api/v1/reports/statistics`
 - **Mô tả**: Thống kê số báo cáo theo loại và trạng thái.
@@ -934,7 +939,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 
 #### 11.3. [GET] `/api/v1/reports/{id}`
 - **Mô tả**: Chi tiết báo cáo.
-- **Response `200 OK`** (`data`): `id`, `code`, `title`, `type`, `status`, `description`, `createdAt`, `updatedAt`, `region` (`{ id, name }`), `creator`, `defectCount` (tính trực tiếp), `dateFrom`, `dateTo`, `rejectionReason`, `approvedBy`, `approvedAt`, `missions[]` (`id`, `missionCode`, `title`, `status`, `plannedStart`).
+- **Response `200 OK`** (`data`): `id`, `code`, `title`, `type`, `status`, `description`, `createdAt`, `updatedAt`, `region` (`{ id, name }`), `creator`, `defectCount` (từ snapshot nếu báo cáo đã duyệt và có snapshot, ngược lại tính trực tiếp), `dateFrom`, `dateTo`, `rejectionReason`, `approvedBy`, `approvedAt`, `missions[]` (`id`, `missionCode`, `title`, `status`, `plannedStart`, đọc trực tiếp), `hasSnapshot`.
 
 #### 11.4. [POST] `/api/v1/reports`
 - **Mô tả**: Tạo báo cáo mới (trạng thái `draft`).
@@ -965,11 +970,11 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 
 #### 11.7. Luồng duyệt
 - `[PUT] /api/v1/reports/{id}/submit`: `draft` → `pending`. Phân quyền: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`, `MaintenanceTechnician`).
-- `[PUT] /api/v1/reports/{id}/approve`: `pending` → `approved`. Phân quyền: `SystemAdmin`, `Manager`.
+- `[PUT] /api/v1/reports/{id}/approve`: `pending` → `approved`, đồng thời ghi `snapshot`. Phân quyền: `SystemAdmin`, `Manager`. `approved` là trạng thái cuối: không sửa, xóa hay từ chối được nữa, nên snapshot luôn khớp metadata.
 - `[PUT] /api/v1/reports/{id}/reject`: `pending` → `draft`, body `{ "reason": "..." }`. Phân quyền: `SystemAdmin`, `Manager`.
 
 #### 11.8. [GET] `/api/v1/reports/{id}/download` và [POST] `/api/v1/reports/{id}/generate`
-- **Mô tả**: Cả hai endpoint **sinh mới tệp tại thời điểm gọi** từ dữ liệu hiện tại theo phạm vi báo cáo và stream về client. Không có tệp nào được lưu. `/generate` giữ lại để tương thích và tương đương `/download`.
+- **Mô tả**: Cả hai endpoint sinh tệp tại thời điểm gọi và stream về client, không lưu tệp. Báo cáo `approved` có snapshot được sinh **từ snapshot** (số liệu lúc duyệt); các báo cáo còn lại sinh từ dữ liệu hiện tại theo phạm vi báo cáo. Hai nguồn dùng chung bố cục PDF/Excel. `/generate` giữ lại để tương thích và tương đương `/download`.
 - **Phân quyền**: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`, `MaintenanceTechnician`). Manager chỉ tải được báo cáo trong phạm vi khu vực của mình; người dùng khác không tải được bản `draft` do người khác tạo.
 - **Query Params**: `format` = `pdf` (mặc định) hoặc `excel` / `xlsx`.
 - **Response `200 OK`**: nội dung tệp nhị phân (không bọc `ApiResponse`), `Content-Type` là `application/pdf` hoặc `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, kèm tên tệp trong `Content-Disposition`.

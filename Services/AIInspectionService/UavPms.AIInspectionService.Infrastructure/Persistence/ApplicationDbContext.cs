@@ -42,6 +42,7 @@ public class ApplicationDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+        Configurations.StorageKeyColumns.Apply(modelBuilder);
 
         // Apply Global Soft Delete Query Filter for BaseEntity descendants
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())

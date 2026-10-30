@@ -103,7 +103,8 @@ public class GlobalExceptionHandler : IExceptionHandler
                 or "MISSION_CONCURRENCY_CONFLICT"
                 or "ASSESSMENT_CONCURRENCY_CONFLICT"
                 or "IDEMPOTENCY_CONFLICT"
-                or "DUPLICATE_MEDIA";
+                or "DUPLICATE_MEDIA"
+                or "ALERT_ALREADY_ACTIVE";
 
             httpContext.Response.StatusCode = isConflict ? (int)HttpStatusCode.Conflict : (int)HttpStatusCode.BadRequest;
             apiResponse = new ApiResponse(

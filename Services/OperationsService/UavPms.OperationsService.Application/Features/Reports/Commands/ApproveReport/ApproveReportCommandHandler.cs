@@ -19,15 +19,18 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
     private readonly IUnitOfWork _unitOfWork;
     private readonly IReportRepository _reportRepository;
     private readonly ICurrentUserServices _currentUserServices;
+    private readonly IUserRepository? _userRepository;
 
     public ApproveReportCommandHandler(
         IUnitOfWork unitOfWork,
         IReportRepository reportRepository,
-        ICurrentUserServices currentUserServices)
+        ICurrentUserServices currentUserServices,
+        IUserRepository? userRepository = null)
     {
         _unitOfWork = unitOfWork;
         _reportRepository = reportRepository;
         _currentUserServices = currentUserServices;
+        _userRepository = userRepository;
     }
 
     public async Task<ReportDetailDto> Handle(ApproveReportCommand request, CancellationToken cancellationToken)
@@ -68,6 +71,12 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         // Sinh snapshot bất biến cho báo cáo đã duyệt (kiểm toán toàn vẹn dữ liệu theo thời gian)
         var anomalies = await _reportRepository.GetAnomaliesForReportAsync(report);
         var snapshot = ReportSnapshot.FromReport(report, anomalies);
+        // report.ApprovedBy is not loaded yet (ApprovedById was just set): read the approver's full name so the
+        // frozen file shows the same "Người phê duyệt" as a live export, not a login name.
+        if (string.IsNullOrWhiteSpace(snapshot.ApprovedByName) && report.ApprovedById.HasValue && _userRepository != null)
+        {
+            snapshot.ApprovedByName = (await _userRepository.GetByIdAsync(report.ApprovedById.Value, track: false))?.FullName;
+        }
         if (string.IsNullOrWhiteSpace(snapshot.ApprovedByName))
         {
             snapshot.ApprovedByName = _currentUserServices.Username ?? _currentUserServices.Email;

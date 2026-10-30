@@ -28,7 +28,7 @@ Physical names are PascalCase (EF default). "Audit" = `CreatedAt, CreatedBy, Upd
 | `DroneFlightControllers` | Drop `IsActive` (active = `UnpairedAt IS NULL`) |
 | `DroneTechnicalInspections` | Rename `TechnicianUserId` → `TechnicianId` |
 | `DroneTechnicalMetrics` | Drop `Critical` (use `Severity = 'Critical'`) |
-| `InspectionSchedules` | Drop `CreatedByUserId` (use audit `CreatedBy`) |
+| `InspectionSchedules` | Drop `CreatedByUserId` (use audit `CreatedBy`). CHECK `CK_InspectionSchedules_RecurrenceRule` (non-blank RRULE) |
 | `PreMissionAssessments` | Drop `ConsumedByMissionId` (use `Missions.PreMissionAssessmentId`) |
 | `PreMissionAssessmentTowers` (new) | `Id, AssessmentId, TowerId, Sequence` + audit. Unique `(AssessmentId, TowerId)` |
 | `PreMissionAssessmentPersonnel` / `PreMissionAssessmentDrones` | Drop `IsEligible` |
@@ -41,13 +41,16 @@ Physical names are PascalCase (EF default). "Audit" = `CreatedAt, CreatedBy, Upd
 | `InspectionMedia` | Drop `AssetId`, `AiSource`. Keep `TowerId` (nullable). Add `Checksum varchar(64)` (unique when not null), `FileSizeBytes bigint`, `WidthPx int`, `HeightPx int`, `DurationSeconds double`, `Fps double` |
 | `AIAnalysisRuns` (was `AIAnalysisRequests`) | Columns: `Id, MediaId (NOT NULL), ExecutionLocation ('Edge'/'Cloud'), UavId (NULL, FK UAVs), RequestedBy (NULL, FK Users; was UploadedBy), AnalysisType (string), ModelName, ModelVersion, Status (string: Pending/Processing/Completed/Failed), SourceEventId (unique), BatchId, ErrorMessage (was Notes), StartedAt, CompletedAt` + audit. Dropped: `FileUrl, MediaType, MissionId, AssetId, Result` |
 | `DetectedAnomalies` | Add `AnalysisRunId uuid NULL` (FK `AIAnalysisRuns`, NULL = manual), `SupersededById uuid NULL` (self FK). `TowerId` becomes **uuid NULL FK `Towers`** (was varchar). Rename `Timestamp` → `FrameTimeSeconds`. `Gps jsonb` → `Location geometry(Point,4326)`. Drop `AssetId`, `AiSource`, `VideoDuration`, `VideoFps`, `VideoWidth`, `VideoHeight`. Unique `(AnalysisRunId, AiDetectionId)`. CHECK `ValidationStatus <> 'Confirmed' OR TowerId IS NOT NULL` (NOT VALID for legacy rows) |
-| `EmergencyAlerts` | Drop `AssetId`, `TowerId`, `MissionId`, `DeliveryLatencySeconds`. Rename `ReviewedByUserId` → `ReviewedById` |
+| `EmergencyAlerts` | Drop `AssetId`, `TowerId`, `MissionId`, `DeliveryLatencySeconds`. Rename `ReviewedByUserId` → `ReviewedById`. Partial unique `UX_EmergencyAlerts_ActivePerAnomaly (AnomalyId) WHERE Status = 'Active' AND NOT IsDeleted` |
+| `AlertEscalations` | CHECK `CK_AlertEscalations_DifferentUsers` (`EscalatedBy <> EscalatedTo`, NOT VALID if legacy rows violate it) |
 | `MaintenanceTickets` | Drop `AssetId`, `TowerId` (tower = `Anomaly.TowerId`). `TechnicianId` **NULL** = not assigned yet (migration `MakeMaintenanceTicketTechnicianNullable`) |
 | `MaintenanceProofs` | Drop `AfterRepairImageUrl` (one row per file, `ProofType` Before/After/Document) |
 | `Notifications` | Drop `IsRead`, `IsPushed` (use `ReadAt`, `PushedAt`) |
 | `Reports` | Drop `PdfFileUrl`, `PdfFileSize`, `ExcelFileUrl`, `ExcelFileSize`, `DefectCount`, `SubstationId`, `TransmissionLineId`. Add `RegionId uuid NULL` FK `Regions`, `Snapshot jsonb NULL` (frozen metadata + missions + anomalies upon approval) |
 | `ReportMissions` | Rename `AssignedAt` → `AddedAt` |
 | `OutboxMessages` | Drop audit columns (`CreatedAt, CreatedBy, UpdatedAt, UpdatedBy, IsDeleted, DeletedAt`) |
+
+Column lengths: the 48 server-controlled columns listed in `Persistence/Configurations/ErdColumnLengths.cs` are `varchar(n)` as in the ERD (migration `AddErdV2_2ConstraintsAndColumnLengths`); free-input columns stay `text` until the API validates their length.
 
 ## Final table list (42)
 
@@ -73,3 +76,4 @@ MaterialLogs, Reports, ReportMissions, Notifications, AuditLogs, SystemSettings,
   and `AssignedAt = NULL`. An unassigned ticket stays `Open`; it cannot move to `InProgress`.
 - Reports have no stored files; PDF/Excel are generated on download from `DateFrom/DateTo/RegionId/ReportMissions` (or read from `Snapshot` if status is `Approved` for audit immutability).
 - Incident reports have no file attachment.
+- `InspectionMedia.FileUrl`, `MaintenanceProofs.FileUrl`, `DetectedAnomalies.ImageUrl/CropUrl` store a storage key (`bucket/object`) for files in the configured Supabase project; services rebuild the public URL from `Supabase:Url` on read (`UavPms.Shared.Contracts.Settings.StorageKeys` + EF value converter). Local paths (`/images/...`) and URLs of other hosts are stored as-is. Any service mapping these columns must apply the same converter.

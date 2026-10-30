@@ -59,7 +59,7 @@ public class SupabaseFileStorageService : IFileStorageService
         var bytes = ms.ToArray();
 
         var content = new ByteArrayContent(bytes);
-        content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+        content.Headers.ContentType = new MediaTypeHeaderValue(UavPms.Shared.Contracts.Settings.StorageContentTypes.For(uniqueFileName));
         request.Content = content;
 
         var response = await _httpClient.SendAsync(request, cancellationToken);

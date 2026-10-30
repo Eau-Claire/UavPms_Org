@@ -6,6 +6,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Alerts.DTOs;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
@@ -241,5 +242,37 @@ public class EmergencyAlertServiceTests
             e.UserId == analystId &&
             e.ReferenceType == "EmergencyAlert"
         )), Times.Once);
+    }
+
+    [Fact]
+    public async Task EscalateAlertAsync_ToSelf_IsRejected()
+    {
+        await using var db = CreateContext();
+        var service = new EmergencyAlertService(db, Mock.Of<IEventPublisher>(), NullLogger<EmergencyAlertService>.Instance);
+        var alertId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        db.EmergencyAlerts.Add(new EmergencyAlert { Id = alertId, Status = "Active", Priority = "Critical", TriggeredAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var act = () => service.EscalateAlertAsync(alertId, userId, new EscalateEmergencyAlertRequest { EscalatedToUserId = userId, Reason = "x" });
+
+        (await act.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be("INVALID_ESCALATION_TARGET");
+        (await db.EmergencyAlerts.FindAsync(alertId))!.Status.Should().Be("Active");
+        (await db.AlertEscalations.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task TriggerAlertAsync_WhenAnomalyAlreadyHasActiveAlert_IsRejected()
+    {
+        await using var db = CreateContext();
+        var service = new EmergencyAlertService(db, Mock.Of<IEventPublisher>(), NullLogger<EmergencyAlertService>.Instance);
+        var anomalyId = Guid.NewGuid();
+        db.EmergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid(), AnomalyId = anomalyId, Status = "Active", Priority = "Critical", TriggeredAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var act = () => service.TriggerAlertAsync(new TriggerEmergencyAlertRequest { AnomalyId = anomalyId, MissionId = Guid.NewGuid() });
+
+        (await act.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be("ALERT_ALREADY_ACTIVE");
+        (await db.EmergencyAlerts.CountAsync(a => a.AnomalyId == anomalyId)).Should().Be(1);
     }
 }

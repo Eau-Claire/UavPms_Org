@@ -348,7 +348,8 @@ public class InspectionScheduleConfiguration : IEntityTypeConfiguration<Inspecti
 {
     public void Configure(EntityTypeBuilder<InspectionSchedule> builder)
     {
-        builder.ToTable("InspectionSchedules");
+        builder.ToTable("InspectionSchedules", t =>
+            t.HasCheckConstraint("CK_InspectionSchedules_RecurrenceRule", "btrim(\"RecurrenceRule\") <> ''"));
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Name).HasMaxLength(256).IsRequired();
         builder.Property(x => x.RecurrenceRule).HasMaxLength(512).IsRequired();
@@ -565,6 +566,12 @@ public class EmergencyAlertConfiguration : IEntityTypeConfiguration<EmergencyAle
     {
         builder.ToTable("EmergencyAlerts");
         builder.HasKey(e => e.Id);
+        // Plain FK index kept for "all alerts of an anomaly"; the partial unique index below only covers Active rows.
+        builder.HasIndex(e => e.AnomalyId, "IX_EmergencyAlerts_AnomalyId");
+        // At most one Active alert per anomaly (ERD v2.2); escalated/resolved history is unrestricted.
+        builder.HasIndex(e => e.AnomalyId, "UX_EmergencyAlerts_ActivePerAnomaly")
+            .IsUnique()
+            .HasFilter("\"Status\" = 'Active' AND NOT \"IsDeleted\" AND \"AnomalyId\" IS NOT NULL");
 
         builder.HasOne(e => e.Anomaly)
             .WithMany(a => a.EmergencyAlerts)
@@ -583,7 +590,8 @@ public class AlertEscalationConfiguration : IEntityTypeConfiguration<AlertEscala
 {
     public void Configure(EntityTypeBuilder<AlertEscalation> builder)
     {
-        builder.ToTable("AlertEscalations");
+        builder.ToTable("AlertEscalations", t =>
+            t.HasCheckConstraint("CK_AlertEscalations_DifferentUsers", "\"EscalatedBy\" <> \"EscalatedTo\""));
         builder.HasKey(e => e.Id);
 
         builder.HasOne(e => e.Alert)

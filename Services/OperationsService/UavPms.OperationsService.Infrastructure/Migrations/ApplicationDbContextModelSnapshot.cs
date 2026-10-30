@@ -165,7 +165,10 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasIndex("EscalatedTo");
 
-                    b.ToTable("AlertEscalations", (string)null);
+                    b.ToTable("AlertEscalations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AlertEscalations_DifferentUsers", "\"EscalatedBy\" <> \"EscalatedTo\"");
+                        });
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.AuditLog", b =>
@@ -176,7 +179,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("ActionType")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -198,7 +202,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("TableName")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("UserAgent")
                         .IsRequired()
@@ -471,7 +476,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -517,7 +523,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Health")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -526,7 +533,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("PolicyVersion")
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("RawSnapshot")
                         .IsRequired()
@@ -534,7 +542,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("SourceType")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("SourceVersion")
                         .IsRequired()
@@ -545,7 +554,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<Guid?>("TechnicianId")
                         .HasColumnType("uuid");
@@ -615,7 +625,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Severity")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Subsystem")
                         .IsRequired()
@@ -684,7 +695,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime>("TriggeredAt")
                         .HasColumnType("timestamp with time zone");
@@ -697,9 +709,13 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AnomalyId");
-
                     b.HasIndex("ReviewedById");
+
+                    b.HasIndex(new[] { "AnomalyId" }, "IX_EmergencyAlerts_AnomalyId");
+
+                    b.HasIndex(new[] { "AnomalyId" }, "UX_EmergencyAlerts_ActivePerAnomaly")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Active' AND NOT \"IsDeleted\" AND \"AnomalyId\" IS NOT NULL");
 
                     b.ToTable("EmergencyAlerts", (string)null);
                 });
@@ -745,7 +761,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<Guid?>("TowerId")
                         .HasColumnType("uuid");
@@ -800,7 +817,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("FileUrl")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<double?>("Fps")
                         .HasColumnType("double precision");
@@ -813,7 +831,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("MediaType")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<Guid>("MissionId")
                         .HasColumnType("uuid");
@@ -832,7 +851,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("ValidationStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<int?>("WidthPx")
                         .HasColumnType("integer");
@@ -899,7 +919,10 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasIndex("RegionId");
 
-                    b.ToTable("InspectionSchedules", (string)null);
+                    b.ToTable("InspectionSchedules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InspectionSchedules_RecurrenceRule", "btrim(\"RecurrenceRule\") <> ''");
+                        });
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.MaintenanceProof", b =>
@@ -919,7 +942,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("FileUrl")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -995,7 +1019,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Priority")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1005,14 +1030,16 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<Guid?>("TechnicianId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("TicketCode")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1145,16 +1172,19 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("MissionCode")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("MissionType")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Objective")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
                         .HasDefaultValue("PeriodicInspection");
 
                     b.Property<DateTime?>("OverdueNotifiedAt")
@@ -1191,7 +1221,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1286,11 +1317,13 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("ResponseStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1350,7 +1383,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1434,7 +1468,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("ConnectionStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1512,7 +1547,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("InspectionStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -1566,7 +1602,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("ReferenceType")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("SentAt")
                         .HasColumnType("timestamp with time zone");
@@ -1577,7 +1614,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Type")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -1605,7 +1643,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("EvaluationPolicyVersion")
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Findings")
                         .IsRequired()
@@ -1622,7 +1661,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("OverallTechnicalHealth")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime>("PlannedEnd")
                         .HasColumnType("timestamp with time zone");
@@ -1638,11 +1678,13 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("SiteFeasibilityStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1711,28 +1753,33 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("OperationalAvailabilityStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("ReasonCode")
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("SnapshotAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Suitability")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("SuitabilityReason")
                         .HasColumnType("text");
 
                     b.Property<string>("TechnicalEligibilityStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("TechnicalHealth")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<Guid?>("TechnicalInspectionId")
                         .HasColumnType("uuid");
@@ -1766,7 +1813,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("AvailabilityStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1779,7 +1827,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("EligibilityStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Findings")
                         .IsRequired()
@@ -1789,7 +1838,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("ReasonCode")
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("SnapshotAt")
                         .HasColumnType("timestamp with time zone");
@@ -1885,7 +1935,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2098,7 +2149,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2139,7 +2191,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("RoleName")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.HasKey("Id");
 
@@ -2278,7 +2331,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("DeviceTokenHash")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
@@ -2346,7 +2400,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("FlightStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -2372,7 +2427,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("OperationalStatus")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("SerialNumber")
                         .IsRequired()
@@ -2381,7 +2437,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("TechnicalHealth")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("UavCode")
                         .IsRequired()
@@ -2448,7 +2505,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
