@@ -89,12 +89,11 @@ jobs:
             cd "$DEPLOY_PATH"
             test -f scripts/storage/set_minio_env.sh || { echo "ERROR: scripts/storage/set_minio_env.sh missing; run Deploy first."; exit 1; }
 
-            SCHEME=http; [ "$MINIO_USE_SSL" = "true" ] && SCHEME=https
-            if curl -sf -m 10 -o /dev/null "$SCHEME://$MINIO_ENDPOINT/minio/health/live"; then
-              echo "MinIO reachable at $SCHEME://$MINIO_ENDPOINT"
-            else
-              echo "WARNING: $SCHEME://$MINIO_ENDPOINT/minio/health/live is not reachable from the server."
-            fi
+            # script_stop exits after any line whose status is non-zero, so every line here must end with status 0
+            # (a false `[ ] && x`, or the first line of an `else` branch, would stop the script silently).
+            SCHEME=http; if [ "$MINIO_USE_SSL" = "true" ]; then SCHEME=https; fi
+            HEALTH="$SCHEME://$MINIO_ENDPOINT/minio/health/live"
+            curl -sf -m 10 -o /dev/null "$HEALTH" && echo "MinIO reachable at $SCHEME://$MINIO_ENDPOINT" || echo "WARNING: $HEALTH is not reachable from the server."
 
             bash scripts/storage/set_minio_env.sh .env
 
