@@ -98,6 +98,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasAlternateKey("Id", "MediaId")
+                        .HasName("AK_AIAnalysisRuns_Id_MediaId");
+
                     b.HasIndex("RequestedBy");
 
                     b.HasIndex("SourceEventId")
@@ -353,6 +356,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.HasIndex("AnalysisRunId", "AiDetectionId")
                         .IsUnique()
                         .HasFilter("\"AiDetectionId\" IS NOT NULL AND \"IsDeleted\" = false");
+
+                    b.HasIndex("AnalysisRunId", "MediaId");
 
                     b.ToTable("DetectedAnomalies", null, t =>
                         {
@@ -1053,10 +1058,10 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasIndex("ManagerId");
 
-                    b.HasIndex("TechnicianId");
-
                     b.HasIndex("TicketCode")
                         .IsUnique();
+
+                    b.HasIndex("TechnicianId", "Status");
 
                     b.ToTable("MaintenanceTickets", (string)null);
                 });
@@ -1342,11 +1347,11 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasIndex("AssignedById");
 
-                    b.HasIndex("UserId");
-
                     b.HasIndex("MissionId", "UserId")
                         .IsUnique()
                         .HasFilter("\"Status\" = 'Active' AND NOT \"IsDeleted\"");
+
+                    b.HasIndex("UserId", "Status");
 
                     b.ToTable("MissionAssignments", null, t =>
                         {
@@ -2715,6 +2720,13 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .WithMany("DetectedAnomalies")
                         .HasForeignKey("TowerId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.AIAnalysisRun", null)
+                        .WithMany()
+                        .HasForeignKey("AnalysisRunId", "MediaId")
+                        .HasPrincipalKey("Id", "MediaId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("FK_DetectedAnomalies_AIAnalysisRuns_AnalysisRunId_MediaId");
 
                     b.Navigation("AnalysisRun");
 

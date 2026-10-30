@@ -6,7 +6,6 @@
   "search": "test",
   "status": "Pending",
   "fakeId": "00000000-0000-0000-0000-000000000000",
-  "invalidCreatePayload": {},
   "updatePayload": {
     "title": "Updated Regression Mission",
     "status": "Pending",

@@ -23,10 +23,10 @@ test.describe('Operations Service – Towers', () => {
     expect(body).toBeTruthy();
   });
 
-  test('GET /api/v1/towers – should filter by lineAssetId', async ({ request }) => {
+  test('GET /api/v1/towers – should filter by regionId', async ({ request }) => {
     const fakeId = '00000000-0000-0000-0000-000000000000';
     const res = await request.get('/api/v1/towers', {
-      params: { page: 1, pageSize: 5, lineAssetId: fakeId },
+      params: { page: 1, pageSize: 5, regionId: fakeId },
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(res.status()).toBe(200);
@@ -53,8 +53,10 @@ test.describe('Operations Service – Towers', () => {
     const res = await request.put(`/api/v1/towers/${fakeId}`, {
       headers: { Authorization: `Bearer ${token}` },
       data: {
-        lineAssetId: fakeId,
+        regionId: fakeId,
         towerCode: 'TOWER-TEST-001',
+        poleType: 'Steel',
+        address: 'Test address',
         latitude: 10.123,
         longitude: 106.456,
       },

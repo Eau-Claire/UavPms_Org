@@ -18,6 +18,8 @@ def quote(value):
 
 
 def generate(towers_per_line=30):
+    # ERD v2.2: infrastructure is only Regions -> Towers. A "corridor" is a synthetic
+    # grouping of towers used to build missions; it is not stored in the database.
     if not 2 <= towers_per_line <= 500:
         raise ValueError('towers_per_line must be between 2 and 500')
     sql = ["\\set ON_ERROR_STOP on", "BEGIN;", """DO $$ BEGIN
@@ -29,11 +31,11 @@ END $$;"""]
 
     inserted_ids = {}
 
-    def insert(table, key, values, geometry=None):
+    def insert(table, key, values, geometry=None, now_columns=()):
         ident = uid(key)
         values = {'Id': ident, **values, 'IsDeleted': False}
-        columns = list(values) + ['CreatedAt']
-        expressions = [quote(v) for v in values.values()] + ['now()']
+        columns = list(values) + ['CreatedAt'] + list(now_columns)
+        expressions = [quote(v) for v in values.values()] + ['now()'] * (1 + len(now_columns))
         if geometry:
             column, wkt = geometry
             columns.append(column)
@@ -47,8 +49,8 @@ END $$;"""]
         # Supplied through psql, never embedded in generated files.
         ident = uid(key)
         email = key.lower() + '@mf01.example.test'
-        sql.append(f'''INSERT INTO "Users" ("Id","Username","Email","PasswordHash","FullName","Phone","Status","IsEmailVerified","CreatedAt","IsDeleted")
-VALUES ('{ident}','{key}','{email}',crypt(:'mf01_password',gen_salt('bf',10)),'MOCK {key}','', 'Active',true,now(),false) ON CONFLICT ("Id") DO NOTHING;
+        sql.append(f'''INSERT INTO "Users" ("Id","Email","PasswordHash","FullName","Phone","Status","IsEmailVerified","CreatedAt","IsDeleted")
+VALUES ('{ident}','{email}',crypt(:'mf01_password',gen_salt('bf',10)),'MOCK {key}','', 'Active',true,now(),false) ON CONFLICT ("Id") DO NOTHING;
 INSERT INTO "UserRoles" ("UserId","RoleId","AssignedAt") SELECT '{ident}',"Id",now() FROM "Roles" WHERE "RoleName"='{role}' ON CONFLICT DO NOTHING;''')
         inserted_ids.setdefault('Users', []).append(ident)
         manifest['users'].append({'id': ident, 'email': email, 'role': role})
@@ -63,37 +65,35 @@ INSERT INTO "UserRoles" ("UserId","RoleId","AssignedAt") SELECT '{ident}',"Id",n
     for region_code, longitude, latitude in [('NINHTHUAN',108.9,11.5), ('DONGNAI',107.1,10.9), ('CAMAU',105.0,9.1)]:
         key = 'MF01-' + region_code
         ring = f'{longitude} {latitude},{longitude+.3} {latitude},{longitude+.3} {latitude+.3},{longitude} {latitude+.3},{longitude} {latitude}'
-        region = insert('Regions',key,{'Code':key,'RegionName':'MOCK '+region_code,'Type':'Region'},('Geom',f'POLYGON(({ring}))'))
-        unit = insert('ManagementUnits',key+'-UNIT',{'Code':key+'-UNIT','Name':'MOCK '+region_code,'Type':'PowerCompany','Status':'Active'})
+        region = insert('Regions',key,{'Code':key,'Name':'MOCK '+region_code,'Type':'Region'},('Geom',f'POLYGON(({ring}))'))
         manager = user(key+'-MANAGER','Manager')
         inspectors = [user(key+f'-INSPECTOR-{i}','Inspector') for i in range(1,4)]
         insert('UserGeographicScopes',key+'-SCOPE',{'UserId':manager,'RegionId':region})
-        info = {'id':region,'code':key,'managerId':manager,'inspectors':inspectors,'lines':[], 'polygon':{'type':'Polygon','coordinates':[[[longitude,latitude],[longitude+.3,latitude],[longitude+.3,latitude+.3],[longitude,latitude+.3],[longitude,latitude]]]}}
+        info = {'id':region,'code':key,'managerId':manager,'inspectors':inspectors,'corridors':[], 'polygon':{'type':'Polygon','coordinates':[[[longitude,latitude],[longitude+.3,latitude],[longitude+.3,latitude+.3],[longitude,latitude+.3],[longitude,latitude]]]}}
         manifest['regions'].append(info)
-        for station_no in range(1,7):
-            station_key = key+f'-S{station_no}'
-            station = insert('Substations',station_key,{'RegionAssetId':region,'SubstationName':'MOCK '+station_key,'VoltageLevel':'220kV'})
-            for line_no in range(1,4):
-                line_key = station_key+f'-L{line_no}'
-                x,y = round(longitude+.01*line_no,6),round(latitude+.03*station_no,6)
+        for group_no in range(1,7):
+            for corridor_no in range(1,4):
+                corridor_key = key+f'-G{group_no}-C{corridor_no}'
+                x,y = round(longitude+.01*corridor_no,6),round(latitude+.03*group_no,6)
                 points = [(round(x+.15*i/(towers_per_line-1),6),round(y+.005*i/(towers_per_line-1),6)) for i in range(towers_per_line)]
-                line = insert('TransmissionLines',line_key,{'SubstationAssetId':station,'ManagementUnitId':unit,'Code':line_key,'LineName':'MOCK '+line_key,'VoltageLevel':['110kV','220kV','500kV'][line_no-1],'Status':'Active','IsCriticalEdge':False},('Geom','LINESTRING('+','.join(f'{a} {b}' for a,b in points)+')'))
-                asset_ids = []
+                tower_ids = []
                 for index,(a,b) in enumerate(points):
-                    tower_key = line_key+f'-T{index+1:03}'
-                    tower = insert('Towers',tower_key,{'LineAssetId':line,'TowerCode':tower_key},('Geom',f'POINT({a} {b})'))
-                    asset_ids.append(insert('AssetComponents',tower_key+'-ASSET',{'TowerId':tower,'PowerLineId':line,'ManagementUnitId':unit,'ComponentCode':tower_key+'-ASSET','ComponentType':'Tension' if index%2 else 'Suspension','Status':'Inactive' if index==towers_per_line-1 else 'Active','CurrentHealthScore':100-index%40,'RiskLevel':'Low'},('Location',f'POINT({a} {b})')))
-                info['lines'].append({'id':line,'substationId':station,'assetIds':asset_ids,'inactiveAssetId':asset_ids[-1]})
-                drone = insert('UAVs',line_key+'-UAV',{'UavCode':line_key+'-UAV','Model':'MOCK','Status':'Idle','BatteryLevel':100})
-                status = ['Pending','Executing','Completed','Cancelled'][(station_no*3+line_no)%4]
-                inspector = inspectors[(line_no-1)%3]
-                mission = insert('Missions',line_key+'-MISSION',{'MissionCode':line_key+'-MISSION','Title':'MOCK '+line_key,'ManagerId':manager,'InspectorId':inspector,'UavId':drone,'Status':status,'Description':'Synthetic MF01 regional fixture'})
-                targets = asset_ids[:min(10,len(asset_ids)-1)]
-                for index,asset in enumerate(targets):
-                    insert('MissionTargets',line_key+f'-TARGET-{index}',{'MissionId':mission,'AssetId':asset,'Sequence':index+1,'InspectionStatus':'Pending'})
-                manifest['missions'].append({'id':mission,'regionId':region,'inspectorId':inspector,'status':status,'targetAssetIds':targets})
+                    tower_key = corridor_key+f'-T{index+1:03}'
+                    tower_ids.append(insert('Towers',tower_key,{'RegionId':region,'TowerCode':tower_key,'PoleType':'Tension' if index%2 else 'Suspension','Address':'MOCK '+region_code},('Geom',f'POINT({a} {b})')))
+                # The last tower of each corridor is never a mission target.
+                info['corridors'].append({'code':corridor_key,'towerIds':tower_ids,'unassignedTowerId':tower_ids[-1]})
+                drone = insert('UAVs',corridor_key+'-UAV',{'UavCode':corridor_key+'-UAV','Name':'MOCK '+corridor_key+'-UAV','Model':'MOCK','SerialNumber':corridor_key+'-UAV','Category':'Hexacopter','AssignedRegionId':region,'FlightStatus':'Idle','OperationalStatus':'Available','TechnicalHealth':'Healthy','BatteryLevel':100,'FlightEnduranceMinutes':30,'OperationalRangeKm':10,'Version':1})
+                status = ['Pending','Executing','Completed','Cancelled'][(group_no*3+corridor_no)%4]
+                inspector = inspectors[(corridor_no-1)%3]
+                mission = insert('Missions',corridor_key+'-MISSION',{'MissionCode':corridor_key+'-MISSION','Title':'MOCK '+corridor_key,'ManagerId':manager,'RegionId':region,'UavId':drone,'Status':status,'MissionType':'AdHoc','Description':'Synthetic MF01 regional fixture'})
+                # Missions have no InspectorId column in ERD v2.2; the inspector is an assignment.
+                insert('MissionAssignments',corridor_key+'-ASSIGNMENT',{'MissionId':mission,'UserId':inspector,'AssignmentRole':'INSPECTOR','Status':'Active','ResponseStatus':'Pending','IsRequired':True,'AssignedById':manager},now_columns=('AssignedAt',))
+                targets = tower_ids[:min(10,len(tower_ids)-1)]
+                for index,tower in enumerate(targets):
+                    insert('MissionTargets',corridor_key+f'-TARGET-{index}',{'MissionId':mission,'TowerId':tower,'Sequence':index+1,'InspectionStatus':'Pending'})
+                manifest['missions'].append({'id':mission,'regionId':region,'inspectorId':inspector,'status':status,'targetTowerIds':targets})
     manifest['cases'] = {
-        'mixedRegionAssetIds':[r['lines'][0]['assetIds'][0] for r in manifest['regions']],
+        'mixedRegionTowerIds':[r['corridors'][0]['towerIds'][0] for r in manifest['regions']],
         'emptyPolygon':{'type':'Polygon','coordinates':[[[109,12],[109.01,12],[109.01,12.01],[109,12.01],[109,12]]]},
         'crossRegionPolygon':{'type':'Polygon','coordinates':[[[105,10],[109,10],[109,22],[105,22],[105,10]]]},
         'invalidPolygon':{'type':'Polygon','coordinates':[[[105,10],[106,11],[106,10],[105,11],[105,10]]]}}

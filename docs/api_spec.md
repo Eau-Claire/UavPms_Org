@@ -11,7 +11,7 @@
 - **Staging / Production (Gateway)**: `https://uavpms.ddns.net`
 - **Tiền tố API**:
   - `/api/v1`: Toàn bộ các API tiêu chuẩn của hệ thống (Auth, Users, Hạ tầng & GIS, Missions MF02, Execution MF03, AI Review MF04, Maintenance, Reports, Notifications).
-  - `/api/v2`: Dành riêng cho luồng Đánh giá Tiền khả thi MF01 (`/api/v2/assessments`).
+  - `/api/v2`: Alias của `/api/v1` cho luồng Đánh giá Tiền khả thi MF01 (`/api/v{1|2}/pre-mission-assessments`).
 
 ### 1.2. Ràng buộc Path Parameters (Bắt buộc GUID)
 Mọi tham số ID trên URL định tuyến backend (`{id}`, `{missionId}`, `{towerId}`, `{droneId}`, `{userId}`, `{ticketId}`, `{anomalyId}`, v.v.) đều áp dụng ràng buộc **`guid`** (UUID 36 ký tự: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
@@ -77,8 +77,8 @@ graph TD
     Client[Web Frontend / Mobile App / Vision Edge] -->|HTTP / WebSocket| Gateway[UavPms.ApiGateway :5194]
     Gateway -->|/api/v1/auth, /api/v1/users| Identity[IdentityService :8080]
     Gateway -->|/api/v1/users/{id}/geographic-scopes| Operations
-    Gateway -->|/api/v1/regions, /towers, /gis, /uavs, /missions, /maintenance, /reports...| Operations[OperationsService :8080]
-    Gateway -->|/api/v2/assessments| Operations
+    Gateway -->|/api/v1/regions, /towers, /gis, /drones, /pre-mission-assessments, /missions, /maintenance, /reports...| Operations[OperationsService :8080]
+    Gateway -->|/api/v2/pre-mission-assessments| Operations
     Gateway -->|/api/v1/ai-analysis, /api/v1/missions/{id}/ai-analysis, /api/v1/vision| AIInspection[AIInspectionService :8080]
     Gateway -->|/api/v1/notifications, /hubs/notifications| Notification[NotificationService :8080]
     Gateway -->|/hangfire| Notification
@@ -397,59 +397,95 @@ graph TD
 
 ### MODULE 3: ĐỘI BAY UAV & KIỂM ĐỊNH KỸ THUẬT (OPERATIONSSERVICE)
 
-#### 3.1. [GET] `/api/v1/uavs`
-- **Mô tả**: Lấy danh sách thiết bị bay, trạng thái hoạt động (`Ready`, `Degraded`, `Grounded`), tình trạng kỹ thuật (`Good`, `Fair`, `Critical`), mức pin, giờ bay.
-- **Query Params**: `status`, `operationalStatus`, `page`, `pageSize`
+> Route gốc là `/api/v1/drones`. Các endpoint ở module này trả về DTO trực tiếp (không bọc `ApiResponse`).
+> Enum dùng chung:
+> - `operationalStatus`: `Available`, `Reserved`, `InUse`, `Maintenance`, `Unavailable`, `Lost`.
+> - `status` (trạng thái bay): `Idle`, `Flying`, `Maintenance`, `Offline`, `Online`.
+> - `technicalHealth`: `Unknown`, `Healthy`, `Warning`, `Critical`.
+> - Trạng thái biên bản kiểm định: `Pending`, `InProgress`, `Passed`, `Failed`, `Incomplete`.
 
-#### 3.2. [GET] `/api/v1/uavs/{id}`
-- **Mô tả**: Xem thông tin chi tiết một drone và lịch sử kiểm định kỹ thuật.
+#### 3.1. [GET] `/api/v1/drones`
+- **Mô tả**: Danh sách drone.
+- **Query Params**: `search`, `operationalStatus`, `status`, `technicalHealth`, `regionId`, `availableOnly`, `detailed`.
+- **Endpoint liên quan**:
+  - `GET /api/v1/drones/available`: drone đang sẵn sàng.
+  - `GET /api/v1/drones/eligible`: drone đủ điều kiện cho một nhiệm vụ.
+  - `GET|POST /api/v1/drones/estimate-gis-scope`: ước lượng số drone cần cho một phạm vi GIS.
 
-#### 3.3. [POST] `/api/v1/uavs/{id}/inspections`
-- **Mô tả**: Tạo biên bản kiểm định kỹ thuật cho drone trước chiến dịch bay.
-- **Phân quyền**: `Technician`, `SystemAdmin`
-- **Request Body**:
+#### 3.2. [GET] `/api/v1/drones/{id}`
+- **Mô tả**: Chi tiết một drone. Query `live=true` lấy thêm trạng thái trực tiếp.
+- **Endpoint liên quan**:
+  - `GET /api/v1/drones/{id}/status`: trạng thái hiện tại.
+  - `GET /api/v1/drones/{id}/technical-inspections`: lịch sử kiểm định kỹ thuật.
+
+#### 3.3. [POST] `/api/v1/drones` · [PUT] `/api/v1/drones/{id}` · [DELETE] `/api/v1/drones/{id}`
+- **Phân quyền**: `Manager`, `SystemAdmin`, `MaintenanceTechnician` (DELETE chỉ `Manager`, `SystemAdmin`).
+- **Request Body (POST/PUT)**:
   ```json
   {
-    "technicianUserId": "44444444-4444-4444-4444-444444444444",
-    "notes": "Kiểm định định kỳ tuần 42 trước khi nhận nhiệm vụ"
+    "code": "UAV-HP-01",
+    "name": "Hexa Hải Phòng 01",
+    "model": "M300 RTK",
+    "category": "Hexacopter",
+    "serialNumber": "SN-0001",
+    "assignedRegionId": "33333333-3333-3333-3333-333333333333",
+    "operationalStatus": "Available",
+    "technicalHealth": "Unknown",
+    "flightEnduranceMinutes": 30,
+    "operationalRangeKm": 10,
+    "cameraPayloadInfo": "Zenmuse H20T",
+    "batteryLevel": 100
   }
   ```
+- **Response**: POST trả `201 Created` kèm `UavDetailsDto`; PUT trả `200 OK` kèm `UavDetailsDto`.
 
-#### 3.4. [POST] `/api/v1/uavs/{id}/inspections/{inspectionId}/metrics`
-- **Mô tả**: Nạp các chỉ số đo đạc chi tiết từng phân hệ phần cứng (`Propulsion`, `Avionics`, `Payload`, `Power`).
+#### 3.4. [POST] `/api/v1/drone-technical-inspections`
+- **Mô tả**: Nộp biên bản kiểm định kỹ thuật kèm chỉ số từng phân hệ. Hệ thống chốt `Passed`/`Failed`, tính `validUntil` và cập nhật `technicalHealth` của drone.
+- **Phân quyền**: `MaintenanceTechnician`, `Manager`, `SystemAdmin`.
+- **Alias**: `POST /api/v1/uavs/{droneId}/inspections` (lấy `droneId` từ path).
 - **Request Body**:
   ```json
   {
+    "droneId": "88888888-8888-8888-8888-888888888888",
+    "notes": "Kiểm định định kỳ tuần 42",
+    "policyVersion": "v2.0",
+    "flightControllerUid": null,
+    "preMissionAssessmentId": null,
     "metrics": [
-      {
-        "metricCode": "MOTOR_VIBRATION",
-        "subsystem": "Propulsion",
-        "numericValue": 1.25,
-        "passed": true,
-        "isCritical": true,
-        "unit": "mm/s"
-      },
       {
         "metricCode": "BATTERY_HEALTH",
         "subsystem": "Power",
         "numericValue": 94.0,
+        "unit": "%",
         "passed": true,
-        "isCritical": true,
-        "unit": "%"
+        "isRequired": true,
+        "critical": true,
+        "severity": "High"
       }
     ]
   }
   ```
+- **Endpoint liên quan**:
+  - `POST /api/v1/drones/{id}/basic-technical-check`: kiểm tra kỹ thuật nhanh, trả `DroneTechnicalInspectionSummaryDto`.
+  - `GET /api/v1/drone-technical-inspections/drone/{droneId}/latest` (alias `GET /api/v1/uavs/{droneId}/inspections[/latest]`): biên bản mới nhất, `404` nếu chưa có.
 
-#### 3.5. [PUT] `/api/v1/uavs/{id}/inspections/{inspectionId}/complete`
-- **Mô tả**: Hoàn thành kiểm định, chốt kết quả `Passed`/`Failed`, tính hạn giá trị `validUntil` và tự động cập nhật `uav.operational_status`.
+#### 3.5. Flight controller của drone
+- `POST /api/v1/drones/{droneId}/flight-controller`: ghép flight controller.
+- `DELETE /api/v1/drones/{droneId}/flight-controller`: gỡ ghép.
+- `GET /api/v1/drones/{droneId}/flight-controller`: flight controller đang ghép.
+- `GET /api/v1/drones/{droneId}/flight-controller/history`: lịch sử ghép.
 
 ---
 
 ### MODULE 4: MF01 - ĐÁNH GIÁ TIỀN KHẢ THI (PRE-MISSION ASSESSMENT V2)
 
-#### 4.1. [POST] `/api/v2/assessments`
-- **Mô tả**: Quản lý tạo hồ sơ đánh giá tiền khả thi cho một chiến dịch bay dự kiến.
+> Route gốc là `/api/v1/pre-mission-assessments` (cũng nhận `/api/v2/...`). Controller v0.9 cũ đã deprecated.
+> Phân quyền mặc định: `SystemAdmin`, `Manager`, `Inspector`. Endpoint trả DTO trực tiếp (không bọc `ApiResponse`).
+> Trạng thái hồ sơ: `Draft` → `Evaluating` → `Ready` / `NotReady` → `Completed`; ngoài ra `Expired`, `Cancelled`.
+> Giá trị cũ `Consumed` = `Completed`, `Incomplete` = `NotReady`.
+
+#### 4.1. [POST] `/api/v1/pre-mission-assessments`
+- **Mô tả**: Tạo hồ sơ đánh giá tiền khả thi cho một chiến dịch bay dự kiến.
 - **Phân quyền**: `Manager`, `SystemAdmin`
 - **Request Body**:
   ```json
@@ -457,112 +493,90 @@ graph TD
     "regionId": "33333333-3333-3333-3333-333333333333",
     "plannedStart": "2026-10-25T08:00:00Z",
     "plannedEnd": "2026-10-25T17:00:00Z",
-    "targetTowerIds": [
+    "towerIds": [
       "22222222-2222-2222-2222-222222222222",
       "55555555-5555-5555-5555-555555555555"
     ],
-    "proposedBoundary": {
-      "type": "Polygon",
-      "coordinates": [...]
-    }
+    "boundaryWkt": "POLYGON((106.6 20.8, 106.7 20.8, 106.7 20.9, 106.6 20.8))",
+    "idempotencyKey": "assess-2026-10-25-hp"
   }
   ```
-- **Response `201 Created`**:
+- **Response `200 OK`**: `PreMissionAssessmentDto`. Các trường chính:
+  - định danh: `id`, `assessmentCode`, `managerId`, `regionId`, `regionName`, `version`;
+  - kế hoạch: `plannedStart`, `plannedEnd`, `validUntil`;
+  - kết quả: `status`, `siteFeasibilityStatus`, `overallTechnicalHealth`, `findings`, `evaluationPolicyVersion`;
+  - danh sách: `towers`, `personnelCandidates`, `droneCandidates`;
+  - liên kết: `consumedByMissionId` (alias `completedMissionId`).
+
+#### 4.2. [GET] `/api/v1/pre-mission-assessments` · [GET] `/api/v1/pre-mission-assessments/{id}`
+- **Query Params (list)**: `status`, `search`, `page`, `pageSize` (mặc định 20).
+- **Endpoint liên quan**: `GET /api/v1/pre-mission-assessments/{id}/resource-readiness`: mức sẵn sàng nhân sự và drone.
+
+#### 4.3. Chuyển trạng thái hồ sơ
+- `POST /{id}/evaluate`, `POST /{id}/re-evaluate`: chạy (lại) đánh giá bãi bay, UAV, kỹ thuật, nhân sự.
+- `POST /{id}/confirm` (`Manager`, `SystemAdmin`): xác nhận hồ sơ đạt (`Ready`).
+- `POST /{id}/mark-completed` (alias `/consume`), body `{ "missionId": "..." }`: đánh dấu hồ sơ đã dùng.
+- `POST /{id}/cancel`, body `{ "reason": "..." }`: hủy hồ sơ.
+
+#### 4.4. [POST] `/api/v1/pre-mission-assessments/{id}/create-mission`
+- **Mô tả**: Tạo nhiệm vụ bay chính thức từ hồ sơ `Ready`. **Đây là cách duy nhất để tạo nhiệm vụ**: endpoint `POST /api/v1/missions` cũ đã bị gỡ.
+- **Request Body** (`assessmentId` lấy từ path nếu khác):
   ```json
   {
-    "success": true,
-    "message": "Khởi tạo hồ sơ tiền khả thi thành công.",
-    "data": {
-      "assessmentId": "66666666-6666-6666-6666-666666666666",
-      "status": "Evaluating",
-      "siteFeasibility": "Feasible",
-      "weatherSuitability": "Suitable",
-      "airspaceClearance": "Clear",
-      "resourceReadiness": "Ready",
-      "findings": {
-        "candidatePilotsCount": 3,
-        "candidateUavsCount": 2,
-        "totalDistanceMeters": 4500,
-        "estimatedFlightDurationMinutes": 45
-      }
-    }
+    "title": "Kiểm tra định kỳ tuyến 22kV An Dương",
+    "description": "Chú ý khu vực cột 12-15 có cây cối rậm rạp",
+    "personnel": [
+      { "userId": "77777777-7777-7777-7777-777777777777", "role": "INSPECTOR", "isRequired": true }
+    ],
+    "droneIds": ["88888888-8888-8888-8888-888888888888"],
+    "priority": "Normal",
+    "objective": "PeriodicInspection",
+    "priorityDefects": null,
+    "emergencyReason": null,
+    "isImmediate": false,
+    "idempotencyKey": "mission-2026-10-25-hp"
   }
   ```
-
-#### 4.2. [GET] `/api/v2/assessments/{id}`
-- **Mô tả**: Lấy thông tin chi tiết hồ sơ thẩm định tiền khả thi, bao gồm các chỉ số cảnh báo rủi ro bãi bay và danh sách tài nguyên khả dụng.
-
-#### 4.3. [PUT] `/api/v2/assessments/{id}/confirm`
-- **Mô tả**: Quản lý xác nhận hồ sơ tiền khả thi đạt yêu cầu (`status = 'Ready'`), cho phép chuyển tiếp sang MF02 để lập nhiệm vụ chính thức.
+- **Response `200 OK`**: đối tượng nhiệm vụ vừa tạo.
 
 ---
 
 ### MODULE 5: MF02 - ĐIỀU PHỐI & PHÂN CÔNG NHIỆM VỤ BAY (OPERATIONSSERVICE)
 
-#### 5.1. [POST] `/api/v1/missions`
-- **Mô tả**: Tạo nhiệm vụ bay kiểm tra chính thức (có thể kế thừa phạm vi từ Assessment MF01 hoặc tạo trực tiếp).
-- **Phân quyền**: `Manager`, `SystemAdmin`
-- **Request Body**:
-  ```json
-  {
-    "title": "Kiểm tra định kỳ tuyến đường dây 22kV An Dương - Hải Phòng",
-    "assessmentId": "66666666-6666-6666-6666-666666666666",
-    "regionId": "33333333-3333-3333-3333-333333333333",
-    "priority": 1,
-    "objective": "Periodic",
-    "plannedStart": "2026-10-25T08:00:00Z",
-    "plannedEnd": "2026-10-25T17:00:00Z",
-    "managerInstructions": "Chú ý khu vực cột 12-15 có cây cối rậm rạp",
-    "confirmationDeadline": "2026-10-24T18:00:00Z",
-    "targetTowerIds": [
-      "22222222-2222-2222-2222-222222222222",
-      "55555555-5555-5555-5555-555555555555"
-    ]
-  }
-  ```
+> Route gốc là `/api/v1/missions`. Nhiệm vụ được tạo qua `POST /api/v1/pre-mission-assessments/{id}/create-mission` (mục 4.4).
+> Endpoint trong module này bọc `ApiResponse`.
+> Trạng thái nhiệm vụ: `Draft`, `PendingAcceptance`, `Assigned`, `Preparing`, `Ready`, `InProgress`, `Suspended`, `Postponed`, `Completed`, `Cancelled`.
 
-#### 5.2. [GET] `/api/v1/missions`
-- **Mô tả**: Lấy danh sách nhiệm vụ bay có lọc theo trạng thái (`Draft`, `PendingAcceptance`, `Assigned`, `InProgress`, `Completed`), mức ưu tiên, khoảng thời gian.
+#### 5.1. [GET] `/api/v1/missions`
+- **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`.
+- **Query Params**: `page` (mặc định 1), `pageSize` (mặc định 10, tối đa 100), `search`, `status`, `priority`, `sortBy` (mặc định `createdAt`), `sortDescending` (mặc định `true`).
+- **Endpoint liên quan**: `GET /api/v1/missions/my`: nhiệm vụ của người dùng hiện tại.
 
-#### 5.3. [GET] `/api/v1/missions/{id}`
-- **Mô tả**: Chi tiết nhiệm vụ bao gồm: Danh sách cột cần kiểm tra (`mission_targets`), Đội bay được phân công (`mission_assignments`), Thiết bị bay (`uavs`), Lịch giữ chỗ tài nguyên (`resource_bookings`).
+#### 5.2. [GET] `/api/v1/missions/{id}`
+- **Mô tả**: Chi tiết nhiệm vụ: cột cần kiểm tra, đội bay được phân công, drone, lịch giữ chỗ tài nguyên.
 
-#### 5.4. [POST] `/api/v1/missions/{id}/assignments`
-- **Mô tả**: Gán thành viên đội bay kèm vai trò ngữ cảnh (`PILOT`, `CO_PILOT`, `INSPECTOR`, `OBSERVER`). Tự động gửi thông báo Realtime đến thành viên.
-- **Request Body**:
-  ```json
-  {
-    "userId": "77777777-7777-7777-7777-777777777777",
-    "assignmentRole": "PILOT",
-    "isRequired": true
-  }
-  ```
+#### 5.3. Phạm vi nhiệm vụ
+- `POST /{id}/scope/resolve`: tính danh sách cột trong phạm vi.
+- `PUT /{id}/towers`, body `{ "boundaryWkt": "...", "towerIds": [...] }`: chốt danh sách cột.
 
-#### 5.5. [PUT] `/api/v1/missions/{id}/assignments/{assignmentId}/respond`
-- **Mô tả**: Phi công / Thành viên phản hồi nhận nhiệm vụ (`Accepted` hoặc `Postponed` kèm lý do).
-- **Phân quyền**: Chính thành viên được gán.
-- **Request Body**:
-  ```json
-  {
-    "responseStatus": "Accepted",
-    "reason": null
-  }
-  ```
+#### 5.4. Phân công thành viên
+- `GET /{id}/assignments`: danh sách phân công.
+- `POST /{id}/assignments` (`Manager`, `SystemAdmin`), body `{ "userId": "...", "assignmentRole": "PILOT" }`. Vai trò: `PILOT`, `CO_PILOT`, `INSPECTOR`, `OBSERVER`. Thành viên nhận thông báo realtime.
+- `DELETE /{id}/assignments/{assignmentId}`: gỡ phân công.
+- `POST /{id}/assignments/{assignmentId}/reassign` (hoặc `/{id}/assignments/reassign`): đổi người.
+- `POST /{id}/assignments/accept`: thành viên nhận nhiệm vụ.
+- `POST /{id}/assignments/postpone`, body `{ "reason": "..." }`: thành viên xin hoãn.
 
-#### 5.6. [PUT] `/api/v1/missions/{id}/drone`
-- **Mô tả**: Gán drone chính thức cho nhiệm vụ (Kiểm tra xung đột lịch giữ chỗ & điều kiện kiểm định còn hạn).
-- **Request Body**:
-  ```json
-  {
-    "uavId": "88888888-8888-8888-8888-888888888888"
-  }
-  ```
+#### 5.5. [PUT] `/api/v1/missions/{id}/drone`
+- **Mô tả**: Gán drone chính thức (cũng nhận `POST`). Hệ thống kiểm tra xung đột lịch giữ chỗ và hạn kiểm định.
+- **Request Body**: `{ "droneId": "88888888-8888-8888-8888-888888888888" }`
+- **Endpoint liên quan**: `POST /{id}/drone-handover` và `POST /{id}/drone-handover/return`: bàn giao và hoàn trả drone.
 
-#### 5.7. [POST] `/api/v1/missions/{id}/dispatch`
-- **Mô tả**: Quản lý phát lệnh điều phối nhiệm vụ khi tất cả điều kiện sẵn sàng đạt chuẩn. Chuyển trạng thái sang `Assigned`.
-
-#### 5.8. [POST] `/api/v1/missions/{id}/cancel`
-- **Mô tả**: Hủy nhiệm vụ bay (ghi nhận lý do vào Audit Log và tự động giải phóng tài nguyên đã khóa lịch).
+#### 5.6. Điều phối vòng đời
+- `POST /{id}/confirm`: xác nhận nhiệm vụ sẵn sàng.
+- `POST /{id}/remind`: nhắc thành viên chưa phản hồi.
+- `POST /{id}/suspend` (body `reason` bắt buộc), `POST /{id}/resume`, `POST /{id}/postpone`.
+- `POST /{id}/cancel`, body `{ "reason": "..." }`: hủy nhiệm vụ, ghi Audit Log và giải phóng tài nguyên đã giữ chỗ.
 
 ---
 
@@ -839,19 +853,28 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 
 ### MODULE 8: MF04 - CẢNH BÁO KHẨN CẤP & BẢO TRÌ SỬA CHỮA (OPERATIONSSERVICE)
 
-#### 8.1. [GET] `/api/v1/emergency-alerts`
-- **Mô tả**: Lấy danh sách các cảnh báo sự cố khẩn cấp đang kích hoạt (`Active`, `Investigating`).
+> Cảnh báo khẩn cấp nằm ở `AlertsController`, route gốc **`/api/v1/alerts`**. Vòng đời trạng thái: `Active` (vừa kích hoạt) → `Confirmed` hoặc `Dismissed` (sau khi thẩm định) hoặc `Escalated` (đã chuyển cấp). Mỗi bất thường có tối đa một cảnh báo `Active` (index `UX_EmergencyAlerts_ActivePerAnomaly`).
 
-#### 8.2. [PUT] `/api/v1/emergency-alerts/{id}/resolve`
-- **Mô tả**: Xử lý / Đóng cảnh báo khẩn cấp (Chuyển sang `Resolved` hoặc `FalsePositive` kèm biên bản).
+#### 8.1. [GET] `/api/v1/alerts/active` và [GET] `/api/v1/alerts?status&page&pageSize`
+- **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`
+- `/active`: các cảnh báo `Status = Active`. Response là **mảng trực tiếp** (không bọc `ApiResponse`), mỗi phần tử: `id`, `anomalyId`, `towerId`, `towerCode`, `alertType`, `categoryName`, `priority`, `status`, `deliveryLatencySeconds`, `triggeredAt`, `location` (`towerCode`, …), `evidence` (`mediaUrl`, `confidenceScore`).
+- Danh sách có lọc: `status` (không phân biệt hoa thường), `page` (mặc định `1`), `pageSize` (mặc định `10`). Response trực tiếp: `{ totalCount, page, pageSize, items[] }`, mỗi item: `id`, `towerCode`, `alertType`, `priority`, `status`, `triggeredAt`, `resolvedAt`, `reviewedBy`, `notes`.
+- [GET] `/api/v1/alerts/{id}`: chi tiết (thêm `missionId`, `receivedAt`, lịch sử chuyển cấp); `404` khi không tồn tại.
+
+#### 8.2. [PUT] `/api/v1/alerts/{id}/review`
+- **Mô tả**: Thẩm định cảnh báo. Body `{ "status": "Confirmed" | "Dismissed", "notes": "..." }`; giá trị khác `Dismissed` được coi là `Confirmed`. Ghi `reviewedById`, `resolvedAt`, `notes`.
+- **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`
+- **Response**: `204 No Content`; `404` khi không tồn tại.
 
 #### 8.3. [POST] `/api/v1/alerts/{id}/escalate`
-- **Mô tả**: Leo thang cảnh báo lên cấp quản lý cao hơn khi quá hạn thời gian xử lý chuẩn. Body: `escalatedToUserId`, `reason`.
+- **Mô tả**: Chuyển cấp cảnh báo cho một người dùng khác (thường là Manager). Body: `escalatedToUserId`, `reason`. Cảnh báo chuyển sang `Escalated`, người nhận được thông báo. **Response `201 Created`** (không bọc `ApiResponse`): `id`, `escalatedBy`, `escalatedByName`, `escalatedTo`, `escalatedToName`, `reason`, `escalatedAt`.
+- **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`
 - **Lỗi**: `400 INVALID_ESCALATION_TARGET` khi `escalatedToUserId` là chính người gọi (CHECK `CK_AlertEscalations_DifferentUsers`).
 
 #### 8.3a. [POST] `/api/v1/alerts/trigger`
-- **Mô tả**: Kích hoạt cảnh báo khẩn cấp cho một bất thường (hoặc tạo bất thường edge mới nếu không gửi `anomalyId`).
-- **Lỗi**: `409 ALERT_ALREADY_ACTIVE` khi bất thường đã có một cảnh báo `Active` (mỗi bất thường tối đa một cảnh báo `Active`, index `UX_EmergencyAlerts_ActivePerAnomaly`). Cảnh báo đã `Escalated`/`Resolved` không chặn việc kích hoạt mới.
+- **Mô tả**: Kích hoạt cảnh báo khẩn cấp cho một bất thường (hoặc tạo bất thường edge mới nếu không gửi `anomalyId`). Body: `anomalyId?`, `missionId?`, `towerId?`/`towerCode?`, `priority` (mặc định `Critical`), `latitude?`, `longitude?`. Cảnh báo mới ở trạng thái `Active`.
+- **Phân quyền**: mọi người dùng đã xác thực
+- **Lỗi**: `409 ALERT_ALREADY_ACTIVE` khi bất thường đã có một cảnh báo `Active` (mỗi bất thường tối đa một cảnh báo `Active`, index `UX_EmergencyAlerts_ActivePerAnomaly`). Cảnh báo đã `Escalated`, `Confirmed` hoặc `Dismissed` không chặn việc kích hoạt mới.
 
 #### 8.4. [POST] `/api/v1/maintenance/tickets`
 - **Mô tả**: Quản lý tạo phiếu sửa chữa / bảo trì từ một bất thường. Request **không có `towerId`**: cột điện của phiếu luôn là cột của bất thường (`detected_anomalies.tower_id`), không lưu riêng trên phiếu. Mã phiếu sinh tự động dạng `TCK-yyyyMMdd-NNN`.

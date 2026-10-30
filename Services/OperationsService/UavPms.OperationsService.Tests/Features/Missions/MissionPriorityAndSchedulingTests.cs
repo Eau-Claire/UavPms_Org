@@ -4,7 +4,6 @@ using Moq;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
 using UavPms.OperationsService.Application.Features.Missions;
-using UavPms.OperationsService.Application.Features.Missions.Commands.CreateMission;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Services;
@@ -41,47 +40,6 @@ public class MissionPriorityAndSchedulingTests
         db.DefectCategories.AddRange(
             new DefectCategory { Id = 901, CategoryCode = PriorityDefectCategories.Conductor, CategoryName = "Conductor" },
             new DefectCategory { Id = 902, CategoryCode = PriorityDefectCategories.Insulator, CategoryName = "Insulator" });
-    }
-
-    [Fact]
-    public void Validator_ShouldFail_WhenEmergencyPriority_HasNoEmergencyReason()
-    {
-        var validator = new CreateMissionCommandValidator();
-        var command = new CreateMissionCommand(
-            Title: "Emergency Flight",
-            RouteData: null,
-            AssignedToUserId: Guid.NewGuid(),
-            DroneCode: "DRONE-01",
-            Status: "Pending",
-            Description: "Emergency inspection",
-            TargetTowerIds: new[] { Guid.NewGuid() },
-            Priority: MissionPriority.Emergency,
-            EmergencyReason: null
-        );
-
-        var result = validator.Validate(command);
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "EmergencyReason");
-    }
-
-    [Fact]
-    public void Validator_ShouldPass_WhenEmergencyPriority_HasValidEmergencyReason()
-    {
-        var validator = new CreateMissionCommandValidator();
-        var command = new CreateMissionCommand(
-            Title: "Emergency Flight",
-            RouteData: null,
-            AssignedToUserId: Guid.NewGuid(),
-            DroneCode: "DRONE-01",
-            Status: "Pending",
-            Description: "Emergency inspection",
-            TargetTowerIds: new[] { Guid.NewGuid() },
-            Priority: MissionPriority.Emergency,
-            EmergencyReason: "Critical conductor defect detected after lightning strike."
-        );
-
-        var result = validator.Validate(command);
-        result.IsValid.Should().BeTrue();
     }
 
     [Fact]

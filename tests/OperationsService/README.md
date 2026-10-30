@@ -4,19 +4,20 @@ Tài liệu và mã nguồn kiểm thử tích hợp (integration & regression t
 
 ---
 
-## 1. Danh sách các Test Suites (Tổng cộng 262 Test Cases)
+## 1. Danh sách các Test Suites (Tổng cộng 181 Test Cases)
+
+> ERD v2.2: hạ tầng chỉ còn **khu vực → cột điện** (`regions` → `towers`). Các suite cũ cho trạm biến áp (`substation-suites`), tuyến đường dây (`line-suites`) và thiết bị/Health Score (`asset-suites`) đã bị xóa cùng các endpoint tương ứng.
 
 | Suite Thư Mục | Module Kiểm Thử | Số Lượng TC | Trạng Thái Kiểm Thử Trực Tiếp |
 | :--- | :--- | :---: | :---: |
 | [`region-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/region-suites) | Quản lý khu vực / vùng lưới điện (`/api/v1/regions`) | 26 TCs | **100% PASS** (26/26) |
-| [`substation-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/substation-suites) | Quản lý trạm biến áp 110kV/220kV/500kV (`/api/v1/substations`) | 25 TCs | **100% PASS** (25/25) |
-| [`tower-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/tower-suites) | Cột điện, tọa độ PostGIS & truy vấn Bounding Box (`/api/v1/towers`) | 35 TCs | **PASS + DEVIATION** (25 Pass, 6 Pending, 4 Dev) |
-| [`line-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/line-suites) | Tuyến đường dây truyền tải điện (`/api/v1/lines`) | 29 TCs | **PASS + DEVIATION** (20 Pass, 9 Dev) |
-| [`asset-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/asset-suites) | Thiết bị trên cột, Health Score & Risk Level (`/api/v1/assets`) | 25 TCs | **PASS + DEVIATION** (20 Pass, 5 Dev) |
-| [`mission-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/mission-suites) | Chu trình nhiệm vụ bay, bàn giao UAV, check-in, AI review (`/api/v1/missions`) | 61 TCs | **44 PASS, 6 PENDING, 5 DEV, 6 FAIL** |
-| [`maintenance-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/maintenance-suites) | Phiếu bảo trì, minh chứng sửa chữa, vật tư & đóng phiếu (`/api/v1/maintenance/tickets`) | 33 TCs | **100% PASS** (33/33) |
+| [`tower-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/tower-suites) | Cột điện thuộc khu vực (`regionId`), tọa độ PostGIS & truy vấn không gian (`/api/v1/towers`, `/api/v1/towers/spatial-query`) | 35 TCs | Chưa chạy lại sau ERD v2.2 |
+| [`mission-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/mission-suites) | Chu trình nhiệm vụ bay (tạo qua `/api/v2/pre-mission-assessments/{id}/create-mission`), bàn giao UAV, check-in, AI review (`/api/v1/missions`) | 60 TCs | Chưa chạy lại sau ERD v2.2 |
+| [`maintenance-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/maintenance-suites) | Phiếu bảo trì, minh chứng sửa chữa, vật tư & đóng phiếu (`/api/v1/maintenance/tickets`) | 32 TCs | Chưa chạy lại sau ERD v2.2 |
 | [`monitor-suites/`](file:///home/an/RiderProjects/UavPms_Org/tests/OperationsService/monitor-suites) | Giám sát hệ thống & Nhật ký kiểm toán PostGIS (`/api/v1/monitor/*`, `/api/v1/audit-logs`) | 27 TCs | **100% PASS** (27/27) |
-| **Tổng cộng** | **Toàn bộ 8 Module OperationsService** | **262 TCs** | **100% Tích hợp & Kiểm thử thực tế** |
+| **Tổng cộng** | **5 Module trong runner** | **181 TCs** | |
+
+Ngoài runner còn có `media-suites/` (50 TCs, `/api/v1/missions/{id}/media`, `towerId` tùy chọn) và `flightlog-suites/` (29 TCs), chạy riêng lẻ.
 
 ---
 
@@ -40,7 +41,7 @@ pip install -r tests/OperationsService/requirements.txt
 
 ## 3. Hướng dẫn chạy kiểm thử
 
-### Chạy toàn bộ các Suites của OperationsService (262 TCs):
+### Chạy toàn bộ các Suites của OperationsService (181 TCs):
 ```bash
 python3 tests/OperationsService/run_all_operations_suites.py
 ```
@@ -50,26 +51,21 @@ python3 tests/OperationsService/run_all_operations_suites.py
 # 1. Region Operations Suite (26 TCs)
 python3 tests/OperationsService/region-suites/test_region_suite.py
 
-# 2. Substation Operations Suite (25 TCs)
-python3 tests/OperationsService/substation-suites/test_substation_suite.py
-
-# 3. Tower & PostGIS Spatial Suite (35 TCs)
+# 2. Tower & PostGIS Spatial Suite (35 TCs)
 python3 tests/OperationsService/tower-suites/test_tower_suite.py
 
-# 4. Transmission Line Suite (29 TCs)
-python3 tests/OperationsService/line-suites/test_line_suite.py
-
-# 5. Asset & Health Score Suite (25 TCs)
-python3 tests/OperationsService/asset-suites/test_asset_suite.py
-
-# 6. Flight Mission Full Lifecycle Suite (61 TCs)
+# 3. Flight Mission Full Lifecycle Suite (60 TCs)
 python3 tests/OperationsService/mission-suites/test_mission_suite.py
 
-# 7. Maintenance Ticket Operations Suite (33 TCs)
+# 4. Maintenance Ticket Operations Suite (32 TCs)
 python3 tests/OperationsService/maintenance-suites/test_maintenance_suite.py
 
-# 8. Monitor & Audit Log Operations Suite (27 TCs)
+# 5. Monitor & Audit Log Operations Suite (27 TCs)
 python3 tests/OperationsService/monitor-suites/test_monitor_suite.py
+
+# Ngoài runner: Media Ingestion (50 TCs) và Flight Log (29 TCs)
+python3 tests/OperationsService/media-suites/test_media_suite.py
+python3 tests/OperationsService/flightlog-suites/test_flightlog_suite.py
 ```
 
 ---
@@ -81,7 +77,7 @@ python3 tests/OperationsService/monitor-suites/test_monitor_suite.py
    - Điều kiện để một nhiệm vụ đạt trạng thái `Ready` để bắt đầu bay (`Start`):
      - Đã được Inspector chấp nhận phân công (`Accepted`).
      - Đã hoàn tất `Check-in` tại thực địa.
-     - Đã xác nhận danh sách thiết bị cần kiểm tra (`MissionTargets > 0`).
+     - Đã xác nhận danh sách cột điện cần kiểm tra (`MissionTargets > 0`, lấy từ hồ sơ tiền nhiệm vụ hoặc `PUT /missions/{id}/towers`).
      - Đã hoàn tất bàn giao thiết bị bay (`DroneHandover`).
 
 2. **Các tính năng Pending (Chờ Rebuild Docker Image):**

@@ -3,7 +3,6 @@ using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using UavPms.OperationsService.Application.Features.Missions.Commands.CreateMission;
 using UavPms.OperationsService.Application.Features.Missions;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Application.Features.Missions.Commands.DeleteMission;
@@ -32,67 +31,6 @@ public class MissionController : ControllerBase
     {
         _mediator = mediator;
         _lifecycle = lifecycle;
-    }
-
-    [HttpPost]
-    [Authorize(Roles = UserRoles.AdminAndManager)]
-    [Obsolete("Direct mission creation via POST /api/v1/missions is deprecated. All missions must be created via Pre-Mission Assessment workflow (POST /api/v2/pre-mission-assessments/{id}/create-mission).")]
-    public async Task<IActionResult> Create([FromBody] CreateMissionRequest request, CancellationToken cancellationToken = default)
-    {
-        Response?.Headers?.TryAdd("Warning", "299 - \"Direct mission creation is deprecated. All missions must be created via Pre-Mission Assessment workflow (POST /api/v2/pre-mission-assessments/{id}/create-mission).\"");
-        if (request.RegionId.HasValue)
-        {
-            var assessmentId = request.AssessmentId ?? request.SourceAssessmentId;
-            var isExplicitAdHoc = string.Equals(request.MissionType, "AD_HOC", StringComparison.OrdinalIgnoreCase) ||
-                                  string.Equals(request.MissionType, "AdHoc", StringComparison.OrdinalIgnoreCase);
-
-            var missionType = (isExplicitAdHoc || request.ScheduleId is null || assessmentId is not null)
-                ? MissionType.AdHoc
-                : MissionType.Scheduled;
-
-            if (!request.PlannedStart.HasValue || !request.PlannedEnd.HasValue)
-                return BadRequest(new ApiResponse(false, "PlannedStart and PlannedEnd are required"));
-
-            var mission = await _lifecycle!.CreateAsync(new Mf01CreateMission(
-                request.Title ?? request.Name ?? "",
-                request.RegionId.Value,
-                missionType,
-                request.ScheduleId,
-                request.TriggerReason,
-                ToUtc(request.PlannedStart.Value),
-                ToUtc(request.PlannedEnd.Value),
-                request.Description,
-                request.ConfirmationDeadline.HasValue ? ToUtc(request.ConfirmationDeadline.Value) : null,
-                request.ManagerInstructions,
-                request.AssignedToUserId ?? request.InspectorId,
-                request.DroneId ?? request.UavId,
-                request.Assignments,
-                assessmentId,
-                request.Priority,
-                request.Objective,
-                request.PriorityDefects,
-                request.EmergencyReason,
-                request.IsImmediate), cancellationToken);
-            return Ok(new ApiResponse(true, "Mission created successfully", mission.Id));
-        }
-        var command = new CreateMissionCommand(
-            request.Title ?? request.Name ?? string.Empty,
-            request.RouteData,
-            request.AssignedToUserId ?? request.InspectorId ?? Guid.Empty,
-            request.DroneCode,
-            request.Status,
-            request.Description,
-            request.ScheduledStartAt ?? request.ScheduledAt,
-            request.InspectorId,
-            request.UavId ?? request.DroneId,
-            request.TargetTowerIds,
-            request.Priority,
-            request.Objective,
-            request.PriorityDefects,
-            request.EmergencyReason,
-            request.IsImmediate);
-        var result = await _mediator.Send(command, cancellationToken);
-        return Ok(new ApiResponse(true, "Mission created successfully", result));
     }
 
     [HttpPost("{id:guid}/scope/resolve")]
@@ -609,37 +547,6 @@ public class MissionController : ControllerBase
         ReportedAt = r.ReportedAt
     };
 }
-
-public record CreateMissionRequest(
-    string? Title,
-    string? Name,
-    string? RouteData,
-    Guid? AssignedToUserId,
-    string? DroneCode,
-    string? Status,
-    string? Description,
-    DateTime? ScheduledStartAt,
-    DateTime? ScheduledAt,
-    Guid? InspectorId,
-    Guid? UavId,
-    Guid? DroneId,
-    IReadOnlyList<Guid>? TargetTowerIds,
-    Guid? RegionId = null,
-    string? MissionType = null,
-    Guid? ScheduleId = null,
-    string? TriggerReason = null,
-    DateTime? PlannedStart = null,
-    DateTime? PlannedEnd = null,
-    DateTime? ConfirmationDeadline = null,
-    string? ManagerInstructions = null,
-    IReadOnlyList<MissionAssignmentItemRequest>? Assignments = null,
-    Guid? AssessmentId = null,
-    Guid? SourceAssessmentId = null,
-    MissionPriority Priority = MissionPriority.Normal,
-    InspectionObjective Objective = InspectionObjective.PeriodicInspection,
-    IReadOnlyList<string>? PriorityDefects = null,
-    string? EmergencyReason = null,
-    bool IsImmediate = false);
 
 public record MissionScopeRequest(string BoundaryWkt);
 public record MissionAssetsRequest(string BoundaryWkt, IReadOnlyCollection<Guid> TowerIds);

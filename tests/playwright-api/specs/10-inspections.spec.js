@@ -19,7 +19,7 @@ test.describe('Operations Service – Inspections', () => {
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
         missionId: fakeId,
-        assetId: fakeId,
+        towerId: fakeId,
         capturedAt: new Date().toISOString(),
         file: {
           name: 'test.jpg',

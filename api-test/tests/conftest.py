@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +13,8 @@ import pytest
 
 
 DATA_DIR = Path(os.getenv("TEST_DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
+ASSESSMENT_PATH = "/api/v2/pre-mission-assessments"
+GIS_BOUNDARY_WKT = "POLYGON((106.79 10.83, 106.82 10.83, 106.82 10.86, 106.79 10.86, 106.79 10.83))"
 
 
 def load_json(name: str) -> dict[str, Any]:
@@ -208,7 +213,6 @@ def data() -> dict[str, Any]:
     return {
         "auth": load_json("auth.json"),
         "mission": load_json("mission.json"),
-        "asset": load_json("asset.json"),
         "inspection": load_json("inspection.json"),
     }
 
@@ -250,81 +254,141 @@ def db_connection():
         connection.close()
 
 
+def _find_user_id(cursor, email: str) -> str | None:
+    if not email or email.startswith("replace-with-"):
+        return None
+    cursor.execute('SELECT "Id" FROM "Users" WHERE lower("Email") = lower(%s) AND NOT "IsDeleted"', (email,))
+    row = cursor.fetchone()
+    return str(row[0]) if row is not None else None
+
+
 @pytest.fixture(scope="session")
 def gis_seed(db_connection, roles_data: dict[str, Any]) -> dict[str, str]:
+    # ERD v2.2: infrastructure is only Regions -> Towers.
     ids = {
         "region": "71000000-0000-0000-0000-000000000001",
-        "substation": "71000000-0000-0000-0000-000000000002",
-        "line": "71000000-0000-0000-0000-000000000003",
-        "tower": "71000000-0000-0000-0000-000000000004",
-        "active_asset_1": "71000000-0000-0000-0000-000000000011",
-        "active_asset_2": "71000000-0000-0000-0000-000000000012",
-        "inactive_asset": "71000000-0000-0000-0000-000000000013",
-        "outside_asset": "71000000-0000-0000-0000-000000000014",
+        "tower_1": "71000000-0000-0000-0000-000000000011",
+        "tower_2": "71000000-0000-0000-0000-000000000012",
+        "outside_tower": "71000000-0000-0000-0000-000000000014",
         "uav": "71000000-0000-0000-0000-000000000020",
+        "mission_uav": "71000000-0000-0000-0000-000000000021",
     }
     inspector_email = roles_data.get("inspector", {}).get("email", "")
     if not inspector_email or inspector_email.startswith("replace-with-"):
         pytest.skip("Configure the inspector account in api-test/data/roles.json")
 
     with db_connection.cursor() as cursor:
-        cursor.execute('SELECT "Id" FROM "Users" WHERE lower("Email") = lower(%s) AND NOT "IsDeleted"', (inspector_email,))
-        inspector = cursor.fetchone()
-        if inspector is None:
+        inspector_id = _find_user_id(cursor, inspector_email)
+        if inspector_id is None:
             pytest.skip(f"Inspector seed user does not exist: {inspector_email}")
-        ids["inspector"] = str(inspector[0])
+        ids["inspector"] = inspector_id
+        for role_name in ("manager", "analyst", "technician"):
+            user_id = _find_user_id(cursor, roles_data.get(role_name, {}).get("email", ""))
+            if user_id is not None:
+                ids[role_name] = user_id
+
         cursor.execute(
             """
-            INSERT INTO "Regions" ("Id","RegionName","Code","Type","Geom","CreatedAt","IsDeleted")
+            INSERT INTO "Regions" ("Id","Name","Code","Type","Geom","CreatedAt","IsDeleted")
             VALUES (%s,'GIS API Test Region','GIS-TEST-REGION','District',ST_GeomFromText('POLYGON((106.79 10.83,106.82 10.83,106.82 10.86,106.79 10.86,106.79 10.83))',4326),now(),false)
             ON CONFLICT ("Id") DO UPDATE SET "Geom"=EXCLUDED."Geom","IsDeleted"=false
             """, (ids["region"],))
-        cursor.execute(
-            """
-            INSERT INTO "Substations" ("Id","RegionAssetId","SubstationName","VoltageLevel","Geom","CreatedAt","IsDeleted")
-            VALUES (%s,%s,'GIS API Test Substation','110kV',ST_SetSRID(ST_Point(106.8,10.84),4326),now(),false)
-            ON CONFLICT ("Id") DO UPDATE SET "IsDeleted"=false
-            """, (ids["substation"], ids["region"]))
-        cursor.execute(
-            """
-            INSERT INTO "TransmissionLines" ("Id","SubstationAssetId","LineName","Code","VoltageLevel","Status","IsCriticalEdge","Geom","CreatedAt","IsDeleted")
-            VALUES (%s,%s,'GIS API Test Line','GIS-TEST-LINE','110kV','Active',false,ST_GeomFromText('LINESTRING(106.80 10.84,106.81 10.85)',4326),now(),false)
-            ON CONFLICT ("Id") DO UPDATE SET "Status"='Active',"IsDeleted"=false
-            """, (ids["line"], ids["substation"]))
-        cursor.execute(
-            """
-            INSERT INTO "Towers" ("Id","LineAssetId","TowerCode","Geom","CreatedAt","IsDeleted")
-            VALUES (%s,%s,'GIS-TEST-TOWER',ST_SetSRID(ST_Point(106.805,10.845),4326),now(),false)
-            ON CONFLICT ("Id") DO UPDATE SET "IsDeleted"=false
-            """,
-            (ids["tower"], ids["line"]),
-        )
-        assets = [
-            (ids["active_asset_1"], "GIS-ASSET-A", "Active", 106.804, 10.844),
-            (ids["active_asset_2"], "GIS-ASSET-B", "Operational", 106.808, 10.848),
-            (ids["inactive_asset"], "GIS-ASSET-INACTIVE", "Inactive", 106.806, 10.846),
-            (ids["outside_asset"], "GIS-ASSET-OUTSIDE", "Active", 107.0, 11.0),
+        towers = [
+            (ids["tower_1"], "GIS-TEST-TOWER-A", 106.804, 10.844),
+            (ids["tower_2"], "GIS-TEST-TOWER-B", 106.808, 10.848),
+            (ids["outside_tower"], "GIS-TEST-TOWER-OUTSIDE", 107.0, 11.0),
         ]
-        for asset_id, code, status, longitude, latitude in assets:
+        for tower_id, code, longitude, latitude in towers:
             cursor.execute(
                 """
-                INSERT INTO "AssetComponents" ("Id","TowerId","ComponentType","ComponentCode","Status","CurrentHealthScore","RiskLevel","PowerLineId","Location","CreatedAt","IsDeleted")
-                VALUES (%s,%s,'Insulator',%s,%s,100,'Low Risk',%s,ST_SetSRID(ST_Point(%s,%s),4326),now(),false)
-                ON CONFLICT ("Id") DO UPDATE SET "Status"=EXCLUDED."Status","Location"=EXCLUDED."Location","PowerLineId"=EXCLUDED."PowerLineId","IsDeleted"=false
+                INSERT INTO "Towers" ("Id","RegionId","TowerCode","PoleType","Address","Geom","CreatedAt","IsDeleted")
+                VALUES (%s,%s,%s,'Suspension','GIS API Test Address',ST_SetSRID(ST_Point(%s,%s),4326),now(),false)
+                ON CONFLICT ("Id") DO UPDATE SET "RegionId"=EXCLUDED."RegionId","Geom"=EXCLUDED."Geom","IsDeleted"=false
                 """,
-                (asset_id, ids["tower"], code, status, ids["line"], longitude, latitude),
+                (tower_id, ids["region"], code, longitude, latitude),
             )
-        cursor.execute(
-            """
-            INSERT INTO "UAVs" ("Id","UavCode","Model","Status","BatteryLevel","CreatedAt","IsDeleted")
-            VALUES (%s,'GIS-TEST-UAV','API Test','Idle',100,now(),false)
-            ON CONFLICT ("Id") DO UPDATE SET "Status"='Idle',"BatteryLevel"=100,"IsDeleted"=false
-            """,
-            (ids["uav"],),
-        )
+        # "uav" is used by the drone technical inspection tests (its health may become Critical);
+        # "mission_uav" stays Available/Healthy so assessments can become READY.
+        uavs = [(ids["uav"], "GIS-TEST-UAV"), (ids["mission_uav"], "GIS-TEST-MISSION-UAV")]
+        for uav_id, code in uavs:
+            cursor.execute(
+                """
+                INSERT INTO "UAVs" ("Id","UavCode","Name","Model","SerialNumber","Category","AssignedRegionId","FlightStatus","OperationalStatus","TechnicalHealth","BatteryLevel","FlightEnduranceMinutes","OperationalRangeKm","Version","CreatedAt","IsDeleted")
+                VALUES (%s,%s,%s,'API Test',%s,'Hexacopter',%s,'Idle','Available','Healthy',100,30,10,1,now(),false)
+                ON CONFLICT ("Id") DO UPDATE SET "FlightStatus"='Idle',"OperationalStatus"='Available',"TechnicalHealth"='Healthy',"BatteryLevel"=100,"IsDeleted"=false
+                """,
+                (uav_id, code, code, code, ids["region"]),
+            )
+        # Region scope makes the manager allowed to assess the region and the operational
+        # users eligible personnel candidates.
+        for role_name in ("manager", "inspector", "analyst", "technician"):
+            if role_name not in ids:
+                continue
+            cursor.execute(
+                """
+                INSERT INTO "UserGeographicScopes" ("Id","UserId","RegionId","CreatedAt","IsDeleted")
+                SELECT gen_random_uuid(),%s,%s,now(),false
+                WHERE NOT EXISTS (SELECT 1 FROM "UserGeographicScopes" WHERE "UserId"=%s AND "RegionId"=%s AND NOT "IsDeleted")
+                """,
+                (ids[role_name], ids["region"], ids[role_name], ids["region"]),
+            )
 
     yield ids
 
     with db_connection.cursor() as cursor:
         cursor.execute('DELETE FROM "MissionTargets" WHERE "MissionId" IN (SELECT "Id" FROM "Missions" WHERE "Title" LIKE \'GIS API Test %%\')')
         cursor.execute('DELETE FROM "Missions" WHERE "Title" LIKE \'GIS API Test %%\'')
+
+
+def unique_planned_window() -> tuple[str, str]:
+    # Every mission books its personnel and UAV for the assessment window, so each
+    # assessment gets its own far-future window to avoid RESOURCE_BOOKING_CONFLICT.
+    start = datetime(2090, 1, 1, 8, tzinfo=timezone.utc) + timedelta(hours=4 * random.randint(0, 100_000))
+    end = start + timedelta(hours=2)
+    return start.strftime("%Y-%m-%dT%H:%M:%SZ"), end.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+@pytest.fixture()
+def create_ready_assessment(gis_seed: dict[str, str], client: httpx.Client, role_headers):
+    missing = [role_name for role_name in ("analyst", "technician") if role_name not in gis_seed]
+    if missing:
+        pytest.skip(f"A READY assessment needs eligible {', '.join(missing)} account(s) in api-test/data/roles.json")
+
+    def create(tower_ids: list[str] | None = None) -> dict[str, Any]:
+        planned_start, planned_end = unique_planned_window()
+        payload = {
+            "regionId": gis_seed["region"],
+            "plannedStart": planned_start,
+            "plannedEnd": planned_end,
+            "towerIds": tower_ids if tower_ids is not None else [gis_seed["tower_1"], gis_seed["tower_2"]],
+            "boundaryWkt": GIS_BOUNDARY_WKT,
+            "idempotencyKey": f"gis-api-test-{uuid.uuid4()}",
+        }
+        response = client.post(ASSESSMENT_PATH, json=payload, headers=role_headers("manager"))
+        assert response.status_code == 200, f"POST {ASSESSMENT_PATH} returned {response.status_code}: {response.text}"
+        assessment = response.json()
+        assert assessment["status"] == "READY", f"Assessment is not READY: {assessment}"
+        return assessment
+
+    return create
+
+
+@pytest.fixture()
+def create_gis_mission(gis_seed: dict[str, str], client: httpx.Client, role_headers, create_ready_assessment):
+    # Missions are only created from a READY assessment (POST /api/v1/missions was removed).
+    def create(title: str, tower_ids: list[str] | None = None) -> dict[str, Any]:
+        assessment = create_ready_assessment(tower_ids)
+        payload = {
+            "assessmentId": assessment["id"],
+            "title": title,
+            "description": "Deterministic GIS API automation mission",
+            "personnel": [{"userId": gis_seed["inspector"], "role": "INSPECTOR", "isRequired": True}],
+            "droneIds": [gis_seed["mission_uav"]],
+            "idempotencyKey": f"gis-api-test-mission-{uuid.uuid4()}",
+        }
+        path = f'{ASSESSMENT_PATH}/{assessment["id"]}/create-mission'
+        response = client.post(path, json=payload, headers=role_headers("manager"))
+        assert response.status_code == 200, f"POST {path} returned {response.status_code}: {response.text}"
+        return response.json()
+
+    return create

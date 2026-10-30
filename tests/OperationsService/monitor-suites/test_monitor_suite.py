@@ -62,7 +62,7 @@ tech_token = get_token("An3439201+technician@gmail.com")
 tech_headers = {"Authorization": f"Bearer {tech_token}", "User-Agent": "TestClient/1.0"}
 
 # Ensure Fixture Data in DB
-valid_line_id = "40000000-0000-0000-0000-000000000001"
+valid_region_id = "10000000-0000-0000-0000-000000000001"  # Seed region HN-DEMO (ERD v2.2: towers belong to a region)
 fixture_tower_code = f"TWR-MON-{uuid.uuid4().hex[:6].upper()}"
 
 # Query or create fixture mission
@@ -75,7 +75,7 @@ if not fixture_mission_id or len(fixture_mission_id) != 36:
 mutated_tower_id = None
 try:
     r_tw = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": fixture_tower_code,
         "latitude": 21.0084,
         "longitude": 105.7942
@@ -210,7 +210,7 @@ except Exception as e:
 try:
     if mutated_tower_id:
         requests.put(f"{BASE_URL}/api/v1/towers/{mutated_tower_id}", json={
-            "lineAssetId": valid_line_id,
+            "regionId": valid_region_id,
             "towerCode": f"{fixture_tower_code}-UPDATED",
             "latitude": 21.0090,
             "longitude": 105.7950

@@ -4,15 +4,16 @@ Tài liệu và mã nguồn kiểm thử tự động cho toàn bộ vòng đờ
 
 ---
 
-## 1. Thông tin tổng quan (61 Test Cases)
+## 1. Thông tin tổng quan (60 Test Cases)
 
 - **Đường dẫn script:** `tests/OperationsService/mission-suites/test_mission_suite.py`
-- **Số lượng test cases:** 61 Test Cases
+- **Số lượng test cases:** 60 Test Cases (`OPS_MISSION_036` đã bỏ theo ERD v2.2)
+- **Tạo nhiệm vụ:** endpoint `POST /api/v1/missions` đã bị gỡ; script tạo nhiệm vụ qua `POST /api/v2/pre-mission-assessments` + `POST /api/v2/pre-mission-assessments/{id}/create-mission` (yêu cầu hồ sơ ở trạng thái `READY`). Phạm vi cột: `PUT /missions/{id}/towers`.
 - **Nhóm chức năng:**
   - **Function A: Successful Mission Operations (Happy Path - Lifecycle & Core Flow)** (15 TCs: `OPS_MISSION_001` → `015`)
   - **Function B: Field Operations — Check-in, Drone Handover, Flight Logs & Telemetry** (10 TCs: `OPS_MISSION_016` → `025`)
   - **Function C: Scope, Targets & Multi-Inspector Assignments** (9 TCs: `OPS_MISSION_026` → `034`)
-  - **Function D: Failed Operations — Validation, State Machine & Scheduling Conflicts** (17 TCs: `OPS_MISSION_035` → `051`)
+  - **Function D: Failed Operations — Validation, State Machine & Scheduling Conflicts** (16 TCs: `OPS_MISSION_035` → `051`, không có `036`)
   - **Function E: Authorization (RBAC) & Security** (10 TCs: `OPS_MISSION_RBAC_001` → `010`)
 
 ---

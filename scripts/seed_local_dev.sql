@@ -1,3 +1,6 @@
+-- Local development seed for the ERD v2.2 schema (see docs/database/ERD_v2_2_TARGET_SCHEMA.md).
+-- Infrastructure is regions -> towers only (no substations, lines, management units or asset components).
+-- Idempotent: every insert is guarded by ON CONFLICT, so the script can be re-run safely.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- 1. SEED ROLES
@@ -12,11 +15,10 @@ ON CONFLICT ("RoleName") DO NOTHING;
 
 -- 2. SEED MAIN USER: An3439201@gmail.com
 INSERT INTO "Users" (
-    "Id", "Username", "Email", "PasswordHash", "FullName", "Phone", "Status",
+    "Id", "Email", "PasswordHash", "FullName", "Phone", "Status",
     "IsEmailVerified", "CreatedAt", "UpdatedAt", "IsDeleted"
 ) VALUES (
     '469bfac4-8b96-4f27-a772-945cff2fbaa8',
-    'an3439201',
     'An3439201@gmail.com',
     crypt('12345678', gen_salt('bf', 10)),
     'Nguyễn Nhật An',
@@ -43,12 +45,11 @@ ON CONFLICT DO NOTHING;
 
 -- 3. SEED ADDITIONAL TEST USERS (FOR REGRESSION / WORKFLOW TESTING)
 INSERT INTO "Users" (
-    "Id", "Username", "Email", "PasswordHash", "FullName", "Phone", "Status",
+    "Id", "Email", "PasswordHash", "FullName", "Phone", "Status",
     "IsEmailVerified", "CreatedAt", "UpdatedAt", "IsDeleted"
-) VALUES 
+) VALUES
 (
     '10000000-0000-0000-0000-000000000001',
-    'admin',
     'admin@uavpms.com',
     crypt('12345678', gen_salt('bf', 10)),
     'System Admin',
@@ -61,7 +62,6 @@ INSERT INTO "Users" (
 ),
 (
     '10000000-0000-0000-0000-000000000002',
-    'manager',
     'manager@uavpms.com',
     crypt('12345678', gen_salt('bf', 10)),
     'Operations Manager',
@@ -74,7 +74,6 @@ INSERT INTO "Users" (
 ),
 (
     '10000000-0000-0000-0000-000000000003',
-    'inspector',
     'inspector@uavpms.com',
     crypt('12345678', gen_salt('bf', 10)),
     'UAV Inspector',
@@ -111,71 +110,83 @@ INSERT INTO "DefectCategories" ("CategoryCode", "CategoryName", "SeverityWeight"
 ('VEGETATION', 'Cây cối xâm lấn', 0.6, false, 'Hành lang tuyến bị xâm lấn')
 ON CONFLICT ("CategoryCode") DO NOTHING;
 
-INSERT INTO "Regions" ("Id", "RegionName", "Code", "Type", "Geom", "CreatedAt", "IsDeleted") VALUES 
+-- ERD v2.2: Regions.RegionName was renamed to "Name".
+INSERT INTO "Regions" ("Id", "Name", "Code", "Type", "Geom", "CreatedAt", "IsDeleted") VALUES
 ('10000000-0000-0000-0000-000000000001', 'Khu vực Hà Nội demo', 'HN-DEMO', 'Region', ST_GeomFromText('POLYGON((105.75 20.98,105.95 20.98,105.95 21.12,105.75 21.12,105.75 20.98))', 4326), now(), false)
-ON CONFLICT ("Id") DO NOTHING;
+ON CONFLICT DO NOTHING;
 
-INSERT INTO "ManagementUnits" ("Id", "Code", "Name", "Type", "Status", "CreatedAt", "IsDeleted") VALUES 
-('20000000-0000-0000-0000-000000000001', 'EVN-HN-DEMO', 'Đơn vị quản lý Hà Nội demo', 'PowerCompany', 'Active', now(), false)
-ON CONFLICT ("Id") DO NOTHING;
+-- ERD v2.2: towers belong directly to a region ("RegionId" NOT NULL); latitude/longitude live in "Geom".
+INSERT INTO "Towers" ("Id", "RegionId", "TowerCode", "PoleType", "Address", "Geom", "CreatedAt", "IsDeleted") VALUES
+('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'HN-T001', 'Steel lattice', 'Hà Nội demo - cột 1', ST_SetSRID(ST_MakePoint(105.80, 21.02), 4326), now(), false),
+('50000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'HN-T002', 'Steel lattice', 'Hà Nội demo - cột 2', ST_SetSRID(ST_MakePoint(105.82, 21.04), 4326), now(), false),
+('50000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'HN-T003', 'Steel lattice', 'Hà Nội demo - cột 3', ST_SetSRID(ST_MakePoint(105.86, 21.07), 4326), now(), false)
+ON CONFLICT DO NOTHING;
 
-INSERT INTO "Substations" ("Id", "RegionAssetId", "SubstationName", "VoltageLevel", "Geom", "CreatedAt", "IsDeleted") VALUES 
-('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'Trạm biến áp Hà Nội demo', '220kV', ST_SetSRID(ST_MakePoint(105.82, 21.04), 4326), now(), false)
-ON CONFLICT ("Id") DO NOTHING;
-
-INSERT INTO "TransmissionLines" ("Id", "SubstationAssetId", "LineName", "Code", "VoltageLevel", "ManagementUnitId", "Status", "IsCriticalEdge", "Geom", "CreatedAt", "IsDeleted") VALUES 
-('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 'Đường dây 220kV Hà Nội demo', 'HN-220-01', '220kV', '20000000-0000-0000-0000-000000000001', 'Active', true, ST_GeomFromText('LINESTRING(105.80 21.02,105.82 21.04,105.86 21.07)', 4326), now(), false)
-ON CONFLICT ("Id") DO NOTHING;
-
-INSERT INTO "Towers" ("Id", "LineAssetId", "TowerCode", "Geom", "CreatedAt", "IsDeleted") VALUES 
-('50000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 'HN-T001', ST_SetSRID(ST_MakePoint(105.80, 21.02), 4326), now(), false),
-('50000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000001', 'HN-T002', ST_SetSRID(ST_MakePoint(105.82, 21.04), 4326), now(), false),
-('50000000-0000-0000-0000-000000000003', '40000000-0000-0000-0000-000000000001', 'HN-T003', ST_SetSRID(ST_MakePoint(105.86, 21.07), 4326), now(), false)
-ON CONFLICT ("Id") DO NOTHING;
-
-INSERT INTO "AssetComponents" ("Id", "TowerId", "PowerLineId", "ManagementUnitId", "Location", "ComponentType", "ComponentCode", "Status", "CurrentHealthScore", "RiskLevel", "CreatedAt", "IsDeleted") VALUES 
-('60000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', ST_SetSRID(ST_MakePoint(105.80, 21.02), 4326), 'Insulator', 'INS-HN-001', 'Active', 92, 'Low Risk', now(), false),
-('60000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', ST_SetSRID(ST_MakePoint(105.82, 21.04), 4326), 'Conductor', 'CON-HN-002', 'Operational', 73, 'Medium Risk', now(), false),
-('60000000-0000-0000-0000-000000000003', '50000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', ST_SetSRID(ST_MakePoint(105.86, 21.07), 4326), 'Transformer', 'TRF-HN-003', 'Active', 45, 'High Risk', now(), false)
-ON CONFLICT ("Id") DO NOTHING;
-
--- 5. USER GIS SCOPES
+-- 5. USER GIS SCOPES (unique (UserId, RegionId) WHERE NOT IsDeleted, so no conflict target)
 INSERT INTO "UserGeographicScopes" ("Id", "UserId", "RegionId", "CreatedAt", "IsDeleted")
-SELECT md5(u."Id"::text || ':gis-demo-scope')::uuid, u."Id", '10000000-0000-0000-0000-000000000001'::uuid, now(), false 
+SELECT md5(u."Id"::text || ':gis-demo-scope')::uuid, u."Id", '10000000-0000-0000-0000-000000000001'::uuid, now(), false
 FROM "Users" u WHERE u."Status" = 'Active'
-ON CONFLICT ("Id") DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- 6. UAVS & MISSIONS
-INSERT INTO "UAVs" ("Id", "UavCode", "Model", "Status", "BatteryLevel", "CurrentLocation", "CreatedAt", "IsDeleted") VALUES 
-('70000000-0000-0000-0000-000000000001', 'UAV-HN-01', 'DJI Matrice 350 RTK', 'Idle', 86, ST_SetSRID(ST_MakePoint(105.82, 21.04), 4326), now(), false)
-ON CONFLICT ("Id") DO NOTHING;
+-- ERD v2.2: UAVs.Status was renamed to "FlightStatus" (DroneStatus enum as string).
+INSERT INTO "UAVs" (
+    "Id", "UavCode", "Name", "Model", "Category", "SerialNumber", "AssignedRegionId",
+    "FlightStatus", "OperationalStatus", "TechnicalHealth",
+    "FlightEnduranceMinutes", "OperationalRangeKm", "BatteryLevel", "CurrentLocation",
+    "Version", "CreatedAt", "IsDeleted"
+) VALUES (
+    '70000000-0000-0000-0000-000000000001', 'UAV-HN-01', 'UAV Hà Nội 01', 'DJI Matrice 350 RTK', 'Quadcopter', 'SN-DEMO-HN-01',
+    '10000000-0000-0000-0000-000000000001',
+    'Idle', 'Available', 'Healthy',
+    55, 15, 86, ST_SetSRID(ST_MakePoint(105.82, 21.04), 4326),
+    1, now(), false
+) ON CONFLICT DO NOTHING;
 
+-- ERD v2.2: Missions no longer have InspectorId / AssignedToUserId / DroneCode / RouteData /
+-- ScheduledStartAt / IsOverdueNotified. The plan window is "PlannedStart"/"PlannedEnd" and the
+-- inspector is a row in "MissionAssignments".
 INSERT INTO "Missions" (
-    "Id", "MissionCode", "Title", "ManagerId", "InspectorId", "AssignedToUserId",
-    "UavId", "DroneCode", "RouteData", "Status", "ScheduledStartAt", "Description",
-    "MissionType", "Version", "IsOverdueNotified", "CreatedAt", "IsDeleted"
+    "Id", "MissionCode", "Title", "Description", "ManagerId", "RegionId", "UavId",
+    "Status", "MissionType", "PlannedStart", "PlannedEnd", "Version", "CreatedAt", "IsDeleted"
 ) VALUES (
     '80000000-0000-0000-0000-000000000001',
     'MIS-HN-DEMO-001',
-    'Kiểm tra đường dây Hà Nội demo',
-    '469bfac4-8b96-4f27-a772-945cff2fbaa8',
-    '469bfac4-8b96-4f27-a772-945cff2fbaa8',
-    '469bfac4-8b96-4f27-a772-945cff2fbaa8',
-    '70000000-0000-0000-0000-000000000001',
-    'UAV-HN-01',
-    '{}',
-    'Pending',
-    now() + interval '1 day',
+    'Kiểm tra cột điện Hà Nội demo',
     'Nhiệm vụ kiểm tra định kỳ UAV',
+    '469bfac4-8b96-4f27-a772-945cff2fbaa8',
+    '10000000-0000-0000-0000-000000000001',
+    '70000000-0000-0000-0000-000000000001',
+    'Draft',
     'Scheduled',
-    0,
-    false,
+    now() + interval '1 day',
+    now() + interval '1 day 4 hours',
+    1,
     now(),
     false
-) ON CONFLICT ("Id") DO NOTHING;
+) ON CONFLICT DO NOTHING;
 
-INSERT INTO "MissionTargets" ("Id", "MissionId", "AssetId", "Sequence", "InspectionStatus", "CreatedAt", "IsDeleted") VALUES 
-('90000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000001', 1, 'Pending', now(), false),
-('90000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000002', 2, 'Pending', now(), false),
-('90000000-0000-0000-0000-000000000003', '80000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000003', 3, 'Pending', now(), false)
-ON CONFLICT ("Id") DO NOTHING;
+INSERT INTO "MissionAssignments" (
+    "Id", "MissionId", "UserId", "AssignmentRole", "IsRequired", "Status", "ResponseStatus",
+    "AssignedById", "AssignedAt", "Version", "CreatedAt", "IsDeleted"
+) VALUES (
+    'a0000000-0000-0000-0000-000000000001',
+    '80000000-0000-0000-0000-000000000001',
+    '469bfac4-8b96-4f27-a772-945cff2fbaa8',
+    'INSPECTOR',
+    true,
+    'Active',
+    'Pending',
+    '469bfac4-8b96-4f27-a772-945cff2fbaa8',
+    now(),
+    1,
+    now(),
+    false
+) ON CONFLICT DO NOTHING;
+
+-- ERD v2.2: MissionTargets.AssetId became "TowerId" (FK Towers), unique (MissionId, TowerId).
+INSERT INTO "MissionTargets" ("Id", "MissionId", "TowerId", "Sequence", "InspectionStatus", "CreatedAt", "IsDeleted") VALUES
+('90000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', 1, 'Pending', now(), false),
+('90000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000002', 2, 'Pending', now(), false),
+('90000000-0000-0000-0000-000000000003', '80000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000003', 3, 'Pending', now(), false)
+ON CONFLICT DO NOTHING;

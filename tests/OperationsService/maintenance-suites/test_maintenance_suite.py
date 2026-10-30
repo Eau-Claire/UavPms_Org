@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 UAV PMS - OperationsService: Maintenance Ticket Operations Test Suite
-Covers 33 standardized and enhanced test cases:
+Covers 32 standardized and enhanced test cases:
 - Function A: Successful Maintenance Workflows (Happy Path) [OPS_TICKET_001 - OPS_TICKET_010C] (12 TCs)
-- Function B: Failed Maintenance Operations — Validation & Guardrails [OPS_TICKET_011 - OPS_TICKET_023] (14 TCs)
+- Function B: Failed Maintenance Operations — Validation & Guardrails [OPS_TICKET_011 - OPS_TICKET_024] (13 TCs; OPS_TICKET_013 removed in ERD v2.2)
 - Function C: Authorization (RBAC) & Security [OPS_TICKET_RBAC_001 - OPS_TICKET_RBAC_007] (7 TCs)
 """
 
@@ -48,7 +48,7 @@ def record(tc_id, name, status, http_code, details):
     print(f"[{color}{status:<9}{reset}] {tc_id:<20} (HTTP {http_code:<3}): {name} -> {details[:85]}")
 
 print("=" * 95)
-print("   UAV PMS - OPERATIONS SERVICE MAINTENANCE TICKET TEST SUITE (33 TEST CASES)")
+print("   UAV PMS - OPERATIONS SERVICE MAINTENANCE TICKET TEST SUITE (32 TEST CASES)")
 print("=" * 95)
 
 # Setup Authentication Tokens
@@ -73,7 +73,7 @@ valid_tech_id = "55555555-5555-5555-5555-555555555555"
 unassigned_tech_id = "5c2d008d-b68e-4975-9a0d-93c42cd306b4"
 valid_inspector_id = "33333333-3333-3333-3333-333333333333"
 valid_analyst_id = "44444444-4444-4444-4444-444444444444"
-valid_asset_id = "60000000-0000-0000-0000-000000000001"
+valid_tower_id = "50000000-0000-0000-0000-000000000001"  # Seed tower HN-T001 (tickets derive their tower from the anomaly)
 
 # Ensure fixture anomaly exists in DB
 existing_anomaly = run_db_query('SELECT "Id" FROM "DetectedAnomalies" LIMIT 1;')
@@ -89,10 +89,10 @@ else:
     fixture_media_id = run_db_query('SELECT "Id" FROM "InspectionMedia" LIMIT 1;')
     if not fixture_media_id:
         fixture_media_id = str(uuid.uuid4())
-        run_db_query(f'INSERT INTO "InspectionMedia" ("Id", "MissionId", "AssetId", "MediaType", "FileUrl", "AiSource", "ValidationStatus", "CapturedAt", "CreatedAt", "IsDeleted") VALUES (\'{fixture_media_id}\', \'{fixture_mission_id}\', \'{valid_asset_id}\', \'Image\', \'https://storage.uavpms.internal/fixtures/disc_01.jpg\', \'YOLOv8\', \'Confirmed\', NOW(), NOW(), false);')
+        run_db_query(f'INSERT INTO "InspectionMedia" ("Id", "MissionId", "TowerId", "MediaType", "FileUrl", "ValidationStatus", "CapturedAt", "CreatedAt", "IsDeleted") VALUES (\'{fixture_media_id}\', \'{fixture_mission_id}\', \'{valid_tower_id}\', \'Image\', \'https://storage.uavpms.internal/fixtures/disc_01.jpg\', \'Confirmed\', NOW(), NOW(), false);')
     
     valid_anomaly_id = str(uuid.uuid4())
-    run_db_query(f'INSERT INTO "DetectedAnomalies" ("Id", "MediaId", "AssetId", "CategoryId", "AnalystId", "BoundingBox", "ConfidenceScore", "ValidationStatus", "AiSource", "AnalystNotes", "CreatedAt", "IsDeleted") VALUES (\'{valid_anomaly_id}\', \'{fixture_media_id}\', \'{valid_asset_id}\', 1, \'{valid_analyst_id}\', \'{{"x": 100, "y": 150, "w": 50, "h": 50}}\'::jsonb, 0.95, \'Confirmed\', \'YOLOv8\', \'Insulator damaged fixture\', NOW(), false);')
+    run_db_query(f'INSERT INTO "DetectedAnomalies" ("Id", "MediaId", "TowerId", "CategoryId", "AnalystId", "BoundingBox", "ConfidenceScore", "ValidationStatus", "AnalystNotes", "CreatedAt", "IsDeleted") VALUES (\'{valid_anomaly_id}\', \'{fixture_media_id}\', \'{valid_tower_id}\', 1, \'{valid_analyst_id}\', \'{{"x": 100, "y": 150, "w": 50, "h": 50}}\'::jsonb, 0.95, \'Confirmed\', \'Insulator damaged fixture\', NOW(), false);')
 
 created_ticket_id = None
 created_ticket_code = None
@@ -111,7 +111,6 @@ try:
     due_date = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
     payload_001 = {
         "anomalyId": valid_anomaly_id,
-        "assetId": valid_asset_id,
         "technicianId": valid_tech_id,
         "priority": "High",
         "description": "Replace damaged insulator disc per AI recommendation",
@@ -145,7 +144,7 @@ except Exception as e:
 if not created_ticket_id:
     created_ticket_id = str(uuid.uuid4())
     created_ticket_code = f"TKT-{datetime.now(timezone.utc):%Y%m%d}-001"
-    run_db_query(f'INSERT INTO "MaintenanceTickets" ("Id", "TicketCode", "AnomalyId", "AssetId", "ManagerId", "TechnicianId", "Status", "Priority", "Description", "DueDate", "AssignedAt", "CreatedAt", "IsDeleted") VALUES (\'{created_ticket_id}\', \'{created_ticket_code}\', \'{valid_anomaly_id}\', \'{valid_asset_id}\', \'{valid_manager_id}\', \'{valid_tech_id}\', \'Open\', \'High\', \'Replace damaged insulator disc per AI recommendation\', NOW() + INTERVAL \'7 days\', NOW(), NOW(), false);')
+    run_db_query(f'INSERT INTO "MaintenanceTickets" ("Id", "TicketCode", "AnomalyId", "ManagerId", "TechnicianId", "Status", "Priority", "Description", "DueDate", "AssignedAt", "CreatedAt", "IsDeleted") VALUES (\'{created_ticket_id}\', \'{created_ticket_code}\', \'{valid_anomaly_id}\', \'{valid_manager_id}\', \'{valid_tech_id}\', \'Open\', \'High\', \'Replace damaged insulator disc per AI recommendation\', NOW() + INTERVAL \'7 days\', NOW(), NOW(), false);')
 
 # OPS_TICKET_002: Verify Technician updates ticket status: Assigned / Open -> InProgress
 try:
@@ -243,19 +242,19 @@ try:
 except Exception as e:
     record("OPS_TICKET_003", "Technician updates ticket status: InProgress -> PendingVerification", "ERROR", 0, str(e))
 
-# OPS_TICKET_007: Verify Manager closes ticket (/close), triggering anomaly resolution and asset health recalculation
+# OPS_TICKET_007: Verify Manager closes ticket (/close), triggering anomaly resolution
 try:
     r = requests.put(f"{BASE_URL}/api/v1/maintenance/tickets/{created_ticket_id}/close", headers=mgr_headers, timeout=5)
     if r.status_code in [200, 204]:
-        record("OPS_TICKET_007", "Manager closes ticket (/close) triggering resolution & health recalculation", "PASS", r.status_code, "Ticket Closed, Anomaly Resolved, Health recalculated")
+        record("OPS_TICKET_007", "Manager closes ticket (/close) triggering anomaly resolution", "PASS", r.status_code, "Ticket Closed, Anomaly Resolved")
     elif r.status_code == 404:
         run_db_query(f'UPDATE "MaintenanceTickets" SET "Status" = \'Closed\', "ResolvedAt" = NOW() WHERE "Id" = \'{created_ticket_id}\';')
         run_db_query(f'UPDATE "DetectedAnomalies" SET "ValidationStatus" = \'Resolved\' WHERE "Id" = \'{valid_anomaly_id}\';')
-        record("OPS_TICKET_007", "Manager closes ticket (/close) triggering resolution & health recalculation", "DEVIATION", r.status_code, "Route pending in Gateway (Workflow logic defined in MissionLifecycleService)")
+        record("OPS_TICKET_007", "Manager closes ticket (/close) triggering anomaly resolution", "DEVIATION", r.status_code, "Route pending in Gateway (Workflow logic defined in MissionLifecycleService)")
     else:
-        record("OPS_TICKET_007", "Manager closes ticket (/close) triggering resolution & health recalculation", "FAIL", r.status_code, r.text[:80])
+        record("OPS_TICKET_007", "Manager closes ticket (/close) triggering anomaly resolution", "FAIL", r.status_code, r.text[:80])
 except Exception as e:
-    record("OPS_TICKET_007", "Manager closes ticket (/close) triggering resolution & health recalculation", "ERROR", 0, str(e))
+    record("OPS_TICKET_007", "Manager closes ticket (/close) triggering anomaly resolution", "ERROR", 0, str(e))
 
 # OPS_TICKET_008: Verify Technician retrieves assigned tickets via GET /maintenance/tickets/my
 try:
@@ -291,7 +290,6 @@ except Exception as e:
 try:
     payload_010 = {
         "anomalyId": valid_anomaly_id,
-        "assetId": valid_asset_id,
         "technicianId": valid_tech_id,
         "priority": "Medium",
         "description": "Thay thế bát sứ cách điện 220kV bị mẻ cạnh",
@@ -316,7 +314,7 @@ try:
     r = requests.get(f"{BASE_URL}/api/v1/maintenance/tickets/{created_ticket_id}", headers=mgr_headers, timeout=5)
     if r.status_code == 200:
         data = r.json().get("data", {})
-        has_navs = ("asset" in data or "anomaly" in data or "technician" in data or "materialLogs" in data)
+        has_navs = ("tower" in data or "anomaly" in data or "technician" in data or "materialLogs" in data)
         record("OPS_TICKET_010B", "Verify retrieval of ticket details by ID with relationships", "PASS" if has_navs else "FAIL", r.status_code, f"Retrieved ticket details: {created_ticket_code}")
     elif r.status_code == 404:
         record("OPS_TICKET_010B", "Verify retrieval of ticket details by ID with relationships", "DEVIATION", r.status_code, "Route pending in Gateway (Repository GetByIdWithDetailsAsync implemented)")
@@ -347,7 +345,6 @@ print("\n>>> FUNCTION B: Failed Maintenance Operations — Validation & Guardrai
 try:
     payload_011 = {
         "anomalyId": valid_anomaly_id,
-        "assetId": valid_asset_id,
         "technicianId": valid_inspector_id, # Inspector instead of Technician
         "priority": "High",
         "description": "Test invalid technician role assignment",
@@ -367,7 +364,6 @@ except Exception as e:
 try:
     payload_012 = {
         "anomalyId": valid_anomaly_id,
-        "assetId": valid_asset_id,
         "technicianId": "00000000-0000-0000-0000-000000000000",
         "priority": "High",
         "description": "Test non-existent technician ID",
@@ -383,31 +379,12 @@ try:
 except Exception as e:
     record("OPS_TICKET_012", "Reject ticket creation when technician does not exist in DB", "ERROR", 0, str(e))
 
-# OPS_TICKET_013: Verify ticket creation fails when assetId does not exist in DB
-try:
-    payload_013 = {
-        "anomalyId": valid_anomaly_id,
-        "assetId": "00000000-0000-0000-0000-000000000000",
-        "technicianId": valid_tech_id,
-        "priority": "High",
-        "description": "Test non-existent asset ID",
-        "dueDate": (datetime.now(timezone.utc) + timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    }
-    r = requests.post(f"{BASE_URL}/api/v1/maintenance/tickets", json=payload_013, headers=mgr_headers, timeout=5)
-    if r.status_code in [400, 404]:
-        record("OPS_TICKET_013", "Reject ticket creation when asset does not exist in DB", "PASS", r.status_code, "Asset not found rejected")
-    elif r.status_code == 404:
-        record("OPS_TICKET_013", "Reject ticket creation when asset does not exist in DB", "DEVIATION", r.status_code, "Route pending in Gateway (Foreign Key FK_MaintenanceTickets_AssetComponents_AssetId enforces in DB)")
-    else:
-        record("OPS_TICKET_013", "Reject ticket creation when asset does not exist in DB", "FAIL", r.status_code, r.text[:80])
-except Exception as e:
-    record("OPS_TICKET_013", "Reject ticket creation when asset does not exist in DB", "ERROR", 0, str(e))
+# OPS_TICKET_013 removed (ERD v2.2): tickets no longer take an asset/tower id; the tower is derived from the anomaly.
 
 # OPS_TICKET_014: Verify ticket creation fails when priority is invalid (Domain values: Low, Medium, High, Emergency)
 try:
     payload_014 = {
         "anomalyId": valid_anomaly_id,
-        "assetId": valid_asset_id,
         "technicianId": valid_tech_id,
         "priority": "SuperCritical", # Invalid priority
         "description": "Test invalid priority enum",
@@ -427,7 +404,6 @@ except Exception as e:
 try:
     payload_015 = {
         "anomalyId": valid_anomaly_id,
-        "assetId": valid_asset_id,
         "technicianId": valid_tech_id,
         "priority": "High",
         "description": "Test past due date validation",
@@ -448,7 +424,7 @@ try:
     # Create empty ticket without proofs
     empty_ticket_id = str(uuid.uuid4())
     run_db_query('DELETE FROM "MaintenanceTickets" WHERE "TicketCode" LIKE \'TKT-NO-PROOF%\';')
-    run_db_query(f'INSERT INTO "MaintenanceTickets" ("Id", "TicketCode", "AnomalyId", "AssetId", "ManagerId", "TechnicianId", "Status", "Priority", "Description", "CreatedAt", "IsDeleted") VALUES (\'{empty_ticket_id}\', \'TKT-NO-PROOF-01\', \'{valid_anomaly_id}\', \'{valid_asset_id}\', \'{valid_manager_id}\', \'{valid_tech_id}\', \'PendingVerification\', \'High\', \'Test no proof close\', NOW(), false);')
+    run_db_query(f'INSERT INTO "MaintenanceTickets" ("Id", "TicketCode", "AnomalyId", "ManagerId", "TechnicianId", "Status", "Priority", "Description", "CreatedAt", "IsDeleted") VALUES (\'{empty_ticket_id}\', \'TKT-NO-PROOF-01\', \'{valid_anomaly_id}\', \'{valid_manager_id}\', \'{valid_tech_id}\', \'PendingVerification\', \'High\', \'Test no proof close\', NOW(), false);')
     r = requests.put(f"{BASE_URL}/api/v1/maintenance/tickets/{empty_ticket_id}/close", headers=mgr_headers, timeout=5)
     if r.status_code == 400:
         record("OPS_TICKET_016", "Reject closing ticket without repair proof photo", "PASS", r.status_code, "Rejected: Cannot close ticket without repair proof photo")
@@ -505,7 +481,6 @@ except Exception as e:
 try:
     payload_020 = {
         "anomalyId": "00000000-0000-0000-0000-000000000000",
-        "assetId": valid_asset_id,
         "technicianId": valid_tech_id,
         "priority": "High",
         "description": "Test non-existent anomaly ID",
@@ -569,7 +544,6 @@ except Exception as e:
 try:
     payload_024 = {
         "anomalyId": valid_anomaly_id,
-        "assetId": valid_asset_id,
         "technicianId": valid_tech_id,
         "priority": "High",
         "description": "", # Empty description
@@ -596,7 +570,6 @@ print("\n>>> FUNCTION C: Authorization (RBAC) & Security")
 try:
     payload_rbac = {
         "anomalyId": valid_anomaly_id,
-        "assetId": valid_asset_id,
         "technicianId": valid_tech_id,
         "priority": "High",
         "description": "RBAC create test",

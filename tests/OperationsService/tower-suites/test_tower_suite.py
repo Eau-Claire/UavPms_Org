@@ -38,15 +38,29 @@ analyst_headers = {"Authorization": f"Bearer {analyst_token}"}
 tech_token = get_token("An3439201+technician@gmail.com")
 tech_headers = {"Authorization": f"Bearer {tech_token}"}
 
-valid_line_id = "40000000-0000-0000-0000-000000000001"
+# Seed region "HN-DEMO" (ERD v2.2: a tower belongs to exactly one region via regionId)
+valid_region_id = "10000000-0000-0000-0000-000000000001"
 created_tower_ids = []
+
+def bbox_polygon(min_lat, min_lng, max_lat, max_lng):
+    # GeoJSON Polygon (closed ring, [lng, lat] order) for POST /api/v1/towers/spatial-query
+    return {
+        "type": "Polygon",
+        "coordinates": [[
+            [min_lng, min_lat],
+            [max_lng, min_lat],
+            [max_lng, max_lat],
+            [min_lng, max_lat],
+            [min_lng, min_lat]
+        ]]
+    }
 
 print("=== STARTING TOWER TEST SUITE ===")
 
 # OPS_TOWER_001: Manager creates tower with GPS -> PostGIS Point
 try:
     r = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-N1-05",
         "latitude": 21.0084,
         "longitude": 105.7942
@@ -63,18 +77,26 @@ try:
 except Exception as e:
     record("OPS_TOWER_001", "Verify successful creation of a tower with valid GPS coordinates and PostGIS Point conversion", "ERROR", 0, str(e))
 
-# OPS_TOWER_002: Bounding Box spatial query (/towers/in-bbox)
+# OPS_TOWER_002: Bounding Box spatial query (POST /towers/spatial-query)
 try:
-    r = requests.get(f"{BASE_URL}/api/v1/towers/in-bbox?minLat=20.950&minLng=105.750&maxLat=21.050&maxLng=105.850", headers=admin_headers)
-    # Note: in-bbox endpoint check
-    record("OPS_TOWER_002", "Verify Bounding Box spatial query (/towers/in-bbox) returns only towers within viewport", "PASS" if r.status_code == 200 else "DEVIATION", r.status_code, f"Response: {r.text[:80]} (Endpoint route status)")
+    tower_id = created_tower_ids[0] if created_tower_ids else None
+    r = requests.post(f"{BASE_URL}/api/v1/towers/spatial-query", json={"geometry": bbox_polygon(20.950, 105.750, 21.050, 105.850)}, headers=admin_headers)
+    data = r.json().get("data", {}) if r.status_code == 200 else {}
+    towers = data.get("towers", [])
+    inside = all(20.950 <= t.get("latitude", 0) <= 21.050 and 105.750 <= t.get("longitude", 0) <= 105.850 for t in towers)
+    ok = (r.status_code == 200 and inside and (tower_id is None or any(t.get("towerId") == tower_id for t in towers)))
+    record("OPS_TOWER_002", "Verify Bounding Box spatial query (/towers/spatial-query) returns only towers within viewport", "PASS" if ok else "FAIL", r.status_code, f"Total: {data.get('total')}, Created tower found: {any(t.get('towerId') == tower_id for t in towers)}")
 except Exception as e:
-    record("OPS_TOWER_002", "Verify Bounding Box spatial query (/towers/in-bbox) returns only towers within viewport", "ERROR", 0, str(e))
+    record("OPS_TOWER_002", "Verify Bounding Box spatial query (/towers/spatial-query) returns only towers within viewport", "ERROR", 0, str(e))
 
 # OPS_TOWER_003: Bounding Box spatial query boundary inclusion
 try:
-    r = requests.get(f"{BASE_URL}/api/v1/towers/in-bbox?minLat=20.950&minLng=105.750&maxLat=21.050&maxLng=105.850", headers=admin_headers)
-    record("OPS_TOWER_003", "Verify Bounding Box spatial query correctly includes towers located on viewport boundaries", "PASS" if r.status_code == 200 else "DEVIATION", r.status_code, f"Response: {r.text[:80]}")
+    tower_id = created_tower_ids[0] if created_tower_ids else None
+    # Bottom edge of the polygon passes exactly through TOW-N1-05 (lat 21.0084); ST_Intersects includes boundary points
+    r = requests.post(f"{BASE_URL}/api/v1/towers/spatial-query", json={"geometry": bbox_polygon(21.0084, 105.750, 21.050, 105.850)}, headers=admin_headers)
+    towers = r.json().get("data", {}).get("towers", []) if r.status_code == 200 else []
+    ok = (r.status_code == 200 and tower_id is not None and any(t.get("towerId") == tower_id for t in towers))
+    record("OPS_TOWER_003", "Verify Bounding Box spatial query correctly includes towers located on viewport boundaries", "PASS" if ok else "FAIL", r.status_code, f"Towers returned: {len(towers)}")
 except Exception as e:
     record("OPS_TOWER_003", "Verify Bounding Box spatial query correctly includes towers located on viewport boundaries", "ERROR", 0, str(e))
 
@@ -82,25 +104,25 @@ except Exception as e:
 try:
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.append(["LineAssetId", "TowerCode", "Latitude", "Longitude"])
-    ws.append([valid_line_id, "TOW-IMP-BULK-01", 21.01, 105.81])
-    ws.append([valid_line_id, "TOW-IMP-BULK-02", 21.02, 105.82])
+    ws.append(["RegionId", "TowerCode", "Latitude", "Longitude"])
+    ws.append([valid_region_id, "TOW-IMP-BULK-01", 21.01, 105.81])
+    ws.append([valid_region_id, "TOW-IMP-BULK-02", 21.02, 105.82])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     files = {"file": ("towers.xlsx", buf.read(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
     r = requests.post(f"{BASE_URL}/api/v1/towers/import", files=files, headers=mgr_headers)
     ok = (r.status_code == 200 and r.json().get("success") == True)
-    record("OPS_TOWER_004", "Verify bulk import of towers from Excel file creates towers and default assets", "PASS" if ok else "DEVIATION", r.status_code, f"Response: {r.text[:80]}")
+    record("OPS_TOWER_004", "Verify bulk import of towers from Excel file creates towers in the referenced region", "PASS" if ok else "DEVIATION", r.status_code, f"Response: {r.text[:80]}")
 except Exception as e:
-    record("OPS_TOWER_004", "Verify bulk import of towers from Excel file creates towers and default assets", "ERROR", 0, str(e))
+    record("OPS_TOWER_004", "Verify bulk import of towers from Excel file creates towers in the referenced region", "ERROR", 0, str(e))
 
 # OPS_TOWER_005: Bulk import partial row error recovery
 try:
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.append(["LineAssetId", "TowerCode", "Latitude", "Longitude"])
-    ws.append([valid_line_id, "TOW-IMP-VALID-01", 21.01, 105.81])
+    ws.append(["RegionId", "TowerCode", "Latitude", "Longitude"])
+    ws.append([valid_region_id, "TOW-IMP-VALID-01", 21.01, 105.81])
     ws.append(["corrupt-guid", "TOW-IMP-ERR", "not-lat", "not-lng"])
     buf = io.BytesIO()
     wb.save(buf)
@@ -128,7 +150,7 @@ except Exception as e:
 try:
     tower_id = created_tower_ids[0]
     r = requests.put(f"{BASE_URL}/api/v1/towers/{tower_id}", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-N1-05",
         "latitude": 21.0100,
         "longitude": 105.8000
@@ -142,7 +164,7 @@ except Exception as e:
 # OPS_TOWER_008: Soft-deletion of a tower excludes it from retrieval
 try:
     del_r = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-DEL-01",
         "latitude": 21.0084,
         "longitude": 105.7942
@@ -156,20 +178,20 @@ try:
 except Exception as e:
     record("OPS_TOWER_008", "Verify soft-deletion of a tower sets IsDeleted=true and excludes from retrieval", "ERROR", 0, str(e))
 
-# OPS_TOWER_009: Tower retrieval / filtering by lineAssetId and pagination
+# OPS_TOWER_009: Tower retrieval / filtering by regionId and pagination
 try:
-    r = requests.get(f"{BASE_URL}/api/v1/towers?page=1&pageSize=5&lineAssetId={valid_line_id}", headers=admin_headers)
+    r = requests.get(f"{BASE_URL}/api/v1/towers?page=1&pageSize=5&regionId={valid_region_id}", headers=admin_headers)
     body = r.json()
     items = body.get("data", {}).get("items", [])
     ok = (r.status_code == 200 and body.get("success") == True and isinstance(items, list))
-    record("OPS_TOWER_009", "Verify tower retrieval and filtering by lineAssetId with pagination", "PASS" if ok else "FAIL", r.status_code, f"Items count: {len(items)}, totalItems: {body.get('data', {}).get('pagination', {}).get('totalItems')}")
+    record("OPS_TOWER_009", "Verify tower retrieval and filtering by regionId with pagination", "PASS" if ok else "FAIL", r.status_code, f"Items count: {len(items)}, totalItems: {body.get('data', {}).get('pagination', {}).get('totalItems')}")
 except Exception as e:
-    record("OPS_TOWER_009", "Verify tower retrieval and filtering by lineAssetId with pagination", "ERROR", 0, str(e))
+    record("OPS_TOWER_009", "Verify tower retrieval and filtering by regionId with pagination", "ERROR", 0, str(e))
 
 # OPS_TOWER_010: Tower creation handles UTF-8 / Unicode tower codes
 try:
     r = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "CỘT-N1-05",
         "latitude": 21.0084,
         "longitude": 105.7942
@@ -187,7 +209,7 @@ except Exception as e:
 # OPS_TOWER_011: Tower creation fails when latitude out of [-90, 90]
 try:
     r = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-LAT-OUT",
         "latitude": 95.0,
         "longitude": 105.7942
@@ -203,7 +225,7 @@ except Exception as e:
 # OPS_TOWER_012: Tower creation fails when longitude out of [-180, 180]
 try:
     r = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-LNG-OUT",
         "latitude": 21.0,
         "longitude": 195.0
@@ -219,7 +241,7 @@ except Exception as e:
 try:
     # TOW-N1-05 already exists
     r = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-N1-05",
         "latitude": 21.0084,
         "longitude": 105.7942
@@ -230,46 +252,52 @@ try:
 except Exception as e:
     record("OPS_TOWER_013", "Verify tower creation fails when towerCode is duplicate", "ERROR", 0, str(e))
 
-# OPS_TOWER_014: Tower creation fails when linked lineAssetId does not exist
+# OPS_TOWER_014: Tower creation fails when linked regionId does not exist
 try:
     r = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": "00000000-0000-0000-0000-000000000000",
-        "towerCode": "TOW-LINE-NONEXIST",
+        "regionId": "00000000-0000-0000-0000-000000000000",
+        "towerCode": "TOW-REGION-NONEXIST",
         "latitude": 21.0084,
         "longitude": 105.7942
     }, headers=admin_headers)
     ok = (r.status_code in [400, 404])
-    record("OPS_TOWER_014", "Verify tower creation fails when linked lineAssetId does not exist in DB", "PASS" if ok else "FAIL", r.status_code, f"Response: {r.text[:80]}")
+    record("OPS_TOWER_014", "Verify tower creation fails when linked regionId does not exist in DB", "PASS" if ok else "FAIL", r.status_code, f"Response: {r.text[:80]}")
 except Exception as e:
-    record("OPS_TOWER_014", "Verify tower creation fails when linked lineAssetId does not exist in DB", "ERROR", 0, str(e))
+    record("OPS_TOWER_014", "Verify tower creation fails when linked regionId does not exist in DB", "ERROR", 0, str(e))
 
-# OPS_TOWER_015: /towers/in-bbox returns empty array when no towers in bbox
+# OPS_TOWER_015: /towers/spatial-query returns empty array when no towers in polygon
 try:
-    r = requests.get(f"{BASE_URL}/api/v1/towers/in-bbox?minLat=0.0&minLng=0.0&maxLat=0.1&maxLng=0.1", headers=admin_headers)
-    record("OPS_TOWER_015", "Verify /towers/in-bbox returns an empty array when no towers exist in requested bounding box", "PASS" if r.status_code == 200 else "DEVIATION", r.status_code, f"Response: {r.text[:80]}")
+    r = requests.post(f"{BASE_URL}/api/v1/towers/spatial-query", json={"geometry": bbox_polygon(0.0, 0.0, 0.1, 0.1)}, headers=admin_headers)
+    data = r.json().get("data", {}) if r.status_code == 200 else {}
+    ok = (r.status_code == 200 and data.get("total") == 0 and data.get("towers") == [])
+    record("OPS_TOWER_015", "Verify /towers/spatial-query returns an empty array when no towers exist in requested polygon", "PASS" if ok else "FAIL", r.status_code, f"Response: {r.text[:80]}")
 except Exception as e:
-    record("OPS_TOWER_015", "Verify /towers/in-bbox returns an empty array when no towers exist in requested bounding box", "ERROR", 0, str(e))
+    record("OPS_TOWER_015", "Verify /towers/spatial-query returns an empty array when no towers exist in requested polygon", "ERROR", 0, str(e))
 
-# OPS_TOWER_016: /towers/in-bbox fails when minLat > maxLat
+# OPS_TOWER_016: /towers/spatial-query fails when the polygon ring is not closed
 try:
-    r = requests.get(f"{BASE_URL}/api/v1/towers/in-bbox?minLat=21.050&minLng=105.750&maxLat=20.950&maxLng=105.850", headers=admin_headers)
-    record("OPS_TOWER_016", "Verify /towers/in-bbox fails when minLat > maxLat", "PASS" if r.status_code == 400 else "DEVIATION", r.status_code, f"Response: {r.text[:80]}")
+    open_ring = {"type": "Polygon", "coordinates": [[[105.750, 20.950], [105.850, 20.950], [105.850, 21.050], [105.750, 21.050]]]}
+    r = requests.post(f"{BASE_URL}/api/v1/towers/spatial-query", json={"geometry": open_ring}, headers=admin_headers)
+    ok = (r.status_code == 400 and "INVALID_GEOMETRY" in r.text)
+    record("OPS_TOWER_016", "Verify /towers/spatial-query fails when the polygon ring is not closed", "PASS" if ok else "FAIL", r.status_code, f"Response: {r.text[:80]}")
 except Exception as e:
-    record("OPS_TOWER_016", "Verify /towers/in-bbox fails when minLat > maxLat", "ERROR", 0, str(e))
+    record("OPS_TOWER_016", "Verify /towers/spatial-query fails when the polygon ring is not closed", "ERROR", 0, str(e))
 
-# OPS_TOWER_017: /towers/in-bbox fails when minLng > maxLng
+# OPS_TOWER_017: /towers/spatial-query fails when coordinates are out of WGS84 range
 try:
-    r = requests.get(f"{BASE_URL}/api/v1/towers/in-bbox?minLat=20.950&minLng=105.850&maxLat=21.050&maxLng=105.750", headers=admin_headers)
-    record("OPS_TOWER_017", "Verify /towers/in-bbox fails when minLng > maxLng", "PASS" if r.status_code == 400 else "DEVIATION", r.status_code, f"Response: {r.text[:80]}")
+    r = requests.post(f"{BASE_URL}/api/v1/towers/spatial-query", json={"geometry": bbox_polygon(20.950, 105.750, 95.0, 195.0)}, headers=admin_headers)
+    ok = (r.status_code == 400 and "INVALID_GEOMETRY" in r.text)
+    record("OPS_TOWER_017", "Verify /towers/spatial-query fails when coordinates are out of [-90, 90] / [-180, 180]", "PASS" if ok else "FAIL", r.status_code, f"Response: {r.text[:80]}")
 except Exception as e:
-    record("OPS_TOWER_017", "Verify /towers/in-bbox fails when minLng > maxLng", "ERROR", 0, str(e))
+    record("OPS_TOWER_017", "Verify /towers/spatial-query fails when coordinates are out of [-90, 90] / [-180, 180]", "ERROR", 0, str(e))
 
-# OPS_TOWER_018: /towers/in-bbox fails when query parameters are missing
+# OPS_TOWER_018: /towers/spatial-query fails when geometry is missing
 try:
-    r = requests.get(f"{BASE_URL}/api/v1/towers/in-bbox", headers=admin_headers)
-    record("OPS_TOWER_018", "Verify /towers/in-bbox fails when query parameters are missing", "PASS" if r.status_code == 400 else "DEVIATION", r.status_code, f"Response: {r.text[:80]}")
+    r = requests.post(f"{BASE_URL}/api/v1/towers/spatial-query", json={}, headers=admin_headers)
+    ok = (r.status_code == 400)
+    record("OPS_TOWER_018", "Verify /towers/spatial-query fails when geometry is missing", "PASS" if ok else "FAIL", r.status_code, f"Response: {r.text[:80]}")
 except Exception as e:
-    record("OPS_TOWER_018", "Verify /towers/in-bbox fails when query parameters are missing", "ERROR", 0, str(e))
+    record("OPS_TOWER_018", "Verify /towers/spatial-query fails when geometry is missing", "ERROR", 0, str(e))
 
 # OPS_TOWER_019: /towers/import fails when attached file is NOT an Excel format (.txt)
 try:
@@ -310,9 +338,9 @@ except Exception as e:
 try:
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.append(["LineAssetId", "TowerCode", "Latitude", "Longitude"])
-    ws.append([valid_line_id, "TOW-DUP-FILE-01", 21.01, 105.81])
-    ws.append([valid_line_id, "TOW-DUP-FILE-01", 21.02, 105.82])
+    ws.append(["RegionId", "TowerCode", "Latitude", "Longitude"])
+    ws.append([valid_region_id, "TOW-DUP-FILE-01", 21.01, 105.81])
+    ws.append([valid_region_id, "TOW-DUP-FILE-01", 21.02, 105.82])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -343,7 +371,7 @@ except Exception as e:
 
 # OPS_TOWER_025: Soft-deletion of tower is blocked when active dependencies exist
 try:
-    # Towers in seed data with attached assets
+    # Seed towers may be referenced by mission targets, inspection media and anomalies
     seed_tower = run_db_query('SELECT "Id" FROM "Towers" WHERE "IsDeleted" = false LIMIT 1;')
     record("OPS_TOWER_025", "Verify soft-deletion of tower dependency behavior", "PASS", 200, f"Seed tower check: {seed_tower}")
 except Exception as e:
@@ -356,7 +384,7 @@ except Exception as e:
 # OPS_TOWER_RBAC_001: Write operations succeed for SystemAdmin
 try:
     r_post = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-ADMIN-01",
         "latitude": 21.0084,
         "longitude": 105.7942
@@ -365,7 +393,7 @@ try:
     if tid:
         created_tower_ids.append(tid)
     r_put = requests.put(f"{BASE_URL}/api/v1/towers/{tid}", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-ADMIN-01-UPD",
         "latitude": 21.0090,
         "longitude": 105.7950
@@ -379,7 +407,7 @@ except Exception as e:
 # OPS_TOWER_RBAC_002: Write operations succeed for Manager
 try:
     r_post = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-MGR-01",
         "latitude": 21.0084,
         "longitude": 105.7942
@@ -388,7 +416,7 @@ try:
     if tid:
         created_tower_ids.append(tid)
     r_put = requests.put(f"{BASE_URL}/api/v1/towers/{tid}", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-MGR-01-UPD",
         "latitude": 21.0090,
         "longitude": 105.7950
@@ -402,7 +430,7 @@ except Exception as e:
 # OPS_TOWER_RBAC_003: Write operations rejected for Inspector
 try:
     r_post = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-INSP-01",
         "latitude": 21.0,
         "longitude": 105.0
@@ -415,7 +443,7 @@ except Exception as e:
 # OPS_TOWER_RBAC_004: Write operations rejected for Analyst
 try:
     r_post = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-ANL-01",
         "latitude": 21.0,
         "longitude": 105.0
@@ -428,7 +456,7 @@ except Exception as e:
 # OPS_TOWER_RBAC_005: Write operations rejected for Technician
 try:
     r_post = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "TOW-TECH-01",
         "latitude": 21.0,
         "longitude": 105.0
@@ -469,8 +497,8 @@ except Exception as e:
 
 # OPS_TOWER_RBAC_008: SQL Injection resistance in query parameters
 try:
-    r = requests.get(f"{BASE_URL}/api/v1/towers?page=1&pageSize=10&lineAssetId=' OR 1=1 --", headers=admin_headers)
-    ok = (r.status_code in [200, 400]) # 400 Bad Request because lineAssetId is Guid type
+    r = requests.get(f"{BASE_URL}/api/v1/towers?page=1&pageSize=10&regionId=' OR 1=1 --", headers=admin_headers)
+    ok = (r.status_code in [200, 400]) # 400 Bad Request because regionId is Guid type
     record("OPS_TOWER_RBAC_008", "Verify SQL Injection resistance in tower query parameters", "PASS" if ok else "FAIL", r.status_code, f"Status: {r.status_code}")
 except Exception as e:
     record("OPS_TOWER_RBAC_008", "Verify SQL Injection resistance in tower query parameters", "ERROR", 0, str(e))
@@ -478,7 +506,7 @@ except Exception as e:
 # OPS_TOWER_RBAC_009: XSS resistance in towerCode
 try:
     r = requests.post(f"{BASE_URL}/api/v1/towers", json={
-        "lineAssetId": valid_line_id,
+        "regionId": valid_region_id,
         "towerCode": "<script>alert('xss')</script>",
         "latitude": 21.0084,
         "longitude": 105.7942
@@ -494,7 +522,7 @@ except Exception as e:
 # OPS_TOWER_RBAC_010: Audit Log entry verification
 try:
     # Check if AuditLogs table has records for Tower operations
-    logs = run_db_query('SELECT count(*) FROM "AuditLogs" WHERE "EntityName" = \'Tower\';')
+    logs = run_db_query('SELECT count(*) FROM "AuditLogs" WHERE "TableName" = \'Towers\';')
     record("OPS_TOWER_RBAC_010", "Verify Audit Log entry generation for Tower operations", "PASS", 200, f"AuditLogs count: {logs}")
 except Exception as e:
     record("OPS_TOWER_RBAC_010", "Verify Audit Log entry generation for Tower operations", "ERROR", 0, str(e))

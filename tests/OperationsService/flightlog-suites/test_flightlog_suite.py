@@ -67,24 +67,41 @@ manager_id = "22222222-2222-2222-2222-222222222222"
 valid_region_id = "10000000-0000-0000-0000-000000000001"
 outside_region_id = "2621aeef-7be6-46b3-bd73-990eee8ea088" # South region (outside secondary inspector scope)
 valid_uav_id = "70000000-0000-0000-0000-000000000001"
+valid_tower_id = "50000000-0000-0000-0000-000000000001" # Seed tower HN-T001 (region HN-DEMO)
 
 def create_mission(status="InProgress", region_id=valid_region_id, inspector_id=valid_inspector_id):
-    payload = {
+    # Legacy POST /api/v1/missions was removed (ERD v2.2): a mission is created from a READY
+    # pre-mission assessment via POST /api/v2/pre-mission-assessments/{id}/create-mission.
+    start = datetime.now(timezone.utc)
+    r = requests.post(f"{BASE_URL}/api/v2/pre-mission-assessments", json={
+        "regionId": valid_region_id,
+        "plannedStart": start.isoformat(),
+        "plannedEnd": (start + timedelta(hours=3)).isoformat(),
+        "towerIds": [valid_tower_id]
+    }, headers=admin_headers)
+    if r.status_code != 200:
+        raise RuntimeError(f"Failed to create pre-mission assessment: {r.text}")
+    assessment = r.json()
+    if assessment.get("status") != "READY":
+        raise RuntimeError(f"Pre-mission assessment is not READY ({assessment.get('status')}): {r.text[:200]}")
+    eligible_drones = [d.get("droneId") for d in assessment.get("droneCandidates", []) if d.get("isEligible")]
+    drone_id = valid_uav_id if valid_uav_id in eligible_drones else (eligible_drones[0] if eligible_drones else valid_uav_id)
+    r = requests.post(f"{BASE_URL}/api/v2/pre-mission-assessments/{assessment['id']}/create-mission", json={
+        "assessmentId": assessment["id"],
         "title": f"FlightLog Suite Mission {int(time.time()*1000)%1000000}",
-        "regionId": region_id,
-        "plannedStart": datetime.now(timezone.utc).isoformat(),
-        "plannedEnd": (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat(),
-        "inspectorId": inspector_id,
-        "uavId": valid_uav_id,
-        "missionType": "AdHoc",
-        "description": "Integration test mission for flight log telemetry"
-    }
-    r = requests.post(f"{BASE_URL}/api/v1/missions", json=payload, headers=admin_headers)
-    mid = r.json().get("data")
+        "description": "Integration test mission for flight log telemetry",
+        "personnel": [{"userId": inspector_id, "role": "INSPECTOR", "isRequired": True}],
+        "droneIds": [drone_id]
+    }, headers=admin_headers)
+    mid = r.json().get("id") if r.status_code == 200 else None
     if not mid:
         raise RuntimeError(f"Failed to create test mission: {r.text}")
-    if status != "Draft":
-        run_db_query(f'UPDATE "Missions" SET "Status" = \'{status}\' WHERE "Id" = \'{mid}\';')
+    # Release resource bookings so the next fixture can book the same inspector & drone in the same time window
+    run_db_query(f'UPDATE "ResourceBookings" SET "Status" = \'Released\' WHERE "MissionId" = \'{mid}\';')
+    if region_id != valid_region_id:
+        # Missions inherit the assessment region; move the fixture to another region directly in DB
+        run_db_query(f'UPDATE "Missions" SET "RegionId" = \'{region_id}\' WHERE "Id" = \'{mid}\';')
+    run_db_query(f'UPDATE "Missions" SET "Status" = \'{status}\' WHERE "Id" = \'{mid}\';')
     return mid
 
 print("=" * 85)

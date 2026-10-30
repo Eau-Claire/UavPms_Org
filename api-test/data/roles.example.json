@@ -30,7 +30,7 @@
     "roles": ["Manager"],
     "fullName": "Regression Manager",
     "phone": "+84900000001",
-    "description": "Manager account for mission and asset management endpoints."
+    "description": "Manager account for mission, pre-mission assessment and tower management endpoints."
   },
   "inspector": {
     "email": "replace-with-inspector@example.test",

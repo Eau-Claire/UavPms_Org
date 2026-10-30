@@ -23,7 +23,7 @@ def test_upload_inspection_image_request_is_handled(
     files = {"file": ("sample.jpg", file_bytes, "image/jpeg")}
     form = {
         "missionId": inspection["fakeMissionId"],
-        "assetId": inspection["fakeAssetId"],
+        "towerId": inspection["fakeTowerId"],
         "capturedAt": datetime.now(timezone.utc).isoformat(),
     }
     response = client.post("/api/v1/inspections/upload", data=form, files=files, headers=role_headers("inspector"))

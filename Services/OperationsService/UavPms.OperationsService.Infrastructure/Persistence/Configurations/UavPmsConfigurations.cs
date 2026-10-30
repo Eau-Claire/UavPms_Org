@@ -368,6 +368,8 @@ public class MissionAssignmentConfiguration : IEntityTypeConfiguration<MissionAs
         builder.Property(x => x.Version).IsConcurrencyToken();
         builder.ToTable(t => t.HasCheckConstraint("CK_MissionAssignments_PostponeReason", "\"ResponseStatus\" <> 'Postponed' OR (\"ResponseReason\" IS NOT NULL AND length(trim(\"ResponseReason\")) > 0)"));
         builder.HasIndex(x => new { x.MissionId, x.UserId }).IsUnique().HasFilter("\"Status\" = 'Active' AND NOT \"IsDeleted\"");
+        // GeographicAccessFilter: active assignments of the current user on every GIS-scoped query (plan 3.5).
+        builder.HasIndex(x => new { x.UserId, x.Status });
         builder.HasOne(x => x.Mission).WithMany(x => x.Assignments).HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.AssignedBy).WithMany().HasForeignKey(x => x.AssignedById).OnDelete(DeleteBehavior.Restrict);
@@ -538,6 +540,14 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
             .HasForeignKey(e => e.AnalysisRunId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // The run that produced an anomaly analysed the anomaly's own media (ERD v2.2).
+        builder.HasOne<AIAnalysisRun>()
+            .WithMany()
+            .HasForeignKey(e => new { e.AnalysisRunId, e.MediaId })
+            .HasPrincipalKey(r => new { r.Id, r.MediaId })
+            .HasConstraintName("FK_DetectedAnomalies_AIAnalysisRuns_AnalysisRunId_MediaId")
+            .OnDelete(DeleteBehavior.NoAction);
+
         builder.HasOne(e => e.SupersededBy)
             .WithMany()
             .HasForeignKey(e => e.SupersededById)
@@ -643,6 +653,8 @@ public class MaintenanceTicketConfiguration : IEntityTypeConfiguration<Maintenan
         builder.ToTable("MaintenanceTickets");
         builder.HasKey(e => e.Id);
         builder.HasIndex(e => e.TicketCode).IsUnique();
+        // GeographicAccessFilter: open tickets of the current technician (plan 3.5).
+        builder.HasIndex(e => new { e.TechnicianId, e.Status });
 
         builder.Property(e => e.Status).HasConversion<string>();
         builder.Property(e => e.Priority).HasConversion<string>();
@@ -756,6 +768,8 @@ public class AIAnalysisRunConfiguration : IEntityTypeConfiguration<AIAnalysisRun
         builder.ToTable("AIAnalysisRuns", t => t.HasCheckConstraint(
             "CK_AIAnalysisRuns_ExecutionLocation", "\"ExecutionLocation\" IN ('Edge', 'Cloud')"));
         builder.HasKey(e => e.Id);
+        // Target of DetectedAnomalies' composite FK (AnalysisRunId, MediaId).
+        builder.HasAlternateKey(e => new { e.Id, e.MediaId }).HasName("AK_AIAnalysisRuns_Id_MediaId");
         builder.Property(e => e.ExecutionLocation).HasMaxLength(10).IsRequired();
         builder.Property(e => e.AnalysisType).HasConversion<string>().HasMaxLength(40);
         builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);

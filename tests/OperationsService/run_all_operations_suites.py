@@ -5,10 +5,7 @@ import time
 
 SUITES = [
     ("Region Operations Suite", "tests/OperationsService/region-suites/test_region_suite.py"),
-    ("Substation Operations Suite", "tests/OperationsService/substation-suites/test_substation_suite.py"),
     ("Tower & PostGIS Spatial Suite", "tests/OperationsService/tower-suites/test_tower_suite.py"),
-    ("Transmission Line Suite", "tests/OperationsService/line-suites/test_line_suite.py"),
-    ("Asset & Health Score Suite", "tests/OperationsService/asset-suites/test_asset_suite.py"),
     ("Flight Mission Full Lifecycle Suite", "tests/OperationsService/mission-suites/test_mission_suite.py"),
     ("Maintenance Ticket Operations Suite", "tests/OperationsService/maintenance-suites/test_maintenance_suite.py"),
     ("Monitor & Audit Log Operations Suite", "tests/OperationsService/monitor-suites/test_monitor_suite.py"),

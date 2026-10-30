@@ -4,26 +4,12 @@ import httpx
 import pytest
 import uuid
 
-from tests.conftest import assert_json_response
-
-
-def _mission_payload(gis_seed: dict, title: str, target_ids: list[str] | None = None) -> dict:
-    return {
-        "name": title,
-        "description": "Deterministic GIS API automation mission",
-        "scheduledAt": "2026-09-03T08:00:00+07:00",
-        "inspectorId": gis_seed["inspector"],
-        "droneId": gis_seed["uav"],
-        "targetAssetIds": target_ids if target_ids is not None else [gis_seed["active_asset_1"], gis_seed["active_asset_2"]],
-    }
+from tests.conftest import ASSESSMENT_PATH, assert_json_response
 
 
 @pytest.fixture()
-def created_gis_mission(gis_seed: dict, client: httpx.Client, role_headers) -> dict:
-    payload = _mission_payload(gis_seed, f"GIS API Test Created {uuid.uuid4()}")
-    response = client.post("/api/v1/missions", json=payload, headers=role_headers("manager"))
-    assert response.status_code == 200, f"POST /api/v1/missions returned {response.status_code}: {response.text}"
-    return assert_json_response(response)["data"]
+def created_gis_mission(create_gis_mission) -> dict:
+    return create_gis_mission(f"GIS API Test Created {uuid.uuid4()}")
 
 
 def test_list_missions_as_manager(client: httpx.Client, role_headers, data: dict) -> None:
@@ -43,13 +29,6 @@ def test_my_missions_as_inspector(client: httpx.Client, role_headers) -> None:
     assert response.status_code == 200, f"GET /api/v1/missions/my returned {response.status_code}: {response.text}"
 
 
-def test_create_mission_validates_required_fields_as_manager(client: httpx.Client, role_headers, data: dict) -> None:
-    response = client.post("/api/v1/missions", json=data["mission"]["invalidCreatePayload"], headers=role_headers("manager"))
-    assert response.status_code in {400, 422}, (
-        f"POST /api/v1/missions empty payload returned {response.status_code}: {response.text}"
-    )
-
-
 def test_missions_require_authentication(client: httpx.Client) -> None:
     response = client.get("/api/v1/missions")
     assert response.status_code == 401, f"GET /api/v1/missions without token returned {response.status_code}: {response.text}"
@@ -60,17 +39,13 @@ def test_mission_list_rejects_inspector_role(client: httpx.Client, role_headers,
     assert response.status_code == 403, f"GET /api/v1/missions as Inspector returned {response.status_code}: {response.text}"
 
 
-def test_create_mission_persists_multiple_targets(gis_seed: dict, created_gis_mission: dict, db_connection) -> None:
-    targets = created_gis_mission["targets"]
-    assert [target["assetId"] for target in targets] == [gis_seed["active_asset_1"], gis_seed["active_asset_2"]]
-    assert [target["sequence"] for target in targets] == [1, 2]
-    assert all(target["inspectionStatus"] == "Pending" for target in targets)
+def test_mission_from_assessment_persists_tower_targets(gis_seed: dict, created_gis_mission: dict, db_connection) -> None:
     with db_connection.cursor() as cursor:
-        cursor.execute('SELECT "AssetId", "Sequence", "InspectionStatus" FROM "MissionTargets" WHERE "MissionId"=%s ORDER BY "Sequence"', (created_gis_mission["id"],))
+        cursor.execute('SELECT "TowerId", "Sequence", "InspectionStatus" FROM "MissionTargets" WHERE "MissionId"=%s ORDER BY "Sequence"', (created_gis_mission["id"],))
         persisted = cursor.fetchall()
     assert [(str(row[0]), row[1], row[2]) for row in persisted] == [
-        (gis_seed["active_asset_1"], 1, "Pending"),
-        (gis_seed["active_asset_2"], 2, "Pending"),
+        (gis_seed["tower_1"], 1, "Pending"),
+        (gis_seed["tower_2"], 2, "Pending"),
     ]
 
 
@@ -78,59 +53,23 @@ def test_mission_detail_returns_targets(gis_seed: dict, client: httpx.Client, ro
     response = client.get(f'/api/v1/missions/{created_gis_mission["id"]}', headers=role_headers("manager"))
     assert response.status_code == 200, response.text
     targets = assert_json_response(response)["data"]["targets"]
-    assert [target["assetId"] for target in targets] == [gis_seed["active_asset_1"], gis_seed["active_asset_2"]]
+    assert [target["towerId"] for target in targets] == [gis_seed["tower_1"], gis_seed["tower_2"]]
     assert [target["sequence"] for target in targets] == [1, 2]
     assert all(target["inspectionStatus"] == "Pending" for target in targets)
 
 
-def test_create_mission_rejects_duplicate_targets_without_rows(gis_seed: dict, client: httpx.Client, role_headers, db_connection) -> None:
-    title = f"GIS API Test Duplicate {uuid.uuid4()}"
-    payload = _mission_payload(gis_seed, title, [gis_seed["active_asset_1"], gis_seed["active_asset_1"]])
-    response = client.post("/api/v1/missions", json=payload, headers=role_headers("manager"))
+def test_create_mission_rejects_drone_not_in_assessment(gis_seed: dict, client: httpx.Client, role_headers, create_ready_assessment, db_connection) -> None:
+    assessment = create_ready_assessment()
+    title = f"GIS API Test Invalid Drone {uuid.uuid4()}"
+    payload = {
+        "assessmentId": assessment["id"],
+        "title": title,
+        "personnel": [{"userId": gis_seed["inspector"], "role": "INSPECTOR", "isRequired": True}],
+        "droneIds": ["00000000-0000-0000-0000-000000000099"],
+    }
+    response = client.post(f'{ASSESSMENT_PATH}/{assessment["id"]}/create-mission', json=payload, headers=role_headers("manager"))
     assert response.status_code == 400, response.text
-    with db_connection.cursor() as cursor:
-        cursor.execute('SELECT count(*) FROM "Missions" WHERE "Title"=%s', (title,))
-        assert cursor.fetchone()[0] == 0
-
-
-def test_create_mission_rejects_empty_targets(gis_seed: dict, client: httpx.Client, role_headers) -> None:
-    response = client.post("/api/v1/missions", json=_mission_payload(gis_seed, "GIS API Test Empty", []), headers=role_headers("manager"))
-    assert response.status_code in {400, 422}, response.text
-    assert "MISSION_TARGET_REQUIRED" in response.text
-
-
-@pytest.mark.parametrize("target_id, expected_error", [
-    ("00000000-0000-0000-0000-000000000099", "ASSET_NOT_FOUND"),
-])
-def test_create_mission_rejects_missing_asset(gis_seed: dict, client: httpx.Client, role_headers, target_id: str, expected_error: str) -> None:
-    response = client.post("/api/v1/missions", json=_mission_payload(gis_seed, "GIS API Test Missing", [target_id]), headers=role_headers("manager"))
-    assert response.status_code == 404, response.text
-    assert expected_error in response.text
-
-
-def test_create_mission_rejects_inactive_asset(gis_seed: dict, client: httpx.Client, role_headers) -> None:
-    response = client.post("/api/v1/missions", json=_mission_payload(gis_seed, "GIS API Test Inactive", [gis_seed["inactive_asset"]]), headers=role_headers("manager"))
-    assert response.status_code == 400, response.text
-    assert "ASSET_NOT_AVAILABLE" in response.text
-
-
-def test_create_mission_rejects_invalid_inspector_and_drone(gis_seed: dict, client: httpx.Client, role_headers) -> None:
-    payload = _mission_payload(gis_seed, "GIS API Test Invalid Inspector")
-    payload["inspectorId"] = "00000000-0000-0000-0000-000000000099"
-    inspector_response = client.post("/api/v1/missions", json=payload, headers=role_headers("manager"))
-    assert inspector_response.status_code == 404, inspector_response.text
-
-    payload = _mission_payload(gis_seed, "GIS API Test Invalid Drone")
-    payload["droneId"] = "00000000-0000-0000-0000-000000000099"
-    drone_response = client.post("/api/v1/missions", json=payload, headers=role_headers("manager"))
-    assert drone_response.status_code == 404, drone_response.text
-
-
-def test_failed_target_validation_leaves_no_partial_mission(gis_seed: dict, client: httpx.Client, role_headers, db_connection) -> None:
-    title = f"GIS API Test Atomic {uuid.uuid4()}"
-    payload = _mission_payload(gis_seed, title, [gis_seed["active_asset_1"], "00000000-0000-0000-0000-000000000099"])
-    response = client.post("/api/v1/missions", json=payload, headers=role_headers("manager"))
-    assert response.status_code == 404, response.text
+    assert "RESOURCE_NOT_IN_ASSESSMENT" in response.text
     with db_connection.cursor() as cursor:
         cursor.execute('SELECT count(*) FROM "Missions" WHERE "Title"=%s', (title,))
         assert cursor.fetchone()[0] == 0
@@ -188,12 +127,9 @@ def test_mission_accept_assignment_happy_path(created_gis_mission: dict, client:
     assert body.get("success") is True or "accepted" in response.text.lower()
 
 
-def test_mission_postpone_assignment_happy_path(gis_seed: dict, client: httpx.Client, role_headers) -> None:
+def test_mission_postpone_assignment_happy_path(create_gis_mission, client: httpx.Client, role_headers) -> None:
     # Create a separate mission to test postpone flow
-    payload = _mission_payload(gis_seed, f"GIS API Postpone Test {uuid.uuid4()}")
-    create_res = client.post("/api/v1/missions", json=payload, headers=role_headers("manager"))
-    assert create_res.status_code == 200, create_res.text
-    mission_id = create_res.json()["data"]["id"]
+    mission_id = create_gis_mission(f"GIS API Test Postpone {uuid.uuid4()}")["id"]
 
     postpone_res = client.post(
         f"/api/v1/missions/{mission_id}/assignments/postpone",
@@ -203,5 +139,3 @@ def test_mission_postpone_assignment_happy_path(gis_seed: dict, client: httpx.Cl
     assert postpone_res.status_code == 200, postpone_res.text
     body = postpone_res.json()
     assert body.get("success") is True or "postponed" in postpone_res.text.lower()
-
-

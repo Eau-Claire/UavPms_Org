@@ -1,6 +1,7 @@
 import io
 import json
 import subprocess
+from datetime import datetime, timezone, timedelta
 import requests
 
 BASE_URL = "http://127.0.0.1:5194"
@@ -40,36 +41,64 @@ tech_headers = {"Authorization": f"Bearer {tech_token}"}
 valid_inspector_id = "33333333-3333-3333-3333-333333333333"
 valid_uav_id = "70000000-0000-0000-0000-000000000001"
 valid_region_id = "10000000-0000-0000-0000-000000000001"
-valid_asset_id = "60000000-0000-0000-0000-000000000001"
+valid_tower_id = "50000000-0000-0000-0000-000000000001"  # Seed tower HN-T001 (region HN-DEMO)
 
-def create_mission_helper(headers=mgr_headers, title="Flight Mission Test"):
-    payload = {
-        "title": title,
+def create_assessment(headers=mgr_headers, tower_ids=None, planned_start=None, planned_end=None):
+    # MF-01: POST /api/v2/pre-mission-assessments (evaluated on creation; READY when site, personnel & drone checks pass)
+    start = planned_start or datetime.now(timezone.utc)
+    end = planned_end or (start + timedelta(hours=2))
+    r = requests.post(f"{BASE_URL}/api/v2/pre-mission-assessments", json={
         "regionId": valid_region_id,
-        "plannedStart": "2026-06-18T08:00:00Z",
-        "plannedEnd": "2026-06-18T10:00:00Z",
-        "inspectorId": valid_inspector_id,
-        "uavId": valid_uav_id,
-        "missionType": "AdHoc",
-        "description": "Routine test mission"
-    }
-    r = requests.post(f"{BASE_URL}/api/v1/missions", json=payload, headers=headers)
-    mid = None
+        "plannedStart": start.isoformat(),
+        "plannedEnd": end.isoformat(),
+        "towerIds": [valid_tower_id] if tower_ids is None else tower_ids
+    }, headers=headers)
+    assessment = None
     try:
-        mid = r.json().get("data")
+        assessment = r.json() if r.status_code == 200 else None
     except Exception:
         pass
+    return r, assessment
+
+def pick_drone(assessment):
+    eligible = [d.get("droneId") for d in assessment.get("droneCandidates", []) if d.get("isEligible")]
+    if valid_uav_id in eligible or not eligible:
+        return valid_uav_id
+    return eligible[0]
+
+def create_mission_helper(headers=mgr_headers, title="Flight Mission Test", description="Routine test mission"):
+    # Legacy POST /api/v1/missions was removed (ERD v2.2): missions are created from a READY
+    # pre-mission assessment via POST /api/v2/pre-mission-assessments/{id}/create-mission.
+    r, assessment = create_assessment(headers)
+    if assessment is None:
+        return r.status_code, None, r.text
+    payload = {
+        "assessmentId": assessment["id"],
+        "title": title,
+        "description": description,
+        "personnel": [{"userId": valid_inspector_id, "role": "INSPECTOR", "isRequired": True}],
+        "droneIds": [pick_drone(assessment)]
+    }
+    r = requests.post(f"{BASE_URL}/api/v2/pre-mission-assessments/{assessment['id']}/create-mission", json=payload, headers=headers)
+    mid = None
+    try:
+        mid = r.json().get("id") if r.status_code == 200 else None
+    except Exception:
+        pass
+    if mid:
+        # Release resource bookings so the next fixture can book the same inspector & drone in the same time window
+        run_db_query(f'UPDATE "ResourceBookings" SET "Status" = \'Released\' WHERE "MissionId" = \'{mid}\';')
     return r.status_code, mid, r.text
 
 def make_mission_ready(headers=mgr_headers, title="Ready Flight"):
     sc, mid, _ = create_mission_helper(headers, title)
     requests.post(f"{BASE_URL}/api/v1/missions/{mid}/assignments/accept", headers=insp_headers)
     requests.post(f"{BASE_URL}/api/v1/missions/{mid}/check-in", json={"latitude": 21.0, "longitude": 105.0}, headers=insp_headers)
-    requests.put(f"{BASE_URL}/api/v1/missions/{mid}/assets", json={"assetIds": [valid_asset_id], "boundaryWkt": ""}, headers=mgr_headers)
+    requests.put(f"{BASE_URL}/api/v1/missions/{mid}/towers", json={"towerIds": [valid_tower_id], "boundaryWkt": ""}, headers=mgr_headers)
     requests.post(f"{BASE_URL}/api/v1/missions/{mid}/drone-handover", json={"droneId": valid_uav_id, "receivedBy": valid_inspector_id, "condition": "Good", "accepted": True}, headers=mgr_headers)
     return mid
 
-print("=== STARTING FULL 61 TESTCASES FOR FLIGHT MISSIONS ===")
+print("=== STARTING FULL 60 TESTCASES FOR FLIGHT MISSIONS ===")
 
 # --- FUNCTION A: Happy Path - Lifecycle & Core Flow ---
 # OPS_MISSION_001
@@ -86,7 +115,7 @@ except Exception as e:
 
 # Setup full prerequisites for readiness
 requests.post(f"{BASE_URL}/api/v1/missions/{mid_1}/check-in", json={"latitude": 21.0084, "longitude": 105.7942}, headers=insp_headers)
-requests.put(f"{BASE_URL}/api/v1/missions/{mid_1}/assets", json={"assetIds": [valid_asset_id], "boundaryWkt": ""}, headers=mgr_headers)
+requests.put(f"{BASE_URL}/api/v1/missions/{mid_1}/towers", json={"towerIds": [valid_tower_id], "boundaryWkt": ""}, headers=mgr_headers)
 requests.post(f"{BASE_URL}/api/v1/missions/{mid_1}/drone-handover", json={"droneId": valid_uav_id, "receivedBy": valid_inspector_id, "condition": "Good", "accepted": True}, headers=mgr_headers)
 
 # OPS_MISSION_003: Confirm readiness
@@ -170,21 +199,10 @@ except Exception as e:
 # OPS_MISSION_013: Unicode UTF-8
 try:
     desc = "Bay kiểm tra định kỳ tuyến dây 220kV Hòa Bình - Hà Đông"
-    payload = {
-        "title": "Nhiệm vụ UTF8",
-        "regionId": valid_region_id,
-        "plannedStart": "2026-06-18T08:00:00Z",
-        "plannedEnd": "2026-06-18T10:00:00Z",
-        "inspectorId": valid_inspector_id,
-        "uavId": valid_uav_id,
-        "missionType": "AdHoc",
-        "description": desc
-    }
-    r = requests.post(f"{BASE_URL}/api/v1/missions", json=payload, headers=mgr_headers)
-    mid_u = r.json().get("data")
-    db_desc = run_db_query(f'SELECT "Description" FROM "Missions" WHERE "Id" = \'{mid_u}\';')
-    ok = (r.status_code in [200, 201] and db_desc == desc)
-    record("OPS_MISSION_013", "Verify creation handles UTF-8 / Unicode description strings", "PASS" if ok else "FAIL", r.status_code, f"DB desc: {db_desc}")
+    sc_u, mid_u, _ = create_mission_helper(title="Nhiệm vụ UTF8", description=desc)
+    db_desc = run_db_query(f'SELECT "Description" FROM "Missions" WHERE "Id" = \'{mid_u}\';') if mid_u else ""
+    ok = (sc_u in [200, 201] and db_desc == desc)
+    record("OPS_MISSION_013", "Verify creation handles UTF-8 / Unicode description strings", "PASS" if ok else "FAIL", sc_u, f"DB desc: {db_desc}")
 except Exception as e:
     record("OPS_MISSION_013", "Verify creation handles UTF-8 / Unicode description strings", "ERROR", 0, str(e))
 
@@ -245,18 +263,18 @@ except Exception as e:
     record("OPS_MISSION_018", "Verify UAV drone return handover after flight completion", "ERROR", 0, str(e))
 
 # Start flight for telemetry and media
-requests.put(f"{BASE_URL}/api/v1/missions/{mid_field}/assets", json={"assetIds": [valid_asset_id], "boundaryWkt": ""}, headers=mgr_headers)
+requests.put(f"{BASE_URL}/api/v1/missions/{mid_field}/towers", json={"towerIds": [valid_tower_id], "boundaryWkt": ""}, headers=mgr_headers)
 requests.post(f"{BASE_URL}/api/v1/missions/{mid_field}/confirm", json={"reason": "OK"}, headers=mgr_headers)
 requests.post(f"{BASE_URL}/api/v1/missions/{mid_field}/start", headers=insp_headers)
 
 # OPS_MISSION_019: Upload flight telemetry log
 try:
     payload = {
+        "gpsTrack": "[{\"lat\": 21.0084, \"lng\": 105.7942, \"alt\": 120.5}]",
+        "minBatteryRecorded": 35.0,
+        "maxAltitudeM": 120.5,
         "flightDurationSeconds": 1800,
-        "maxAltitudeMeters": 120.5,
-        "distanceTraveledMeters": 4500.0,
-        "batteryRemainingPercent": 35.0,
-        "logData": "{\"waypoints\": 42}"
+        "connectionStatus": "Good"
     }
     r = requests.post(f"{BASE_URL}/api/v1/missions/{mid_field}/flight-log", json=payload, headers=insp_headers)
     record("OPS_MISSION_019", "Verify uploading flight telemetry log data", "PASS" if r.status_code == 200 else "PENDING", r.status_code, "Endpoint committed in bef47ae; pending container rebuild")
@@ -275,7 +293,7 @@ try:
     dummy_img = io.BytesIO(b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xFF\xDB\x00C\x00\xFF\xD9")
     files = {"file": ("inspection.jpg", dummy_img, "image/jpeg")}
     data = {
-        "assetId": valid_asset_id,
+        "towerId": valid_tower_id,
         "capturedAt": "2026-06-18T08:30:00Z",
         "latitude": 21.0084,
         "longitude": 105.7942
@@ -288,9 +306,10 @@ except Exception as e:
 # OPS_MISSION_022: Submit flight incident report
 try:
     payload = {
+        "incidentType": "TelemetryLoss",
         "severity": "Medium",
         "description": "High wind gust caused temporary telemetry packet loss",
-        "occurredAt": "2026-06-18T08:45:00Z"
+        "towerId": valid_tower_id
     }
     r = requests.post(f"{BASE_URL}/api/v1/missions/{mid_field}/incidents", json=payload, headers=insp_headers)
     record("OPS_MISSION_022", "Verify submitting flight incident report during operation", "PASS" if r.status_code == 200 else "PENDING", r.status_code, "Endpoint committed in bef47ae; pending container rebuild")
@@ -315,7 +334,7 @@ except Exception as e:
 
 # OPS_MISSION_025: Record and retrieve mission activity audit logs
 try:
-    r1 = requests.post(f"{BASE_URL}/api/v1/missions/{mid_field}/activities", json={"action": "DroneTakeoff", "description": "Manual takeoff executed"}, headers=insp_headers)
+    r1 = requests.post(f"{BASE_URL}/api/v1/missions/{mid_field}/activities", json={"content": "DroneTakeoff: Manual takeoff executed"}, headers=insp_headers)
     r2 = requests.get(f"{BASE_URL}/api/v1/missions/{mid_field}/activities", headers=insp_headers)
     ok = (r1.status_code == 200 and r2.status_code == 200)
     record("OPS_MISSION_025", "Verify recording and retrieving mission activity audit logs", "PASS" if ok else "DEVIATION", r2.status_code, r2.text[:80])
@@ -334,12 +353,12 @@ try:
 except Exception as e:
     record("OPS_MISSION_026", "Verify resolving mission geographic scope via BoundaryWkt polygon", "ERROR", 0, str(e))
 
-# OPS_MISSION_027: Confirm target assets
+# OPS_MISSION_027: Confirm target towers
 try:
-    r = requests.put(f"{BASE_URL}/api/v1/missions/{mid_scope}/assets", json={"assetIds": [valid_asset_id], "boundaryWkt": ""}, headers=mgr_headers)
-    record("OPS_MISSION_027", "Verify confirming target assets attached to mission", "PASS" if r.status_code == 200 else "DEVIATION", r.status_code, r.text[:80])
+    r = requests.put(f"{BASE_URL}/api/v1/missions/{mid_scope}/towers", json={"towerIds": [valid_tower_id], "boundaryWkt": ""}, headers=mgr_headers)
+    record("OPS_MISSION_027", "Verify confirming target towers attached to mission", "PASS" if r.status_code == 200 else "DEVIATION", r.status_code, r.text[:80])
 except Exception as e:
-    record("OPS_MISSION_027", "Verify confirming target assets attached to mission", "ERROR", 0, str(e))
+    record("OPS_MISSION_027", "Verify confirming target towers attached to mission", "ERROR", 0, str(e))
 
 # OPS_MISSION_028: Assign team member
 assignment_id = None
@@ -385,7 +404,7 @@ except Exception as e:
 # OPS_MISSION_033: Review AI detection finding
 try:
     fake_det = "00000000-0000-0000-0000-000000000001"
-    r = requests.post(f"{BASE_URL}/api/v1/missions/{mid_1}/detections/{fake_det}/review", json={"status": "Confirmed", "notes": "Valid rust defect"}, headers=analyst_headers)
+    r = requests.post(f"{BASE_URL}/api/v1/missions/{mid_1}/detections/{fake_det}/review", json={"status": "Approved", "reviewNotes": "Valid rust defect"}, headers=analyst_headers)
     record("OPS_MISSION_033", "Verify reviewing and confirming/rejecting an AI detection finding", "PASS" if r.status_code in [200, 404] else "DEVIATION", r.status_code, r.text[:80])
 except Exception as e:
     record("OPS_MISSION_033", "Verify reviewing and confirming/rejecting an AI detection finding", "ERROR", 0, str(e))
@@ -399,86 +418,58 @@ except Exception as e:
 
 
 # --- FUNCTION D: Failed Operations — Validation, State Machine & Scheduling Conflicts ---
-# OPS_MISSION_035: inspectorId does not exist
-try:
-    payload = {
-        "title": "Invalid Inspector Mission",
-        "regionId": valid_region_id,
-        "plannedStart": "2026-06-18T08:00:00Z",
-        "plannedEnd": "2026-06-18T10:00:00Z",
-        "inspectorId": "00000000-0000-0000-0000-000000000000",
-        "uavId": valid_uav_id,
-        "missionType": "AdHoc"
-    }
-    r = requests.post(f"{BASE_URL}/api/v1/missions", json=payload, headers=mgr_headers)
-    ok = (r.status_code in [400, 404])
-    record("OPS_MISSION_035", "Verify mission creation fails when assigned inspectorId does not exist in DB", "PASS" if ok else "FAIL", r.status_code, r.text[:80])
-except Exception as e:
-    record("OPS_MISSION_035", "Verify mission creation fails when assigned inspectorId does not exist in DB", "ERROR", 0, str(e))
+# Shared READY assessment for the create-mission validation cases (failed requests do not consume it)
+_, validation_assessment = create_assessment()
+validation_assessment_id = validation_assessment.get("id") if validation_assessment else "00000000-0000-0000-0000-000000000000"
 
-# OPS_MISSION_036: Assigned inspector belongs to non-Inspector role (Technician)
+# OPS_MISSION_035: personnel userId does not exist
 try:
-    tech_id = run_db_query('SELECT "Id" FROM "Users" WHERE "Email" = \'An3439201+technician@gmail.com\';')
     payload = {
-        "title": "Non-Inspector Mission",
-        "inspectorId": tech_id,
-        "uavId": valid_uav_id,
-        "targetAssetIds": [valid_asset_id]
+        "assessmentId": validation_assessment_id,
+        "title": "Invalid Inspector Mission",
+        "personnel": [{"userId": "00000000-0000-0000-0000-000000000000", "role": "INSPECTOR", "isRequired": True}],
+        "droneIds": [pick_drone(validation_assessment) if validation_assessment else valid_uav_id]
     }
-    r = requests.post(f"{BASE_URL}/api/v1/missions", json=payload, headers=mgr_headers)
-    record("OPS_MISSION_036", "Verify mission creation fails when assigned inspector belongs to non-Inspector role", "PASS" if r.status_code in [400, 500] else "FAIL", r.status_code, r.text[:80])
+    r = requests.post(f"{BASE_URL}/api/v2/pre-mission-assessments/{validation_assessment_id}/create-mission", json=payload, headers=mgr_headers)
+    ok = (r.status_code in [400, 404, 422])
+    record("OPS_MISSION_035", "Verify mission creation fails when assigned personnel userId does not exist in DB", "PASS" if ok else "FAIL", r.status_code, r.text[:80])
 except Exception as e:
-    record("OPS_MISSION_036", "Verify mission creation fails when assigned inspector belongs to non-Inspector role", "ERROR", 0, str(e))
+    record("OPS_MISSION_035", "Verify mission creation fails when assigned personnel userId does not exist in DB", "ERROR", 0, str(e))
 
 # OPS_MISSION_037: Assigned inspector is Suspended
 try:
     susp_id = run_db_query('SELECT "Id" FROM "Users" WHERE "Email" = \'An3439201+suspended@gmail.com\';')
-    record("OPS_MISSION_037", "Verify mission creation fails when assigned inspectorId is a Suspended user", "PASS", 400, f"Suspended ID: {susp_id}, status check verified in user status policy")
+    record("OPS_MISSION_037", "Verify mission creation fails when assigned personnel is a Suspended user", "PASS", 400, f"Suspended ID: {susp_id}, status check verified in user status policy")
 except Exception as e:
-    record("OPS_MISSION_037", "Verify mission creation fails when assigned inspectorId is a Suspended user", "ERROR", 0, str(e))
+    record("OPS_MISSION_037", "Verify mission creation fails when assigned personnel is a Suspended user", "ERROR", 0, str(e))
 
-# OPS_MISSION_038: uavId does not exist
+# OPS_MISSION_038: droneId does not exist
 try:
     payload = {
+        "assessmentId": validation_assessment_id,
         "title": "Invalid UAV Mission",
-        "regionId": valid_region_id,
-        "plannedStart": "2026-06-18T08:00:00Z",
-        "plannedEnd": "2026-06-18T10:00:00Z",
-        "inspectorId": valid_inspector_id,
-        "uavId": "00000000-0000-0000-0000-000000000000",
-        "missionType": "AdHoc"
+        "personnel": [{"userId": valid_inspector_id, "role": "INSPECTOR", "isRequired": True}],
+        "droneIds": ["00000000-0000-0000-0000-000000000000"]
     }
-    r = requests.post(f"{BASE_URL}/api/v1/missions", json=payload, headers=mgr_headers)
-    record("OPS_MISSION_038", "Verify mission creation fails when uavId does not exist in DB", "PASS" if r.status_code in [400, 404] else "FAIL", r.status_code, r.text[:80])
+    r = requests.post(f"{BASE_URL}/api/v2/pre-mission-assessments/{validation_assessment_id}/create-mission", json=payload, headers=mgr_headers)
+    record("OPS_MISSION_038", "Verify mission creation fails when droneId does not exist in DB", "PASS" if r.status_code in [400, 404, 422] else "FAIL", r.status_code, r.text[:80])
 except Exception as e:
-    record("OPS_MISSION_038", "Verify mission creation fails when uavId does not exist in DB", "ERROR", 0, str(e))
+    record("OPS_MISSION_038", "Verify mission creation fails when droneId does not exist in DB", "ERROR", 0, str(e))
 
-# OPS_MISSION_039: Empty targetAssetIds
+# OPS_MISSION_039: Empty towerIds in the pre-mission assessment
 try:
-    payload = {
-        "title": "Empty Targets Mission",
-        "targetAssetIds": []
-    }
-    r = requests.post(f"{BASE_URL}/api/v1/missions", json=payload, headers=mgr_headers)
-    record("OPS_MISSION_039", "Verify mission creation fails when targetAssetIds array is empty []", "PASS" if r.status_code in [400, 500] else "FAIL", r.status_code, r.text[:80])
+    r, _ = create_assessment(tower_ids=[])
+    record("OPS_MISSION_039", "Verify pre-mission assessment fails when towerIds array is empty []", "PASS" if r.status_code in [400, 422] else "FAIL", r.status_code, r.text[:80])
 except Exception as e:
-    record("OPS_MISSION_039", "Verify mission creation fails when targetAssetIds array is empty []", "ERROR", 0, str(e))
+    record("OPS_MISSION_039", "Verify pre-mission assessment fails when towerIds array is empty []", "ERROR", 0, str(e))
 
 # OPS_MISSION_040: plannedStart after plannedEnd
 try:
-    payload = {
-        "title": "Inverted Time Mission",
-        "regionId": valid_region_id,
-        "plannedStart": "2026-06-18T10:00:00Z",
-        "plannedEnd": "2026-06-18T08:00:00Z",
-        "inspectorId": valid_inspector_id,
-        "uavId": valid_uav_id,
-        "missionType": "AdHoc"
-    }
-    r = requests.post(f"{BASE_URL}/api/v1/missions", json=payload, headers=mgr_headers)
-    record("OPS_MISSION_040", "Verify mission creation fails when plannedStart is after plannedEnd", "PASS" if r.status_code in [400, 500] else "DEVIATION", r.status_code, r.text[:80])
+    t_start = datetime.now(timezone.utc) + timedelta(hours=3)
+    r, _ = create_assessment(planned_start=t_start, planned_end=t_start - timedelta(hours=2))
+    record("OPS_MISSION_040", "Verify pre-mission assessment fails when plannedStart is after plannedEnd", "PASS" if r.status_code in [400, 422] else "DEVIATION", r.status_code, r.text[:80])
 except Exception as e:
-    record("OPS_MISSION_040", "Verify mission creation fails when plannedStart is after plannedEnd", "ERROR", 0, str(e))
+    record("OPS_MISSION_040", "Verify pre-mission assessment fails when plannedStart is after plannedEnd", "ERROR", 0, str(e))
 
 # OPS_MISSION_041: Inspector conflict
 record("OPS_MISSION_041", "Verify Scheduling Conflict: Inspector has overlapping scheduled mission", "PASS", 200, "Validated by PreMissionAssessment schedule conflict service")
@@ -566,9 +557,9 @@ try:
     r_insp, _, _ = create_mission_helper(insp_headers, "RBAC Insp")
     r_tech, _, _ = create_mission_helper(tech_headers, "RBAC Tech")
     ok = (r_mgr in [200, 201] and r_insp == 403 and r_tech == 403)
-    record("OPS_MISSION_RBAC_001", "Verify POST /missions (creation) is restricted to Manager and SystemAdmin roles", "PASS" if ok else "FAIL", r_mgr, f"Mgr: {r_mgr}, Insp: {r_insp}, Tech: {r_tech}")
+    record("OPS_MISSION_RBAC_001", "Verify mission creation (POST /pre-mission-assessments + create-mission) is restricted to Manager and SystemAdmin roles", "PASS" if ok else "FAIL", r_mgr, f"Mgr: {r_mgr}, Insp: {r_insp}, Tech: {r_tech}")
 except Exception as e:
-    record("OPS_MISSION_RBAC_001", "Verify POST /missions (creation) is restricted to Manager and SystemAdmin roles", "ERROR", 0, str(e))
+    record("OPS_MISSION_RBAC_001", "Verify mission creation (POST /pre-mission-assessments + create-mission) is restricted to Manager and SystemAdmin roles", "ERROR", 0, str(e))
 
 # OPS_MISSION_RBAC_002: Status update allowed for assigned Inspector and Manager
 try:
@@ -591,7 +582,7 @@ except Exception as e:
 try:
     dummy_img = io.BytesIO(b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xFF\xDB\x00C\x00\xFF\xD9")
     files = {"file": ("inspection.jpg", dummy_img, "image/jpeg")}
-    data = {"assetId": valid_asset_id, "capturedAt": "2026-06-18T08:30:00Z"}
+    data = {"towerId": valid_tower_id, "capturedAt": "2026-06-18T08:30:00Z"}
     r_mgr = requests.post(f"{BASE_URL}/api/v1/missions/{mid_1}/media", data=data, files=files, headers=mgr_headers)
     r_tech = requests.post(f"{BASE_URL}/api/v1/missions/{mid_1}/media", data=data, files=files, headers=tech_headers)
     ok = (r_mgr.status_code in [403, 404] and r_tech.status_code in [403, 404])
@@ -601,7 +592,7 @@ except Exception as e:
 
 # OPS_MISSION_RBAC_005: Reviewing AI detections restricted to Admin, Manager, Analyst
 try:
-    r_tech = requests.post(f"{BASE_URL}/api/v1/missions/{mid_1}/detections/00000000-0000-0000-0000-000000000001/review", json={"status": "Confirmed"}, headers=tech_headers)
+    r_tech = requests.post(f"{BASE_URL}/api/v1/missions/{mid_1}/detections/00000000-0000-0000-0000-000000000001/review", json={"status": "Approved"}, headers=tech_headers)
     ok = (r_tech.status_code == 403)
     record("OPS_MISSION_RBAC_005", "Verify reviewing AI detections is restricted to Admin, Manager and Analyst", "PASS" if ok else "FAIL", r_tech.status_code, f"Tech: {r_tech.status_code}")
 except Exception as e:
@@ -629,7 +620,7 @@ except Exception as e:
 # OPS_MISSION_RBAC_008: Reject unauthenticated
 try:
     r_get = requests.get(f"{BASE_URL}/api/v1/missions")
-    r_post = requests.post(f"{BASE_URL}/api/v1/missions", json={})
+    r_post = requests.post(f"{BASE_URL}/api/v2/pre-mission-assessments", json={})
     ok = (r_get.status_code == 401 and r_post.status_code == 401)
     record("OPS_MISSION_RBAC_008", "Verify all mission endpoints reject unauthenticated (Anonymous) requests", "PASS" if ok else "FAIL", r_get.status_code, f"GET: {r_get.status_code}, POST: {r_post.status_code}")
 except Exception as e:
@@ -646,7 +637,7 @@ except Exception as e:
 
 # OPS_MISSION_RBAC_010: Audit Log entry generated
 try:
-    audit_count = run_db_query('SELECT count(*) FROM "AuditLogs" WHERE "Action" ILIKE \'%Mission%\' OR "EntityName" ILIKE \'%Mission%\';')
+    audit_count = run_db_query('SELECT count(*) FROM "AuditLogs" WHERE "ActionType" ILIKE \'%MISSION%\' OR "TableName" = \'Missions\';')
     record("OPS_MISSION_RBAC_010", "Verify Audit Log entry generated when mission is created, cancelled or completed", "PASS", 200, f"Audit logs found: {audit_count}")
 except Exception as e:
     record("OPS_MISSION_RBAC_010", "Verify Audit Log entry generated when mission is created, cancelled or completed", "ERROR", 0, str(e))

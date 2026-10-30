@@ -160,8 +160,8 @@ async def dashboard() -> str:
         </select>
         <select id="case-module">
           <option value="all">All modules</option>
-          <option value="asset">Asset</option>
           <option value="mission">Mission</option>
+          <option value="pre_mission">Pre-mission</option>
           <option value="inspection">Inspection</option>
           <option value="auth">Auth</option>
         </select>

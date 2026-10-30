@@ -62,12 +62,21 @@ test.describe('Operations Service – Missions', () => {
     expect(res.status()).toBe(200);
   });
 
-  test('POST /api/v1/missions – should validate required fields', async ({ request }) => {
-    const res = await request.post('/api/v1/missions', {
+  // Missions are no longer created via POST /api/v1/missions (removed in ERD v2.2);
+  // they are created from an approved pre-mission assessment.
+  test('POST /api/v2/pre-mission-assessments/{id}/create-mission – should reject fake assessment UUID', async ({ request }) => {
+    const fakeId = '00000000-0000-0000-0000-000000000000';
+    const res = await request.post(`/api/v2/pre-mission-assessments/${fakeId}/create-mission`, {
       headers: { Authorization: `Bearer ${token}` },
-      data: {}, // Missing required fields
+      data: {
+        assessmentId: fakeId,
+        title: 'Test Mission',
+        description: 'Created from assessment',
+        personnel: [],
+        droneIds: [],
+      },
     });
-    expect([400, 422]).toContain(res.status());
+    expect([400, 404, 409, 422]).toContain(res.status());
   });
 
   test('PUT /api/v1/missions/{id} – should return 404 for fake UUID', async ({ request }) => {

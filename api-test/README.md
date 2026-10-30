@@ -155,7 +155,7 @@ $env:TARGET_API="http://localhost:5194"
 pytest tests -q
 ```
 
-GIS and mission-target API tests require the same non-production PostgreSQL/PostGIS database used by the backend. They seed fixed UUIDs and coordinates, then remove missions created with the `GIS API Test` prefix.
+GIS, pre-mission assessment and mission-target API tests require the same non-production PostgreSQL/PostGIS database used by the backend. They seed a fixed region, towers and UAVs (ERD v2.2: regions -> towers only), give the configured manager/inspector/analyst/technician accounts a scope on that region, create missions through `POST /api/v2/pre-mission-assessments/{id}/create-mission`, then remove missions created with the `GIS API Test` prefix. Mission-creating tests skip unless analyst and technician accounts are configured, because a READY assessment needs eligible Inspector, Analyst and Technician candidates.
 
 ```powershell
 cd api-test
@@ -163,7 +163,7 @@ $env:TARGET_API="http://localhost:5194"
 $env:AUTH_API="http://localhost:5194"
 $env:DB_CONNECTION="Host=localhost;Port=5432;Database=uavpms_test;Username=postgres;Password=postgres"
 $env:ALLOW_API_TEST_DB_SEED="true"
-pytest tests/test_asset.py tests/test_mission.py -q
+pytest tests/test_pre_mission.py tests/test_mission.py -q
 ```
 
 When using Compose, `docker-compose.test.yml` forwards `DB_CONNECTION` and `ALLOW_API_TEST_DB_SEED` to the API test container. The seed fixture remains skipped unless the opt-in flag is exactly `true`. The connection must point to a migrated disposable test database with PostGIS enabled; never run the deterministic seed fixtures against production.
@@ -172,8 +172,7 @@ When using Compose, `docker-compose.test.yml` forwards `DB_CONNECTION` and `ALLO
 
 - `auth.json`: default role and negative auth payloads.
 - `roles.json`: credentials/tokens per role.
-- `mission.json`: mission query/filter and validation payloads.
-- `asset.json`: asset query/filter and validation payloads.
+- `mission.json`: mission query/filter payloads.
 - `inspection.json`: inspection IDs and optional sample image path.
 - `inspection/`: place small upload images here when needed.
 

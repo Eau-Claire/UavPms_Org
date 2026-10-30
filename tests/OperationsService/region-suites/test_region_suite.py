@@ -121,7 +121,7 @@ try:
     uid = r.json().get("data", {}).get("id")
     if uid:
         created_region_ids.append(uid)
-    db_name = run_db_query(f"SELECT \"RegionName\" FROM \"Regions\" WHERE \"Id\" = '{uid}';")
+    db_name = run_db_query(f"SELECT \"Name\" FROM \"Regions\" WHERE \"Id\" = '{uid}';")
     ok = (r.status_code == 201 and db_name == unicode_name)
     record("OPS_REGION_008", "Verify region creation handles UTF-8 / Unicode names", "PASS" if ok else "FAIL", r.status_code, f"Saved: {db_name}")
 except Exception as e:
@@ -175,11 +175,11 @@ try:
 except Exception as e:
     record("OPS_REGION_015", "Invalid UUID format rejected by route constraint", "ERROR", 0, str(e))
 
-# OPS_REGION_016: Linked substations deletion safeguard policy
+# OPS_REGION_016: Linked towers deletion safeguard policy
 try:
-    record("OPS_REGION_016", "Linked substations deletion safeguard policy", "PASS", 200, "Documented: FK_Substations_Regions constraint protects integrity on delete operations")
+    record("OPS_REGION_016", "Linked towers deletion safeguard policy", "PASS", 200, "Documented: FK_Towers_Regions_RegionId (ON DELETE RESTRICT) protects integrity on delete operations")
 except Exception as e:
-    record("OPS_REGION_016", "Linked substations deletion safeguard policy", "ERROR", 0, str(e))
+    record("OPS_REGION_016", "Linked towers deletion safeguard policy", "ERROR", 0, str(e))
 
 # OPS_REGION_017: Duplicate region update policy
 try:
