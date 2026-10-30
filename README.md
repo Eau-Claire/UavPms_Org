@@ -1,6 +1,6 @@
 # UAV-GridGuard PMS
 
-Backend for UAV-based power-line inspection management. The system is organized as a moderate distributed architecture: Ocelot API Gateway, four ASP.NET Core business services, one internal gRPC service, RabbitMQ background consumers, Redis, Supabase/PostgreSQL, and the existing independent FastAPI AI service integration.
+Backend for UAV-based power-line inspection management. The system is organized as a moderate distributed architecture: Ocelot API Gateway, four ASP.NET Core business services, one internal gRPC service, RabbitMQ background consumers, Redis, PostgreSQL, MinIO object storage for media, and the existing independent FastAPI AI service integration.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ Client / Swagger
 
 ## Technology Stack
 
-ASP.NET Core 9, Ocelot, MediatR, EF Core, PostgreSQL/Supabase, Redis, RabbitMQ, Hangfire, SignalR, JWT Bearer auth, Swagger/OpenAPI, gRPC, Docker Compose.
+ASP.NET Core 9, Ocelot, MediatR, EF Core, PostgreSQL, MinIO (S3), Redis, RabbitMQ, Hangfire, SignalR, JWT Bearer auth, Swagger/OpenAPI, gRPC, Docker Compose.
 
 ## Run
 
@@ -64,9 +64,14 @@ JWT_SECRET=
 JWT_ISSUER=UavPms
 JWT_AUDIENCE=UavPmsClient
 JWT_EXPIRY_MINUTES=60
-SUPABASE_URL=
-SUPABASE_API_KEY=
-SUPABASE_BUCKET=
+# Media storage: MinIO S3 API (port 9000, not the 9001 console). Without these, files go to local disk.
+MINIO_ENDPOINT=
+MINIO_ACCESS_KEY=
+MINIO_SECRET_KEY=
+MINIO_BUCKET=uav-media
+MINIO_USE_SSL=false
+# Base of the URLs handed to clients (e.g. an HTTPS proxy in front of MinIO); defaults to the endpoint.
+MINIO_PUBLIC_BASE_URL=
 BREVO_API_KEY=
 BREVO_FROM_EMAIL=
 BREVO_FROM_NAME=UavPms System
@@ -178,7 +183,8 @@ RabbitMQ consumers are also meaningful background workers and are suitable for l
 | Sorting | `GET /api/v1/missions?sortBy=createdAt&sortDescending=true` |
 | Pagination | `page`, `pageSize`, `PaginationMetaData` responses |
 | EF Core | Service-local `Infrastructure/Persistence/ApplicationDbContext.cs` |
-| Relational database | PostgreSQL/Supabase connection via `DB_CONNECTION` |
+| Relational database | PostgreSQL connection via `DB_CONNECTION` |
+| Media storage | MinIO (S3 API) via `MINIO_*`; DB stores `bucket/object` keys, services return full URLs |
 | Dependency Injection | `Application/DependencyInjection.cs`, `Infrastructure/DependencyInjection.cs` |
 | Configuration management | `appsettings.json`, Docker env vars |
 | Logging | Serilog console logging |

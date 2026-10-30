@@ -1,0 +1,86 @@
+name: Copy Media To MinIO
+
+# Manual only. One-off move of the legacy Supabase media to MinIO: every storage key ("bucket/object") the
+# database references is downloaded from the old Supabase public storage and uploaded to MinIO under the same
+# bucket/object, so the URLs the services build ({MINIO_PUBLIC_BASE_URL}/{bucket}/{object}) resolve.
+#
+#   mode = dry-run : download everything into a temp dir on the server and report missing files; nothing uploaded.
+#   mode = apply   : same, then create missing buckets (anonymous read on objects) and upload.
+#
+# MinIO credentials are read from the server .env (MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY,
+# MINIO_USE_SSL); they are never passed through GitHub.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run (report only) or apply (upload to MinIO)
+        required: true
+        type: choice
+        default: dry-run
+        options:
+          - dry-run
+          - apply
+      legacy_supabase_url:
+        description: Old Supabase project URL (empty = SUPABASE_URL from the server .env)
+        required: false
+        type: string
+      confirmation:
+        description: Type COPY_MEDIA_TO_MINIO to confirm
+        required: true
+        type: string
+
+concurrency:
+  group: production-media-storage
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  copy:
+    name: Copy media to MinIO (${{ inputs.mode }})
+    if: ${{ inputs.confirmation == 'COPY_MEDIA_TO_MINIO' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Copy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          MODE: ${{ inputs.mode }}
+          LEGACY_INPUT: ${{ inputs.legacy_supabase_url }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          command_timeout: 60m
+          envs: DEPLOY_PATH,MODE,LEGACY_INPUT
+          script_stop: true
+          script: |
+            set -euo pipefail
+            test -n "${DEPLOY_PATH:-}" || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
+            cd "$DEPLOY_PATH"
+            git fetch --quiet origin main
+            if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+              echo "ERROR: deployment checkout is not at origin/main; run Deploy first."; exit 1
+            fi
+            test -f scripts/storage/copy_media_to_minio.sh || { echo "ERROR: copy script missing from the checkout."; exit 1; }
+
+            # Read single values from the server .env without sourcing it.
+            env_value() { grep -E "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"; }
+            export MINIO_ENDPOINT="$(env_value MINIO_ENDPOINT)"
+            export MINIO_ACCESS_KEY="$(env_value MINIO_ACCESS_KEY)"
+            export MINIO_SECRET_KEY="$(env_value MINIO_SECRET_KEY)"
+            export MINIO_USE_SSL="$(env_value MINIO_USE_SSL)"
+            export LEGACY_SUPABASE_URL="${LEGACY_INPUT:-$(env_value SUPABASE_URL)}"
+            test -n "$LEGACY_SUPABASE_URL" || { echo "ERROR: no legacy Supabase URL (input or SUPABASE_URL in .env)."; exit 1; }
+            if [ "$MODE" = "apply" ]; then
+              test -n "$MINIO_ENDPOINT" -a -n "$MINIO_ACCESS_KEY" -a -n "$MINIO_SECRET_KEY" \
+                || { echo "ERROR: MINIO_ENDPOINT / MINIO_ACCESS_KEY / MINIO_SECRET_KEY must be set in .env."; exit 1; }
+            fi
+            echo "Legacy Supabase: $LEGACY_SUPABASE_URL  MinIO: ${MINIO_ENDPOINT:-(not set)}"
+
+            bash scripts/storage/copy_media_to_minio.sh "$MODE"

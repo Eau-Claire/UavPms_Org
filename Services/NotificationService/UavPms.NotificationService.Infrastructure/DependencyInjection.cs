@@ -90,16 +90,8 @@ public static class DependencyInjection
             services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(StackExchange.Redis.ConnectionMultiplexer.Connect(configOptions));
         }
 
-        // Đăng ký File Storage Service (Tự động chọn Supabase nếu có ApiKey, ngược lại dùng Local)
-        var supabaseKey = configuration["Supabase:ApiKey"];
-        if (!string.IsNullOrEmpty(supabaseKey) && !supabaseKey.Contains("YOUR_SUPABASE_SERVICE_ROLE_KEY"))
-        {
-            services.AddScoped<IFileStorageService, SupabaseFileStorageService>();
-        }
-        else
-        {
-            services.AddScoped<IFileStorageService, LocalFileStorageService>();
-        }
+        // Media storage (MinIO) is used by OperationsService and AIInspectionService only; this service keeps local files.
+        services.AddScoped<IFileStorageService, LocalFileStorageService>();
        
         return services;
     }

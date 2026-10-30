@@ -1,0 +1,106 @@
+name: Configure MinIO Env
+
+# Manual only. Writes the MINIO_* settings into the server .env (backup kept as .env.bak.<timestamp>) and
+# restarts the services that store media, so they pick the values up.
+#
+# Credentials come from the GitHub "production" environment secrets MINIO_ACCESS_KEY and MINIO_SECRET_KEY
+# (Settings > Environments > production); they are masked in the log and never stored in the repository.
+# Use a dedicated MinIO access key (console > Access Keys), not the root account.
+
+on:
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: MinIO S3 API host:port (not the 9001 console)
+        required: true
+        type: string
+        default: 116.118.3.58:9000
+      bucket:
+        description: Bucket for new uploads
+        required: true
+        type: string
+        default: uav-media
+      use_ssl:
+        description: S3 API over HTTPS
+        required: true
+        type: boolean
+        default: false
+      public_base_url:
+        description: Base of URLs given to clients (e.g. https://media.example.com); empty = the endpoint
+        required: false
+        type: string
+      restart_services:
+        description: Restart operationsservice and aiinspectionservice afterwards
+        required: true
+        type: boolean
+        default: true
+      confirmation:
+        description: Type CONFIGURE_MINIO_ENV to confirm
+        required: true
+        type: string
+
+concurrency:
+  group: production-media-storage
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  configure:
+    name: Write MINIO_* to server .env
+    if: ${{ inputs.confirmation == 'CONFIGURE_MINIO_ENV' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Check secrets
+        env:
+          MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+        run: |
+          if [ -z "$MINIO_ACCESS_KEY" ] || [ -z "$MINIO_SECRET_KEY" ]; then
+            echo "ERROR: add MINIO_ACCESS_KEY and MINIO_SECRET_KEY to the 'production' environment secrets first."
+            exit 1
+          fi
+
+      - name: Update .env over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          MINIO_ENDPOINT: ${{ inputs.endpoint }}
+          MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+          MINIO_BUCKET: ${{ inputs.bucket }}
+          MINIO_USE_SSL: ${{ inputs.use_ssl }}
+          MINIO_PUBLIC_BASE_URL: ${{ inputs.public_base_url }}
+          RESTART_SERVICES: ${{ inputs.restart_services }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          command_timeout: 20m
+          envs: DEPLOY_PATH,MINIO_ENDPOINT,MINIO_ACCESS_KEY,MINIO_SECRET_KEY,MINIO_BUCKET,MINIO_USE_SSL,MINIO_PUBLIC_BASE_URL,RESTART_SERVICES
+          script_stop: true
+          script: |
+            set -euo pipefail
+            test -n "${DEPLOY_PATH:-}" || { echo "ERROR: DEPLOY_PATH is not configured."; exit 1; }
+            cd "$DEPLOY_PATH"
+            test -f scripts/storage/set_minio_env.sh || { echo "ERROR: scripts/storage/set_minio_env.sh missing; run Deploy first."; exit 1; }
+
+            SCHEME=http; [ "$MINIO_USE_SSL" = "true" ] && SCHEME=https
+            if curl -sf -m 10 -o /dev/null "$SCHEME://$MINIO_ENDPOINT/minio/health/live"; then
+              echo "MinIO reachable at $SCHEME://$MINIO_ENDPOINT"
+            else
+              echo "WARNING: $SCHEME://$MINIO_ENDPOINT/minio/health/live is not reachable from the server."
+            fi
+
+            bash scripts/storage/set_minio_env.sh .env
+
+            if [ "$RESTART_SERVICES" = "true" ]; then
+              echo "Recreating media services with the new environment..."
+              RUN_MIGRATIONS=false docker compose up -d --no-deps operationsservice aiinspectionservice
+              sleep 10
+              docker compose logs --tail=20 operationsservice aiinspectionservice
+            fi

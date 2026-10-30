@@ -26,15 +26,18 @@ public class MaintenanceTicketService : IMaintenanceTicketService
     private readonly ApplicationDbContext _db;
     private readonly ICurrentUserServices _currentUser;
     private readonly IMissionRealtimeNotifier? _notifier;
+    private readonly IFileStorageService? _fileStorage;
 
     public MaintenanceTicketService(
         ApplicationDbContext db,
         ICurrentUserServices currentUser,
-        IMissionRealtimeNotifier? notifier = null)
+        IMissionRealtimeNotifier? notifier = null,
+        IFileStorageService? fileStorage = null)
     {
         _db = db;
         _currentUser = currentUser;
         _notifier = notifier;
+        _fileStorage = fileStorage;
     }
 
     public async Task<MaintenanceTicketDto> CreateTicketAsync(CreateMaintenanceTicketRequest request, CancellationToken ct = default)
@@ -264,7 +267,25 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             throw new BusinessRuleException("File extension is prohibited");
         }
 
-        var fileUrl = $"https://storage.uavpms.internal/proofs/{ticket.Id}/{FileSanitizer.GenerateUniqueFileName(file.FileName)}";
+        // The proof photo is stored in MinIO (or local storage without MinIO); a placeholder URL is used only
+        // when no storage service is wired (unit tests).
+        string fileUrl;
+        if (_fileStorage != null)
+        {
+            await using var stream = file.OpenReadStream();
+            try
+            {
+                fileUrl = await _fileStorage.SaveImageAsync(stream, file.FileName, ct);
+            }
+            catch (Exception ex) when (ex is not BusinessRuleException)
+            {
+                throw new InfrastructureOperationException("STORAGE_FAILURE", "Failed to store maintenance proof.", ex);
+            }
+        }
+        else
+        {
+            fileUrl = $"https://storage.uavpms.internal/proofs/{ticket.Id}/{FileSanitizer.GenerateUniqueFileName(file.FileName)}";
+        }
 
         var proof = new MaintenanceProof
         {

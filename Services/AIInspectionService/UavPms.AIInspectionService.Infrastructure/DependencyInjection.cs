@@ -1,3 +1,4 @@
+using UavPms.Shared.Contracts.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -104,14 +105,16 @@ public static class DependencyInjection
             services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(StackExchange.Redis.ConnectionMultiplexer.Connect(configOptions));
         }
 
-        // Media URL columns store Supabase object keys and are rebuilt from Supabase:Url on read (plan item 2.8).
-        UavPms.Shared.Contracts.Settings.StorageKeys.Configure(configuration["Supabase:Url"]);
+        // Media lives in MinIO; URL columns store bucket/object keys rebuilt from the public base on read (plan item 2.8).
+        services.AddOptions<MinioOptions>().Bind(configuration.GetSection(MinioOptions.SectionName));
+        var minio = configuration.GetSection(MinioOptions.SectionName).Get<MinioOptions>() ?? new MinioOptions();
+        StorageKeys.Configure(minio.IsConfigured || !string.IsNullOrWhiteSpace(minio.PublicBaseUrl) ? minio.ResolvedPublicBaseUrl : null);
 
-        // Đăng ký File Storage Service (Tự động chọn Supabase nếu có ApiKey, ngược lại dùng Local)
-        var supabaseKey = configuration["Supabase:ApiKey"];
-        if (!string.IsNullOrEmpty(supabaseKey) && !supabaseKey.Contains("YOUR_SUPABASE_SERVICE_ROLE_KEY"))
+        // Đăng ký File Storage Service (MinIO khi đã cấu hình Minio:Endpoint/AccessKey/SecretKey, ngược lại dùng Local)
+        if (minio.IsConfigured)
         {
-            services.AddScoped<IFileStorageService, SupabaseFileStorageService>();
+            services.AddSingleton(_ => MinioFileStorageService.CreateClient(minio));
+            services.AddScoped<IFileStorageService, MinioFileStorageService>();
         }
         else
         {

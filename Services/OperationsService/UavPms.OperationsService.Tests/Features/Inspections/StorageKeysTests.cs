@@ -11,8 +11,8 @@ namespace UavPms.OperationsService.Tests.Features.Inspections;
 
 public class StorageKeysTests
 {
-    private const string Host = "https://unit-test-project.supabase.co";
-    private const string Base = Host + "/storage/v1/object/public/";
+    private const string Host = "http://minio.unit-test:9000";
+    private const string Base = Host + "/";
 
     // StorageKeys is process-wide; other tests only use URLs outside this host, which pass through unchanged.
     private static void WithHost(Action test)
@@ -23,18 +23,18 @@ public class StorageKeysTests
     }
 
     [Fact]
-    public void SupabasePublicUrl_RoundTripsThroughKey() => WithHost(() =>
+    public void MinioPathStyleUrl_RoundTripsThroughKey() => WithHost(() =>
     {
-        var url = Base + "uav-images/abc%20x.jpg";
+        var url = Base + "uav-media/2026/10/abc_x.jpg";
 
-        StorageKeys.ToKey(url).Should().Be("uav-images/abc%20x.jpg");
-        StorageKeys.ToUrl("uav-images/abc%20x.jpg").Should().Be(url);
+        StorageKeys.ToKey(url).Should().Be("uav-media/2026/10/abc_x.jpg");
+        StorageKeys.ToUrl("uav-media/2026/10/abc_x.jpg").Should().Be(url);
     });
 
     [Theory]
     [InlineData("/images/local.jpg")]
     [InlineData("https://cdn.example.com/x.jpg")]
-    [InlineData("https://other-project.supabase.co/storage/v1/object/public/b/1.jpg")]
+    [InlineData("https://legacy-project.supabase.co/storage/v1/object/public/b/1.jpg")]
     [InlineData("")]
     public void LocalPathsAndOtherHosts_AreStoredAndReturnedUnchanged(string value) => WithHost(() =>
     {
