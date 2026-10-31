@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ""
+      errors_since:
+        description: "Show ERR/FTL log entries (with stack traces) from this far back, e.g. 30m, 6h, 48h"
+        required: false
+        type: string
+        default: "6h"
 
 concurrency:
   group: production-diagnostics
@@ -27,12 +32,13 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           GATEWAY_HEALTH_URL: ${{ secrets.GATEWAY_HEALTH_URL }}
           DIAGNOSTIC_SERVICE: ${{ inputs.service }}
+          ERRORS_SINCE: ${{ inputs.errors_since }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
-          envs: DEPLOY_PATH,GATEWAY_HEALTH_URL,DIAGNOSTIC_SERVICE
+          envs: DEPLOY_PATH,GATEWAY_HEALTH_URL,DIAGNOSTIC_SERVICE,ERRORS_SINCE
           script_stop: false
           script: |
             DEPLOY_DIR="${DEPLOY_PATH:-}"
@@ -96,6 +102,15 @@ jobs:
                 printf '%s\n' "$COMPOSE_SERVICES"
               fi
             fi
+
+            # The tails below are mostly EF SQL from the outbox poller (every 2s), so an exception is gone from them
+            # within a minute or two; this section keeps only error entries and the stack trace lines after them.
+            SINCE="${ERRORS_SINCE:-6h}"
+            printf '%s' "$SINCE" | grep -E '^[0-9]+[smh]$' >/dev/null 2>&1 || SINCE=6h
+            echo "========== ERRORS (ERR/FTL, last $SINCE) =========="
+            docker compose logs --no-color --since "$SINCE" 2>&1 \
+              | grep -E -A 40 '(ERR|FTL)\]|fail:|Unhandled exception' \
+              | tail -n 800 || true
 
             echo "========== AI INSPECTION LOGS =========="
             docker compose logs --tail=300 aiinspectionservice 2>&1 || true
