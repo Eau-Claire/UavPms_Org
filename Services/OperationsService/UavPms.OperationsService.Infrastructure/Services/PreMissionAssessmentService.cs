@@ -148,7 +148,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
     public async Task<PreMissionAssessment> GetAsync(Guid id, CancellationToken ct)
     {
-        await RequireManagerOrInspector(ct);
+        await RequireAssessmentReader(ct);
 
         var assessment = await _db.PreMissionAssessments
             .Include(a => a.Mission)
@@ -177,10 +177,10 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
     public async Task<IReadOnlyList<PreMissionAssessment>> ListAsync(string? status, CancellationToken ct)
     {
-        await RequireManagerOrInspector(ct);
+        await RequireAssessmentReader(ct);
 
         var isGlobal = _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
-        var isInspector = _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase);
+        var isInspector = IsFieldReader();
         List<Guid?>? userScopes = null;
         if (!isGlobal)
         {
@@ -906,6 +906,26 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             throw new ForbiddenException("ACTIVE_USER_REQUIRED");
     }
 
+    /// <summary>Inspectors and technicians read every assessment: they inspect drones and fly for any region.
+    /// Write actions are still limited by RequireManager / RequireManagerOrInspector.</summary>
+    private bool IsFieldReader() =>
+        _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase) ||
+        _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
+        _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase);
+
+    private async Task RequireAssessmentReader(CancellationToken ct)
+    {
+        if (_current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
+            _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
+                throw new ForbiddenException("AUTHENTICATION_REQUIRED");
+            return;
+        }
+
+        await RequireManagerOrInspector(ct);
+    }
+
     private async Task EnsureManagerHasAssessmentAccessAsync(PreMissionAssessment assessment, CancellationToken ct)
     {
         if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
@@ -926,7 +946,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             return;
         }
 
-        if (_current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase))
+        if (IsFieldReader())
         {
             return;
         }

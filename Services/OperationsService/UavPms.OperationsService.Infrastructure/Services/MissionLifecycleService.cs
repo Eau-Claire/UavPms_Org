@@ -1223,7 +1223,9 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 Id = x.Id.ToString(),
                 SenderId = x.SenderId.HasValue ? x.SenderId.Value.ToString() : string.Empty,
                 SenderName = x.Sender != null ? x.Sender.FullName : "Hệ thống",
-                SenderRole = x.SenderId == null ? "SYSTEM" : (x.SenderId == x.Mission!.ManagerId ? "MANAGER" : "INSPECTOR"),
+                SenderRole = x.SenderId == null ? "SYSTEM" : (x.SenderId == x.Mission!.ManagerId ? "MANAGER" : SenderRoleOf(
+                    x.Mission.Assignments.Where(a => a.UserId == x.SenderId).Select(a => a.AssignmentRole).FirstOrDefault(),
+                    x.Sender!.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault())),
                 Type = x.Type,
                 Content = x.Content,
                 Timestamp = x.CreatedAt
@@ -1516,7 +1518,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             var statusStr = t.Status switch
             {
                 TicketStatus.Open => "Pending",
-                TicketStatus.InProgress or TicketStatus.PendingVerification => "InProgress",
+                TicketStatus.InProgress => "InProgress",
+                TicketStatus.PendingVerification => "PendingVerification",
                 TicketStatus.Resolved or TicketStatus.Closed => "Completed",
                 _ => "Pending"
             };
@@ -1557,13 +1560,28 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 MissionId = x.MissionId.ToString(),
                 SenderUserId = x.SenderId.HasValue ? x.SenderId.Value.ToString() : string.Empty,
                 SenderName = x.Sender != null ? x.Sender.FullName : "Hệ thống",
-                SenderRole = x.SenderId == null ? "SYSTEM" : (x.SenderId == x.Mission!.ManagerId ? "MANAGER" : "INSPECTOR"),
+                SenderRole = x.SenderId == null ? "SYSTEM" : (x.SenderId == x.Mission!.ManagerId ? "MANAGER" : SenderRoleOf(
+                    x.Mission.Assignments.Where(a => a.UserId == x.SenderId).Select(a => a.AssignmentRole).FirstOrDefault(),
+                    x.Sender!.UserRoles.Select(ur => ur.Role!.RoleName).FirstOrDefault())),
                 Content = x.Content,
                 Timestamp = x.CreatedAt
             })
             .ToListAsync(ct);
 
         return logs;
+    }
+
+    /// <summary>Role badge of a non-manager message sender: their assignment role on the mission, else their account role.</summary>
+    internal static string SenderRoleOf(string? assignmentRole, string? accountRole)
+    {
+        if (!string.IsNullOrWhiteSpace(assignmentRole)) return assignmentRole.Trim().ToUpperInvariant();
+        return (accountRole ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "analyst" => "ANALYST",
+            "technician" or "maintenancetechnician" => "TECHNICIAN",
+            "manager" or "systemadmin" => "MANAGER",
+            _ => "INSPECTOR"
+        };
     }
 
     public async Task<MissionActivityDto> AddActivityAsync(

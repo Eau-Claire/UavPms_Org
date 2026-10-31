@@ -16,9 +16,12 @@ namespace UavPms.OperationsService.API.Controllers;
 [ApiVersion("1.0")]
 [ApiVersion("2.0")]
 [Route("api/v{version:apiVersion}/pre-mission-assessments")]
-[Authorize(Roles = UserRoles.AdminManagerInspector)]
+// Roles are set per action: technicians may read assessments (MF01 drone technical inspection) but not change them.
+[Authorize]
 public sealed class PreMissionAssessmentV2Controller : ControllerBase
 {
+    private const string AssessmentReaders = $"{UserRoles.AdminManagerInspector},{UserRoles.Technician},{UserRoles.MaintenanceTechnician}";
+
     private readonly PreMissionAssessmentService _service;
     private readonly ISender? _mediator;
 
@@ -44,6 +47,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = AssessmentReaders)]
     public async Task<IActionResult> List(
         [FromQuery] string? status,
         [FromQuery] int page = 1,
@@ -66,6 +70,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = AssessmentReaders)]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     {
         var assessment = await _service.GetAsync(id, ct);
@@ -73,6 +78,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/evaluate")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
     public async Task<IActionResult> Evaluate(Guid id, CancellationToken ct)
     {
         var assessment = await _service.EvaluateAsync(id, ct);
@@ -80,6 +86,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/re-evaluate")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
     public async Task<IActionResult> ReEvaluate(Guid id, CancellationToken ct)
     {
         var assessment = await _service.EvaluateAsync(id, ct);
@@ -87,6 +94,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/create-mission")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
     public async Task<IActionResult> CreateMission(Guid id, [FromBody] CreateMissionFromAssessmentRequest request, CancellationToken ct)
     {
         var finalRequest = request.AssessmentId == id
@@ -98,6 +106,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/mark-completed")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
     public async Task<IActionResult> MarkCompleted(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
     {
         var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
@@ -105,6 +114,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/consume")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
     public async Task<IActionResult> Consume(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
     {
         var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
@@ -112,6 +122,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelAssessmentRequest? request, CancellationToken ct)
     {
         var assessment = await _service.CancelAsync(id, request?.Reason, ct);
@@ -132,6 +143,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpGet("{id:guid}/resource-readiness")]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
     public async Task<IActionResult> GetResourceReadiness(Guid id, CancellationToken ct)
     {
         if (_mediator != null)
