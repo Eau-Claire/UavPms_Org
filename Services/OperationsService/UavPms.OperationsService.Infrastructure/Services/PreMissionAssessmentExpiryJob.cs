@@ -1,7 +1,10 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using UavPms.OperationsService.Application.Features.Assessments.Policies;
+using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Infrastructure.Persistence;
 
@@ -67,25 +70,42 @@ public sealed class PreMissionAssessmentExpiryJob : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
+        // NS-01: Ready assessments whose validity (or planned end) is reached. Same boundary as AssessmentExpiryPolicy
+        // (<=), so the job and the on-read expiry agree. Other statuses are expired when read, evaluated or used.
         var now = DateTime.UtcNow;
         var expiredAssessments = await db.PreMissionAssessments
             .Where(x => !x.IsDeleted &&
                         x.Status == PreMissionAssessmentStatus.Ready &&
-                        x.ValidUntil.HasValue &&
-                        x.ValidUntil.Value < now)
+                        ((x.ValidUntil != null && x.ValidUntil <= now) || x.PlannedEnd <= now))
             .ToListAsync(cancellationToken);
 
-        if (expiredAssessments.Count == 0)
-            return 0;
-
+        var count = 0;
         foreach (var assessment in expiredAssessments)
         {
-            assessment.Status = PreMissionAssessmentStatus.Expired;
+            var previousStatus = assessment.Status;
+            if (!AssessmentExpiryPolicy.CheckAndApplyExpiry(assessment))
+                continue;
+
             assessment.UpdatedAt = now;
+            count++;
+            db.AuditLogs.Add(new AuditLog
+            {
+                UserId = null,
+                TableName = "PreMissionAssessments",
+                RecordId = assessment.Id,
+                ActionType = "ASSESSMENT_EXPIRED",
+                OldValues = JsonSerializer.Serialize(new { status = previousStatus.ToString(), assessment.ValidUntil }),
+                NewValues = JsonSerializer.Serialize(new { status = assessment.Status.ToString(), source = "PreMissionAssessmentExpiryJob" }),
+                IpAddress = string.Empty,
+                UserAgent = nameof(PreMissionAssessmentExpiryJob)
+            });
         }
 
+        if (count == 0)
+            return 0;
+
         await db.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("Auto-expired {Count} pre-mission assessment(s) that exceeded ValidUntil threshold.", expiredAssessments.Count);
-        return expiredAssessments.Count;
+        _logger.LogInformation("Auto-expired {Count} pre-mission assessment(s) that exceeded ValidUntil threshold.", count);
+        return count;
     }
 }

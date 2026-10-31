@@ -71,21 +71,22 @@ public static class SiteFeasibilityPolicy
             );
         }
 
-        var towersWithoutLocation = towers.Where(a => a.Geom == null).Select(a => a.Id).ToList();
+        // BR-15: every target tower needs coordinates, whether or not a boundary is given.
+        var towersWithoutLocation = towers.Where(a => a.Geom == null || a.Geom.IsEmpty).Select(a => a.Id).ToList();
+        if (towersWithoutLocation.Count > 0)
+        {
+            findings["towersWithoutLocation"] = towersWithoutLocation;
+            findings["error"] = "One or more target towers have no geographic location.";
+            return new SiteFeasibilityResult(
+                ReadinessCheckStatus.Failed,
+                JsonSerializer.Serialize(findings),
+                false,
+                "TOWER_MISSING_GEOLOCATION"
+            );
+        }
+
         if (proposedBoundary != null)
         {
-            if (towersWithoutLocation.Count > 0)
-            {
-                findings["towersWithoutLocation"] = towersWithoutLocation;
-                findings["error"] = "Towers missing geographic location cannot be verified against boundary.";
-                return new SiteFeasibilityResult(
-                    ReadinessCheckStatus.Failed,
-                    JsonSerializer.Serialize(findings),
-                    false,
-                    "TOWER_MISSING_GEOLOCATION"
-                );
-            }
-
             var outsideBoundary = towers.Where(a => a.Geom != null && !proposedBoundary.Covers(a.Geom)).Select(a => a.Id).ToList();
             if (outsideBoundary.Count > 0)
             {

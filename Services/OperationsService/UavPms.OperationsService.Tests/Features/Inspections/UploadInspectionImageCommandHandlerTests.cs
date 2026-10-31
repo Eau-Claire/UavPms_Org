@@ -42,6 +42,8 @@ public class UploadInspectionImageCommandHandlerTests
         _fileStorageServiceMock = new Mock<IFileStorageService>();
         _eventPublisherMock = new Mock<IEventPublisher>();
         _currentUserServicesMock = new Mock<ICurrentUserServices>();
+        // Field uploads come from Inspector accounts; tests that check other roles override this.
+        _currentUserServicesMock.Setup(s => s.Roles).Returns(new[] { UserRoles.Inspector });
         _loggerMock = new Mock<ILogger<UploadInspectionImageCommandHandler>>();
 
         _handler = new UploadInspectionImageCommandHandler(
@@ -174,11 +176,37 @@ public class UploadInspectionImageCommandHandlerTests
         _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<InspectionMediaUploadedEvent>()), Times.Never);
     }
 
+    [Fact]
+    public async Task Handle_AssignedAnalyst_CannotUpload()
+    {
+        var missionId = Guid.NewGuid();
+        var analystId = Guid.NewGuid();
+        var mission = new Mission
+        {
+            Id = missionId,
+            ManagerId = Guid.NewGuid(),
+            Assignments = { new MissionAssignment { UserId = analystId, AssignmentRole = "INSPECTOR" } },
+            Status = MissionStatus.InProgress
+        };
+        _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false)).ReturnsAsync(mission);
+        _currentUserServicesMock.Setup(s => s.UserId).Returns(analystId);
+        _currentUserServicesMock.Setup(s => s.Roles).Returns(new[] { UserRoles.Analyst });
+
+        Func<Task> act = async () => await _handler.Handle(new UploadInspectionImageCommand
+        {
+            MissionId = missionId, CapturedAt = DateTime.UtcNow, FileStream = new MemoryStream(), FileName = "a.jpg", ContentType = "image/jpeg"
+        }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ForbiddenException>();
+        _fileStorageServiceMock.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Theory]
     [InlineData(UserRoles.SystemAdmin, false, true)]
     [InlineData(UserRoles.Manager, true, true)]
     [InlineData(UserRoles.Manager, false, false)]
     [InlineData(UserRoles.Analyst, true, false)]
+    [InlineData(UserRoles.Technician, false, false)]
     public async Task Handle_UnassignedUser_MayUploadOnlyAsAdminOrTheMissionManager(string role, bool isMissionManager, bool allowed)
     {
         var missionId = Guid.NewGuid();

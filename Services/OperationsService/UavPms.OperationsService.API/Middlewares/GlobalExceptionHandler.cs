@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Net;
 using UavPms.OperationsService.API.Controllers;
 using UavPms.OperationsService.Application.Common.Exceptions;
+using UavPms.OperationsService.Infrastructure.Persistence;
 
 namespace UavPms.OperationsService.API.Middlewares;
 
@@ -21,6 +22,13 @@ public class GlobalExceptionHandler : IExceptionHandler
         _logger.LogError(exception, "An unhandled exception occurred: {Message}", exception.Message);
 
         ApiResponse apiResponse;
+
+        // A race lost to a database constraint (booking exclusion, unique index) is a conflict, not a server error.
+        if (exception is DbUpdateException dbUpdateException and not DbUpdateConcurrencyException
+            && DbConstraintErrors.Translate(dbUpdateException) is { } translated)
+        {
+            exception = translated;
+        }
 
         if (exception is ValidationException validationException)
         {
@@ -98,13 +106,7 @@ public class GlobalExceptionHandler : IExceptionHandler
                     ? "INVALID_MISSION_TOWER"
                     : "BUSINESS_RULE_VIOLATION");
 
-            var isConflict = code is "INVALID_MISSION_STATE"
-                or "RESOURCE_BOOKING_CONFLICT"
-                or "MISSION_CONCURRENCY_CONFLICT"
-                or "ASSESSMENT_CONCURRENCY_CONFLICT"
-                or "IDEMPOTENCY_CONFLICT"
-                or "DUPLICATE_MEDIA"
-                or "ALERT_ALREADY_ACTIVE";
+            var isConflict = IsConflictCode(code);
 
             httpContext.Response.StatusCode = isConflict ? (int)HttpStatusCode.Conflict : (int)HttpStatusCode.BadRequest;
             apiResponse = new ApiResponse(
@@ -144,7 +146,26 @@ public class GlobalExceptionHandler : IExceptionHandler
         }
 
         await httpContext.Response.WriteAsJsonAsync(apiResponse, cancellationToken);
-        
+
         return true;
     }
+
+    /// <summary>Business codes returned as 409 Conflict: the request clashes with the current state of a resource.</summary>
+    public static bool IsConflictCode(string code) => code is "INVALID_MISSION_STATE"
+        or "RESOURCE_BOOKING_CONFLICT"
+        or "MISSION_CONCURRENCY_CONFLICT"
+        or "CONCURRENCY_CONFLICT"
+        or "ASSESSMENT_CONCURRENCY_CONFLICT"
+        or "IDEMPOTENCY_CONFLICT"
+        or "IDEMPOTENCY_KEY_REUSED"
+        or "DUPLICATE_MEDIA"
+        or "ALERT_ALREADY_ACTIVE"
+        or "DUPLICATE_ASSIGNMENT"
+        or "ASSIGNEE_ALREADY_ASSIGNED"
+        or "DUPLICATE_CHECK_IN"
+        or "DUPLICATE_HANDOVER"
+        or "DUPLICATE_RESOURCE"
+        or "DRONE_IN_USE"
+        or "REQUIRED_ACCEPTANCE_PENDING"
+        or "HANDOVER_REJECTED";
 }

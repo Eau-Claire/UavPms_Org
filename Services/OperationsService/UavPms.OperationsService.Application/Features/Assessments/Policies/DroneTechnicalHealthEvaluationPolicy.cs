@@ -1,6 +1,5 @@
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
-using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 
 namespace UavPms.OperationsService.Application.Features.Assessments.Policies;
@@ -26,6 +25,11 @@ public record DroneTechnicalEvaluationResult(
     bool AnyWarning
 );
 
+/// <summary>
+/// BR-22 / BR-23: an inspection is Failed when a critical item fails. Health is Critical when a critical item fails,
+/// Warning when a non-critical item fails or a battery reading is in the warning band, otherwise Healthy.
+/// A critical or required item without any reading (no Passed, BoolValue or NumericValue) fails.
+/// </summary>
 public static class DroneTechnicalHealthEvaluationPolicy
 {
     private static readonly HashSet<string> KnownCriticalCodes = new(StringComparer.OrdinalIgnoreCase)
@@ -46,6 +50,11 @@ public static class DroneTechnicalHealthEvaluationPolicy
         "RF_LINK_TELEMETRY",
         "TELEMETRY"
     };
+
+    private static readonly HashSet<string> BatteryCodes = new(StringComparer.OrdinalIgnoreCase) { "BATTERY_HEALTH", "BATTERY" };
+    private static readonly HashSet<string> RfLinkCodes = new(StringComparer.OrdinalIgnoreCase) { "RF_LINK_TELEMETRY", "TELEMETRY" };
+
+    public static bool IsKnownCritical(string metricCode) => KnownCriticalCodes.Contains(metricCode);
 
     public static DroneTechnicalEvaluationResult Evaluate(
         IReadOnlyList<DroneMetricSubmitDto>? requestedMetrics,
@@ -69,9 +78,16 @@ public static class DroneTechnicalHealthEvaluationPolicy
                 "Technical inspection requires at least one diagnostic or telemetry metric.");
         }
 
+        if (requestedMetrics.Any(m => m == null || string.IsNullOrWhiteSpace(m.MetricCode) || string.IsNullOrWhiteSpace(m.Subsystem)))
+        {
+            throw new BusinessRuleException(
+                "METRICS_REQUIRED",
+                "Every metric needs a metric code and a subsystem.");
+        }
+
         // Check duplicates for (Subsystem, MetricCode)
         var duplicate = requestedMetrics
-            .GroupBy(m => $"{m.Subsystem}:{m.MetricCode}", StringComparer.OrdinalIgnoreCase)
+            .GroupBy(m => $"{m.Subsystem.Trim()}:{m.MetricCode.Trim()}", StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault(g => g.Count() > 1);
 
         if (duplicate != null)
@@ -84,118 +100,85 @@ public static class DroneTechnicalHealthEvaluationPolicy
         var evaluatedMetrics = new List<EvaluatedMetricResult>();
         var anyCriticalFailed = false;
         var anyFailed = false;
+        var anyBatteryWarning = false;
 
         foreach (var m in requestedMetrics)
         {
-            var isKnownCritical = KnownCriticalCodes.Contains(m.MetricCode) || m.Critical;
-            var passed = true;
-            var critical = isKnownCritical;
-            var severity = m.Severity ?? "Medium";
+            // A known critical item stays critical even when the client omits or clears the flag (BR-22).
+            var critical = KnownCriticalCodes.Contains(m.MetricCode) || m.Critical;
+            var mustHaveReading = critical || m.IsRequired;
+            bool passed;
+            string severity;
 
-            if (m.MetricCode.Equals("BATTERY_HEALTH", StringComparison.OrdinalIgnoreCase) ||
-                m.MetricCode.Equals("BATTERY", StringComparison.OrdinalIgnoreCase))
+            if (BatteryCodes.Contains(m.MetricCode))
             {
-                var batteryVal = m.NumericValue ?? (decimal)droneBatteryLevel;
-                if (batteryVal < criticalBatteryThreshold)
+                decimal? batteryVal = m.NumericValue ?? (droneBatteryLevel > 0 ? (decimal)droneBatteryLevel : null);
+                if (!batteryVal.HasValue)
+                {
+                    // No level at all: only an explicit verdict counts; otherwise the item has no reading.
+                    passed = m.Passed ?? m.BoolValue ?? !mustHaveReading;
+                    severity = passed ? "Low" : "Critical";
+                }
+                else if (batteryVal.Value < criticalBatteryThreshold)
                 {
                     passed = false;
-                    critical = true;
                     severity = "Critical";
                 }
-                else if (batteryVal < warningBatteryThreshold)
+                else if (batteryVal.Value < warningBatteryThreshold)
                 {
+                    // BR-23: a low battery passes with a warning.
                     passed = true;
-                    critical = false;
+                    anyBatteryWarning = true;
                     severity = "Medium";
                 }
                 else
                 {
                     passed = true;
-                    critical = false;
                     severity = "Low";
                 }
 
-                if (m.Passed.HasValue && !m.Passed.Value)
+                if (m.Passed == false || m.BoolValue == false)
                 {
                     passed = false;
-                    critical = true;
-                }
-            }
-            else if (m.MetricCode.Equals("IMU_CALIBRATION", StringComparison.OrdinalIgnoreCase) ||
-                     m.MetricCode.Equals("IMU", StringComparison.OrdinalIgnoreCase) ||
-                     m.MetricCode.Equals("GPS_RTK_FIX", StringComparison.OrdinalIgnoreCase) ||
-                     m.MetricCode.Equals("GPS_FIX", StringComparison.OrdinalIgnoreCase) ||
-                     m.MetricCode.Equals("ESC_PROPULSION", StringComparison.OrdinalIgnoreCase) ||
-                     m.MetricCode.Equals("PROP_INTEGRITY", StringComparison.OrdinalIgnoreCase))
-            {
-                critical = true;
-                if (m.Passed.HasValue)
-                {
-                    passed = m.Passed.Value;
-                }
-                else if (m.BoolValue.HasValue)
-                {
-                    passed = m.BoolValue.Value;
-                }
-                else
-                {
-                    passed = true;
-                }
-
-                if (!passed)
-                {
                     severity = "Critical";
                 }
             }
-            else if (m.MetricCode.Equals("RF_LINK_TELEMETRY", StringComparison.OrdinalIgnoreCase) ||
-                     m.MetricCode.Equals("TELEMETRY", StringComparison.OrdinalIgnoreCase))
+            else if (RfLinkCodes.Contains(m.MetricCode))
             {
-                critical = true;
                 if (m.NumericValue.HasValue && m.NumericValue.Value < minRfLinkThreshold)
-                {
                     passed = false;
-                    severity = "Critical";
-                }
                 else if (m.Passed.HasValue)
-                {
                     passed = m.Passed.Value;
-                }
                 else if (m.BoolValue.HasValue)
-                {
                     passed = m.BoolValue.Value;
-                }
+                else if (m.NumericValue.HasValue)
+                    passed = true;
+                else
+                    passed = !mustHaveReading;
 
-                if (!passed)
-                {
-                    severity = "Critical";
-                }
+                severity = passed ? "Low" : (critical ? "Critical" : "Medium");
             }
             else
             {
-                // General or custom metric
                 if (m.Passed.HasValue)
-                {
                     passed = m.Passed.Value;
-                }
                 else if (m.BoolValue.HasValue)
-                {
                     passed = m.BoolValue.Value;
-                }
                 else if (m.NumericValue.HasValue)
-                {
                     passed = m.NumericValue.Value >= 0;
-                }
+                else
+                    passed = !mustHaveReading;
 
-                critical = m.Critical;
+                severity = passed
+                    ? "Low"
+                    : (critical ? "Critical" : (string.IsNullOrWhiteSpace(m.Severity) || m.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ? "Medium" : m.Severity));
             }
 
             if (!passed)
             {
                 anyFailed = true;
                 if (critical)
-                {
                     anyCriticalFailed = true;
-                }
             }
 
             evaluatedMetrics.Add(new EvaluatedMetricResult(
@@ -216,16 +199,17 @@ public static class DroneTechnicalHealthEvaluationPolicy
             ? DroneTechnicalInspectionStatus.Failed
             : DroneTechnicalInspectionStatus.Passed;
 
+        var anyWarning = !anyCriticalFailed && (anyFailed || anyBatteryWarning);
         var health = anyCriticalFailed
             ? TechnicalHealth.Critical
-            : (anyFailed ? TechnicalHealth.Warning : TechnicalHealth.Healthy);
+            : (anyWarning ? TechnicalHealth.Warning : TechnicalHealth.Healthy);
 
         return new DroneTechnicalEvaluationResult(
             status,
             health,
             evaluatedMetrics,
             anyCriticalFailed,
-            anyFailed && !anyCriticalFailed
+            anyWarning
         );
     }
 }

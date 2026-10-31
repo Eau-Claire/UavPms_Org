@@ -8,6 +8,7 @@ using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Application.Features.Assessments;
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
+using UavPms.OperationsService.Application.Features.Assessments.Policies;
 using UavPms.OperationsService.Application.Features.Drones;
 using UavPms.OperationsService.Application.Features.Drones.DTOs;
 using UavPms.OperationsService.Application.Features.FlightControllers.DTOs;
@@ -326,9 +327,9 @@ public sealed class UavManagementService : IUavManagementService
             new DroneMetricSubmitDto(
                 "GPS_RTK_FIX",
                 "Avionics",
-                request.GpsSatelliteCount ?? 18,
+                request.GpsSatelliteCount,
                 null,
-                $"Trạng thái GPS Fix: {request.GpsFixStatus ?? "3D_FIX_RTK"} | Vệ tinh: {request.GpsSatelliteCount ?? 18}",
+                $"Trạng thái GPS Fix: {request.GpsFixStatus ?? "3D_FIX_RTK"} | Vệ tinh: {request.GpsSatelliteCount?.ToString() ?? "N/A"}",
                 "Sats",
                 request.GpsPassed,
                 true,
@@ -338,7 +339,7 @@ public sealed class UavManagementService : IUavManagementService
             new DroneMetricSubmitDto(
                 "RF_LINK_TELEMETRY",
                 "Communication",
-                request.CommunicationConnected == false ? 0m : 95m,
+                request.CommunicationConnected == false ? 0m : (decimal?)null,
                 null,
                 $"Tín hiệu: {request.CommunicationSignalInfo ?? "RSSI -62dBm"} | Kết nối: {(request.CommunicationConnected != false ? "Connected" : "Disconnected")}",
                 "%",
@@ -375,110 +376,67 @@ public sealed class UavManagementService : IUavManagementService
         return MapInspectionToSummaryDto(inspection);
     }
 
+    /// <summary>
+    /// GIS scope estimate (BR-21). Suitability is judged from the scope and the UAV's endurance/range only
+    /// (<see cref="UavScopeSuitabilityPolicy"/>); availability and technical readiness are reported separately in
+    /// IsAvailable / IsTechnicallyReady. With an assessment, the corridor comes from the real tower coordinates
+    /// in sequence order and availability/readiness use the same evaluator as the assessment (window, bookings,
+    /// inspection validity).
+    /// </summary>
     public async Task<GisDroneEstimationResult> EstimateGisScopeDronesAsync(
         GisDroneEstimationRequest request,
         CancellationToken ct = default)
     {
         double corridorKm = request.CorridorLengthKm.GetValueOrDefault(0.0);
         int assetCount = request.AssetCount.GetValueOrDefault(0);
+        PreMissionAssessment? assessment = null;
 
         if (request.AssessmentId.HasValue && request.AssessmentId.Value != Guid.Empty)
         {
-            var assessment = await _db.PreMissionAssessments
+            assessment = await _db.PreMissionAssessments
                 .Include(a => a.Towers)
                 .SingleOrDefaultAsync(a => a.Id == request.AssessmentId.Value && !a.IsDeleted, ct);
 
-            if (assessment != null)
+            if (assessment != null && assessment.Towers.Count > 0)
             {
-                assetCount = Math.Max(assetCount, assessment.Towers.Count);
-                if (corridorKm <= 0 && assetCount > 0)
-                {
-                    corridorKm = Math.Round(assetCount * 0.35, 2); // 350m average tower distance
-                }
+                var (towerCorridorKm, towerCount) = await DroneReadinessEvaluator.EstimateScopeAsync(_db, assessment.Towers, ct);
+                assetCount = Math.Max(assetCount, towerCount);
+                if (corridorKm <= 0)
+                    corridorKm = towerCorridorKm;
             }
         }
 
-        if (corridorKm <= 0) corridorKm = 5.0; // Default 5km corridor
-        if (assetCount <= 0) assetCount = (int)Math.Max(1, Math.Round(corridorKm / 0.35));
+        if (corridorKm <= 0 && assetCount <= 0) corridorKm = 5.0; // Manual estimate without any input: 5 km corridor
+        if (assetCount <= 0) assetCount = (int)Math.Max(1, Math.Round(corridorKm / UavScopeSuitabilityPolicy.FallbackTowerSpacingKm));
 
-        const double avgSpeedKmh = 36.0; // 10 m/s
-        const double reservePercent = 20.0;
-        const double inspectionMinutesPerAsset = 3.0;
+        var totalMissionMinutes = Math.Round(
+            corridorKm / UavScopeSuitabilityPolicy.AverageSpeedKmh * 60.0 + assetCount * UavScopeSuitabilityPolicy.InspectionMinutesPerTower, 1);
 
-        var transitMinutes = (corridorKm / avgSpeedKmh) * 60.0;
-        var inspectionMinutes = assetCount * inspectionMinutesPerAsset;
-        var totalMissionMinutes = Math.Round(transitMinutes + inspectionMinutes, 1);
-
-        var query = _db.Uavs.Where(x => !x.IsDeleted);
-        if (request.RegionId.HasValue && request.RegionId.Value != Guid.Empty)
+        IReadOnlyList<(Uav Drone, DroneEligibilityResult Result)> evaluated;
+        if (assessment != null)
         {
-            query = query.Where(x => x.AssignedRegionId == null || x.AssignedRegionId == request.RegionId.Value);
+            evaluated = await DroneReadinessEvaluator.EvaluateAsync(
+                _db, assessment.PlannedStart, assessment.PlannedEnd, corridorKm, assetCount, ct);
         }
-
-        var drones = await query.OrderBy(x => x.UavCode).ToListAsync(ct);
-        var droneCapabilityList = new List<GisDroneCapabilityItemDto>();
-
-        foreach (var drone in drones)
+        else
         {
-            var endurance = drone.FlightEnduranceMinutes > 0 ? drone.FlightEnduranceMinutes : 30.0;
-            var effectiveFlightMinutes = Math.Round(endurance * (1.0 - reservePercent / 100.0), 1);
-            var maxCoverageKm = Math.Round((effectiveFlightMinutes / 60.0) * avgSpeedKmh, 2);
-
-            var flightsNeeded = (int)Math.Max(1, Math.Ceiling(totalMissionMinutes / effectiveFlightMinutes));
-            var dronesNeeded = (int)Math.Max(1, Math.Ceiling(flightsNeeded / 2.0));
-
-            var isOpAvailable = drone.OperationalStatus == DroneOperationalStatus.Available;
-            var isTechReady = drone.TechnicalHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning;
-
-            string suitability;
-            string recommendation;
-
-            if (!isTechReady || drone.TechnicalHealth == TechnicalHealth.Critical)
-            {
-                suitability = "UNSUITABLE";
-                recommendation = $"Thiết bị có sức khỏe kỹ thuật {drone.TechnicalHealth}, không đạt chuẩn an toàn để triển khai.";
-            }
-            else if (!isOpAvailable)
-            {
-                suitability = "UNSUITABLE";
-                recommendation = $"Thiết bị đang ở trạng thái {drone.OperationalStatus}, không khả dụng cho đợt bay.";
-            }
-            else if (flightsNeeded == 1 && corridorKm <= drone.OperationalRangeKm)
-            {
-                suitability = "SUITABLE";
-                recommendation = $"Khả năng bay của UAV ({effectiveFlightMinutes} phút hiệu dụng) đáp ứng trọn vẹn toàn bộ phạm vi đo kiểm trong 1 lần cất cánh.";
-            }
-            else if (flightsNeeded <= 4 && corridorKm <= drone.OperationalRangeKm * 2)
-            {
-                suitability = "SUITABLE_WITH_SPLIT";
-                recommendation = $"Phạm vi đo kiểm ({totalMissionMinutes} phút, {corridorKm} km) vượt quá 1 lần bay ({effectiveFlightMinutes} phút). Khuyến nghị chia thành {flightsNeeded} đợt bay hoặc huy động {dronesNeeded} UAV song song.";
-            }
-            else
-            {
-                suitability = "UNSUITABLE";
-                recommendation = $"Phạm vi đo kiểm ({corridorKm} km) vượt quá năng lực vận hành tối đa của thiết bị ({drone.OperationalRangeKm} km).";
-            }
-
-            droneCapabilityList.Add(new GisDroneCapabilityItemDto
-            {
-                DroneId = drone.Id,
-                DroneCode = drone.UavCode,
-                DroneName = drone.Name,
-                Model = drone.Model,
-                Category = drone.Category,
-                OperationalStatus = drone.OperationalStatus.ToString(),
-                TechnicalHealth = drone.TechnicalHealth.ToString(),
-                FlightEnduranceMinutes = endurance,
-                OperationalRangeKm = drone.OperationalRangeKm,
-                EffectiveFlightMinutes = effectiveFlightMinutes,
-                MaxCoverageDistanceKm = maxCoverageKm,
-                EstimatedFlightsNeeded = flightsNeeded,
-                EstimatedDronesNeeded = dronesNeeded,
-                Suitability = suitability,
-                IsAvailable = isOpAvailable,
-                IsTechnicallyReady = isTechReady,
-                Recommendation = recommendation
-            });
+            var query = _db.Uavs.Where(x => !x.IsDeleted);
+            if (request.RegionId.HasValue && request.RegionId.Value != Guid.Empty)
+                query = query.Where(x => x.AssignedRegionId == null || x.AssignedRegionId == request.RegionId.Value);
+            var drones = await query.OrderBy(x => x.UavCode).ToListAsync(ct);
+            // No planned window: report the stored status and health; suitability is still scope-only.
+            evaluated = drones
+                .Select(d => (d, new DroneEligibilityResult(
+                    d.OperationalStatus == DroneOperationalStatus.Available,
+                    false,
+                    d.TechnicalHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning
+                        ? ResourceEligibilityStatus.Eligible
+                        : ResourceEligibilityStatus.Ineligible,
+                    d.TechnicalHealth,
+                    null,
+                    UavScopeSuitabilityPolicy.Evaluate(corridorKm, assetCount, d.FlightEnduranceMinutes, d.OperationalRangeKm),
+                    null)))
+                .ToList();
         }
 
         return new GisDroneEstimationResult
@@ -486,13 +444,17 @@ public sealed class UavManagementService : IUavManagementService
             CorridorLengthKm = corridorKm,
             AssetCount = assetCount,
             EstimatedMissionDurationMinutes = totalMissionMinutes,
-            AverageSpeedKmh = avgSpeedKmh,
-            ReserveBatteryPercent = reservePercent,
-            InspectionMinutesPerAsset = inspectionMinutesPerAsset,
-            Drones = droneCapabilityList
+            AverageSpeedKmh = UavScopeSuitabilityPolicy.AverageSpeedKmh,
+            ReserveBatteryPercent = UavScopeSuitabilityPolicy.ReserveBatteryPercent,
+            InspectionMinutesPerAsset = UavScopeSuitabilityPolicy.InspectionMinutesPerTower,
+            Drones = evaluated.Select(x => ToCapabilityItem(x.Drone, x.Result)).ToList()
         };
     }
 
+    /// <summary>
+    /// GET /drones/eligible?assessmentId= — the UAVs that the assessment evaluation would mark eligible right now
+    /// (BR-20: Available, no booking conflict in the window, a valid non-failed inspection, scope not Unsuitable).
+    /// </summary>
     public async Task<IReadOnlyList<GisDroneCapabilityItemDto>> GetEligibleDronesForAssessmentAsync(
         Guid assessmentId,
         CancellationToken ct = default)
@@ -502,15 +464,44 @@ public sealed class UavManagementService : IUavManagementService
             .SingleOrDefaultAsync(a => a.Id == assessmentId && !a.IsDeleted, ct)
             ?? throw new NotFoundException("PreMissionAssessment", assessmentId);
 
-        var estimation = await EstimateGisScopeDronesAsync(new GisDroneEstimationRequest
-        {
-            AssessmentId = assessmentId,
-            RegionId = assessment.RegionId
-        }, ct);
+        var (corridorKm, towerCount) = await DroneReadinessEvaluator.EstimateScopeAsync(_db, assessment.Towers, ct);
+        var evaluated = await DroneReadinessEvaluator.EvaluateAsync(
+            _db, assessment.PlannedStart, assessment.PlannedEnd, corridorKm, towerCount, ct);
 
-        return estimation.Drones
-            .Where(d => d.Suitability != "UNSUITABLE" && d.IsAvailable && d.IsTechnicallyReady)
+        return evaluated
+            .Where(x => x.Result.IsEligible)
+            .Select(x => ToCapabilityItem(x.Drone, x.Result))
             .ToList();
+    }
+
+    private static GisDroneCapabilityItemDto ToCapabilityItem(Uav drone, DroneEligibilityResult result)
+    {
+        var scope = result.Scope;
+        return new GisDroneCapabilityItemDto
+        {
+            DroneId = drone.Id,
+            DroneCode = drone.UavCode,
+            DroneName = drone.Name,
+            Model = drone.Model,
+            Category = drone.Category,
+            OperationalStatus = drone.OperationalStatus.ToString(),
+            TechnicalHealth = result.TechnicalHealth.ToString(),
+            FlightEnduranceMinutes = drone.FlightEnduranceMinutes,
+            OperationalRangeKm = drone.OperationalRangeKm,
+            EffectiveFlightMinutes = scope.EffectiveFlightMinutes,
+            MaxCoverageDistanceKm = scope.MaxCoverageDistanceKm,
+            EstimatedFlightsNeeded = scope.EstimatedFlightsNeeded,
+            EstimatedDronesNeeded = (int)Math.Max(1, Math.Ceiling(scope.EstimatedFlightsNeeded / 2.0)),
+            Suitability = scope.Suitability switch
+            {
+                UavScopeSuitability.Suitable => "SUITABLE",
+                UavScopeSuitability.SuitableWithSplit => "SUITABLE_WITH_SPLIT",
+                _ => "UNSUITABLE"
+            },
+            IsAvailable = result.IsOperationallyAvailable,
+            IsTechnicallyReady = result.IsTechnicallyEligible,
+            Recommendation = scope.Reason
+        };
     }
 
     private static UavDetailsDto MapToDetailsDto(Uav drone)

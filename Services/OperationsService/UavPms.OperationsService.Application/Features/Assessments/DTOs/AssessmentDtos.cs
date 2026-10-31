@@ -28,7 +28,11 @@ public record CreateMissionFromAssessmentRequest(
     InspectionObjective Objective = InspectionObjective.PeriodicInspection,
     IReadOnlyList<string>? PriorityDefects = null,
     string? EmergencyReason = null,
-    bool IsImmediate = false
+    bool IsImmediate = false,
+    /// <summary>BR-31: when Pending Acceptance passes this time the manager is notified. Must be in the future and
+    /// not after the planned start; omitted → now + Mission:ConfirmationDeadlineHours (24 h), capped at the planned start.</summary>
+    DateTime? ConfirmationDeadline = null,
+    string? ManagerInstructions = null
 );
 
 public record DroneMetricSubmitDto(
@@ -105,7 +109,11 @@ public record PreMissionAssessmentDroneDto(
     string? Suitability = null,
     int? EstimatedFlightsNeeded = null,
     double? CoverageDistanceKm = null,
-    string? SuitabilityReason = null
+    string? SuitabilityReason = null,
+    /// <summary>Operational availability (Available, Conflict, Unavailable, Unknown) separate from technical readiness.</summary>
+    bool? IsAvailable = null,
+    /// <summary>Technical eligibility (Eligible, Ineligible, RequiresInspection, Unknown).</summary>
+    string? TechnicalEligibilityStatus = null
 );
 
 public record PreMissionAssessmentDto(

@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Application.Features.Assessments;
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
 using UavPms.Shared.Contracts.Constants;
@@ -46,6 +47,8 @@ public sealed class DroneTechnicalInspectionController : ControllerBase
     {
         if (request.DroneId == Guid.Empty)
             request = request with { DroneId = droneId };
+        else if (request.DroneId != droneId)
+            throw new BusinessRuleException("DRONE_ID_MISMATCH", "The droneId in the body does not match the UAV in the route.");
 
         var inspection = await _inspectionService.SubmitInspectionAsync(request, ct);
         return Ok(inspection.ToDto());

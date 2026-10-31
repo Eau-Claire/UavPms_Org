@@ -99,5 +99,9 @@ public class PreMissionAssessmentExpiryJobTests
 
         var unaffectedDraft = await verifyDb.PreMissionAssessments.FindAsync(overdueDraft.Id);
         unaffectedDraft!.Status.Should().Be(PreMissionAssessmentStatus.Draft);
+
+        // Every expiry is audited (BR-06).
+        verifyDb.AuditLogs.Where(a => a.ActionType == "ASSESSMENT_EXPIRED").Select(a => a.RecordId)
+            .Should().BeEquivalentTo(new[] { overdueReady.Id });
     }
 }

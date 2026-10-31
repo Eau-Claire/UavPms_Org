@@ -46,6 +46,9 @@ public class DeleteMissionCommandHandler : IRequestHandler<DeleteMissionCommand>
             }
         }
         
+        // A soft-deleted mission must not keep resources: its Active bookings still count for the
+        // database exclusion constraints (BR-19).
+        await _missionRepository.CancelActiveBookingsAsync(mission.Id, cancellationToken);
         await _missionRepository.DeleteAsync(mission);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }

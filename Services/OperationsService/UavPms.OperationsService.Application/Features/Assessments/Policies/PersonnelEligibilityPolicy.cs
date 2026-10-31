@@ -5,17 +5,36 @@ using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.Application.Features.Assessments.Policies;
 
+/// <summary>
+/// BR-18 / BR-19: decides whether one person may be assigned for a region and planned window.
+/// Pure: every input is current data passed in by the caller, so assessment evaluation and mission creation
+/// can both re-check a candidate with the same rules.
+/// </summary>
 public static class PersonnelEligibilityPolicy
 {
     private static readonly string[] AllowedOperationalRoles = new[]
     {
         UserRoles.Inspector,
         UserRoles.Analyst,
-        "Technician",
+        UserRoles.Technician,
         UserRoles.MaintenanceTechnician,
         "Pilot"
     };
 
+    private static readonly string[] NonOperationalRoles = new[]
+    {
+        UserRoles.SystemAdmin,
+        UserRoles.Manager
+    };
+
+    public static IReadOnlyList<string> FieldRoleNames => AllowedOperationalRoles;
+    public static IReadOnlyList<string> NonFieldRoleNames => NonOperationalRoles;
+
+    /// <param name="isGlobalAdmin">
+    /// Ignored. It used to receive the CALLER's SystemAdmin flag, which put every field user in scope when an
+    /// administrator evaluated (BR-18). A candidate's scope comes only from the candidate's own scope rows.
+    /// Kept so existing callers still compile.
+    /// </param>
     public static PreMissionAssessmentPersonnel EvaluatePersonnel(
         User user,
         Guid regionId,
@@ -37,14 +56,17 @@ public static class PersonnelEligibilityPolicy
                 primaryRole = UserRoles.Inspector;
             else if (primaryRole.Equals(UserRoles.Analyst, StringComparison.OrdinalIgnoreCase))
                 primaryRole = UserRoles.Analyst;
-            else if (primaryRole.Equals("Technician", StringComparison.OrdinalIgnoreCase) || primaryRole.Equals(UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase))
-                primaryRole = "Technician";
+            else if (primaryRole.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) || primaryRole.Equals(UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase))
+                primaryRole = UserRoles.Technician;
         }
-        var hasValidRole = primaryRole != null;
 
-        var isActive = user.IsEmailVerified && (user.Status == "Active" || user.Status == "Enabled");
+        var hasNonOperationalRole = roleNames.Any(r => NonOperationalRoles.Contains(r, StringComparer.OrdinalIgnoreCase));
+        var hasValidRole = primaryRole != null && !hasNonOperationalRole;
 
-        var inScope = isGlobalAdmin || userScopes.Any(s => s.UserId == user.Id && (s.RegionId == regionId || s.RegionId == null));
+        var isActive = !user.IsDeleted && user.IsEmailVerified && (user.Status == "Active" || user.Status == "Enabled");
+
+        // UserGeographicScope.RegionId is non-nullable: there is no "global scope" row (BR-02).
+        var inScope = userScopes.Any(s => s.UserId == user.Id && s.RegionId == regionId && !s.IsDeleted);
 
         var hasBookingConflict = userBookings.Any(b =>
             b.UserId == user.Id &&
@@ -52,7 +74,6 @@ public static class PersonnelEligibilityPolicy
             b.StartAt < plannedEnd &&
             b.EndAt > plannedStart);
 
-        var isEligible = hasValidRole && isActive && inScope && !hasBookingConflict;
         var eligibilityStatus = (hasValidRole && isActive && inScope)
             ? ResourceEligibilityStatus.Eligible
             : ResourceEligibilityStatus.Ineligible;
@@ -61,15 +82,16 @@ public static class PersonnelEligibilityPolicy
             ? ResourceAvailabilityStatus.Available
             : ResourceAvailabilityStatus.Unavailable;
 
+        // Same order as the criteria table of UC-MF01-03: account, role, scope, schedule.
         string? reasonCode = null;
-        if (!inScope)
+        if (!isActive)
+            reasonCode = "USER_INACTIVE";
+        else if (!hasValidRole)
+            reasonCode = "INVALID_ROLE";
+        else if (!inScope)
             reasonCode = "OUTSIDE_MANAGEMENT_SCOPE";
         else if (hasBookingConflict)
             reasonCode = "SCHEDULE_CONFLICT";
-        else if (!hasValidRole)
-            reasonCode = "INVALID_ROLE";
-        else if (!isActive)
-            reasonCode = "USER_INACTIVE";
 
         var findings = new Dictionary<string, object>
         {

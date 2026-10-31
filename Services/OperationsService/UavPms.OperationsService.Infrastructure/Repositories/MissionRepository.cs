@@ -132,6 +132,18 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
              || _context.UserGeographicScopes.Any(s => s.UserId == userId && s.RegionId == m.RegionId)), cancellationToken);
     }
 
+    public async Task CancelActiveBookingsAsync(Guid missionId, CancellationToken cancellationToken = default)
+    {
+        var bookings = await _context.ResourceBookings
+            .Where(b => b.MissionId == missionId && b.Status == ResourceBookingStatus.Active)
+            .ToListAsync(cancellationToken);
+        foreach (var booking in bookings)
+        {
+            booking.Status = ResourceBookingStatus.Cancelled;
+            booking.UpdatedAt = DateTime.UtcNow;
+        }
+    }
+
     public Task<bool> UserCanManageAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken)
     {
         if (global) return Task.FromResult(true);

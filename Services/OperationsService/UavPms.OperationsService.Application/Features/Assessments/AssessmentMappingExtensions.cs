@@ -60,7 +60,9 @@ public static class AssessmentMappingExtensions
                 d.Suitability.ToString().ToUpperInvariant(),
                 d.EstimatedFlightsNeeded,
                 d.CoverageDistanceKm,
-                d.SuitabilityReason
+                d.SuitabilityReason,
+                d.OperationalAvailabilityStatus == ResourceAvailabilityStatus.Available,
+                d.TechnicalEligibilityStatus.ToString()
             ))
             .ToList();
 
@@ -128,6 +130,26 @@ public static class AssessmentMappingExtensions
         );
     }
 
+    /// <summary>A metric stores one value column; a note sent with a numeric/bool reading is kept in Metadata.note.</summary>
+    private static string? MetadataNote(string? metadata)
+    {
+        if (string.IsNullOrWhiteSpace(metadata) || !metadata.Contains("\"note\""))
+            return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(metadata);
+            return doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                   doc.RootElement.TryGetProperty("note", out var note) &&
+                   note.ValueKind == System.Text.Json.JsonValueKind.String
+                ? note.GetString()
+                : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
     public static DroneTechnicalInspectionDto ToDto(this DroneTechnicalInspection entity)
     {
         var metrics = entity.Metrics
@@ -137,7 +159,7 @@ public static class AssessmentMappingExtensions
                 m.Subsystem,
                 m.NumericValue,
                 m.BoolValue,
-                m.ValueText,
+                m.ValueText ?? MetadataNote(m.Metadata),
                 m.Unit,
                 m.Passed,
                 m.Severity == "Critical",

@@ -409,8 +409,12 @@ graph TD
 - **Query Params**: `search`, `operationalStatus`, `status`, `technicalHealth`, `regionId`, `availableOnly`, `detailed`.
 - **Endpoint liên quan**:
   - `GET /api/v1/drones/available`: drone đang sẵn sàng.
-  - `GET /api/v1/drones/eligible`: drone đủ điều kiện cho một nhiệm vụ.
-  - `GET|POST /api/v1/drones/estimate-gis-scope`: ước lượng số drone cần cho một phạm vi GIS.
+  - `GET /api/v1/drones/eligible?assessmentId=`: drone đủ điều kiện cho hồ sơ MF01, **cùng bộ luật với bước đánh giá UAV của hồ sơ** (BR-20 – BR-22): `Available`, không trùng lịch đặt chỗ `Active` trong khung giờ của hồ sơ, biên bản kiểm định **hoàn tất mới nhất** (bất kể kết quả) không `Failed`/`Critical` và còn hạn tại `plannedStart`, phạm vi không `UNSUITABLE`. Danh sách drone không lọc theo vùng (giống bước đánh giá).
+  - `GET|POST /api/v1/drones/estimate-gis-scope`: ước lượng số chuyến bay cho một phạm vi GIS. Có `assessmentId` thì chiều dài hành lang tính từ tọa độ thật của các cột theo thứ tự `sequence` (haversine) và `isAvailable`/`isTechnicallyReady` tính theo khung giờ của hồ sơ; không có thì dùng `corridorLengthKm`/`assetCount` nhập tay và trạng thái lưu của drone.
+- **Phù hợp phạm vi (`suitability`, BR-21)** chỉ xét phạm vi so với năng lực bay, **không** còn gộp tình trạng sẵn sàng/kỹ thuật (xem `isAvailable`, `isTechnicallyReady`):
+  - số chuyến = max(⌈thời gian nhiệm vụ / thời gian bay hiệu dụng⌉, ⌈chiều dài hành lang / `operationalRangeKm`⌉) — mỗi chuyến phải ≤ tầm bay và ≤ thời gian bay hiệu dụng (80 % `flightEnduranceMinutes`);
+  - 1 chuyến → `SUITABLE`, 2–4 chuyến → `SUITABLE_WITH_SPLIT`, nhiều hơn → `UNSUITABLE`;
+  - drone có `flightEnduranceMinutes` hoặc `operationalRangeKm` ≤ 0 → `UNSUITABLE` (không còn mặc định 30 phút).
 
 #### 3.2. [GET] `/api/v1/drones/{id}`
 - **Mô tả**: Chi tiết một drone. Query `live=true` lấy thêm trạng thái trực tiếp.
@@ -465,8 +469,17 @@ graph TD
     ]
   }
   ```
+- **Luật đánh giá (BR-22, BR-23)**:
+  - `metrics` bắt buộc, ít nhất 1 chỉ số. **Không còn bộ chỉ số mặc định "đạt hết"** khi `metrics` rỗng/`null` → `400 METRICS_REQUIRED`. Trùng `(subsystem, metricCode)` → `400 DUPLICATE_METRIC`.
+  - Mục quan trọng: `FRAME_BODY`, `PROP_INTEGRITY`, `MOTORS`, `PROPULSION`, `ESC_PROPULSION`, `BATTERY(_HEALTH)`, `GPS`, `GPS_FIX`, `GPS_RTK_FIX`, `IMU(_CALIBRATION)`, `FLIGHT_CONTROLLER`, `RF_LINK_TELEMETRY`, `TELEMETRY` luôn là critical, kể cả khi client gửi `critical: false`; client có thể đánh dấu thêm mục khác là critical.
+  - Một mục critical hoặc `isRequired` mà không có số đo (`passed`, `boolValue`, `numericValue` đều `null`) bị tính là **không đạt**.
+  - Pin < `Drone:CriticalBatteryThreshold` (30 %) → không đạt; < `Drone:WarningBatteryThreshold` (50 %) → đạt nhưng sức khỏe `Warning`. RF link < `Drone:MinRfLinkThreshold` → không đạt.
+  - Kết quả: mục critical không đạt → `Failed` + `Critical`; mục thường không đạt hoặc pin vùng cảnh báo → `Passed` + `Warning`; còn lại `Passed` + `Healthy`. Hiệu lực 7 ngày (`Drone:InspectionValidityDays`).
+  - Mỗi chỉ số chỉ lưu **một** giá trị (ràng buộc `CK_DroneTechnicalMetrics_SingleValue`): ưu tiên `numericValue` → `boolValue` → `valueText`; ghi chú đi kèm được lưu vào `metadata.note` và vẫn trả về trong `valueText` của DTO.
+  - Có `preMissionAssessmentId`: hồ sơ phải còn mở — `Cancelled` → `400 ASSESSMENT_CANCELLED`, `Completed` → `400 ASSESSMENT_ALREADY_COMPLETED`, `Expired` (hoặc vừa hết hạn) → `400 ASSESSMENT_EXPIRED`; drone phải là ứng viên của hồ sơ (`400 ASSESSMENT_DRONE_MISMATCH`); `Manager` phải có scope vùng của hồ sơ (`403 ASSESSMENT_ACCESS_DENIED`; `SystemAdmin` và kỹ thuật viên được phép).
+  - Alias `POST /api/v1/uavs/{droneId}/inspections`: nếu body có `droneId` khác `droneId` trên path → `400 DRONE_ID_MISMATCH`.
 - **Endpoint liên quan**:
-  - `POST /api/v1/drones/{id}/basic-technical-check`: kiểm tra kỹ thuật nhanh, trả `DroneTechnicalInspectionSummaryDto`.
+  - `POST /api/v1/drones/{id}/basic-technical-check`: kiểm tra kỹ thuật nhanh, trả `DroneTechnicalInspectionSummaryDto`. Trước đây luôn lỗi `500` trên PostgreSQL (pin/GPS/RF gửi cả số đo lẫn ghi chú); nay ghi chú vào `metadata`. Không gửi `gpsSatelliteCount`/`communicationConnected` thì không còn tự điền 18 vệ tinh / RF 95 %.
   - `GET /api/v1/drone-technical-inspections/drone/{droneId}/latest` (alias `GET /api/v1/uavs/{droneId}/inspections[/latest]`): biên bản mới nhất, `404` nếu chưa có.
 
 #### 3.5. Flight controller của drone
@@ -507,16 +520,33 @@ graph TD
   - kết quả: `status`, `siteFeasibilityStatus`, `overallTechnicalHealth`, `findings`, `evaluationPolicyVersion`;
   - danh sách: `towers`, `personnelCandidates`, `droneCandidates`;
   - liên kết: `consumedByMissionId` (alias `completedMissionId`).
+- **Thời gian (BR-08)**: lưu UTC. Giá trị có offset (`+07:00`) được đổi sang UTC; giá trị **không có offset** được hiểu là UTC — frontend nên gửi ISO-8601 có `Z` hoặc offset.
+- **Kiểm tra đầu vào** (theo thứ tự):
+  - `towerIds` thiếu/`null`/rỗng/trùng/`Guid.Empty` → `400 INVALID_PROPOSED_SCOPE` (trước đây `null` gây `500`).
+  - `plannedEnd` ≤ `plannedStart` hoặc ≤ hiện tại → `400 INVALID_PLANNED_TIME`.
+  - Vùng không tồn tại hoặc đã xóa mềm → `404 NOT_FOUND`; không có scope vùng → `403 REGION_MANAGEMENT_SCOPE_REQUIRED`; cột ngoài vùng → `403 TOWER_OUTSIDE_MANAGEMENT_SCOPE`.
+  - Cột không có tọa độ → `400 TOWER_MISSING_GEOLOCATION` (**kể cả khi không có `boundaryWkt`**); boundary sai → `400 INVALID_GEOMETRY`; cột ngoài boundary → `400 TOWER_OUTSIDE_BOUNDARY`.
+- **Idempotency (UC-MF01-01 A1)**: `idempotencyKey` thuộc về manager đã tạo hồ sơ.
+  - Gửi lại cùng key, cùng `regionId`/`plannedStart`/`plannedEnd`/tập `towerIds`/`boundaryWkt` → trả hồ sơ cũ (kiểm tra lại quyền ghi; nếu hồ sơ còn `Evaluating` do lần trước lỗi thì đánh giá lại; hết hạn thì trả `Expired`).
+  - Cùng key nhưng khác nội dung, hoặc key đã được manager khác dùng → `IDEMPOTENCY_KEY_REUSED` (dự kiến `409`; hiện GlobalExceptionHandler trả `400` cho tới khi mã này được thêm vào danh sách conflict).
+  - Chỉ vi phạm unique của index idempotency mới được coi là trùng key; lỗi DB khác không còn bị đổi thành `IDEMPOTENCY_CONFLICT`.
+- **Kết quả đánh giá (BR-16 – BR-22)**:
+  - Ứng viên nhân sự: mọi người dùng có vai trò hiện trường (`Inspector`, `Analyst`, `Technician`/`MaintenanceTechnician`) và không có vai trò `SystemAdmin`/`Manager`; người dùng không Active/chưa xác minh chỉ được liệt kê nếu có scope vùng (lý do `USER_INACTIVE`). Scope của ứng viên chỉ lấy từ scope của chính ứng viên — vai trò `SystemAdmin` của **người đánh giá** không còn làm mọi người "trong scope". `reasonCode` theo thứ tự `USER_INACTIVE` → `INVALID_ROLE` → `OUTSIDE_MANAGEMENT_SCOPE` → `SCHEDULE_CONFLICT`.
+  - Ứng viên UAV: dùng biên bản kiểm định **hoàn tất mới nhất bất kể kết quả** (biên bản `Failed` mới hơn không bị che bởi biên bản `Passed` cũ). Không có biên bản còn hạn tại `plannedStart` → `technicalEligibilityStatus = RequiresInspection`, `reasonCode = NO_VALID_TECHNICAL_INSPECTION`, **không đủ điều kiện** (trước đây vẫn đủ điều kiện nhờ `technicalHealth` lưu trên drone). `reasonCode`: `DRONE_NOT_AVAILABLE` → `SCHEDULE_CONFLICT` → `TECHNICAL_HEALTH_CRITICAL` / `NO_VALID_TECHNICAL_INSPECTION` / `TECHNICAL_HEALTH_DEGRADED` → `SCOPE_EXCEEDS_CAPABILITY`. `suitability` chỉ phản ánh phạm vi (xem Module 3.1); `coverageDistanceKm` = quãng đường tối đa một chuyến (min(tầm bay, quãng bay theo thời gian hiệu dụng)).
 
 #### 4.2. [GET] `/api/v1/pre-mission-assessments` · [GET] `/api/v1/pre-mission-assessments/{id}`
 - **Query Params (list)**: `status`, `search`, `page`, `pageSize` (mặc định 20).
-- **Endpoint liên quan**: `GET /api/v1/pre-mission-assessments/{id}/resource-readiness`: mức sẵn sàng nhân sự và drone.
+- Hết hạn (BR-17) được áp dụng **trước** khi lọc `status` và được ghi audit `ASSESSMENT_EXPIRED`, nên `?status=NOT_READY`/`READY` không còn trả hồ sơ đã quá `validUntil`/`plannedEnd`.
+- **Quyền đọc**: `SystemAdmin`; manager tạo hồ sơ; `Manager` có scope vùng; mọi `Inspector`/`Technician`/`MaintenanceTechnician`.
+- **Endpoint liên quan**: `GET /api/v1/pre-mission-assessments/{id}/resource-readiness`: kết quả nhân sự và drone **của lần đánh giá gần nhất**. Endpoint này **chỉ đọc**: không đánh giá lại, không gia hạn `validUntil`, không tăng `version`, không đổi `Ready` → `NotReady`. `evaluatedAt` là thời điểm chụp ứng viên. Muốn làm mới, gọi `POST /{id}/re-evaluate`.
 
 #### 4.3. Chuyển trạng thái hồ sơ
-- `POST /{id}/evaluate`, `POST /{id}/re-evaluate`: chạy (lại) đánh giá bãi bay, UAV, kỹ thuật, nhân sự.
+- **Quyền ghi** (`evaluate`, `re-evaluate`, `cancel`, `mark-completed`, `create-mission`): `SystemAdmin`, hoặc `Manager` **đang** có scope vùng của hồ sơ (người tạo đã mất scope cũng bị chặn) → `403 REGION_MANAGEMENT_SCOPE_REQUIRED`; vai trò khác → `403 ASSESSMENT_ACCESS_DENIED`.
+- `POST /{id}/evaluate`, `POST /{id}/re-evaluate`: chạy (lại) đánh giá bãi bay, UAV, kỹ thuật, nhân sự. Lỗi: `400 ASSESSMENT_ALREADY_COMPLETED`, `400 ASSESSMENT_CANCELLED`, `400 ASSESSMENT_EXPIRED` (hết hạn được áp dụng và ghi audit trước), `400 REGION_INACTIVE` (vùng bị xóa sau khi tạo hồ sơ).
 - `POST /{id}/confirm` (`Manager`, `SystemAdmin`): xác nhận hồ sơ đạt (`Ready`).
 - `POST /{id}/mark-completed` (alias `/consume`), body `{ "missionId": "..." }`: đánh dấu hồ sơ đã dùng.
-- `POST /{id}/cancel`, body `{ "reason": "..." }`: hủy hồ sơ.
+- `POST /{id}/cancel`, body `{ "reason": "..." }`: hủy hồ sơ. `Expired` và `Cancelled` là trạng thái cuối (BR-05): hồ sơ đã/vừa hết hạn → `400 ASSESSMENT_EXPIRED` (không còn bị đổi thành `Cancelled`); hủy lần hai → `400 ASSESSMENT_CANCELLED` (trước đây trả `200`); `Completed` → `400 ASSESSMENT_ALREADY_COMPLETED`.
+- Job hết hạn (NS-01, mỗi 2 phút): hồ sơ `Ready` có `validUntil` ≤ hiện tại → `Expired`, ghi audit `ASSESSMENT_EXPIRED` (người dùng `null`, user agent `PreMissionAssessmentExpiryJob`).
 
 #### 4.4. [POST] `/api/v1/pre-mission-assessments/{id}/create-mission`
 - **Mô tả**: Tạo nhiệm vụ bay chính thức từ hồ sơ `Ready`. **Đây là cách duy nhất để tạo nhiệm vụ**: endpoint `POST /api/v1/missions` cũ đã bị gỡ.
@@ -534,10 +564,20 @@ graph TD
     "priorityDefects": null,
     "emergencyReason": null,
     "isImmediate": false,
-    "idempotencyKey": "mission-2026-10-25-hp"
+    "idempotencyKey": "mission-2026-10-25-hp",
+    "confirmationDeadline": "2026-10-25T06:00:00Z",
+    "managerInstructions": "Mang thêm 2 pin dự phòng"
   }
   ```
-- **Response `200 OK`**: đối tượng nhiệm vụ vừa tạo.
+- **Quy tắc** (BR-18 – BR-20, BR-25 – BR-31):
+  - `personnel`: ít nhất 1 người, **không trùng `userId`**, ít nhất 1 người `isRequired: true`. Mỗi người được kiểm tra lại lúc tạo (không chỉ dựa vào ảnh chụp ứng viên): tài khoản Active và đã xác thực, có vai trò hiện trường (Inspector/Analyst/Technician), không có vai trò Manager/SystemAdmin, thuộc phạm vi vùng, không trùng lịch.
+  - `droneIds`: **đúng 1 UAV** (nhiệm vụ chỉ bay 1 UAV và chỉ UAV đó được giữ chỗ). UAV phải `Available`, sức khỏe `Healthy` hoặc `Warning`, không `Unsuitable` với phạm vi, không trùng lịch.
+  - `confirmationDeadline` (tùy chọn, UTC): phải ở tương lai và không sau `plannedStart`. Bỏ trống → `now + Mission:ConfirmationDeadlineHours` (mặc định 24 giờ), tối đa bằng `plannedStart`. Quá hạn mà nhiệm vụ còn `PendingAcceptance` thì quản lý nhận `MISSION_CONFIRMATION_OVERDUE`.
+  - `managerInstructions` (tùy chọn, tối đa 2.000 ký tự): hiện trong thông báo `MISSION_DISPATCH`.
+  - `idempotencyKey`: gửi lại cùng khóa với cùng quản lý, hồ sơ, tiêu đề và UAV trả về nhiệm vụ đã tạo (kể cả khi hai yêu cầu chạy đồng thời). Dùng lại khóa cho yêu cầu khác → `409 IDEMPOTENCY_KEY_REUSED`.
+  - Xung đột lịch là booking `Active` (chưa xóa) chồng lên khoảng `[plannedStart, plannedEnd)`; hai khoảng chỉ chạm nhau thì không xung đột.
+- **Response `200 OK`**: đối tượng nhiệm vụ vừa tạo (`status = PendingAcceptance`, có `confirmationDeadline`, `managerInstructions`).
+- **Lỗi**: `400 PERSONNEL_ASSIGNMENT_REQUIRED`, `DRONE_ASSIGNMENT_REQUIRED`, `DUPLICATE_PERSONNEL`, `DUPLICATE_DRONE`, `MULTIPLE_DRONES_NOT_SUPPORTED`, `REQUIRED_MEMBER_REQUIRED`, `RESOURCE_NOT_IN_ASSESSMENT`, `ASSIGNEE_INACTIVE`, `ASSIGNEE_ROLE_NOT_ELIGIBLE`, `ASSIGNEE_OUT_OF_SCOPE`, `DRONE_NOT_AVAILABLE`, `DRONE_CRITICAL_HEALTH`, `DRONE_HEALTH_UNKNOWN`, `DRONE_UNSUITABLE`, `INVALID_CONFIRMATION_DEADLINE`, `MANAGER_INSTRUCTIONS_TOO_LONG`, `EMERGENCY_REASON_REQUIRED`, `ASSESSMENT_*`; `409 RESOURCE_BOOKING_CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `ASSESSMENT_CONCURRENCY_CONFLICT`.
 
 ---
 
@@ -560,23 +600,45 @@ graph TD
 - `PUT /{id}/towers`, body `{ "boundaryWkt": "...", "towerIds": [...] }`: chốt danh sách cột.
 
 #### 5.4. Phân công thành viên
+> Mọi thay đổi nhân sự, UAV, cột và mức ưu tiên bị từ chối sau khi nhiệm vụ đã bắt đầu (`StartedAt` có giá trị, kể cả khi đang `Suspended`) → `400 MISSION_IMMUTABLE_AFTER_START` (BR-32).
+> Người mới được kiểm tra như lúc tạo nhiệm vụ (mục 4.4): `ASSIGNEE_INACTIVE`, `ASSIGNEE_ROLE_NOT_ELIGIBLE`, `ASSIGNEE_OUT_OF_SCOPE`, `409 RESOURCE_BOOKING_CONFLICT`.
 - `GET /{id}/assignments`: danh sách phân công.
-- `POST /{id}/assignments` (`Manager`, `SystemAdmin`), body `{ "userId": "...", "assignmentRole": "PILOT" }`. Vai trò: `PILOT`, `CO_PILOT`, `INSPECTOR`, `OBSERVER`. Thành viên nhận thông báo realtime.
-- `DELETE /{id}/assignments/{assignmentId}`: gỡ phân công.
-- `POST /{id}/assignments/{assignmentId}/reassign` (hoặc `/{id}/assignments/reassign`): đổi người.
-- `POST /{id}/assignments/accept`: thành viên nhận nhiệm vụ.
-- `POST /{id}/assignments/postpone`, body `{ "reason": "..." }`: thành viên xin hoãn.
+- `POST /{id}/assignments` (`Manager`, `SystemAdmin`), body `{ "userId": "...", "assignmentRole": "PILOT", "isRequired": true }` (`isRequired` mặc định `true`). Vai trò: `PILOT`, `CO_PILOT`, `INSPECTOR`, `OBSERVER`, `ANALYST`, `TECHNICIAN`. Thành viên nhận thông báo `MISSION_ASSIGNED`. Thêm người **bắt buộc** khi nhiệm vụ đang `Assigned`/`Preparing`/`Ready` đưa nhiệm vụ về `PendingAcceptance`. Người đã là thành viên: chỉ cập nhật vai trò.
+- `DELETE /{id}/assignments/{assignmentId}`: gỡ phân công (phản hồi `Cancelled`, booking `Cancelled`, check-in bị thu hồi, thông báo `MISSION_ASSIGNMENT_REMOVED`). Không gỡ được thành viên bắt buộc cuối cùng → `400 REQUIRED_MEMBER_REQUIRED`. Gỡ người bắt buộc còn chờ có thể hoàn tất xác nhận (`PendingAcceptance` → `Assigned`).
+- `POST /{id}/assignments/{assignmentId}/reassign` (hoặc `/{id}/assignments/reassign` với `assignmentId` hoặc `role` trong body), body `{ "newUserId": "...", "role": null, "reason": "..." }`: đổi người.
+  - Phân công cũ chuyển `Revoked` / phản hồi `Replaced`, booking cũ `Released`, check-in và bàn giao UAV đang mở của người cũ được đóng; tạo **phân công mới** (id mới) ở `Pending` với cùng vai trò và cờ bắt buộc. Người mới nhận `MISSION_ASSIGNED`, người cũ nhận `MISSION_ASSIGNMENT_REMOVED`.
+  - Nhiệm vụ đã dispatch quay về `PendingAcceptance` nếu người mới là bắt buộc (khi `Suspended` trước lúc bắt đầu, việc này xét lại lúc `resume`).
+  - Lỗi: `404` khi `assignmentId` không tồn tại (không còn tự tạo phân công mới); `400 ASSIGNMENT_ID_REQUIRED` khi thiếu cả `assignmentId` và `role`; `409 ASSIGNEE_ALREADY_ASSIGNED` khi người mới đã là thành viên.
+- `POST /{id}/assignments/accept`: thành viên nhận nhiệm vụ. Chỉ khi nhiệm vụ `PendingAcceptance`/`Assigned`/`Preparing`/`Ready`, ngược lại `409 INVALID_MISSION_STATE` (nhận lại khi đã `Accepted` trả kết quả cũ). Khi mọi người bắt buộc đã nhận, nhiệm vụ thành `Assigned` và quản lý nhận `MISSION_CONFIRMED`.
+- `POST /{id}/assignments/postpone`, body `{ "reason": "..." }`: thành viên xin hoãn, cùng điều kiện trạng thái như `accept`. Người bắt buộc hoãn → nhiệm vụ `Postponed` (ghi `postponeReason`); người không bắt buộc hoãn chỉ đổi phản hồi của chính họ.
 
 #### 5.5. [PUT] `/api/v1/missions/{id}/drone`
-- **Mô tả**: Gán drone chính thức (cũng nhận `POST`). Hệ thống kiểm tra xung đột lịch giữ chỗ và hạn kiểm định.
+- **Mô tả**: Đổi UAV của nhiệm vụ trước khi bắt đầu (cũng nhận `POST`). UAV mới phải `Available`, sức khỏe `Healthy`/`Warning`, flight status `Idle`, không `Unsuitable` với phạm vi hồ sơ, không trùng lịch. **Mọi** booking UAV `Active` khác của nhiệm vụ bị `Cancelled`; bàn giao đang mở của UAV cũ được đóng.
 - **Request Body**: `{ "droneId": "88888888-8888-8888-8888-888888888888" }`
+- **Lỗi**: `400 DRONE_NOT_AVAILABLE`, `DRONE_CRITICAL_HEALTH`, `DRONE_HEALTH_UNKNOWN`, `DRONE_UNSUITABLE`, `DRONE_UNAVAILABLE`, `MISSION_IMMUTABLE_AFTER_START`; `409 RESOURCE_BOOKING_CONFLICT`.
 - **Endpoint liên quan**: `POST /{id}/drone-handover` và `POST /{id}/drone-handover/return`: bàn giao và hoàn trả drone.
+  - Bàn giao do thành viên hoặc quản lý của vùng ghi nhận; mỗi UAV chỉ có một bàn giao đang mở trên các nhiệm vụ chưa kết thúc → `409 DUPLICATE_HANDOVER`. Bàn giao bị **từ chối** (`accepted: false`) được đóng ngay (`returnedAt` có giá trị) nên có thể bàn giao lại.
 
 #### 5.6. Điều phối vòng đời
-- `POST /{id}/confirm`: xác nhận nhiệm vụ sẵn sàng.
+- `POST /{id}/confirm`: tương đương `assignments/accept` của **chính người gọi** (kèm nhật ký liên lạc). Không còn nhảy trạng thái: nhiệm vụ chỉ thành `Assigned` khi mọi người bắt buộc đã nhận. Người gọi không phải thành viên → `403 USER_NOT_ASSIGNED`; sai trạng thái → `409 INVALID_MISSION_STATE`.
 - `POST /{id}/remind`: nhắc thành viên chưa phản hồi.
-- `POST /{id}/suspend` (body `reason` bắt buộc), `POST /{id}/resume`, `POST /{id}/postpone`.
-- `POST /{id}/cancel`, body `{ "reason": "..." }`: hủy nhiệm vụ, ghi Audit Log và giải phóng tài nguyên đã giữ chỗ.
+- `POST /{id}/suspend` (body `reason` bắt buộc), `POST /{id}/resume`: `resume` trả về `InProgress` nếu đã bắt đầu; nếu chưa, về `PendingAcceptance` khi còn người bắt buộc chưa nhận, ngược lại `Assigned`/`Preparing`/`Ready`. Mỗi thành viên nhận một thông báo.
+- `POST /{id}/postpone` (**chỉ `Manager`, `SystemAdmin` của vùng**; trước đây cả `Inspector`): từ `PendingAcceptance`/`Assigned`/`Preparing`/`Ready` → `Postponed`, thành viên nhận `MISSION_POSTPONED`. Thành viên tự hoãn dùng `assignments/postpone`.
+- `POST /{id}/cancel`, body `{ "reason": "..." }`: hủy nhiệm vụ, ghi Audit Log, `Cancelled` mọi booking `Active`, trả hồ sơ MF01 về `Ready` (hoặc `Expired`). Nhiệm vụ đã bắt đầu rồi tạm dừng: bàn giao đang mở được đóng và UAV `Flying` về `Idle` (trừ khi nhiệm vụ `InProgress` khác đang dùng UAV đó).
+- Xóa nhiệm vụ `Draft` (endpoint cũ) cũng `Cancelled` các booking của nó.
+- Quản lý có tài khoản bị khóa nhận `403 ACTIVE_USER_REQUIRED` dù JWT còn hạn.
+
+#### 5.7. Bắt đầu và hoàn thành (MF03, BR-38, BR-45)
+- `POST /{id}/start` chỉ khi:
+  - nhiệm vụ `Ready`/`Assigned`/`Preparing` và mọi người bắt buộc đã nhận (`409 REQUIRED_ACCEPTANCE_PENDING`, `409 INVALID_MISSION_STATE`);
+  - không sớm hơn `plannedStart - Mission:StartToleranceMinutes` (mặc định 120 phút) → `400 MISSION_START_TOO_EARLY`;
+  - UAV còn dùng được: `400 DRONE_ASSIGNMENT_REQUIRED`, `DRONE_NOT_AVAILABLE` (Maintenance/Unavailable/Lost/InUse), `DRONE_CRITICAL_HEALTH`; `409 DRONE_IN_USE` khi UAV đang bay nhiệm vụ khác, flight status không phải `Idle`/`Online`, hoặc đang được bàn giao ở nhiệm vụ khác;
+  - bàn giao gần nhất của UAV không bị từ chối → `409 HANDOVER_REJECTED`.
+  - Khi bắt đầu từ `Assigned`/`Preparing`, hệ thống ghi check-in cho người gọi (nếu là thành viên đã nhận) và một bàn giao `Accepted` nếu chưa có.
+- `POST /{id}/complete`: UAV về `Idle` chỉ khi không nhiệm vụ `InProgress` nào khác dùng UAV; mọi booking `Active` → `Released`.
+
+#### 5.8. Mã lỗi xung đột (HTTP 409)
+Vi phạm ràng buộc CSDL không còn trả `500`: ràng buộc chống trùng lịch (`23P01`) → `RESOURCE_BOOKING_CONFLICT`; trùng khóa (`23505`) → `DUPLICATE_ASSIGNMENT`, `DUPLICATE_CHECK_IN`, `DUPLICATE_HANDOVER`, `IDEMPOTENCY_KEY_REUSED`, `DUPLICATE_RESOURCE` (bảng khác); deadlock/serialization → `CONCURRENCY_CONFLICT`. Các mã `409` khác của module: `INVALID_MISSION_STATE`, `MISSION_CONCURRENCY_CONFLICT`, `ASSIGNEE_ALREADY_ASSIGNED`, `DRONE_IN_USE`, `REQUIRED_ACCEPTANCE_PENDING`, `HANDOVER_REJECTED`. `DUPLICATE_CHECK_IN` và `DUPLICATE_HANDOVER` trước đây trả `400`, nay trả `409`.
 
 ---
 

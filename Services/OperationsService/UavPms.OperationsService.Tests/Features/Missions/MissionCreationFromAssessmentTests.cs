@@ -9,6 +9,7 @@ using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.Shared.Contracts.Constants;
+using UavPms.OperationsService.Tests.Common.Utilities;
 
 namespace UavPms.OperationsService.Tests.Features.Missions;
 
@@ -41,12 +42,14 @@ public class MissionCreationFromAssessmentTests
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = managerId, Status = "Active" });
-        db.Users.Add(new User { Id = inspectorId, Status = "Active" });
+        FieldUsers.Add(db, inspectorId);
 
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+        FieldUsers.AddScope(db, inspectorId, region.Id);
 
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available, TechnicalHealth = TechnicalHealth.Healthy };
         db.Uavs.Add(drone);
 
         var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
@@ -116,11 +119,13 @@ public class MissionCreationFromAssessmentTests
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = managerId, Status = "Active" });
-        db.Users.Add(new User { Id = inspectorId, Status = "Active" });
+        FieldUsers.Add(db, inspectorId);
         var region = new Region { Id = Guid.NewGuid() };
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available, TechnicalHealth = TechnicalHealth.Healthy };
         var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+        FieldUsers.AddScope(db, inspectorId, region.Id);
         db.Uavs.Add(drone);
         db.Towers.Add(tower);
 
@@ -173,6 +178,8 @@ public class MissionCreationFromAssessmentTests
         var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
         var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+        FieldUsers.AddScope(db, inspectorId, region.Id);
         db.Uavs.Add(drone);
         db.Towers.Add(tower);
 
@@ -217,6 +224,8 @@ public class MissionCreationFromAssessmentTests
         var region = new Region { Id = Guid.NewGuid() };
         var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+        FieldUsers.AddScope(db, inspectorId, region.Id);
         db.Uavs.Add(drone);
 
         var assessment = new PreMissionAssessment

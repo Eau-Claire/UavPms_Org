@@ -35,8 +35,8 @@ public class CreateMissionFromAssessmentTests
         await using (var db = _pg.CreateContext())
         {
             managerId = await InsertUserAsync(db, $"m-{tag}@it.test");
-            inspectorId = await InsertUserAsync(db, $"i-{tag}@it.test");
-            analystId = await InsertUserAsync(db, $"a-{tag}@it.test");
+            inspectorId = await InsertUserAsync(db, $"i-{tag}@it.test", UserRoles.Inspector);
+            analystId = await InsertUserAsync(db, $"a-{tag}@it.test", UserRoles.Analyst);
 
             var region = new Region { Id = Guid.NewGuid(), Code = $"R-{tag}", Name = "Central", Type = "Province" };
             var towers = Enumerable.Range(1, 2)
@@ -81,6 +81,10 @@ public class CreateMissionFromAssessmentTests
             };
 
             db.Add(region);
+            // Write actions on an assessment need the manager's current region scope (BR-02).
+            db.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+            // BR-18 is re-checked at creation: field role and a scope for the region.
+            db.UserGeographicScopes.AddRange(new UserGeographicScope { UserId = inspectorId, RegionId = region.Id }, new UserGeographicScope { UserId = analystId, RegionId = region.Id });
             db.AddRange(towers);
             db.AddRange(drone, assessment);
             await db.SaveChangesAsync();
@@ -141,13 +145,23 @@ public class CreateMissionFromAssessmentTests
         return options;
     }
 
-    private static async Task<Guid> InsertUserAsync(ApplicationDbContext db, string email)
+    private static async Task<Guid> InsertUserAsync(ApplicationDbContext db, string email, string? role = null)
     {
         var userId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "Users" ("Id", "FullName", "Email", "Phone", "Status", "IsEmailVerified", "PasswordHash", "CreatedAt", "IsDeleted")
             VALUES ({userId}, 'IT user', {email}, '', 'Active', true, 'x', now(), false)
             """);
+        if (role != null)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Roles" ("RoleName", "Description") VALUES ({role}, '') ON CONFLICT ("RoleName") DO NOTHING
+                """);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "UserRoles" ("UserId", "RoleId", "AssignedAt")
+                SELECT {userId}, "Id", now() FROM "Roles" WHERE "RoleName" = {role}
+                """);
+        }
         return userId;
     }
 }

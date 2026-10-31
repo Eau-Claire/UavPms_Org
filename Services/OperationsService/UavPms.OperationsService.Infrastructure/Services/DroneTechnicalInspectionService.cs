@@ -39,6 +39,11 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
     {
         await RequireTechnicianOrManager(ct);
 
+        // UC-MF01-05 E4: an inspection needs real readings. There is no default "all passed" checklist any more:
+        // it produced a Passed/Healthy inspection, valid for 7 days, from no data at all.
+        if (request.Metrics == null || request.Metrics.Count == 0)
+            throw new BusinessRuleException("METRICS_REQUIRED", "Technical inspection requires at least one diagnostic or telemetry metric.");
+
         var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == request.DroneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", request.DroneId);
 
@@ -73,6 +78,22 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
                 .SingleOrDefaultAsync(x => x.Id == request.PreMissionAssessmentId.Value && !x.IsDeleted, ct)
                 ?? throw new NotFoundException("PreMissionAssessment", request.PreMissionAssessmentId.Value);
 
+            await EnsureCallerMayUseAssessmentAsync(assessment, ct);
+
+            // BR-05 / BR-17: an inspection can only be attached to an assessment that is still open.
+            if (assessment.Status == PreMissionAssessmentStatus.Completed)
+                throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED", "Bản đánh giá đã được dùng để tạo nhiệm vụ bay.");
+            if (assessment.Status == PreMissionAssessmentStatus.Cancelled)
+                throw new BusinessRuleException("ASSESSMENT_CANCELLED", "Bản đánh giá đã bị hủy.");
+            if (assessment.Status == PreMissionAssessmentStatus.Expired)
+                throw new BusinessRuleException("ASSESSMENT_EXPIRED", "Bản đánh giá đã hết hạn.");
+            if (AssessmentExpiryPolicy.CheckAndApplyExpiry(assessment))
+            {
+                AddAudit("PreMissionAssessments", assessment.Id, "ASSESSMENT_EXPIRED", "{}");
+                await _db.SaveChangesAsync(ct);
+                throw new BusinessRuleException("ASSESSMENT_EXPIRED", "Bản đánh giá đã hết hạn.");
+            }
+
             var isCandidate = assessment.DroneCandidates.Any(x => x.DroneId == drone.Id);
             if (!isCandidate)
             {
@@ -84,19 +105,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             ? await _systemSettingService.GetDroneThresholdSettingsAsync(ct)
             : new DroneThresholdSettingsDto();
 
-        var metricsToEvaluate = (request.Metrics != null && request.Metrics.Count > 0)
-            ? request.Metrics
-            : new List<DroneMetricSubmitDto>
-            {
-                new("BATTERY_HEALTH", "Power", (decimal)(drone.BatteryLevel > 0 ? drone.BatteryLevel : 100), Critical: true, Passed: true),
-                new("IMU_CALIBRATION", "Sensors", null, BoolValue: true, Passed: true, Critical: true),
-                new("GPS_RTK_FIX", "Navigation", null, BoolValue: true, Passed: true, Critical: true),
-                new("PROP_INTEGRITY", "Propulsion", null, BoolValue: true, Passed: true, Critical: true),
-                new("FLIGHT_CONTROLLER", "Avionics", null, BoolValue: true, Passed: true, Critical: true),
-                new("RF_LINK_TELEMETRY", "Communication", 98, Passed: true, Critical: true)
-            };
-
-        var evalResult = DroneTechnicalHealthEvaluationPolicy.Evaluate(metricsToEvaluate, drone.BatteryLevel, droneSettings);
+        var evalResult = DroneTechnicalHealthEvaluationPolicy.Evaluate(request.Metrics, drone.BatteryLevel, droneSettings);
 
         var inspection = new DroneTechnicalInspection
         {
@@ -113,19 +122,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             Health = evalResult.Health
         };
 
-        var metrics = evalResult.Metrics.Select(m => new DroneTechnicalMetric
-        {
-            Inspection = inspection,
-            MetricCode = m.MetricCode,
-            Subsystem = m.Subsystem,
-            NumericValue = m.NumericValue,
-            BoolValue = m.BoolValue,
-            ValueText = m.ValueText,
-            Unit = m.Unit,
-            Passed = m.Passed,
-            Severity = m.Severity,
-            IsRequired = m.IsRequired
-        }).ToList();
+        var metrics = evalResult.Metrics.Select(m => ToMetricEntity(inspection, m)).ToList();
 
         inspection.Metrics = metrics;
 
@@ -236,6 +233,72 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             .FirstOrDefaultAsync(ct);
     }
 
+    /// <summary>
+    /// The CK_DroneTechnicalMetrics_SingleValue constraint allows one of NumericValue / BoolValue / ValueText.
+    /// The primary reading is kept in that order and the others (for example the notes of the basic technical check)
+    /// go to Metadata, so a checklist item with a reading and a note no longer fails with a 500.
+    /// </summary>
+    internal static DroneTechnicalMetric ToMetricEntity(DroneTechnicalInspection inspection, EvaluatedMetricResult m)
+    {
+        decimal? numeric = m.NumericValue;
+        bool? boolValue = numeric.HasValue ? null : m.BoolValue;
+        var text = string.IsNullOrWhiteSpace(m.ValueText) ? null : m.ValueText;
+        string? valueText = numeric.HasValue || boolValue.HasValue ? null : text;
+
+        var extra = new Dictionary<string, object>();
+        if (text != null && valueText == null)
+            extra["note"] = text;
+        if (m.BoolValue.HasValue && boolValue == null)
+            extra["boolValue"] = m.BoolValue.Value;
+        extra["critical"] = m.Critical;
+
+        return new DroneTechnicalMetric
+        {
+            Inspection = inspection,
+            MetricCode = m.MetricCode,
+            Subsystem = m.Subsystem,
+            NumericValue = numeric,
+            BoolValue = boolValue,
+            ValueText = valueText,
+            Unit = m.Unit,
+            Passed = m.Passed,
+            Severity = m.Severity,
+            IsRequired = m.IsRequired,
+            Metadata = JsonSerializer.Serialize(extra)
+        };
+    }
+
+    /// <summary>
+    /// Attaching an inspection to an assessment: SystemAdmin, a Manager with the assessment's region in scope, or a
+    /// technician (technicians read every assessment – commit 0933670).
+    /// </summary>
+    private async Task EnsureCallerMayUseAssessmentAsync(PreMissionAssessment assessment, CancellationToken ct)
+    {
+        if (_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
+            _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase) ||
+            _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        if (_current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) &&
+            await _db.UserGeographicScopes.AnyAsync(s => s.UserId == _current.UserId && s.RegionId == assessment.RegionId, ct))
+            return;
+
+        throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
+    }
+
+    private void AddAudit(string table, Guid recordId, string action, string newValues) =>
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = _current.UserId,
+            TableName = table,
+            RecordId = recordId,
+            ActionType = action,
+            OldValues = "{}",
+            NewValues = newValues,
+            IpAddress = _current.IpAddress ?? "",
+            UserAgent = _current.UserAgent ?? ""
+        });
+
     private async Task EnsureCallerHasDroneAccessAsync(Guid droneId, CancellationToken ct)
     {
         if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
@@ -266,7 +329,8 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             .Select(s => (Guid?)s.RegionId)
             .ToListAsync(ct);
 
-        if (userScopes.Count > 0 && !userScopes.Contains(null))
+        // UserGeographicScope.RegionId is non-nullable, so there is no "global scope" row to look for.
+        if (userScopes.Count > 0)
         {
             var droneMissionRegions = await _db.Missions
                 .Where(m => m.UavId == droneId)

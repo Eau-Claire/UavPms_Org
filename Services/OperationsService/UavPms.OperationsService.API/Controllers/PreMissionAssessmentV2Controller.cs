@@ -142,6 +142,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
         return Ok(assessment.ToDto());
     }
 
+    /// <summary>Read-only: returns the stored result of the last evaluation. Use POST {id}/re-evaluate to refresh it.</summary>
     [HttpGet("{id:guid}/resource-readiness")]
     [Authorize(Roles = UserRoles.AdminManagerInspector)]
     public async Task<IActionResult> GetResourceReadiness(Guid id, CancellationToken ct)
@@ -151,7 +152,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
             var result = await _mediator.Send(new EvaluateResourceReadinessQuery(id), ct);
             return Ok(result);
         }
-        var assessment = await _service.EvaluateAsync(id, ct);
+        var assessment = await _service.GetAsync(id, ct);
         return Ok(assessment.ToDto());
     }
 }

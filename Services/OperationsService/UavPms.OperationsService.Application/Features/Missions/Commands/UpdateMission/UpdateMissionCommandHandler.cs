@@ -48,7 +48,7 @@ public class UpdateMissionCommandHandler : IRequestHandler<UpdateMissionCommand,
             }
         }
 
-        if (misison.Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled)
+        if (misison.Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled || misison.StartedAt != null)
             throw new BusinessRuleException("MISSION_IMMUTABLE_AFTER_START");
         
         misison.Title = request.Title;

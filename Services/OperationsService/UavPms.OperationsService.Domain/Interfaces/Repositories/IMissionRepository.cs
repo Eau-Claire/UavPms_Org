@@ -20,6 +20,9 @@ public interface IMissionRepository : IGenericRepository<Mission>
     Task<bool> UserCanAccessAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken);
     Task<bool> UserCanManageAsync(Guid missionId, Guid userId, bool global, CancellationToken cancellationToken);
 
+    /// <summary>Cancels the mission's Active resource bookings (saved with the unit of work).</summary>
+    Task CancelActiveBookingsAsync(Guid missionId, CancellationToken cancellationToken = default);
+
     /// <summary>Ghi danh sách lỗi ưu tiên (mã hoặc tên DefectCategories) vào bảng MissionPriorityDefects; mã không tồn tại bị bỏ qua.</summary>
     Task SetPriorityDefectsAsync(Mission mission, IEnumerable<string>? categoryCodes, CancellationToken cancellationToken = default);
 }

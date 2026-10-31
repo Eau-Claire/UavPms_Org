@@ -11,6 +11,7 @@ using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.OperationsService.Infrastructure.Repositories;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.Shared.Contracts.Constants;
+using UavPms.OperationsService.Tests.Common.Utilities;
 
 namespace UavPms.OperationsService.Tests.Features.Missions;
 
@@ -51,11 +52,12 @@ public class MissionPriorityAndSchedulingTests
         await using var db = CreateContext(user.Object);
 
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available, TechnicalHealth = TechnicalHealth.Healthy };
         var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
         db.Users.Add(new User { Id = managerId, Status = "Active" });
-        db.Users.Add(new User { Id = inspectorId, Status = "Active" });
+        FieldUsers.Add(db, inspectorId, region.Id);
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
         db.Uavs.Add(drone);
         db.Towers.Add(tower);
 
@@ -101,11 +103,12 @@ public class MissionPriorityAndSchedulingTests
         await using var db = CreateContext(user.Object);
 
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available, TechnicalHealth = TechnicalHealth.Healthy };
         var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
         db.Users.Add(new User { Id = managerId, Status = "Active" });
-        db.Users.Add(new User { Id = inspectorId, Status = "Active" });
+        FieldUsers.Add(db, inspectorId, region.Id);
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
         SeedPriorityDefectCategories(db);
         db.Uavs.Add(drone);
         db.Towers.Add(tower);
@@ -165,11 +168,12 @@ public class MissionPriorityAndSchedulingTests
         await using var db = CreateContext(user.Object);
 
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available, TechnicalHealth = TechnicalHealth.Healthy };
         var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
         db.Users.Add(new User { Id = managerId, Status = "Active" });
-        db.Users.Add(new User { Id = inspectorId, Status = "Active" });
+        FieldUsers.Add(db, inspectorId, region.Id);
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
         db.Uavs.Add(drone);
         db.Towers.Add(tower);
 
@@ -227,7 +231,7 @@ public class MissionPriorityAndSchedulingTests
         var act = async () => await service.CreateMissionFromAssessmentAsync(request, CancellationToken.None);
         var ex = await act.Should().ThrowAsync<BusinessRuleException>();
         ex.Which.Message.Should().Contain("RESOURCE_BOOKING_CONFLICT");
-        ex.Which.Message.Should().Contain("Drone");
+        ex.Which.Message.Should().Contain("UAV");
         ex.Which.Message.Should().Contain("MS-EXISTING-001");
 
         // Existing booking remains untouched
@@ -652,7 +656,7 @@ public class MissionPriorityAndSchedulingTests
 
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         db.Users.Add(new User { Id = managerId, Status = "Active" });
-        db.Users.Add(new User { Id = inspectorId, Status = "Active" });
+        FieldUsers.Add(db, inspectorId, region.Id);
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 

@@ -8,6 +8,7 @@ using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.OperationsService.Infrastructure.Services;
 using UavPms.Shared.Contracts.Constants;
+using UavPms.OperationsService.Tests.Common.Utilities;
 
 namespace UavPms.OperationsService.Tests.Features.Missions;
 
@@ -228,11 +229,12 @@ public class AssignmentAcceptPostponeTests
 
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         db.Users.Add(new User { Id = originalInspectorId, Status = "Active" });
-        db.Users.Add(new User { Id = replacementInspectorId, Status = "Active" });
+        FieldUsers.Add(db, replacementInspectorId);
 
         var region = new Region { Id = Guid.NewGuid() };
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+        FieldUsers.AddScope(db, replacementInspectorId, region.Id);
 
         var start = DateTime.UtcNow.AddDays(1);
         var end = start.AddHours(4);
@@ -308,11 +310,12 @@ public class AssignmentAcceptPostponeTests
 
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         db.Users.Add(new User { Id = originalInspectorId, Status = "Active" });
-        db.Users.Add(new User { Id = replacementInspectorId, Status = "Active" });
+        FieldUsers.Add(db, replacementInspectorId);
 
         var region = new Region { Id = Guid.NewGuid() };
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
+        FieldUsers.AddScope(db, replacementInspectorId, region.Id);
 
         var start = DateTime.UtcNow.AddDays(1);
         var end = start.AddHours(4);

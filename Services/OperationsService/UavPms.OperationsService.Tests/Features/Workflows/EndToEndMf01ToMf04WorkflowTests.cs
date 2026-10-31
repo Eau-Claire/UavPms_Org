@@ -1,3 +1,4 @@
+using UavPms.OperationsService.Tests.Common.Utilities;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -81,7 +82,7 @@ public class EndToEndMf01ToMf04WorkflowTests
         // Khởi tạo người dùng
         db.Users.AddRange(
             new User { Id = managerId, FullName = "Nguyễn Văn Hoàng (Manager)", Status = "Active" },
-            new User { Id = pilotId, FullName = "Trần Đình Phi (Pilot)", Status = "Active" },
+            new User { Id = pilotId, FullName = "Trần Đình Phi (Pilot)", Status = "Active", IsEmailVerified = true, UserRoles = { new UserRole { UserId = pilotId, Role = new Role { RoleName = UserRoles.Inspector } } } },
             new User { Id = analystId, FullName = "Lê Thị Lan (Analyst)", Status = "Active" },
             new User { Id = technicianId, FullName = "Phạm Văn Sửa (Technician)", Status = "Active" }
         );
@@ -89,6 +90,8 @@ public class EndToEndMf01ToMf04WorkflowTests
         // Khởi tạo khu vực và cột điện mục tiêu (T-220kV tại tọa độ 10.8231, 106.6297)
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-HCM", Name = "TP. Hồ Chí Minh" };
         db.Regions.Add(region);
+        // BR-18: field members need a scope for the mission region; BR-02: so does the manager.
+        FieldUsers.AddScope(db, pilotId, region.Id);
 
         var tower = new Tower
         {

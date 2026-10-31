@@ -27,7 +27,7 @@ public class InspectionController : ControllerBase
     /// Upload ảnh kiểm tra chuyến bay
     /// </summary>
     [HttpPost("upload")]
-    [Authorize(Roles = UserRoles.InspectorOnly)]
+    [Authorize(Roles = UserRoles.AdminManagerInspector)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadImage(
         [FromForm] Guid missionId,

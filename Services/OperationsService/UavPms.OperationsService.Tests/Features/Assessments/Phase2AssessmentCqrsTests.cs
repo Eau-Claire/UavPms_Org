@@ -67,7 +67,7 @@ public class Phase2AssessmentCqrsTests
 
         var region = new Region { Id = regionId, Code = "REG-01", Name = "Region 1" };
         db.Regions.Add(region);
-        db.Towers.Add(new Tower { Id = towerId, RegionId = regionId, TowerCode = "T-01" });
+        db.Towers.Add(new Tower { Id = towerId, RegionId = regionId, TowerCode = "T-01", Geom = new NetTopologySuite.Geometries.Point(106.5, 10.5) { SRID = 4326 } });
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);
@@ -85,7 +85,7 @@ public class Phase2AssessmentCqrsTests
     }
 
     [Fact]
-    public async Task EvaluateResourceReadinessQueryHandler_ReturnsCandidateSummary()
+    public async Task EvaluateResourceReadinessQueryHandler_ReturnsStoredResult_WithoutReEvaluating()
     {
         var managerId = Guid.NewGuid();
         var user = CreateUserMock(managerId, UserRoles.Manager);
@@ -107,7 +107,7 @@ public class Phase2AssessmentCqrsTests
         await db.SaveChangesAsync();
 
         var serviceMock = new Mock<IPreMissionAssessmentService>();
-        serviceMock.Setup(s => s.EvaluateAsync(assessmentId, It.IsAny<CancellationToken>()))
+        serviceMock.Setup(s => s.GetAsync(assessmentId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(assessment);
 
         var handler = new EvaluateResourceReadinessQueryHandler(serviceMock.Object);
@@ -118,6 +118,8 @@ public class Phase2AssessmentCqrsTests
         result.Should().NotBeNull();
         result.AssessmentId.Should().Be(assessmentId);
         result.IsReady.Should().BeTrue();
+        // GET resource-readiness is read-only (BR-17): it must never re-evaluate.
+        serviceMock.Verify(s => s.EvaluateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

@@ -23,6 +23,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UavPms.OperationsService.Infrastructure\UavPms.OperationsService.Infrastructure.csproj" />
+    <!-- GlobalExceptionHandler: database constraint violations must map to 409, checked against real PostgreSQL errors. -->
+    <ProjectReference Include="..\UavPms.OperationsService.API\UavPms.OperationsService.API.csproj" />
   </ItemGroup>
 
 </Project>

@@ -228,7 +228,7 @@ public class UavManagementServiceTests
         result.Drones.Should().HaveCount(1);
         result.Drones[0].Suitability.Should().Be("SUITABLE");
         result.Drones[0].EstimatedFlightsNeeded.Should().Be(1);
-        result.Drones[0].Recommendation.Should().Contain("trọn vẹn");
+        result.Drones[0].Recommendation.Should().Contain("Một chuyến bay");
     }
 
     [Fact]
@@ -267,7 +267,7 @@ public class UavManagementServiceTests
     }
 
     [Fact]
-    public async Task EstimateGisScopeDronesAsync_CriticalTechnicalHealth_ClassifiesUnsuitable()
+    public async Task EstimateGisScopeDronesAsync_CriticalTechnicalHealth_ReportedSeparatelyFromSuitability()
     {
         var userId = Guid.NewGuid();
         var userMock = CreateUserMock(userId, UserRoles.Manager);
@@ -290,8 +290,10 @@ public class UavManagementServiceTests
         var request = new GisDroneEstimationRequest { CorridorLengthKm = 2.0, AssetCount = 4 };
         var result = await service.EstimateGisScopeDronesAsync(request, CancellationToken.None);
 
-        result.Drones[0].Suitability.Should().Be("UNSUITABLE");
-        result.Drones[0].Recommendation.Should().Contain("Critical");
+        // BR-20/BR-21: suitability judges only the scope; the health problem is reported in IsTechnicallyReady.
+        result.Drones[0].Suitability.Should().Be("SUITABLE");
+        result.Drones[0].IsTechnicallyReady.Should().BeFalse();
+        result.Drones[0].TechnicalHealth.Should().Be("Critical");
     }
 
     [Fact]

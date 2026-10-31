@@ -46,7 +46,7 @@ public class PreMissionAssessmentServiceTests
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
-        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01", Geom = new Point(106.5, 10.5) { SRID = 4326 } };
         db.Towers.Add(tower);
         await db.SaveChangesAsync();
 
@@ -111,7 +111,7 @@ public class PreMissionAssessmentServiceTests
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
-        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01", Geom = new Point(106.5, 10.5) { SRID = 4326 } };
         db.Towers.Add(tower);
         await db.SaveChangesAsync();
 
@@ -138,28 +138,35 @@ public class PreMissionAssessmentServiceTests
         db.Regions.Add(region);
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
-        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01", Geom = new Point(106.5, 10.5) { SRID = 4326 } };
         db.Towers.Add(tower);
 
         var key = "RACE-KEY-001";
+        var start = DateTime.UtcNow.AddDays(1);
+        var end = start.AddHours(4);
         var existing = new PreMissionAssessment
         {
             Id = Guid.NewGuid(),
             RegionId = region.Id,
             ManagerId = managerId,
-            PlannedStart = DateTime.UtcNow.AddDays(1),
-            PlannedEnd = DateTime.UtcNow.AddDays(1).AddHours(4),
+            PlannedStart = start,
+            PlannedEnd = end,
             IdempotencyKey = key,
             Status = PreMissionAssessmentStatus.Ready
         };
+        existing.Towers.Add(new PreMissionAssessmentTower { AssessmentId = existing.Id, TowerId = tower.Id, Sequence = 1 });
         db.PreMissionAssessments.Add(existing);
         await db.SaveChangesAsync();
 
         var service = new PreMissionAssessmentService(db, user.Object);
-        var result = await service.CreateAsync(region.Id, DateTime.UtcNow.AddDays(1), DateTime.UtcNow.AddDays(1).AddHours(4), new[] { tower.Id }, null, key, CancellationToken.None);
+        var result = await service.CreateAsync(region.Id, start, end, new[] { tower.Id }, null, key, CancellationToken.None);
 
         result.Should().NotBeNull();
         result.Id.Should().Be(existing.Id);
+
+        // Same key, different window: the key is not silently reused for another request.
+        var reused = () => service.CreateAsync(region.Id, start, end.AddHours(1), new[] { tower.Id }, null, key, CancellationToken.None);
+        await reused.Should().ThrowAsync<BusinessRuleException>().WithMessage("IDEMPOTENCY_KEY_REUSED*");
     }
 
     [Fact]
@@ -201,7 +208,7 @@ public class PreMissionAssessmentServiceTests
 
         db.Users.AddRange(eligibleInspector, eligibleAnalyst, eligibleTech, busyInspector, outOfScopeInspector);
 
-        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01", Geom = new Point(106.5, 10.5) { SRID = 4326 } };
         db.Towers.Add(tower);
 
         var start = DateTime.UtcNow.AddDays(2);
@@ -282,7 +289,7 @@ public class PreMissionAssessmentServiceTests
         });
         db.Uavs.Add(drone);
 
-        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01" };
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, TowerCode = "T-01", Geom = new Point(106.5, 10.5) { SRID = 4326 } };
         db.Towers.Add(tower);
         await db.SaveChangesAsync();
 
@@ -405,6 +412,7 @@ public class PreMissionAssessmentServiceTests
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
         var assessment = new PreMissionAssessment
         {
@@ -454,6 +462,7 @@ public class PreMissionAssessmentServiceTests
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
         var assessment = new PreMissionAssessment
         {
@@ -483,6 +492,7 @@ public class PreMissionAssessmentServiceTests
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
         var assessment = new PreMissionAssessment
         {
@@ -511,6 +521,7 @@ public class PreMissionAssessmentServiceTests
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
         var assessment = new PreMissionAssessment
         {
@@ -539,6 +550,7 @@ public class PreMissionAssessmentServiceTests
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-01" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
         var assessment = new PreMissionAssessment
         {
@@ -568,6 +580,7 @@ public class PreMissionAssessmentServiceTests
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-02" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
         var assessment = new PreMissionAssessment
         {
@@ -605,6 +618,7 @@ public class PreMissionAssessmentServiceTests
         db.Users.Add(new User { Id = managerId, Status = "Active" });
         var region = new Region { Id = Guid.NewGuid(), Code = "REG-03" };
         db.Regions.Add(region);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = region.Id });
 
         var assessment = new PreMissionAssessment
         {

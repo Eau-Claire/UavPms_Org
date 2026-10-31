@@ -58,7 +58,7 @@ public class MissionController : ControllerBase
     [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Assign(Guid id, [FromBody] MissionAssignmentRequest request, CancellationToken ct)
     {
-        var assignment = await _lifecycle!.AssignAsync(id, new Mf01Assignment(request.UserId, request.AssignmentRole), ct);
+        var assignment = await _lifecycle!.AssignAsync(id, new Mf01Assignment(request.UserId, request.AssignmentRole, request.IsRequired), ct);
         return Ok(new ApiResponse(true, "Mission assignment added", MapAssignment(assignment)));
     }
 
@@ -253,8 +253,9 @@ public class MissionController : ControllerBase
         return Ok(new ApiResponse(true, "Mission resumed successfully", MapMissionResult(mission)));
     }
 
+    /// <summary>Manager action (UC-MF02-09). A member postpones their own assignment with /assignments/postpone (BR-30).</summary>
     [HttpPost("{id:guid}/postpone")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Postpone(Guid id, [FromBody] PostponeAssignmentRequest request, CancellationToken ct)
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
@@ -550,7 +551,7 @@ public class MissionController : ControllerBase
 
 public record MissionScopeRequest(string BoundaryWkt);
 public record MissionAssetsRequest(string BoundaryWkt, IReadOnlyCollection<Guid> TowerIds);
-public record MissionAssignmentRequest(Guid UserId, string AssignmentRole);
+public record MissionAssignmentRequest(Guid UserId, string AssignmentRole, bool IsRequired = true);
 public record MissionDroneRequest(Guid DroneId);
 public record MissionHandoverRequest(Guid DroneId, Guid ReceivedBy, string Condition, bool Accepted);
 

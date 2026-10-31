@@ -90,6 +90,8 @@ public class Mission : BaseEntity
     {
         if (Status is not (MissionStatus.Ready or MissionStatus.Assigned or MissionStatus.Preparing))
             throw new InvalidOperationException($"Cannot start mission with status {Status}. Mission must be Ready, Assigned, or Preparing.");
+        if (!AllRequiredAccepted())
+            throw new InvalidOperationException("Cannot start mission before every required member has accepted.");
 
         Status = MissionStatus.InProgress;
         StartedAt = startTime ?? DateTime.UtcNow;
@@ -108,17 +110,6 @@ public class Mission : BaseEntity
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void Confirm(string? reason = null)
-    {
-        if (Status is MissionStatus.InProgress or MissionStatus.Completed or MissionStatus.Cancelled)
-            throw new InvalidOperationException($"Cannot confirm mission with status {Status}.");
-
-        Status = MissionStatus.Assigned;
-        AcceptedAt = DateTime.UtcNow;
-        Version++;
-        UpdatedAt = DateTime.UtcNow;
-    }
-
     public void Suspend(string reason)
     {
         if (Status is not (MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready or MissionStatus.InProgress))
@@ -129,14 +120,24 @@ public class Mission : BaseEntity
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Suspended → In Progress when the mission had started. Otherwise the status is recomputed: Pending Acceptance
+    /// while a required member has not accepted (BR-30, BR-32), else Assigned, Preparing or Ready (BR-37).
+    /// </summary>
     public void Resume(string? reason = null)
     {
         if (Status != MissionStatus.Suspended)
             throw new InvalidOperationException($"Cannot resume mission with status {Status}. Only Suspended missions can be resumed.");
 
-        Status = StartedAt != null
-            ? MissionStatus.InProgress
-            : (RecalculateReadiness() ? MissionStatus.Ready : MissionStatus.Assigned);
+        if (StartedAt != null)
+        {
+            Status = MissionStatus.InProgress;
+        }
+        else
+        {
+            Status = MissionStatus.Assigned;
+            RecalculateReadiness();
+        }
         Version++;
         UpdatedAt = DateTime.UtcNow;
     }
@@ -164,39 +165,81 @@ public class Mission : BaseEntity
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Active, not deleted assignments.</summary>
+    public IEnumerable<MissionAssignment> ActiveAssignments() =>
+        Assignments.Where(x => !x.IsDeleted && x.Status == MissionAssignmentStatus.Active);
+
+    /// <summary>BR-30: at least one active required assignment, and all of them Accepted.</summary>
+    public bool AllRequiredAccepted()
+    {
+        var required = ActiveAssignments().Where(a => a.IsRequired).ToList();
+        return required.Count > 0 && required.All(a => a.ResponseStatus == MissionAssignmentResponse.Accepted);
+    }
+
+    /// <summary>
+    /// Pending Acceptance → Assigned when every active required assignment is Accepted (BR-30). Readiness is then
+    /// recomputed so check-ins and handovers made before a reassignment still count (BR-37).
+    /// </summary>
     public bool CheckAcceptance()
     {
         if (Status != MissionStatus.PendingAcceptance) return false;
-        var requiredAssignments = Assignments.Where(x => x.Status == MissionAssignmentStatus.Active && x.IsRequired).ToList();
-        if (requiredAssignments.Count > 0 && requiredAssignments.All(a => a.ResponseStatus == MissionAssignmentResponse.Accepted))
-        {
-            Status = MissionStatus.Assigned;
-            AcceptedAt = DateTime.UtcNow;
-            Version++;
-            UpdatedAt = DateTime.UtcNow;
-            return true;
-        }
-        return false;
+        if (!AllRequiredAccepted()) return false;
+
+        Status = MissionStatus.Assigned;
+        AcceptedAt = DateTime.UtcNow;
+        RecalculateReadiness();
+        Version++;
+        UpdatedAt = DateTime.UtcNow;
+        return true;
     }
 
+    /// <summary>
+    /// BR-37 readiness of a mission that has not started. Required members must accept and check in; an optional
+    /// member must check in only once they have accepted. A required member who has not accepted sends the mission
+    /// back to Pending Acceptance (BR-32). Pending Acceptance itself only changes through <see cref="CheckAcceptance"/>;
+    /// Suspended, Postponed and final missions are left unchanged.
+    /// </summary>
     public bool RecalculateReadiness()
     {
-        if (Status is MissionStatus.Cancelled or MissionStatus.Completed or MissionStatus.InProgress or MissionStatus.PendingAcceptance or MissionStatus.Suspended or MissionStatus.Postponed)
+        if (Status is MissionStatus.Cancelled or MissionStatus.Completed or MissionStatus.InProgress or MissionStatus.Suspended or MissionStatus.Postponed)
+            return false;
+        if (StartedAt != null)
             return false;
 
-        var active = Assignments.Where(x => x.Status == MissionAssignmentStatus.Active).ToList();
+        var active = ActiveAssignments().ToList();
         var hasUav = UavId.HasValue && UavId.Value != Guid.Empty;
-        var ready = active.Count > 0
-            && active.All(a => (!a.IsRequired || a.ResponseStatus == MissionAssignmentResponse.Accepted) && CheckIns.Any(c => c.UserId == a.UserId && c.Status == MissionCheckInStatus.CheckedIn))
-            && hasUav
-            && MissionTargets.Count > 0
-            && DroneHandovers.Any(h => h.DroneId == UavId!.Value && h.Status == DroneHandoverStatus.Accepted && h.ReturnedAt == null);
+        if (active.Count == 0)
+        {
+            Status = MissionStatus.Draft;
+            return false;
+        }
 
+        if (!AllRequiredAccepted())
+        {
+            Status = MissionStatus.PendingAcceptance;
+            return false;
+        }
+        if (Status == MissionStatus.PendingAcceptance)
+            return CheckAcceptance() && Status == MissionStatus.Ready;
+        if (!hasUav)
+        {
+            // Without a UAV the team can be complete but nothing can be prepared (no handover).
+            Status = MissionStatus.Assigned;
+            return false;
+        }
+
+        bool CheckedIn(Guid userId) => CheckIns.Any(c => !c.IsDeleted && c.UserId == userId && c.Status == MissionCheckInStatus.CheckedIn);
+        var mustCheckIn = active.Where(a => a.IsRequired || a.ResponseStatus == MissionAssignmentResponse.Accepted).ToList();
+        var openHandover = DroneHandovers.Any(h => !h.IsDeleted && h.DroneId == UavId!.Value && h.Status == DroneHandoverStatus.Accepted && h.ReturnedAt == null);
+
+        var ready = mustCheckIn.All(a => CheckedIn(a.UserId))
+            && MissionTargets.Count > 0
+            && openHandover;
+
+        var anyProgress = openHandover || active.Any(a => CheckedIn(a.UserId));
         Status = ready
             ? MissionStatus.Ready
-            : active.Count > 0 && hasUav
-                ? CheckIns.Count > 0 || DroneHandovers.Count > 0 ? MissionStatus.Preparing : MissionStatus.Assigned
-                : MissionStatus.Draft;
+            : anyProgress ? MissionStatus.Preparing : MissionStatus.Assigned;
         return ready;
     }
     #endregion

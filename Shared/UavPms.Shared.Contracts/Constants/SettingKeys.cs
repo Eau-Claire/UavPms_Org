@@ -30,4 +30,10 @@ public static class SettingKeys
     public const string DroneWarningBatteryThreshold = "Drone:WarningBatteryThreshold";
     public const string DroneMinRfLinkThreshold = "Drone:MinRfLinkThreshold";
     public const string DroneInspectionValidityDays = "Drone:InspectionValidityDays";
+
+    // Missions (MF02/MF03)
+    /// <summary>Default confirmation deadline after dispatch, in hours (BR-31); capped at the planned start.</summary>
+    public const string MissionConfirmationDeadlineHours = "Mission:ConfirmationDeadlineHours";
+    /// <summary>How long before the planned start a mission may be started, in minutes (BR-38).</summary>
+    public const string MissionStartToleranceMinutes = "Mission:StartToleranceMinutes";
 }

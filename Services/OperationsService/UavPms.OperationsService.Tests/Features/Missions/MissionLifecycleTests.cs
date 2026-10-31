@@ -17,9 +17,51 @@ public class MissionLifecycleTests
     public void ReadyMissionStartsOnlyOnce()
     {
         var mission = new Mission { Status = MissionStatus.Ready };
+        mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), ResponseStatus = MissionAssignmentResponse.Accepted });
         mission.Start();
         mission.Status.Should().Be(MissionStatus.InProgress);
         mission.Invoking(x => x.Start()).Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void CannotStartWhileARequiredMemberHasNotAccepted()
+    {
+        var mission = new Mission { Status = MissionStatus.Assigned, UavId = Guid.NewGuid() };
+        mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), ResponseStatus = MissionAssignmentResponse.Pending });
+        mission.Invoking(x => x.Start()).Should().Throw<InvalidOperationException>().WithMessage("*required member*");
+    }
+
+    [Fact]
+    public void NewRequiredMemberSendsAssignedMissionBackToPendingAcceptance()
+    {
+        var mission = new Mission { Status = MissionStatus.Preparing, UavId = Guid.NewGuid() };
+        mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), ResponseStatus = MissionAssignmentResponse.Accepted });
+        mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), ResponseStatus = MissionAssignmentResponse.Pending });
+        mission.RecalculateReadiness().Should().BeFalse();
+        mission.Status.Should().Be(MissionStatus.PendingAcceptance);
+    }
+
+    [Fact]
+    public void PendingOptionalMemberDoesNotBlockReadiness()
+    {
+        var inspector = Guid.NewGuid(); var drone = Guid.NewGuid();
+        var mission = new Mission { Status = MissionStatus.Preparing, UavId = drone };
+        mission.Assignments.Add(new MissionAssignment { UserId = inspector, ResponseStatus = MissionAssignmentResponse.Accepted });
+        mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), IsRequired = false, ResponseStatus = MissionAssignmentResponse.Pending });
+        mission.MissionTargets.Add(new MissionTarget { TowerId = Guid.NewGuid() });
+        mission.CheckIns.Add(new MissionCheckIn { UserId = inspector });
+        mission.DroneHandovers.Add(new DroneHandover { DroneId = drone, Status = DroneHandoverStatus.Accepted });
+        mission.RecalculateReadiness().Should().BeTrue();
+        mission.Status.Should().Be(MissionStatus.Ready);
+    }
+
+    [Fact]
+    public void ResumeBeforeStartReturnsToPendingAcceptanceWhenARequiredMemberHasNotAccepted()
+    {
+        var mission = new Mission { Status = MissionStatus.Suspended, UavId = Guid.NewGuid() };
+        mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), ResponseStatus = MissionAssignmentResponse.Pending });
+        mission.Resume();
+        mission.Status.Should().Be(MissionStatus.PendingAcceptance);
     }
 
     [Fact]

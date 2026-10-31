@@ -101,7 +101,7 @@ public class MissionDroneExecutionTests
             Title = "Flight Execution Test",
             RegionId = _regionId,
             ManagerId = _managerId,
-            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
+            Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR", ResponseStatus = MissionAssignmentResponse.Accepted } },
             UavId = _droneId,
             Status = MissionStatus.Ready
         };

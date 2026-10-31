@@ -6,7 +6,7 @@ namespace UavPms.OperationsService.Application.Features.Missions;
 
 public record MissionAssignmentItemRequest(Guid UserId, string? Role = null, bool? IsRequired = true);
 
-public record Mf01Assignment(Guid UserId, string AssignmentRole);
+public record Mf01Assignment(Guid UserId, string AssignmentRole, bool IsRequired = true);
 public record Mf01Handover(Guid DroneId, Guid ReceivedBy, string Condition, bool Accepted);
 
 public interface IMissionLifecycleService

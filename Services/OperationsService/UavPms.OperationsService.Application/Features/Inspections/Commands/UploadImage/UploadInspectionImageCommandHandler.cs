@@ -31,6 +31,7 @@ public class UploadInspectionImageCommandHandler
     private readonly IEventPublisher _eventPublisher;
     private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
     private readonly IGenericRepository<MissionAssignment>? _assignmentRepository;
+    private readonly IGenericRepository<UserGeographicScope>? _scopeRepository;
     private readonly ICurrentUserServices _currentUser;
     private readonly IMissionRealtimeNotifier? _notifier;
     private readonly ILogger<UploadInspectionImageCommandHandler> _logger;
@@ -47,7 +48,8 @@ public class UploadInspectionImageCommandHandler
         ICurrentUserServices currentUser,
         ILogger<UploadInspectionImageCommandHandler> logger,
         IGenericRepository<MissionAssignment>? assignmentRepository = null,
-        IMissionRealtimeNotifier? notifier = null)
+        IMissionRealtimeNotifier? notifier = null,
+        IGenericRepository<UserGeographicScope>? scopeRepository = null)
     {
         _missionRepository = missionRepository;
         _towerRepository = towerRepository;
@@ -58,6 +60,7 @@ public class UploadInspectionImageCommandHandler
         _eventPublisher = eventPublisher;
         _outboxRepository = outboxRepository;
         _assignmentRepository = assignmentRepository;
+        _scopeRepository = scopeRepository;
         _currentUser = currentUser;
         _notifier = notifier;
         _logger = logger;
@@ -75,6 +78,59 @@ public class UploadInspectionImageCommandHandler
         ILogger<UploadInspectionImageCommandHandler> logger)
         : this(missionRepository, towerRepository, mediaRepository, missionTargetRepository, unitOfWork,
             fileStorageService, eventPublisher, null!, currentUser, logger, null, null) { }
+
+    private async Task<bool> CanUploadAsync(Mission mission, CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.UserId;
+        var roles = _currentUser.Roles ?? Array.Empty<string>();
+        bool HasRole(string role) => roles.Contains(role, StringComparer.OrdinalIgnoreCase);
+
+        if (HasRole(UserRoles.SystemAdmin))
+        {
+            return true;
+        }
+
+        if (HasRole(UserRoles.Manager))
+        {
+            if (mission.ManagerId == userId)
+            {
+                return true;
+            }
+
+            if (mission.RegionId.HasValue && _scopeRepository != null)
+            {
+                var scopes = await _scopeRepository.FindAsync(
+                    s => s.UserId == userId && s.RegionId == mission.RegionId.Value,
+                    track: false);
+                if (scopes.Count > 0)
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (!HasRole(UserRoles.Inspector))
+        {
+            return false;
+        }
+
+        if (mission.PrimaryInspectorId() == userId)
+        {
+            return true;
+        }
+
+        if (_assignmentRepository == null)
+        {
+            return false;
+        }
+
+        var activeAssignments = await _assignmentRepository.FindAsync(
+            a => a.MissionId == mission.Id &&
+                 a.UserId == userId &&
+                 a.Status == MissionAssignmentStatus.Active,
+            track: false);
+        return activeAssignments.Count > 0;
+    }
 
     public async Task<UploadInspectionImageResult> Handle(
         UploadInspectionImageCommand request,
@@ -108,27 +164,16 @@ public class UploadInspectionImageCommandHandler
             }
         }
 
-        // 2. Kiểm tra quyền: SystemAdmin, Manager phụ trách nhiệm vụ, hoặc thành viên đang được giao
-        //    (Admin/Manager nạp hộ dữ liệu từ thẻ nhớ sau chuyến bay).
-        var currentUserId = _currentUser.UserId;
-        var roles = _currentUser.Roles ?? Array.Empty<string>();
-        var isAssigned = roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)
-            || (mission.ManagerId == currentUserId && roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))
-            || mission.PrimaryInspectorId() == currentUserId;
-        if (!isAssigned && _assignmentRepository != null)
-        {
-            var activeAssignments = await _assignmentRepository.FindAsync(
-                a => a.MissionId == request.MissionId &&
-                     a.UserId == currentUserId &&
-                     a.Status == MissionAssignmentStatus.Active,
-                track: false);
-            isAssigned = activeAssignments.Count > 0;
-        }
-
-        if (!isAssigned)
+        // 2. Quyền upload (SRS bảng phân quyền SCR-13, BR-02, BR-40):
+        //    - SystemAdmin: mọi nhiệm vụ;
+        //    - Manager: nhiệm vụ mình phụ trách hoặc thuộc khu vực trong phạm vi quản lý;
+        //    - Inspector: thành viên đang được giao của nhiệm vụ.
+        //    Analyst và Technician chỉ xem nhiệm vụ, kể cả khi là thành viên.
+        if (!await CanUploadAsync(mission, cancellationToken))
         {
             throw new ForbiddenException("You are not assigned to this mission.");
         }
+        var currentUserId = _currentUser.UserId;
 
         var targets = request.TowerId.HasValue
             ? await _missionTargetRepository.FindAsync(

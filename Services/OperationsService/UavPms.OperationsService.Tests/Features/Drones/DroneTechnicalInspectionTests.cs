@@ -134,8 +134,10 @@ public class DroneTechnicalInspectionTests
         latest!.Id.Should().Be(newer.Id);
     }
 
-    [Fact]
-    public async Task SubmitInspection_EmptyMetrics_FallsBackToDefaultBistMetrics()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SubmitInspection_EmptyOrMissingMetrics_ThrowsMetricsRequired(bool emptyList)
     {
         var techId = Guid.NewGuid();
         var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
@@ -147,15 +149,14 @@ public class DroneTechnicalInspectionTests
         await db.SaveChangesAsync();
 
         var service = new DroneTechnicalInspectionService(db, user.Object);
-        var request = new DroneInspectionSubmitRequest(drone.Id, "No metrics", new List<DroneMetricSubmitDto>());
+        var request = new DroneInspectionSubmitRequest(drone.Id, "No metrics", emptyList ? new List<DroneMetricSubmitDto>() : null);
 
-        // Since 3caa4ef an empty submission is evaluated against the default healthy BIST metric set.
-        var inspection = await service.SubmitInspectionAsync(request, CancellationToken.None);
+        // UC-MF01-05 E4: no default "all passed" checklist is made up any more (it gave Passed/Healthy for 7 days).
+        var act = () => service.SubmitInspectionAsync(request, CancellationToken.None);
 
-        inspection.Metrics.Should().HaveCount(6);
-        inspection.Metrics.Should().Contain(m => m.MetricCode == "BATTERY_HEALTH");
-        inspection.TechnicianId.Should().Be(techId);
-        (await db.Uavs.FindAsync(drone.Id))!.LastTechnicalInspectionId.Should().Be(inspection.Id);
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("METRICS_REQUIRED*");
+        db.DroneTechnicalInspections.Should().BeEmpty();
+        (await db.Uavs.FindAsync(drone.Id))!.LastTechnicalInspectionId.Should().BeNull();
     }
 
     [Fact]
