@@ -86,7 +86,9 @@ public class NotificationController : ControllerBase
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> MarkAsRead(Guid id, CancellationToken cancellationToken = default)
     {
-        var command = new MarkNotificationAsReadCommand(id);
+        var command = new MarkNotificationAsReadCommand(
+            id,
+            Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var currentUserId) ? currentUserId : null);
         await _mediator.Send(command, cancellationToken);
         return Ok(new ApiResponse(true, "Notification marked as read successfully."));
     }

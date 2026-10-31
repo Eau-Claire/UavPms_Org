@@ -17,11 +17,11 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
         }
 
 
-        public async Task<List<ActiveAlertModel>> GetActiveAlertsAsync(CancellationToken cancellationToken)
+        public async Task<List<ActiveAlertModel>> GetActiveAlertsAsync(Guid userId, CancellationToken cancellationToken)
         {
             return await _context.Notifications
                 .AsNoTracking()
-                .Where(n => n.ReadAt == null)
+                .Where(n => n.UserId == userId && n.ReadAt == null)
                 .OrderByDescending(n => n.SentAt)
                 .Select(n => new ActiveAlertModel
                 {

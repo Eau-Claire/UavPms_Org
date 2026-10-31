@@ -123,6 +123,21 @@ public class NotificationCommandHandlersTests
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+
+    [Fact]
+    public async Task Handle_MarkAsRead_ShouldThrowNotFound_WhenNotificationBelongsToAnotherUser()
+    {
+        var notificationId = Guid.NewGuid();
+        _notificationRepositoryMock.Setup(r => r.GetByIdAsync(notificationId, It.IsAny<bool>()))
+            .ReturnsAsync(new Notification { Id = notificationId, UserId = Guid.NewGuid() });
+        var handler = new MarkNotificationAsReadCommandHandler(_notificationRepositoryMock.Object, _unitOfWorkMock.Object);
+
+        Func<Task> act = async () => await handler.Handle(new MarkNotificationAsReadCommand(notificationId, Guid.NewGuid()), CancellationToken.None);
+
+        await act.Should().ThrowAsync<NotFoundException>();
+        _notificationRepositoryMock.Verify(r => r.MarkAsReadAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
     #endregion
 
     #region DeleteNotificationCommand tests

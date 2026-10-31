@@ -23,6 +23,7 @@ namespace UavPms.OperationsService.Domain.Interfaces.Repositories
             int pageSize,
             CancellationToken cancellationToken);
 
-        Task<List<ActiveAlertModel>> GetActiveAlertsAsync(CancellationToken cancellationToken);
+        /// <summary>Unread notifications of one user (the dashboard alert panel is personal).</summary>
+        Task<List<ActiveAlertModel>> GetActiveAlertsAsync(Guid userId, CancellationToken cancellationToken);
     }
 }
