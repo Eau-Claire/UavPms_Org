@@ -66,24 +66,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         }
 
         // 4. Technician validation
-        var tech = await _db.Users
-            .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.Id == request.TechnicianId && !u.IsDeleted, ct);
-
-        if (tech == null)
-        {
-            throw new NotFoundException("Technician not found");
-        }
-
-        bool isTechnician = tech.UserRoles.Any(ur =>
-            string.Equals(ur.Role?.RoleName, UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(ur.Role?.RoleName, UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase));
-
-        if (!isTechnician)
-        {
-            throw new BusinessRuleException("Assigned user is not a Technician");
-        }
+        var tech = await LoadTechnicianAsync(request.TechnicianId, ct);
 
         // 5. Cột điện của phiếu suy ra từ bất thường (anomaly.TowerId), không nhận từ request.
 
@@ -139,6 +122,101 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         return MapToDto(ticket);
     }
 
+    /// <summary>
+    /// Giao (hoặc đổi) kỹ thuật viên cho phiếu chưa bắt đầu; phiếu tự sinh khi duyệt bất thường chưa có kỹ thuật viên.
+    /// </summary>
+    public async Task<MaintenanceTicketDto> AssignTechnicianAsync(Guid ticketId, AssignTechnicianRequest request, CancellationToken ct = default)
+    {
+        var ticket = await _db.MaintenanceTickets
+            .Include(t => t.Anomaly)
+            .FirstOrDefaultAsync(t => t.Id == ticketId && !t.IsDeleted, ct)
+            ?? throw new NotFoundException("Maintenance ticket not found");
+
+        if (ticket.Status != TicketStatus.Open)
+        {
+            throw new BusinessRuleException("TICKET_NOT_OPEN", $"Only open tickets can be (re)assigned; this ticket is '{ticket.Status}'.");
+        }
+
+        if (request.DueDate.HasValue && request.DueDate.Value < DateTime.UtcNow.AddMinutes(-5))
+        {
+            throw new BusinessRuleException("Due date cannot be in the past");
+        }
+
+        var tech = await LoadTechnicianAsync(request.TechnicianId, ct);
+        var old = new { ticket.TechnicianId, ticket.DueDate };
+
+        ticket.TechnicianId = tech.Id;
+        ticket.DueDate = request.DueDate ?? ticket.DueDate;
+        ticket.AssignedAt = DateTime.UtcNow;
+        ticket.UpdatedAt = DateTime.UtcNow;
+
+        _db.AuditLogs.Add(new AuditLog
+        {
+            Id = Guid.NewGuid(),
+            UserId = _currentUser.UserId,
+            TableName = "MaintenanceTickets",
+            RecordId = ticket.Id,
+            ActionType = "TicketAssigned",
+            OldValues = JsonSerializer.Serialize(old),
+            NewValues = JsonSerializer.Serialize(new { ticket.TechnicianId, ticket.DueDate }),
+            IpAddress = _currentUser.IpAddress ?? "",
+            UserAgent = _currentUser.UserAgent ?? "",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        _db.Notifications.Add(new Notification
+        {
+            UserId = tech.Id,
+            Title = "Phiếu bảo trì mới",
+            Body = $"Bạn được giao phiếu bảo trì {ticket.TicketCode}.",
+            Type = "MAINTENANCE_ASSIGNED",
+            ReferenceType = "MaintenanceTicket",
+            ReferenceId = ticket.Id,
+        });
+
+        await _db.SaveChangesAsync(ct);
+        return MapToDto(ticket);
+    }
+
+    /// <summary>Kỹ thuật viên đang hoạt động kèm số phiếu chưa đóng, để chọn khi giao phiếu.</summary>
+    public async Task<IReadOnlyList<TechnicianSummaryDto>> GetTechniciansAsync(CancellationToken ct = default)
+    {
+        var technicianRoles = new[] { UserRoles.Technician.ToLower(), UserRoles.MaintenanceTechnician.ToLower() };
+        return await _db.Users.AsNoTracking()
+            .Where(u => !u.IsDeleted && (u.Status == "Active" || u.Status == "Enabled") &&
+                        u.UserRoles.Any(ur => technicianRoles.Contains(ur.Role!.RoleName.ToLower())))
+            .OrderBy(u => u.FullName)
+            .Select(u => new TechnicianSummaryDto
+            {
+                Id = u.Id,
+                FullName = u.FullName,
+                Email = u.Email,
+                ActiveTicketCount = _db.MaintenanceTickets.Count(t => t.TechnicianId == u.Id && !t.IsDeleted &&
+                    t.Status != TicketStatus.Closed && t.Status != TicketStatus.Resolved)
+            })
+            .ToListAsync(ct);
+    }
+
+    private async Task<User> LoadTechnicianAsync(Guid technicianId, CancellationToken ct)
+    {
+        var tech = await _db.Users
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+            .FirstOrDefaultAsync(u => u.Id == technicianId && !u.IsDeleted, ct)
+            ?? throw new NotFoundException("Technician not found");
+
+        var isTechnician = tech.UserRoles.Any(ur =>
+            string.Equals(ur.Role?.RoleName, UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(ur.Role?.RoleName, UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase));
+
+        if (!isTechnician)
+        {
+            throw new BusinessRuleException("Assigned user is not a Technician");
+        }
+
+        return tech;
+    }
+
     public async Task<MaintenanceTicketDto> UpdateTicketStatusAsync(Guid ticketId, string newStatus, CancellationToken ct = default)
     {
         var ticket = await _db.MaintenanceTickets
@@ -188,22 +266,12 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         }
         else if (string.Equals(newStatus, "Closed", StringComparison.OrdinalIgnoreCase) || string.Equals(newStatus, "Resolved", StringComparison.OrdinalIgnoreCase))
         {
-            if (ticket.Status == TicketStatus.Open)
+            // Closing is the manager's acceptance step: same rules, audit and anomaly update as PUT /close.
+            if (!IsManagerOrAdmin())
             {
-                throw new BusinessRuleException("Cannot transition ticket directly from Open to Closed");
+                throw new ForbiddenException("TICKET_CLOSE_REQUIRES_MANAGER: Only a Manager or SystemAdmin can accept and close a ticket.");
             }
-            if (ticket.Status != TicketStatus.PendingVerification)
-            {
-                throw new BusinessRuleException($"Cannot close ticket from status '{ticket.Status}'. Must be in PendingVerification.");
-            }
-            var hasProof = await _db.MaintenanceProofs.AnyAsync(p => p.TicketId == ticketId && !p.IsDeleted, ct);
-            if (!hasProof)
-            {
-                throw new BusinessRuleException("Cannot close ticket without repair proof photo");
-            }
-            ticket.Status = TicketStatus.Closed;
-            ticket.ResolvedAt = DateTime.UtcNow;
-
+            return await CloseTicketAsync(ticketId, ct);
         }
         else
         {
@@ -252,6 +320,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         }
 
         EnsureTechnicianOrAdminAccess(ticket);
+        EnsureTicketEditable(ticket);
 
         if (file == null || file.Length == 0 || file.Length > 50 * 1024 * 1024)
         {
@@ -324,6 +393,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         }
 
         EnsureTechnicianOrAdminAccess(ticket);
+        EnsureTicketEditable(ticket);
 
         if (string.IsNullOrWhiteSpace(request.ComponentName) || string.IsNullOrWhiteSpace(request.Unit))
         {
@@ -377,6 +447,11 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         if (ticket == null)
         {
             throw new NotFoundException("Maintenance ticket not found");
+        }
+
+        if (ticket.Status != TicketStatus.PendingVerification)
+        {
+            throw new BusinessRuleException("TICKET_NOT_PENDING_VERIFICATION", $"Cannot close ticket from status '{ticket.Status}'. Must be in PendingVerification.");
         }
 
         var hasProof = await _db.MaintenanceProofs.AnyAsync(p => p.TicketId == ticketId && !p.IsDeleted, ct);
@@ -448,8 +523,12 @@ public class MaintenanceTicketService : IMaintenanceTicketService
     public async Task<IReadOnlyList<MaintenanceTicketDto>> GetMyTicketsAsync(CancellationToken ct = default)
     {
         var tickets = await _db.MaintenanceTickets
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Tower)
+            .Include(t => t.Technician)
             .Include(t => t.MaintenanceProofs)
             .Include(t => t.MaterialLogs)
+            .AsSplitQuery()
             .Where(t => t.TechnicianId == _currentUser.UserId && !t.IsDeleted)
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync(ct);
@@ -460,8 +539,12 @@ public class MaintenanceTicketService : IMaintenanceTicketService
     public async Task<PagedTicketsDto> GetTicketsAsync(int pageIndex, int pageSize, string? status, string? priority, CancellationToken ct = default)
     {
         var query = _db.MaintenanceTickets
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Tower)
+            .Include(t => t.Technician)
             .Include(t => t.MaintenanceProofs)
             .Include(t => t.MaterialLogs)
+            .AsSplitQuery()
             .Where(t => !t.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -498,10 +581,15 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         var ticket = await _db.MaintenanceTickets
             .Include(t => t.Anomaly!)
                 .ThenInclude(a => a.Tower)
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Category)
+            .Include(t => t.Anomaly!)
+                .ThenInclude(a => a.Media)
             .Include(t => t.Manager)
             .Include(t => t.Technician)
             .Include(t => t.MaintenanceProofs)
             .Include(t => t.MaterialLogs)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(t => t.Id == ticketId && !t.IsDeleted, ct);
 
         if (ticket == null)
@@ -516,7 +604,23 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         }
         if (ticket.Anomaly != null)
         {
-            dto.Anomaly = new { ticket.Anomaly.Id, ticket.Anomaly.ValidationStatus, ticket.Anomaly.ConfidenceScore };
+            var a = ticket.Anomaly;
+            dto.Anomaly = new
+            {
+                a.Id,
+                a.ValidationStatus,
+                a.ConfidenceScore,
+                a.MediaId,
+                a.Media?.MissionId,
+                CategoryCode = a.Category?.CategoryCode,
+                CategoryName = a.Category?.CategoryName,
+                a.Category?.IsEmergencyClass,
+                ImageUrl = a.ImageUrl ?? a.Media?.FileUrl,
+                a.CropUrl,
+                a.BoundingBox,
+                a.AnalystNotes,
+                a.ValidatedAt
+            };
         }
         if (ticket.Manager != null)
         {
@@ -530,10 +634,23 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         return dto;
     }
 
+    private bool IsManagerOrAdmin() =>
+        (_currentUser.Roles ?? Array.Empty<string>()).Any(r =>
+            string.Equals(r, UserRoles.Manager, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(r, UserRoles.SystemAdmin, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Proofs and materials belong to the repair, so they are only accepted while the ticket is open for work.</summary>
+    private static void EnsureTicketEditable(MaintenanceTicket ticket)
+    {
+        if (ticket.Status is TicketStatus.Closed or TicketStatus.Resolved)
+        {
+            throw new BusinessRuleException("TICKET_CLOSED", "The ticket is already closed.");
+        }
+    }
+
     private void EnsureTechnicianOrAdminAccess(MaintenanceTicket ticket)
     {
-        if (_currentUser.Roles.Any(r => string.Equals(r, UserRoles.Manager, StringComparison.OrdinalIgnoreCase) || 
-                                        string.Equals(r, UserRoles.SystemAdmin, StringComparison.OrdinalIgnoreCase)))
+        if (IsManagerOrAdmin())
         {
             return;
         }
@@ -562,6 +679,9 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             StartedAt = t.StartedAt,
             ResolvedAt = t.ResolvedAt,
             CreatedAt = t.CreatedAt,
+            // Set when the query loaded them (lists and detail), so list rows can show tower and technician.
+            Tower = t.Anomaly?.Tower == null ? null : new { t.Anomaly.Tower.Id, t.Anomaly.Tower.TowerCode, t.Anomaly.Tower.PoleType, t.Anomaly.Tower.RegionId },
+            Technician = t.Technician == null ? null : new { t.Technician.Id, t.Technician.Email, t.Technician.FullName, Username = t.Technician.Email },
             MaintenanceProofs = t.MaintenanceProofs?.Where(p => !p.IsDeleted).Select(p => new MaintenanceProofDto
             {
                 Id = p.Id,

@@ -36,6 +36,28 @@ public class MaintenanceTicketController : ControllerBase
     }
 
     /// <summary>
+    /// Giao hoặc đổi kỹ thuật viên cho phiếu đang Open (Chỉ dành cho Manager hoặc Admin)
+    /// </summary>
+    [HttpPut("{id:guid}/assign")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> AssignTechnician([FromRoute] Guid id, [FromBody] AssignTechnicianRequest request, CancellationToken ct)
+    {
+        var result = await _ticketService.AssignTechnicianAsync(id, request, ct);
+        return Ok(new ApiResponse(true, "Technician assigned successfully.", result));
+    }
+
+    /// <summary>
+    /// Danh sách kỹ thuật viên đang hoạt động và số phiếu chưa đóng của từng người
+    /// </summary>
+    [HttpGet("technicians")]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
+    public async Task<IActionResult> GetTechnicians(CancellationToken ct)
+    {
+        var result = await _ticketService.GetTechniciansAsync(ct);
+        return Ok(new ApiResponse(true, "Technicians retrieved successfully.", result));
+    }
+
+    /// <summary>
     /// Cập nhật trạng thái phiếu bảo trì
     /// </summary>
     [HttpPut("{id:guid}/status")]

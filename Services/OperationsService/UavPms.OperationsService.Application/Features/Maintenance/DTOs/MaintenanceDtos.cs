@@ -83,3 +83,17 @@ public class PagedTicketsDto
     public int PageIndex { get; set; }
     public int PageSize { get; set; }
 }
+
+public class AssignTechnicianRequest
+{
+    public Guid TechnicianId { get; set; }
+    public DateTime? DueDate { get; set; }
+}
+
+public class TechnicianSummaryDto
+{
+    public Guid Id { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public int ActiveTicketCount { get; set; }
+}

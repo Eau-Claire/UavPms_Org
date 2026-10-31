@@ -896,6 +896,23 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 - **Mô tả**: Lấy danh sách phiếu bảo trì có phân trang, lọc theo trạng thái (`Open`, `InProgress`, `PendingVerification`, `Resolved`, `Closed`) và mức ưu tiên.
 - **Query Params**: `pageIndex` (mặc định `0`), `pageSize` (mặc định `10`), `status`, `priority`
 
+#### 8.5a. [GET] `/api/v1/maintenance/tickets/technicians`
+- **Mô tả**: Danh sách kỹ thuật viên đang hoạt động (vai trò `Technician` hoặc `MaintenanceTechnician`) để chọn khi giao phiếu, kèm số phiếu chưa đóng của từng người.
+- **Phân quyền**: `SystemAdmin`, `Manager`
+- **Response `200 OK`** (`data`): `[{ "id", "fullName", "email", "activeTicketCount" }]`
+
+#### 8.5b. [PUT] `/api/v1/maintenance/tickets/{id}/assign`
+- **Mô tả**: Giao hoặc đổi kỹ thuật viên cho phiếu đang `Open`. Phiếu tự sinh khi Analyst xác nhận bất thường chưa có kỹ thuật viên, nên phải giao trước khi chuyển sang `InProgress`. Ghi `assignedAt`, audit `TicketAssigned` và gửi thông báo `MAINTENANCE_ASSIGNED` cho kỹ thuật viên.
+- **Phân quyền**: `SystemAdmin`, `Manager`
+- **Request Body**: `{ "technicianId": "cccccccc-...", "dueDate": "2026-11-05T17:00:00Z" }` (`dueDate` tùy chọn, không ở quá khứ)
+- **Lỗi**: `400 TICKET_NOT_OPEN` khi phiếu không còn `Open`; `400` khi người được giao không phải kỹ thuật viên; `404` khi không tìm thấy phiếu hoặc người dùng.
+
+#### 8.5c. [PUT] `/api/v1/maintenance/tickets/{id}/status` · [POST] `/api/v1/maintenance/tickets/{id}/materials` · [GET] `/api/v1/maintenance/tickets/my` · [GET] `/api/v1/maintenance/tickets/{id}`
+- `status`: body `{ "status": "InProgress" | "PendingVerification" }`. `InProgress` chỉ từ `Open` và cần đã giao kỹ thuật viên; `PendingVerification` chỉ từ `InProgress` và cần ít nhất một ảnh minh chứng.
+- `materials`: body `{ "componentName", "componentCode", "quantityUsed" (> 0), "unit", "fieldObservations" }`.
+- `my`: phiếu được giao cho kỹ thuật viên đang đăng nhập (`Technician`, `MaintenanceTechnician`).
+- `{id}`: chi tiết phiếu; `anomaly` gồm `categoryCode`, `categoryName`, `isEmergencyClass`, `imageUrl`, `cropUrl`, `boundingBox`, `mediaId`, `missionId`.
+
 #### 8.6. [POST] `/api/v1/maintenance/tickets/{id}/proof`
 - **Mô tả**: Kỹ thuật viên tải ảnh minh chứng sửa chữa (`multipart/form-data`: `file`, `technicianNotes?`). Mỗi tệp là một dòng `maintenance_proofs` (`proofType` = `Before`, `After` hoặc `Document`).
 - **Phân quyền**: `Technician`, `MaintenanceTechnician`, `SystemAdmin`, `Manager`

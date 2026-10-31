@@ -10,6 +10,8 @@ namespace UavPms.OperationsService.Application.Features.Maintenance;
 public interface IMaintenanceTicketService
 {
     Task<MaintenanceTicketDto> CreateTicketAsync(CreateMaintenanceTicketRequest request, CancellationToken ct = default);
+    Task<MaintenanceTicketDto> AssignTechnicianAsync(Guid ticketId, AssignTechnicianRequest request, CancellationToken ct = default);
+    Task<IReadOnlyList<TechnicianSummaryDto>> GetTechniciansAsync(CancellationToken ct = default);
     Task<MaintenanceTicketDto> UpdateTicketStatusAsync(Guid ticketId, string newStatus, CancellationToken ct = default);
     Task<MaintenanceProofDto> UploadProofAsync(Guid ticketId, IFormFile file, string? technicianNotes, CancellationToken ct = default);
     Task<MaterialLogDto> LogMaterialAsync(Guid ticketId, LogMaterialRequest request, CancellationToken ct = default);
