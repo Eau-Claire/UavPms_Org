@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -21,7 +22,8 @@ namespace UavPms.AIInspectionService.Infrastructure.Messaging;
 
 /// <summary>
 /// Temporary demo-only AI worker. It consumes AIAnalysisRequestedEvent messages and creates
-/// deterministic mock detections through the same callback command used by the real AI service.
+/// mock detections (see <see cref="MockDetectionGenerator"/>) through the same callback command used by the real AI service,
+/// so anomalies, alerts and notifications are written for real.
 /// Enable with MockAI:Enabled=true. Disable when a real AI worker is available.
 /// </summary>
 public class MockAIAnalysisConsumer : BackgroundService
@@ -209,8 +211,18 @@ public class MockAIAnalysisConsumer : BackgroundService
                 CompletedAt = DateTime.UtcNow
             }, cancellationToken);
 
-            var categoryCode = await ResolveCategoryCodeAsync(categoryRepository);
-            if (string.IsNullOrWhiteSpace(categoryCode))
+            var categories = (await categoryRepository.GetAllAsync(track: false)).ToList();
+            var isVideo = "video".Equals(aiRequestEvent.MediaType, StringComparison.OrdinalIgnoreCase);
+            var detections = MockDetectionGenerator.Generate(
+                aiRequestEvent.MediaId ?? aiRequestEvent.RequestId,
+                isVideo,
+                categories,
+                new MockDetectionOptions(
+                    _configuration["MockAI:CategoryCode"],
+                    double.TryParse(_configuration["MockAI:Confidence"], NumberStyles.Float, CultureInfo.InvariantCulture, out var fixedConfidence) ? fixedConfidence : null,
+                    GetPositiveInt("MockAI:MaxDetections", 3),
+                    GetDouble("MockAI:EmergencyRate", 0.2)));
+            if (detections.Count == 0)
             {
                 await mediator.Send(new ProcessAiAnalysisResultCommand
                 {
@@ -227,7 +239,6 @@ public class MockAIAnalysisConsumer : BackgroundService
                 return;
             }
 
-            var confidence = GetDouble("MockAI:Confidence", 0.92);
             var command = new ProcessAiAnalysisResultCommand
             {
                 RequestId = aiRequestEvent.RequestId,
@@ -243,21 +254,7 @@ public class MockAIAnalysisConsumer : BackgroundService
                     mocked = true,
                     source = nameof(MockAIAnalysisConsumer)
                 },
-                Detections =
-                [
-                    new DetectionDto
-                    {
-                        CategoryCode = categoryCode,
-                        Confidence = confidence,
-                        BoundingBox = new BoundingBoxDto
-                        {
-                            X = GetDouble("MockAI:BoundingBox:X", 0.15),
-                            Y = GetDouble("MockAI:BoundingBox:Y", 0.18),
-                            Width = GetDouble("MockAI:BoundingBox:Width", 0.32),
-                            Height = GetDouble("MockAI:BoundingBox:Height", 0.38)
-                        }
-                    }
-                ]
+                Detections = detections
             };
 
             var result = await mediator.Send(command, cancellationToken);
@@ -277,36 +274,9 @@ public class MockAIAnalysisConsumer : BackgroundService
         }
     }
 
-    private async Task<string?> ResolveCategoryCodeAsync(IGenericRepository<DefectCategory> categoryRepository)
-    {
-        var configuredCategoryCode = _configuration["MockAI:CategoryCode"];
-        if (!string.IsNullOrWhiteSpace(configuredCategoryCode))
-        {
-            var configuredMatches = await categoryRepository.FindAsync(
-                category => category.CategoryCode == configuredCategoryCode,
-                track: false);
-
-            var configuredCategory = configuredMatches.FirstOrDefault();
-            if (configuredCategory != null)
-            {
-                return configuredCategory.CategoryCode;
-            }
-
-            _logger.LogWarning("Configured MockAI category code does not exist: {CategoryCode}. Falling back to first category.", configuredCategoryCode);
-        }
-
-        var categories = await categoryRepository.GetAllAsync(track: false);
-        return categories
-            .OrderByDescending(category => category.IsEmergencyClass)
-            .ThenByDescending(category => category.SeverityWeight)
-            .ThenBy(category => category.Id)
-            .FirstOrDefault()
-            ?.CategoryCode;
-    }
-
     private double GetDouble(string key, double fallback)
     {
-        return double.TryParse(_configuration[key], out var value) ? value : fallback;
+        return double.TryParse(_configuration[key], NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : fallback;
     }
 
     private int GetInt(string key, int fallback)

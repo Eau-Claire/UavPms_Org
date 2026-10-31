@@ -128,7 +128,13 @@ Domain models now live under service-local namespaces, for example `UavPms.Ident
 Cross-domain background consumers are compiled only in their owning services:
 
 - `MissionCreatedConsumer` and `DefectDetectedConsumer` are owned by `NotificationService`.
-- `MockAIAnalysisConsumer` is owned by `AIInspectionService`.
+- `MockAIAnalysisConsumer` is owned by `AIInspectionService`. It stands in for the Python AI worker while none is
+  deployed (`MOCK_AI_ENABLED`, default `true` in `docker-compose.yml`): it consumes `ai.analysis.server.image.requested`
+  and `ai.analysis.server.video.requested` and sends the result through the real `ProcessAiAnalysisResultCommand`, so
+  anomalies, emergency alerts and notifications are stored for real. `MockDetectionGenerator` seeds the result by media
+  id (same file, same result): 1..`MOCK_AI_MAX_DETECTIONS` detections of distinct categories with normalized boxes, and
+  an emergency category on about `MOCK_AI_EMERGENCY_RATE` of the media. `MOCK_AI_CATEGORY_CODE` / `MOCK_AI_CONFIDENCE`
+  force a single fixed detection. Set `MOCK_AI_ENABLED=false` when a real worker consumes these queues.
 
 RabbitMQ producer-consumer paths:
 

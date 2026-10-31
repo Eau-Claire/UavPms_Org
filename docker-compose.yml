@@ -30,9 +30,14 @@ x-service-environment: &service-environment
 
   AIService__ServiceKey: ${AIService_ServiceKey}
 
-  MockAI__Enabled: ${MOCK_AI_ENABLED:-false}
+  # Demo AI worker (no real model deployed yet): results go through the real callback path, so anomalies,
+  # alerts and notifications are stored for real. Set MOCK_AI_ENABLED=false once a real AI worker consumes
+  # the ai.analysis.server.* queues, otherwise both compete for the same messages.
+  MockAI__Enabled: ${MOCK_AI_ENABLED:-true}
   MockAI__CategoryCode: ${MOCK_AI_CATEGORY_CODE:-}
-  MockAI__Confidence: ${MOCK_AI_CONFIDENCE:-0.92}
+  MockAI__Confidence: ${MOCK_AI_CONFIDENCE:-}
+  MockAI__MaxDetections: ${MOCK_AI_MAX_DETECTIONS:-3}
+  MockAI__EmergencyRate: ${MOCK_AI_EMERGENCY_RATE:-0.2}
   MockAI__ImageConcurrency: ${MOCK_AI_IMAGE_CONCURRENCY:-2}
   MockAI__VideoConcurrency: ${MOCK_AI_VIDEO_CONCURRENCY:-1}
 
