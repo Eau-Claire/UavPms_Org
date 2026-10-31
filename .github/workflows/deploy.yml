@@ -67,6 +67,9 @@ jobs:
             echo "Building containers..."
             docker compose build
 
+            echo "Applying database schema adjustments..."
+            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'ALTER TABLE "AuditLogs" ALTER COLUMN "ActionType" TYPE character varying(100);' || true
+
             echo "Starting containers..."
             docker compose up -d --remove-orphans
 

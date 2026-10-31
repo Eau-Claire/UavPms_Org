@@ -1996,7 +1996,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         if (!isAssigned)
             throw new ForbiddenException("USER_NOT_ASSIGNED_TO_MISSION");
     }
-    private void Audit(Guid id, string action, string oldValues = "{}", string newValues = "{}") => _db.AuditLogs.Add(new AuditLog { UserId = _current.UserId, TableName = "Missions", RecordId = id, ActionType = action, OldValues = oldValues, NewValues = newValues, IpAddress = _current.IpAddress ?? "", UserAgent = _current.UserAgent ?? "" });
+    private void Audit(Guid id, string action, string oldValues = "{}", string newValues = "{}") => _db.AuditLogs.Add(new AuditLog { UserId = _current.UserId, TableName = "Missions", RecordId = id, ActionType = action.Length > 100 ? action[..100] : action, OldValues = oldValues, NewValues = newValues, IpAddress = _current.IpAddress ?? "", UserAgent = _current.UserAgent ?? "" });
     private static (string Title, string Body) GetNotificationContent(string type, Mission m, string? role)
     {
         var roleText = !string.IsNullOrWhiteSpace(role) ? $"vai trò {role}" : "nhiệm vụ";

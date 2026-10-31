@@ -940,7 +940,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             UserId = _current.UserId,
             TableName = tableName,
             RecordId = id,
-            ActionType = action,
+            ActionType = action.Length > 100 ? action[..100] : action,
             OldValues = oldValues,
             NewValues = newValues,
             IpAddress = _current.IpAddress ?? "",

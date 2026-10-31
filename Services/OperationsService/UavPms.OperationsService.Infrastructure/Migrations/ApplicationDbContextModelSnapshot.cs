@@ -182,8 +182,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.Property<string>("ActionType")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");

@@ -60,7 +60,7 @@ public static class ErdColumnLengths
         ("Notifications", "Type", 50),
         ("Notifications", "ReferenceType", 50),
         ("AuditLogs", "TableName", 100),
-        ("AuditLogs", "ActionType", 20),
+        ("AuditLogs", "ActionType", 100),
     ];
 
     public static void Apply(ModelBuilder modelBuilder)
