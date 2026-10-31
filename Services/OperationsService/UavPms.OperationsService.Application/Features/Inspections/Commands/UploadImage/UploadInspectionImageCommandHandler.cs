@@ -15,6 +15,7 @@ using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Application.Common.Utilities;
 using UavPms.OperationsService.Domain.Enums;
 using System.Text.Json;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.Application.Features.Inspections.Commands.UploadImage;
 
@@ -107,9 +108,13 @@ public class UploadInspectionImageCommandHandler
             }
         }
 
-        // 2. Kiểm tra quyền: chỉ Inspector được giao mới có quyền upload
+        // 2. Kiểm tra quyền: SystemAdmin, Manager phụ trách nhiệm vụ, hoặc thành viên đang được giao
+        //    (Admin/Manager nạp hộ dữ liệu từ thẻ nhớ sau chuyến bay).
         var currentUserId = _currentUser.UserId;
-        var isAssigned = mission.PrimaryInspectorId() == currentUserId;
+        var roles = _currentUser.Roles ?? Array.Empty<string>();
+        var isAssigned = roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase)
+            || (mission.ManagerId == currentUserId && roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))
+            || mission.PrimaryInspectorId() == currentUserId;
         if (!isAssigned && _assignmentRepository != null)
         {
             var activeAssignments = await _assignmentRepository.FindAsync(

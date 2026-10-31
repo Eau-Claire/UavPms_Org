@@ -1,3 +1,4 @@
+using UavPms.Shared.Contracts.Constants;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -171,6 +172,50 @@ public class UploadInspectionImageCommandHandlerTests
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
         _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<InspectionMediaUploadedEvent>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(UserRoles.SystemAdmin, false, true)]
+    [InlineData(UserRoles.Manager, true, true)]
+    [InlineData(UserRoles.Manager, false, false)]
+    [InlineData(UserRoles.Analyst, true, false)]
+    public async Task Handle_UnassignedUser_MayUploadOnlyAsAdminOrTheMissionManager(string role, bool isMissionManager, bool allowed)
+    {
+        var missionId = Guid.NewGuid();
+        var towerId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
+        var mission = new Mission
+        {
+            Id = missionId,
+            ManagerId = isMissionManager ? currentUserId : Guid.NewGuid(),
+            Assignments = { new MissionAssignment { UserId = Guid.NewGuid(), AssignmentRole = "INSPECTOR" } },
+            Status = MissionStatus.InProgress
+        };
+        var command = new UploadInspectionImageCommand
+        {
+            MissionId = missionId,
+            TowerId = towerId,
+            CapturedAt = DateTime.UtcNow,
+            FileStream = new MemoryStream(),
+            FileName = "test.jpg",
+            ContentType = "image/jpeg"
+        };
+
+        _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false)).ReturnsAsync(mission);
+        _assetRepositoryMock.Setup(r => r.GetByIdAsync(towerId, false)).ReturnsAsync(new Tower { Id = towerId });
+        _currentUserServicesMock.Setup(s => s.UserId).Returns(currentUserId);
+        _currentUserServicesMock.Setup(s => s.Roles).Returns(new[] { role });
+        _missionTargetRepositoryMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<MissionTarget, bool>>>(), false))
+            .ReturnsAsync(new List<MissionTarget> { new() { MissionId = missionId, TowerId = towerId } });
+        _fileStorageServiceMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), "test.jpg", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("uav-media/test.jpg");
+
+        Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
+
+        if (allowed)
+            await act.Should().NotThrowAsync();
+        else
+            await act.Should().ThrowAsync<ForbiddenException>().WithMessage("You are not assigned to this mission.");
     }
 
     [Theory]
