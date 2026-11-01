@@ -50,7 +50,11 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         IReadOnlyCollection<Guid> towerIds,
         string? boundaryWkt,
         string? idempotencyKey,
-        CancellationToken ct)
+        CancellationToken ct,
+        int requiredInspectors = 1,
+        int requiredAnalysts = 1,
+        int requiredTechnicians = 1,
+        int maxDronesLimit = 1)
     {
         await RequireManager(ct);
 
@@ -100,6 +104,12 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         if (!siteResult.IsValid)
             throw new BusinessRuleException(siteResult.ErrorMessage ?? "SITE_FEASIBILITY_FAILED");
 
+        var findingsDict = JsonSerializer.Deserialize<Dictionary<string, object>>(siteResult.FindingsJson) ?? new Dictionary<string, object>();
+        findingsDict["requiredInspectors"] = Math.Max(1, requiredInspectors);
+        findingsDict["requiredAnalysts"] = Math.Max(1, requiredAnalysts);
+        findingsDict["requiredTechnicians"] = Math.Max(1, requiredTechnicians);
+        findingsDict["maxDronesLimit"] = Math.Max(1, maxDronesLimit);
+
         var assessment = new PreMissionAssessment
         {
             ManagerId = _current.UserId,
@@ -109,7 +119,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             ProposedBoundary = boundary,
             SiteFeasibilityStatus = siteResult.Status,
             Status = PreMissionAssessmentStatus.Evaluating,
-            Findings = siteResult.FindingsJson,
+            Findings = JsonSerializer.Serialize(findingsDict),
             EvaluationPolicyVersion = "v2.0",
             IdempotencyKey = idempotencyKey
         };
@@ -427,7 +437,26 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             ?? throw new BusinessRuleException("REGION_INACTIVE", "Khu vực của bản đánh giá không còn hoạt động.");
         var siteResult = SiteFeasibilityPolicy.Evaluate(region, towers, assessment.ProposedBoundary, towerIds);
         assessment.SiteFeasibilityStatus = siteResult.Status;
-        assessment.Findings = siteResult.FindingsJson;
+
+        int reqInspectors = 1, reqAnalysts = 1, reqTechnicians = 1, maxDrones = 1;
+        if (!string.IsNullOrEmpty(assessment.Findings))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(assessment.Findings);
+                if (doc.RootElement.TryGetProperty("requiredInspectors", out var pInsp) && pInsp.TryGetInt32(out var vInsp)) reqInspectors = Math.Max(1, vInsp);
+                if (doc.RootElement.TryGetProperty("requiredAnalysts", out var pAna) && pAna.TryGetInt32(out var vAna)) reqAnalysts = Math.Max(1, vAna);
+                if (doc.RootElement.TryGetProperty("requiredTechnicians", out var pTech) && pTech.TryGetInt32(out var vTech)) reqTechnicians = Math.Max(1, vTech);
+                if (doc.RootElement.TryGetProperty("maxDronesLimit", out var pMaxDrones) && pMaxDrones.TryGetInt32(out var vMax)) maxDrones = Math.Max(1, vMax);
+            }
+            catch { }
+        }
+        var mergedFindings = JsonSerializer.Deserialize<Dictionary<string, object>>(siteResult.FindingsJson) ?? new Dictionary<string, object>();
+        mergedFindings["requiredInspectors"] = reqInspectors;
+        mergedFindings["requiredAnalysts"] = reqAnalysts;
+        mergedFindings["requiredTechnicians"] = reqTechnicians;
+        mergedFindings["maxDronesLimit"] = maxDrones;
+        assessment.Findings = JsonSerializer.Serialize(mergedFindings);
 
         // Step 2: Clear old candidates (Gap #4)
         if (assessment.PersonnelCandidates.Count > 0)
@@ -523,9 +552,9 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
         // Step 5: Overall Status Calculation
         var isSiteFeasible = siteResult.Status == ReadinessCheckStatus.Passed;
-        var hasEligibleInspector = assessment.PersonnelCandidates.Any(x => x.IsEligible && (x.Role.Contains("Inspector", StringComparison.OrdinalIgnoreCase) || x.Role.Contains("Pilot", StringComparison.OrdinalIgnoreCase)));
-        var hasEligibleAnalyst = assessment.PersonnelCandidates.Any(x => x.IsEligible && x.Role.Contains("Analyst", StringComparison.OrdinalIgnoreCase));
-        var hasEligibleTechnician = assessment.PersonnelCandidates.Any(x => x.IsEligible && (x.Role.Contains("Tech", StringComparison.OrdinalIgnoreCase) || x.Role.Contains("Maintenance", StringComparison.OrdinalIgnoreCase)));
+        var hasEligibleInspector = assessment.PersonnelCandidates.Count(x => x.IsEligible && (x.Role.Contains("Inspector", StringComparison.OrdinalIgnoreCase) || x.Role.Contains("Pilot", StringComparison.OrdinalIgnoreCase))) >= reqInspectors;
+        var hasEligibleAnalyst = assessment.PersonnelCandidates.Count(x => x.IsEligible && x.Role.Contains("Analyst", StringComparison.OrdinalIgnoreCase)) >= reqAnalysts;
+        var hasEligibleTechnician = assessment.PersonnelCandidates.Count(x => x.IsEligible && (x.Role.Contains("Tech", StringComparison.OrdinalIgnoreCase) || x.Role.Contains("Maintenance", StringComparison.OrdinalIgnoreCase))) >= reqTechnicians;
         var hasEligiblePersonnel = hasEligibleInspector && hasEligibleAnalyst && hasEligibleTechnician;
         var hasEligibleDrone = assessment.DroneCandidates.Any(x => x.IsEligible);
 
@@ -649,10 +678,21 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                 throw new BusinessRuleException("PERSONNEL_ASSIGNMENT_REQUIRED", "Every person needs a UserId.");
             if (request.Personnel.Select(p => p.UserId).Distinct().Count() != request.Personnel.Count)
                 throw new BusinessRuleException("DUPLICATE_PERSONNEL", "A person is listed more than once.");
+            int maxDronesLimit = 1;
+            if (!string.IsNullOrEmpty(assessment.Findings))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(assessment.Findings);
+                    if (doc.RootElement.TryGetProperty("maxDronesLimit", out var pMax) && pMax.TryGetInt32(out var vMax))
+                        maxDronesLimit = Math.Max(1, vMax);
+                }
+                catch { }
+            }
             if (request.DroneIds.Distinct().Count() != request.DroneIds.Count)
                 throw new BusinessRuleException("DUPLICATE_DRONE", "A UAV is listed more than once.");
-            if (request.DroneIds.Count > 1)
-                throw new BusinessRuleException("MULTIPLE_DRONES_NOT_SUPPORTED", "A mission flies exactly one UAV; send one DroneId.");
+            if (request.DroneIds.Count > maxDronesLimit)
+                throw new BusinessRuleException("MULTIPLE_DRONES_NOT_SUPPORTED", $"Hồ sơ đánh giá chỉ cho phép tối đa {maxDronesLimit} UAV cho mỗi chuyến bay; đã chọn {request.DroneIds.Count} UAV.");
             if (!request.Personnel.Any(p => p.IsRequired))
                 throw new BusinessRuleException("REQUIRED_MEMBER_REQUIRED", "At least one person must be required.");
 
@@ -688,6 +728,11 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                     _db, p.UserId, assessment.RegionId, assessment.PlannedStart, assessment.PlannedEnd, null, callerIsGlobal, ct);
             }
 
+            foreach (var dId in request.DroneIds)
+            {
+                await MissionResourceGuard.EnsureDroneEligibleAsync(
+                    _db, dId, assessment.PlannedStart, assessment.PlannedEnd, null, assessment.Id, ct);
+            }
             var primaryDroneId = request.DroneIds[0];
             var primaryDrone = await MissionResourceGuard.EnsureDroneEligibleAsync(
                 _db, primaryDroneId, assessment.PlannedStart, assessment.PlannedEnd, null, assessment.Id, ct);
@@ -791,15 +836,18 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                     Status = ResourceBookingStatus.Active
                 });
             }
-            // Only the mission UAV is booked (BR-28): one Active booking per person and UAV.
-            _db.ResourceBookings.Add(new ResourceBooking
+            // Book all UAVs assigned to this mission
+            foreach (var dId in request.DroneIds)
             {
-                MissionId = mission.Id,
-                DroneId = primaryDrone.Id,
-                StartAt = assessment.PlannedStart,
-                EndAt = assessment.PlannedEnd,
-                Status = ResourceBookingStatus.Active
-            });
+                _db.ResourceBookings.Add(new ResourceBooking
+                {
+                    MissionId = mission.Id,
+                    DroneId = dId,
+                    StartAt = assessment.PlannedStart,
+                    EndAt = assessment.PlannedEnd,
+                    Status = ResourceBookingStatus.Active
+                });
+            }
 
             // Complete assessment and link mission
             assessment.Status = PreMissionAssessmentStatus.Completed;

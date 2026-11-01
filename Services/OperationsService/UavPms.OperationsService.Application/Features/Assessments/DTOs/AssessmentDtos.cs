@@ -8,7 +8,11 @@ public record CreateAssessmentRequest(
     DateTime PlannedEnd,
     IReadOnlyCollection<Guid> TowerIds,
     string? BoundaryWkt = null,
-    string? IdempotencyKey = null
+    string? IdempotencyKey = null,
+    int? RequiredInspectors = null,
+    int? RequiredAnalysts = null,
+    int? RequiredTechnicians = null,
+    int? MaxDronesLimit = null
 );
 
 public record MissionPersonnelAssignmentRequest(

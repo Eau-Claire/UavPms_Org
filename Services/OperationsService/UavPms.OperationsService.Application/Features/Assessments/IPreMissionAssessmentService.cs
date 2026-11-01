@@ -23,7 +23,11 @@ public interface IPreMissionAssessmentService
         IReadOnlyCollection<Guid> towerIds,
         string? boundaryWkt,
         string? idempotencyKey,
-        CancellationToken ct);
+        CancellationToken ct,
+        int requiredInspectors = 1,
+        int requiredAnalysts = 1,
+        int requiredTechnicians = 1,
+        int maxDronesLimit = 1);
 
     Task<PreMissionAssessment> GetAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<PreMissionAssessment>> ListAsync(CancellationToken ct);

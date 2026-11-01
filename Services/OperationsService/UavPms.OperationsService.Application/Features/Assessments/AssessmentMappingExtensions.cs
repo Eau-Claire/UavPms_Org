@@ -86,17 +86,28 @@ public static class AssessmentMappingExtensions
             entity.UpdatedAt ?? entity.CreatedAt
         );
 
+        int reqInsp = 1, reqAna = 1, reqTech = 1;
+        if (!string.IsNullOrEmpty(entity.Findings))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(entity.Findings);
+                if (doc.RootElement.TryGetProperty("requiredInspectors", out var p1) && p1.TryGetInt32(out var v1)) reqInsp = Math.Max(1, v1);
+                if (doc.RootElement.TryGetProperty("requiredAnalysts", out var p2) && p2.TryGetInt32(out var v2)) reqAna = Math.Max(1, v2);
+                if (doc.RootElement.TryGetProperty("requiredTechnicians", out var p3) && p3.TryGetInt32(out var v3)) reqTech = Math.Max(1, v3);
+            }
+            catch { }
+        }
+
+        var hasReqPersonnel = isReadyOrCompleted || (
+            entity.PersonnelCandidates.Count(p => p.IsEligible && (p.Role == "Inspector" || p.Role.Contains("Inspector", StringComparison.OrdinalIgnoreCase) || p.Role.Contains("Pilot", StringComparison.OrdinalIgnoreCase))) >= reqInsp &&
+            entity.PersonnelCandidates.Count(p => p.IsEligible && (p.Role == "Analyst" || p.Role.Contains("Analyst", StringComparison.OrdinalIgnoreCase))) >= reqAna &&
+            entity.PersonnelCandidates.Count(p => p.IsEligible && (p.Role == "Technician" || p.Role == "MaintenanceTechnician" || p.Role.Contains("Tech", StringComparison.OrdinalIgnoreCase))) >= reqTech
+        );
+
         var personnelCheck = new AssessmentCheckResultDto(
-            (isReadyOrCompleted || (
-                entity.PersonnelCandidates.Any(p => p.IsEligible && p.Role == "Inspector") &&
-                entity.PersonnelCandidates.Any(p => p.IsEligible && p.Role == "Analyst") &&
-                entity.PersonnelCandidates.Any(p => p.IsEligible && (p.Role == "Technician" || p.Role == "MaintenanceTechnician"))
-            )) ? "PASS" : "FAIL",
-            (isReadyOrCompleted || (
-                entity.PersonnelCandidates.Any(p => p.IsEligible && p.Role == "Inspector") &&
-                entity.PersonnelCandidates.Any(p => p.IsEligible && p.Role == "Analyst") &&
-                entity.PersonnelCandidates.Any(p => p.IsEligible && (p.Role == "Technician" || p.Role == "MaintenanceTechnician"))
-            )) ? null : "Chưa đạt định mức nhân sự đang rảnh.",
+            hasReqPersonnel ? "PASS" : "FAIL",
+            hasReqPersonnel ? null : "Chưa đạt định mức nhân sự đang rảnh.",
             entity.UpdatedAt ?? entity.CreatedAt
         );
 

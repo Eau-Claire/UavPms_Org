@@ -42,7 +42,11 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
             request.TowerIds,
             request.BoundaryWkt,
             request.IdempotencyKey,
-            ct);
+            ct,
+            request.RequiredInspectors ?? 1,
+            request.RequiredAnalysts ?? 1,
+            request.RequiredTechnicians ?? 1,
+            request.MaxDronesLimit ?? 1);
         return Ok(assessment.ToDto());
     }
 

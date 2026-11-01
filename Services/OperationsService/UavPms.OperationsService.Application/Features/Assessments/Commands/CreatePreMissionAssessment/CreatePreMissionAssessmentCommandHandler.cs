@@ -23,7 +23,11 @@ public class CreatePreMissionAssessmentCommandHandler : IRequestHandler<CreatePr
             request.TowerIds,
             request.BoundaryWkt,
             request.IdempotencyKey,
-            cancellationToken);
+            cancellationToken,
+            request.RequiredInspectors ?? 1,
+            request.RequiredAnalysts ?? 1,
+            request.RequiredTechnicians ?? 1,
+            request.MaxDronesLimit ?? 1);
 
         return assessment.ToDto();
     }
