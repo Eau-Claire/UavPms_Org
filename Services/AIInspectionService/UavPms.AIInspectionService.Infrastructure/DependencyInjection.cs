@@ -92,18 +92,6 @@ public static class DependencyInjection
         // Đăng ký các Dịch vụ OTP, Email (SendGrid) và Event Publisher
         services.AddMemoryCache();
 
-        // Register Redis ConnectionMultiplexer as Singleton
-        var redisConnectionString = configuration["Redis:ConnectionString"];
-        var redisPassword = configuration["Redis:Password"];
-        if (!string.IsNullOrEmpty(redisConnectionString))
-        {
-            var configOptions = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
-            if (!string.IsNullOrEmpty(redisPassword))
-            {
-                configOptions.Password = redisPassword;
-            }
-            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(StackExchange.Redis.ConnectionMultiplexer.Connect(configOptions));
-        }
 
         // Media lives in MinIO; URL columns store bucket/object keys rebuilt from the public base on read (plan item 2.8).
         services.AddOptions<MinioOptions>().Bind(configuration.GetSection(MinioOptions.SectionName));

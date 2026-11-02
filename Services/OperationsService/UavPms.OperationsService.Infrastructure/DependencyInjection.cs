@@ -123,30 +123,13 @@ public static class DependencyInjection
 
         // Đăng ký Inspection Media Repository
         services.AddScoped<IInspectionMediaRepository, InspectionMediaRepository>();
-        services.AddScoped<IDroneLiveStateService, RedisDroneLiveStateService>();
-        if (configuration.GetValue<bool>("Mqtt:Enabled"))
-        {
-            services.AddHostedService<MqttDroneConsumer>();
-        }
+        services.AddScoped<IDroneLiveStateService, NoOpDroneLiveStateService>();
 
         services.AddHostedService<PreMissionAssessmentExpiryJob>();
 
         // Đăng ký HttpContextAccessor và CurrentUserServices
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserServices, CurrentUserServices>();
-
-        // Register Redis ConnectionMultiplexer as Singleton
-        var redisConnectionString = configuration["Redis:ConnectionString"];
-        var redisPassword = configuration["Redis:Password"];
-        if (!string.IsNullOrEmpty(redisConnectionString))
-        {
-            var configOptions = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
-            if (!string.IsNullOrEmpty(redisPassword))
-            {
-                configOptions.Password = redisPassword;
-            }
-            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(StackExchange.Redis.ConnectionMultiplexer.Connect(configOptions));
-        }
 
         // Media lives in MinIO; URL columns store bucket/object keys rebuilt from the public base on read (plan item 2.8).
         var minio = configuration.GetSection(MinioOptions.SectionName).Get<MinioOptions>() ?? new MinioOptions();

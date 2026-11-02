@@ -77,18 +77,6 @@ public static class DependencyInjection
         services.AddMemoryCache();
         services.AddScoped<IEmailService, EmailService>();
 
-        // Register Redis ConnectionMultiplexer as Singleton
-        var redisConnectionString = configuration["Redis:ConnectionString"];
-        var redisPassword = configuration["Redis:Password"];
-        if (!string.IsNullOrEmpty(redisConnectionString))
-        {
-            var configOptions = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
-            if (!string.IsNullOrEmpty(redisPassword))
-            {
-                configOptions.Password = redisPassword;
-            }
-            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(StackExchange.Redis.ConnectionMultiplexer.Connect(configOptions));
-        }
 
         // Media storage (MinIO) is used by OperationsService and AIInspectionService only; this service keeps local files.
         services.AddScoped<IFileStorageService, LocalFileStorageService>();
