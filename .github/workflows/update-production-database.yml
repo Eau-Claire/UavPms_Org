@@ -50,7 +50,7 @@ jobs:
             fi
             DIRTY_FILES="$(git status --porcelain)"
             if [ -n "$DIRTY_FILES" ]; then
-              UNSAFE_FILES="$(printf '%s\n' "$DIRTY_FILES" | grep -vE '^\?\? (analysis-get\.js|benchmark_ai\.py|health\.js|monitoring/)' || true)"
+              UNSAFE_FILES="$(printf '%s\n' "$DIRTY_FILES" | grep -vE '^\?\? (\.env.*|\.env\.bak.*|analysis-get\.js|benchmark_ai\.py|health\.js|monitoring/)' || true)"
               if [ -n "$UNSAFE_FILES" ]; then
                 echo "ERROR: deployment checkout has unexpected changes."
                 printf '%s\n' "$UNSAFE_FILES"

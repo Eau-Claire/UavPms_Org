@@ -5,6 +5,9 @@
 
 # dotenv files
 .env
+.env.*
+.env.bak*
+*.bak
 
 # Local API regression test credentials
 api-test/data/roles.json
