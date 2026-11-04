@@ -1,0 +1,92 @@
+%% UavPms - System Architecture
+%% Reference: system-architecture.drawio.svg (page "System_Architecture")
+%% Synced with: docker-compose.yml, UavPms.ApiGateway/ocelot.json, Shared/UavPms.Shared.Contracts
+flowchart TB
+
+    %% ================= CLIENT =================
+    subgraph Client["Client"]
+        direction LR
+        Angular["Angular SPA"]
+    end
+
+    %% ================= GATEWAY =================
+    subgraph Gateway["Gateway"]
+        Ocelot["Ocelot API Gateway<br/>(UavPms.ApiGateway :5194)"]
+    end
+
+    %% ================= SERVICES =================
+    subgraph Services["Services (.NET - Clean Architecture: API / Application / Domain / Infrastructure)"]
+        direction LR
+        Identity["IdentityService<br/>auth, users, audit-logs"]
+        Operations["OperationsService<br/>towers, regions, missions, UAVs,<br/>inspections, maintenance, monitor, GIS"]
+        AIInspection["AIInspectionService<br/>ai-analysis, vision, anomalies, alerts"]
+        Notification["NotificationService<br/>notifications, SignalR hub, Hangfire jobs"]
+        Evaluation["InspectionEvaluationService<br/>(gRPC only)"]
+    end
+
+    PyWorker["Python AI Service<br/>(FastAPI - fastapi-ai :8000)"]
+
+    %% ================= INFRASTRUCTURE =================
+    subgraph Infrastructure["Infrastructure"]
+        direction LR
+        RabbitMQ[["RabbitMQ<br/>exchange: uavpms.events<br/>(legacy: identity-exchange)"]]
+        PostgreSQL[("PostgreSQL<br/>service DBs + Hangfire")]
+        Redis[("Redis<br/>token / session cache")]
+        Minio[("MinIO<br/>bucket: uav-media")]
+    end
+
+    subgraph External["External"]
+        direction LR
+        Brevo["Brevo<br/>(email)"]
+        SendGrid["SendGrid<br/>(email)"]
+    end
+
+    %% ---------- Client -> Gateway ----------
+    Angular -- "HTTPS REST / WebSocket" --> Ocelot
+
+    %% ---------- Gateway -> Services (HTTP) ----------
+    Ocelot --> Identity
+    Ocelot --> Operations
+    Ocelot --> AIInspection
+    Ocelot -- "REST + /hubs/notifications" --> Notification
+
+    %% ---------- Service <-> Service ----------
+    AIInspection -- "gRPC" --> Evaluation
+    AIInspection -- "HTTP REST API (PythonAI:BaseUrl)" --> PyWorker
+
+    %% ---------- Messaging ----------
+    Identity -- "publish" --> RabbitMQ
+    Operations <-- "inspection.media.uploaded, mission.dispatched,<br/>maintenance.ticket.assigned / ai.detection.completed" --> RabbitMQ
+    AIInspection <-- "inspection.media.uploaded / ai.detection.completed" --> RabbitMQ
+    RabbitMQ -- "consume: ai.detection.completed, mission.*,<br/>maintenance.ticket.assigned, assessments" --> Notification
+
+    %% ---------- Data stores ----------
+    Identity --> PostgreSQL
+    Operations --> PostgreSQL
+    AIInspection --> PostgreSQL
+    Notification --> PostgreSQL
+
+    Identity --> Redis
+
+    Operations -- "S3 API" --> Minio
+    AIInspection -- "S3 API" --> Minio
+    PyWorker -- "read media" --> Minio
+
+    %% ---------- External ----------
+    Identity -- "HTTP" --> Brevo
+    Notification -- "HTTP" --> SendGrid
+
+    %% ================= STYLES =================
+    classDef client fill:#E3F2FD,stroke:#1E88E5,color:#0D47A1
+    classDef gateway fill:#FFF3E0,stroke:#FB8C00,color:#E65100
+    classDef service fill:#E8F5E9,stroke:#43A047,color:#1B5E20
+    classDef worker fill:#F3E5F5,stroke:#8E24AA,color:#4A148C
+    classDef infra fill:#ECEFF1,stroke:#546E7A,color:#263238
+    classDef external fill:#FFFDE7,stroke:#F9A825,color:#5D4037,stroke-dasharray: 4 3
+
+    class Angular client
+    class Ocelot gateway
+    class Identity,Operations,AIInspection,Notification,Evaluation service
+    class PyWorker worker
+    class RabbitMQ,PostgreSQL,Redis,Minio infra
+    class Brevo,SendGrid external

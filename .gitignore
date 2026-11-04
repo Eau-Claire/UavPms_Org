@@ -500,3 +500,7 @@ UavPms.WebApi/uav_storage/
 
 # Configuration files (Secrets)
 UavPms.WebApi/appsettings.Development.json
+
+# DB sync artifacts (contain production data)
+backups/
+scripts/sync/out/
