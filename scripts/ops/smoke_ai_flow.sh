@@ -41,15 +41,21 @@ trap cleanup EXIT
 echo "== AI smoke test against $API (mission $SMOKE_MISSION_ID)"
 
 # 1. Login (with OTP when the account requires it).
-# Services may still be warming up right after a deploy, so retry the login for a minute.
+# Services may still be warming up right after a deploy: retry only while the API is unreachable
+# or answers 5xx. A real answer (success or rejected credentials) stops immediately, so a wrong
+# password never hammers the account.
 login=""
 for attempt in 1 2 3 4 5 6; do
-  login="$(curl -sS -X POST "$API/api/v1/auth/login" -H 'Content-Type: application/json' \
-    -d "{\"email\":\"$SMOKE_EMAIL\",\"password\":\"$SMOKE_PASSWORD\"}" 2>&1)" \
-    && grep -q '"success"[[:space:]]*:[[:space:]]*true' <<<"$login" && break
-  echo "INFO  login attempt $attempt not ready, retrying"
+  code="$(curl -sS -o "$work/login.json" -w '%{http_code}' -X POST "$API/api/v1/auth/login" \
+    -H 'Content-Type: application/json' \
+    -d "{\"email\":\"$SMOKE_EMAIL\",\"password\":\"$SMOKE_PASSWORD\"}" 2>/dev/null || echo 000)"
+  login="$(cat "$work/login.json" 2>/dev/null)"
+  case "$code" in 000|5??) ;; *) break ;; esac
+  echo "INFO  login attempt $attempt: API not ready (HTTP $code), retrying"
   sleep 10
 done
+grep -q '"success"[[:space:]]*:[[:space:]]*true' <<<"$login" \
+  || die "login rejected (HTTP $code): $(head -c 200 <<<"$login") - check the SMOKE_EMAIL/SMOKE_PASSWORD secrets"
 token="$(json_field accessToken <<<"$login")"
 if [ -z "$token" ] && grep -q 'OTP required' <<<"$login"; then
   [ -n "${SMOKE_OTP:-}" ] || die "login requires an OTP but SMOKE_OTP is not set"
