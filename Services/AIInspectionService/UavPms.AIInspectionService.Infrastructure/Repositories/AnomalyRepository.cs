@@ -41,7 +41,7 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
             .Include(a => a.Analyst)
             .Include(a => a.AnalysisRun)
             .Include(a => a.Tower)
-            .Where(a => a.ValidationStatus == "Pending")
+            .Where(a => a.ValidationStatus == DetectedAnomaly.StatusInReview || a.ValidationStatus == DetectedAnomaly.StatusPending)
             .ToListAsync();
     }
 

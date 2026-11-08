@@ -9,6 +9,13 @@ public class DetectedAnomaly : BaseEntity
 {
     public const string ManualSource = "Manual";
 
+    // State machine: InReview (AI result received, awaiting analyst) -> Confirmed | Rejected.
+    // "Pending" is kept only for rows created before InReview existed and is treated as awaiting review.
+    public const string StatusPending = "Pending";
+    public const string StatusInReview = "InReview";
+    public const string StatusConfirmed = "Confirmed";
+    public const string StatusRejected = "Rejected";
+
     public Guid MediaId { get; set; }
 
     /// <summary>AI run that produced this anomaly; NULL = manual.</summary>
@@ -46,11 +53,14 @@ public class DetectedAnomaly : BaseEntity
 
     #region Rich domain methods
 
+    public bool IsAwaitingReview =>
+        ValidationStatus is StatusInReview or StatusPending || string.IsNullOrWhiteSpace(ValidationStatus);
+
     public void Confirm(Guid analystId, string notes)
     {
         AnalystId = analystId;
         AnalystNotes = notes ?? string.Empty;
-        ValidationStatus = "Confirmed";
+        ValidationStatus = StatusConfirmed;
         ValidatedAt = DateTime.UtcNow;
     }
 
@@ -58,7 +68,7 @@ public class DetectedAnomaly : BaseEntity
     {
         AnalystId = analystId;
         AnalystNotes = notes ?? string.Empty;
-        ValidationStatus = "Rejected";
+        ValidationStatus = StatusRejected;
         ValidatedAt = DateTime.UtcNow;
     }
 

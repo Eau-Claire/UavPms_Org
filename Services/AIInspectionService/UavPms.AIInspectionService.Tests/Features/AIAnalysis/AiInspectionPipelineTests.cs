@@ -309,7 +309,9 @@ public class AiInspectionPipelineTests
                     "Unit test evaluation"))),
             Mock.Of<IEventPublisher>(),
             new GenericRepository<OutboxMessage>(context),
-            Mock.Of<ILogger<ProcessAiAnalysisResultCommandHandler>>());
+            Mock.Of<ILogger<ProcessAiAnalysisResultCommandHandler>>(),
+            new UavPms.AIInspectionService.Infrastructure.Services.SystemSettingService(
+                context, Mock.Of<ILogger<UavPms.AIInspectionService.Infrastructure.Services.SystemSettingService>>()));
 
     private static ApplicationDbContext CreateContext()
     {

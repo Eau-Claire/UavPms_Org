@@ -159,6 +159,12 @@ public class AnomaliesController : ControllerBase
         var analystId = _currentUserServices.UserId;
         var notes = request.AnalystNotes ?? string.Empty;
 
+        if (!anomaly.IsAwaitingReview)
+        {
+            throw new BusinessRuleException("ANOMALY_NOT_IN_REVIEW",
+                $"Anomaly is '{anomaly.ValidationStatus}'; only anomalies in review can be confirmed or rejected.");
+        }
+
         if (string.Equals(request.Status, "Confirmed", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase))
         {
@@ -177,9 +183,8 @@ public class AnomaliesController : ControllerBase
         }
         else
         {
-            anomaly.ValidationStatus = request.Status;
-            anomaly.AnalystNotes = notes;
-            anomaly.ValidatedAt = DateTime.UtcNow;
+            throw new BusinessRuleException("INVALID_ANOMALY_STATUS",
+                $"Status '{request.Status}' is not allowed; use 'Confirmed' or 'Rejected'.");
         }
 
         await _anomalyRepository.UpdateAsync(anomaly);

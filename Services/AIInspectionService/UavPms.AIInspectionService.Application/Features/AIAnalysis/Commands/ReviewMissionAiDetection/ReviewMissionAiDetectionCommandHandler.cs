@@ -60,6 +60,11 @@ public class ReviewMissionAiDetectionCommandHandler
         }
 
         var decision = NormalizeDecision(request.Decision);
+        if (!anomaly.IsAwaitingReview)
+        {
+            throw new BusinessRuleException("ANOMALY_NOT_IN_REVIEW",
+                $"Detection is '{anomaly.ValidationStatus}'; only detections in review can be confirmed or rejected.");
+        }
         var publishConfirmed = decision == "Accepted" && anomaly.ValidationStatus != "Confirmed";
         if (decision == "Accepted")
         {

@@ -6,4 +6,5 @@ public enum AnomalyStatus
     Confirmed = 1,
     Rejected = 2,
     Resolved = 3,
+    InReview = 4,
 }

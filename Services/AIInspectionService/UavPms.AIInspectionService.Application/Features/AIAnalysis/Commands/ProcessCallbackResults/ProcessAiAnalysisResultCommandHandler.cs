@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
 using UavPms.Shared.Contracts.Events;
+using UavPms.Shared.Contracts.Interfaces;
 using UavPms.AIInspectionService.Application.Common.Utilities;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
 using UavPms.AIInspectionService.Application.Interfaces;
@@ -33,6 +34,10 @@ public class ProcessAiAnalysisResultCommandHandler
     private readonly IEventPublisher _eventPublisher;
     private readonly IGenericRepository<OutboxMessage> _outboxRepository;
     private readonly ILogger<ProcessAiAnalysisResultCommandHandler> _logger;
+    private readonly ISystemSettingService _systemSettingService;
+
+    /// <summary>SystemSettings key prefix mapping a raw model label to a DefectCategory code, e.g. "AiLabel:bird_nest".</summary>
+    public const string ModelLabelSettingPrefix = "AiLabel:";
 
     public ProcessAiAnalysisResultCommandHandler(
         IGenericRepository<AIAnalysisRun> runRepo,
@@ -43,8 +48,10 @@ public class ProcessAiAnalysisResultCommandHandler
         IInspectionEvaluationClient inspectionEvaluationClient,
         IEventPublisher eventPublisher,
         IGenericRepository<OutboxMessage> outboxRepository,
-        ILogger<ProcessAiAnalysisResultCommandHandler> logger)
+        ILogger<ProcessAiAnalysisResultCommandHandler> logger,
+        ISystemSettingService systemSettingService)
     {
+        _systemSettingService = systemSettingService;
         _runRepo = runRepo;
         _mediaRepo = mediaRepo;
         _defectCategoryRepo = defectCategoryRepo;
@@ -112,8 +119,9 @@ public class ProcessAiAnalysisResultCommandHandler
             };
         }
 
-        if (run.Status != AIAnalysisStatus.Processing)
-            throw new BusinessRuleException("AI analysis must enter Processing before reaching a terminal state.");
+        // The server bridge reports only terminal states, so Pending may complete directly.
+        if (run.Status is not (AIAnalysisStatus.Pending or AIAnalysisStatus.Processing))
+            throw new BusinessRuleException("AI analysis must be Pending or Processing before reaching a terminal state.");
 
         var savedDetections = 0;
         var createdAlerts = 0;
@@ -136,15 +144,32 @@ public class ProcessAiAnalysisResultCommandHandler
                           a.AnalysisRun!.ExecutionLocation == AIAnalysisRun.Edge, track: true)
                        ?? Array.Empty<DetectedAnomaly>()).ToList();
 
+                var labelMap = detections.Count == 0
+                    ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    : await LoadModelLabelMapAsync(cancellationToken);
+
                 foreach (var detection in detections)
                 {
-                    // Map category code to category ID
-                    var categoryList = await _defectCategoryRepo.FindAsync(c => c.CategoryCode == detection.CategoryCode);
+                    var categoryCode = detection.CategoryCode.Trim();
+                    if (labelMap.TryGetValue(categoryCode, out var mappedCode))
+                    {
+                        if (string.IsNullOrWhiteSpace(mappedCode) || mappedCode.Equals("NONE", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.LogInformation("Model label {Label} is configured as non-defect; detection {DetectionId} skipped.",
+                                categoryCode, detection.Id);
+                            continue;
+                        }
+                        categoryCode = mappedCode.Trim();
+                    }
+
+                    var categoryList = await _defectCategoryRepo.FindAsync(c => c.CategoryCode == categoryCode);
                     var category = categoryList?.FirstOrDefault();
                     if (category == null)
                     {
-                        _logger.LogWarning("DefectCategory not found for CategoryCode={CategoryCode}", detection.CategoryCode);
-                        throw new BusinessRuleException($"DefectCategory with CategoryCode '{detection.CategoryCode}' was not found.");
+                        _logger.LogWarning(
+                            "DefectCategory not found for CategoryCode={CategoryCode} (model label {Label}); detection {DetectionId} skipped.",
+                            categoryCode, detection.CategoryCode, detection.Id);
+                        continue;
                     }
 
                     var bboxJson = JsonSerializer.Serialize(new
@@ -179,7 +204,7 @@ public class ProcessAiAnalysisResultCommandHandler
                         Location = ToPoint(detection.Gps),
                         TowerId = ResolveTowerId(detection.TowerId, media.TowerId),
                         ConfidenceScore = Math.Round(detection.Confidence, 3),
-                        ValidationStatus = "Pending",
+                        ValidationStatus = DetectedAnomaly.StatusInReview,
                         AnalystNotes = string.Empty,
                         ValidatedAt = null,
                         CreatedAt = DateTime.UtcNow
@@ -203,7 +228,7 @@ public class ProcessAiAnalysisResultCommandHandler
 
                     var evaluation = await _inspectionEvaluationClient.EvaluateAsync(
                         new DetectionEvaluationRequest(
-                            detection.CategoryCode,
+                            category.CategoryCode,
                             category.CategoryName,
                             detection.Confidence,
                             category.IsEmergencyClass,
@@ -225,7 +250,7 @@ public class ProcessAiAnalysisResultCommandHandler
                         MediaId = media.Id,
                         TowerId = anomaly.TowerId,
                         AnomalyId = anomaly.Id,
-                        CategoryCode = detection.CategoryCode,
+                        CategoryCode = category.CategoryCode,
                         DefectType = category.CategoryName,
                         Confidence = Math.Round(detection.Confidence, 3),
                         Severity = evaluation?.Severity ?? "Medium",
@@ -322,6 +347,16 @@ public class ProcessAiAnalysisResultCommandHandler
         => !string.IsNullOrWhiteSpace(detectionTowerId) && Guid.TryParse(detectionTowerId.Trim(), out var parsed)
             ? parsed
             : mediaTowerId;
+
+    private async Task<Dictionary<string, string>> LoadModelLabelMapAsync(CancellationToken cancellationToken)
+    {
+        var settings = await _systemSettingService.GetAllAsync(ct: cancellationToken);
+        return settings
+            .Where(s => s.Key.StartsWith(ModelLabelSettingPrefix, StringComparison.OrdinalIgnoreCase)
+                        && s.Key.Length > ModelLabelSettingPrefix.Length)
+            .GroupBy(s => s.Key[ModelLabelSettingPrefix.Length..].Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Value ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+    }
 
     private static string Truncate(string value, int maxLength)
         => value.Length <= maxLength ? value : value[..maxLength];

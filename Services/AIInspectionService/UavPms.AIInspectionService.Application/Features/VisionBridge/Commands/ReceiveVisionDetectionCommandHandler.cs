@@ -190,7 +190,7 @@ public class ReceiveVisionDetectionCommandHandler
             ConfidenceScore = detection.Confidence,
             Location = ToPoint(detection.Latitude, detection.Longitude),
             ImageUrl = savedImageUrl,
-            ValidationStatus = "Pending",
+            ValidationStatus = DetectedAnomaly.StatusInReview,
             AnalystNotes = string.Empty
         };
 
