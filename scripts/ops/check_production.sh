@@ -15,11 +15,13 @@ AI_CONTAINER="${AI_CONTAINER:-uav-ai-inspection-service}"
 RABBIT_CONTAINER="${RABBIT_CONTAINER:-uav-rabbitmq}"
 BRIDGE_CONTAINER="${BRIDGE_CONTAINER:-bridge-ai-bridge-1}"
 STUCK_MINUTES="${STUCK_MINUTES:-30}"
+STATE_DIR="${STATE_DIR:-$HOME/.uavpms-ops}"
 
 failures=0
 warnings=0
 ok()   { echo "OK    $*"; }
 bad()  { echo "FAIL  $*"; failures=$((failures + 1)); }
+info() { echo "INFO  $*"; }
 warn() { if $STRICT; then bad "$*"; else echo "WARN  $*"; warnings=$((warnings + 1)); fi; }
 sql()  { docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tAX -v ON_ERROR_STOP=1 -c "$1"; }
 
@@ -44,9 +46,17 @@ else
     c="$(awk -v q="$q" '$1==q {print $3}' <<<"$queues")"
     if [ "$c" = "1" ]; then ok "$q has 1 consumer"; else bad "$q has ${c:-no} consumers (expected exactly 1: the bridge)"; fi
   done
+  # Dead-letter queues: only growth since the previous check is a problem; old backlog is reported once.
+  mkdir -p "$STATE_DIR"
   for q in ai.analysis.result.dead-letter ai.analysis.dead-letter; do
-    n="$(awk -v q="$q" '$1==q {print $2}' <<<"$queues")"
-    if [ "${n:-0}" = "0" ]; then ok "$q is empty"; else warn "$q holds $n message(s)"; fi
+    n="$(awk -v q="$q" '$1==q {print $2}' <<<"$queues")"; n="${n:-0}"
+    state="$STATE_DIR/$q.count"
+    prev="$(cat "$state" 2>/dev/null || echo "")"
+    if [ "$n" = "0" ]; then ok "$q is empty"
+    elif [ -z "$prev" ]; then info "$q holds $n message(s); recorded as baseline"
+    elif [ "$n" -gt "$prev" ]; then warn "$q grew from $prev to $n message(s)"
+    else info "$q holds $n old message(s), no new ones"; fi
+    echo "$n" >"$state"
   done
 fi
 
@@ -81,9 +91,15 @@ else
 fi
 
 # 6. No analysis run stuck in Pending/Processing.
-stuck="$(sql "SELECT count(*) FROM \"AIAnalysisRuns\" WHERE NOT \"IsDeleted\"
-  AND \"Status\" IN ('Pending','Processing') AND \"CreatedAt\" < now() - interval '$STUCK_MINUTES minutes'" 2>&1)"
-if [ "$stuck" = "0" ]; then ok "no runs stuck over $STUCK_MINUTES min"; else warn "$stuck run(s) stuck in Pending/Processing over $STUCK_MINUTES min"; fi
+# Only runs stuck within the last day count as a new problem; older ones are reported as info.
+stuck="$(sql "SELECT count(*) FILTER (WHERE \"CreatedAt\" >= now() - interval '1 day') || ' ' || count(*)
+  FROM \"AIAnalysisRuns\" WHERE NOT \"IsDeleted\" AND \"Status\" IN ('Pending','Processing')
+  AND \"CreatedAt\" < now() - interval '$STUCK_MINUTES minutes'" 2>&1)"
+recent="${stuck%% *}"; total="${stuck##* }"
+if ! [[ "$recent" =~ ^[0-9]+$ ]]; then bad "cannot count stuck runs: $stuck"
+elif [ "$recent" != "0" ]; then warn "$recent run(s) stuck in Pending/Processing over $STUCK_MINUTES min (last 24h)"
+elif [ "$total" != "0" ]; then info "$total old run(s) stuck for more than a day (close them with the STALE_PENDING update)"
+else ok "no runs stuck over $STUCK_MINUTES min"; fi
 
 echo "== $failures failure(s), $warnings warning(s)"
 [ "$failures" -eq 0 ]
