@@ -62,6 +62,16 @@ public sealed class AiCallbackLifecycleTests
     }
 
     [Fact]
+    public async Task Completed_ShouldStoreCompletedAtAsUtc_WhenWorkerTimestampIsLocal()
+    {
+        var fixture = new Fixture();
+        var local = new DateTime(2026, 11, 8, 11, 9, 12, DateTimeKind.Local);
+        await fixture.Handle("Completed", completedAt: local);
+        fixture.Request.CompletedAt!.Value.Kind.Should().Be(DateTimeKind.Utc);
+        fixture.Request.CompletedAt.Value.Should().Be(local.ToUniversalTime());
+    }
+
+    [Fact]
     public async Task Completed_ShouldMapModelLabelsFromSystemSettings_AndSkipNonDefectOrUnknownLabels()
     {
         var fixture = new Fixture();
@@ -141,14 +151,14 @@ public sealed class AiCallbackLifecycleTests
         }
 
         public Task<AiAnalysisCallbackResponseDto> Handle(string status, Guid? mediaId = null,
-            List<DetectionDto>? detections = null) => _handler.Handle(new()
+            List<DetectionDto>? detections = null, DateTime? completedAt = null) => _handler.Handle(new()
         {
             RequestId = Request.Id, MediaId = mediaId ?? MediaId, MissionId = MissionId,
             Status = status, ModelName = status == "Completed" ? "server" : null,
             Detections = status == "Completed" ? detections ?? [] : null,
             ErrorCode = status == "Failed" ? "AI_PROCESSING_FAILED" : null,
             ErrorMessage = status == "Failed" ? "worker failure" : null,
-            CompletedAt = DateTime.UtcNow
+            CompletedAt = completedAt ?? DateTime.UtcNow
         }, CancellationToken.None);
     }
 }

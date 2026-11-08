@@ -290,7 +290,13 @@ public class ProcessAiAnalysisResultCommandHandler
             }
 
             run.StartedAt ??= DateTime.UtcNow;
-            run.CompletedAt = request.CompletedAt;
+            // Workers send ISO timestamps with an offset, which deserialize as Local; Npgsql requires UTC.
+            run.CompletedAt = request.CompletedAt.Kind switch
+            {
+                DateTimeKind.Utc => request.CompletedAt,
+                DateTimeKind.Local => request.CompletedAt.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(request.CompletedAt, DateTimeKind.Utc)
+            };
             run.UpdatedAt = DateTime.UtcNow;
             await _runRepo.UpdateAsync(run);
 
