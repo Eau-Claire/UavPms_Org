@@ -16,6 +16,20 @@ public sealed class OutboxDispatcher : BackgroundService
     public OutboxDispatcher(IServiceScopeFactory scopeFactory, ILogger<OutboxDispatcher> logger)
     { _scopeFactory = scopeFactory; _logger = logger; }
 
+    // OutboxMessages is shared with AIInspectionService, whose own dispatcher publishes these types
+    // with the right AI routing. Publishing them here would send them via the generic fallback and lose them.
+    public static readonly string[] AiInspectionOwnedMessageTypes =
+    [
+        "AIAnalysisRequestedEvent",
+        "DefectDetectedEvent",
+        "AiDetectionCompletedEvent",
+        "AIAnalysisStatusChangedEvent"
+    ];
+
+    public static IQueryable<OutboxMessage> PendingForDispatch(IQueryable<OutboxMessage> outbox) =>
+        outbox.Where(x => x.PublishedAt == null && !AiInspectionOwnedMessageTypes.Contains(x.MessageType))
+            .OrderBy(x => x.OccurredAt);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -25,8 +39,7 @@ public sealed class OutboxDispatcher : BackgroundService
                 using var scope = _scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
-                var messages = await db.OutboxMessages.Where(x => x.PublishedAt == null)
-                    .OrderBy(x => x.OccurredAt).Take(20).ToListAsync(stoppingToken);
+                var messages = await PendingForDispatch(db.OutboxMessages).Take(20).ToListAsync(stoppingToken);
                 foreach (var message in messages)
                 {
                     try
