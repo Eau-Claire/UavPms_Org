@@ -81,9 +81,6 @@ jobs:
             echo "Cleaning unused Docker images..."
             docker image prune -f
 
-            echo "Cleaning Docker build cache older than 3 days..."
-            docker builder prune -af --filter "until=72h"
-
             if [ -n "$GATEWAY_HEALTH_URL" ]; then
               echo "Running health check..."
               curl \
@@ -103,3 +100,7 @@ jobs:
             # One command per line: script_stop checks $? after every line, so no if/else here.
             echo "Running AI end-to-end smoke test..."
             bash scripts/ops/smoke_ai_flow.sh
+
+            echo "Cleaning Docker build cache..."
+            docker builder prune -af
+            docker system df
