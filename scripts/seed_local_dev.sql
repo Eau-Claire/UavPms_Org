@@ -107,7 +107,13 @@ INSERT INTO "DefectCategories" ("CategoryCode", "CategoryName", "SeverityWeight"
 ('CORROSION', 'Ăn mòn', 0.7, false, 'Ăn mòn bề mặt thiết bị'),
 ('CRACK', 'Nứt vỡ', 0.9, true, 'Nứt vỡ kết cấu'),
 ('HOTSPOT', 'Điểm nóng', 1.0, true, 'Điểm nóng nhiệt'),
-('VEGETATION', 'Cây cối xâm lấn', 0.6, false, 'Hành lang tuyến bị xâm lấn')
+('VEGETATION', 'Cây cối xâm lấn', 0.6, false, 'Hành lang tuyến bị xâm lấn'),
+-- Classes produced by the server AI model (curated_yolo26m); mapped via SystemSettings AiLabel:*
+('BIRD_NEST', 'Tổ chim', 0.6, false, 'Tổ chim trên cột hoặc chuỗi cách điện'),
+('BROKEN_INSULATOR', 'Bát cách điện vỡ', 0.9, true, 'Bát/chuỗi cách điện bị vỡ, mẻ'),
+('INSULATOR_FLASHOVER', 'Phóng điện cách điện', 0.85, true, 'Vết phóng điện bề mặt trên cách điện'),
+('FOREIGN_OBJECT', 'Vật lạ trên đường dây', 0.75, false, 'Vật lạ vướng trên dây dẫn hoặc cột'),
+('BROKEN_STRAND', 'Đứt sợi dây dẫn', 0.9, true, 'Dây dẫn bị đứt hoặc tưa sợi')
 ON CONFLICT ("CategoryCode") DO NOTHING;
 
 -- Synchronize Region column aliases
