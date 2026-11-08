@@ -1,0 +1,45 @@
+name: AI Smoke Test
+
+# End-to-end check of the server AI flow on production, kept out of the deploy so deploys stay fast:
+# login -> upload a bird-nest image -> wait for the AI run -> verify the stored anomaly -> soft-delete it.
+# Runs on its own after a successful deploy (a failure here does not fail the deploy) or on demand.
+on:
+  workflow_run:
+    workflows:
+      - Deploy Backend
+    types:
+      - completed
+  workflow_dispatch:
+
+concurrency:
+  group: ai-smoke-test
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: AI end-to-end smoke test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Run smoke test over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SMOKE_API_URL: ${{ secrets.SMOKE_API_URL || 'https://uavpms.ddns.net' }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          SMOKE_OTP: ${{ secrets.SMOKE_OTP }}
+          SMOKE_MISSION_ID: ${{ secrets.SMOKE_MISSION_ID }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          timeout: 30s
+          command_timeout: 10m
+          envs: DEPLOY_PATH,SMOKE_API_URL,SMOKE_EMAIL,SMOKE_PASSWORD,SMOKE_OTP,SMOKE_MISSION_ID
+          script_stop: true
+          script: |
+            set -e
+            cd "$DEPLOY_PATH"
+            bash scripts/ops/smoke_ai_flow.sh

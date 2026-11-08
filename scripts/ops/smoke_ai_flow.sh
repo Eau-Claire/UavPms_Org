@@ -66,9 +66,14 @@ fi
 [ -n "$token" ] || die "no access token (login response: $(head -c 300 <<<"$login"))"
 echo "OK    logged in"
 
-# 2. Upload a unique copy of the fixture (trailing bytes change the checksum so dedup never short-circuits).
-cp "$FIXTURE" "$work/smoke.jpg"
-printf 'uavpms-smoke-%s' "$(date +%s%N)" >>"$work/smoke.jpg"
+# 2. Upload a unique copy of the fixture so checksum dedup never short-circuits. A JPEG comment
+#    segment (FF FE, length 0x001C = 2 + 26 bytes) is inserted right after SOI: still a valid JPEG.
+{
+  head -c 2 "$FIXTURE"
+  printf '\377\376\000\034'
+  printf 'uavpms-smoke-%013d' "$(date +%s%3N)"
+  tail -c +3 "$FIXTURE"
+} >"$work/smoke.jpg"
 upload="$(curl -sS -X POST "$API/api/v1/missions/$SMOKE_MISSION_ID/media" \
   -H "Authorization: Bearer $token" \
   -F "file=@$work/smoke.jpg;type=image/jpeg" \

@@ -36,11 +36,6 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_COMMIT: ${{ github.event.workflow_run.head_sha }}
           GATEWAY_HEALTH_URL: ${{ secrets.GATEWAY_HEALTH_URL }}
-          SMOKE_API_URL: ${{ secrets.SMOKE_API_URL || 'https://uavpms.ddns.net' }}
-          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
-          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
-          SMOKE_OTP: ${{ secrets.SMOKE_OTP }}
-          SMOKE_MISSION_ID: ${{ secrets.SMOKE_MISSION_ID }}
 
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -51,7 +46,7 @@ jobs:
           timeout: 30s
           command_timeout: 30m
 
-          envs: DEPLOY_PATH,DEPLOY_COMMIT,GATEWAY_HEALTH_URL,SMOKE_API_URL,SMOKE_EMAIL,SMOKE_PASSWORD,SMOKE_OTP,SMOKE_MISSION_ID
+          envs: DEPLOY_PATH,DEPLOY_COMMIT,GATEWAY_HEALTH_URL
 
           script_stop: true
 
@@ -96,10 +91,6 @@ jobs:
 
             echo "Checking AI pipeline configuration..."
             bash scripts/ops/check_production.sh
-
-            # One command per line: script_stop checks $? after every line, so no if/else here.
-            echo "Running AI end-to-end smoke test..."
-            bash scripts/ops/smoke_ai_flow.sh
 
             echo "Cleaning Docker build cache..."
             docker builder prune -af
