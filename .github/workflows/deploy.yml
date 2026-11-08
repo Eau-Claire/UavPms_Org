@@ -36,6 +36,11 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_COMMIT: ${{ github.event.workflow_run.head_sha }}
           GATEWAY_HEALTH_URL: ${{ secrets.GATEWAY_HEALTH_URL }}
+          SMOKE_API_URL: ${{ secrets.SMOKE_API_URL || 'https://uavpms.ddns.net' }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          SMOKE_OTP: ${{ secrets.SMOKE_OTP }}
+          SMOKE_MISSION_ID: ${{ secrets.SMOKE_MISSION_ID }}
 
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -46,7 +51,7 @@ jobs:
           timeout: 30s
           command_timeout: 30m
 
-          envs: DEPLOY_PATH,DEPLOY_COMMIT,GATEWAY_HEALTH_URL
+          envs: DEPLOY_PATH,DEPLOY_COMMIT,GATEWAY_HEALTH_URL,SMOKE_API_URL,SMOKE_EMAIL,SMOKE_PASSWORD,SMOKE_OTP,SMOKE_MISSION_ID
 
           script_stop: true
 
@@ -76,6 +81,9 @@ jobs:
             echo "Cleaning unused Docker images..."
             docker image prune -f
 
+            echo "Cleaning Docker build cache older than 3 days..."
+            docker builder prune -af --filter "until=72h"
+
             if [ -n "$GATEWAY_HEALTH_URL" ]; then
               echo "Running health check..."
               curl \
@@ -87,4 +95,14 @@ jobs:
                 "$GATEWAY_HEALTH_URL"
 
               echo "Health check passed."
+            fi
+
+            echo "Checking AI pipeline configuration..."
+            bash scripts/ops/check_production.sh
+
+            if [ -n "$SMOKE_EMAIL" ] && [ -n "$SMOKE_PASSWORD" ] && [ -n "$SMOKE_MISSION_ID" ]; then
+              echo "Running AI end-to-end smoke test..."
+              bash scripts/ops/smoke_ai_flow.sh
+            else
+              echo "SMOKE_* secrets not set; skipping AI smoke test."
             fi

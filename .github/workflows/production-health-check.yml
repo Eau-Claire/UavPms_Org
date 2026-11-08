@@ -1,0 +1,31 @@
+name: Production Health Check
+
+# Daily check of the AI pipeline on the server: mock consumer off, one bridge consumer per queue,
+# empty dead-letter queues, valid label/category mapping and no stuck analysis runs.
+on:
+  schedule:
+    - cron: "0 1 * * *" # 08:00 Vietnam time
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check AI pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run checks over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          timeout: 30s
+          command_timeout: 5m
+          envs: DEPLOY_PATH
+          script_stop: true
+          script: |
+            set -e
+            cd "$DEPLOY_PATH"
+            bash scripts/ops/check_production.sh --strict
