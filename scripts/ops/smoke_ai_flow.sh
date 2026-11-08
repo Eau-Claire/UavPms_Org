@@ -7,7 +7,10 @@
 #               SMOKE_REQUIRE_DETECTION (default true), SMOKE_FIXTURE, DB_CONTAINER/DB_USER/DB_NAME
 set -u
 
-: "${SMOKE_API_URL:?}" "${SMOKE_EMAIL:?}" "${SMOKE_PASSWORD:?}" "${SMOKE_MISSION_ID:?}"
+if [ -z "${SMOKE_API_URL:-}" ] || [ -z "${SMOKE_EMAIL:-}" ] || [ -z "${SMOKE_PASSWORD:-}" ] || [ -z "${SMOKE_MISSION_ID:-}" ]; then
+  echo "SKIP  SMOKE_API_URL/SMOKE_EMAIL/SMOKE_PASSWORD/SMOKE_MISSION_ID not all set; AI smoke test skipped."
+  exit 0
+fi
 API="${SMOKE_API_URL%/}"
 TIMEOUT="${SMOKE_TIMEOUT:-180}"
 REQUIRE_DETECTION="${SMOKE_REQUIRE_DETECTION:-true}"

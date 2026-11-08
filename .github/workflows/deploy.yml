@@ -100,9 +100,6 @@ jobs:
             echo "Checking AI pipeline configuration..."
             bash scripts/ops/check_production.sh
 
-            if [ -n "$SMOKE_EMAIL" ] && [ -n "$SMOKE_PASSWORD" ] && [ -n "$SMOKE_MISSION_ID" ]; then
-              echo "Running AI end-to-end smoke test..."
-              bash scripts/ops/smoke_ai_flow.sh
-            else
-              echo "SMOKE_* secrets not set; skipping AI smoke test."
-            fi
+            # One command per line: script_stop checks $? after every line, so no if/else here.
+            echo "Running AI end-to-end smoke test..."
+            bash scripts/ops/smoke_ai_flow.sh
