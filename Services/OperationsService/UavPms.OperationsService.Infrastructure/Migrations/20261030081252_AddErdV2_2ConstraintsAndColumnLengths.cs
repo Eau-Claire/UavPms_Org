@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -63,7 +63,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     ('Notifications', 'Type', 50),
                     ('Notifications', 'ReferenceType', 50),
                     ('AuditLogs', 'TableName', 100),
-                    ('AuditLogs', 'ActionType', 20)
+                    ('AuditLogs', 'ActionType', 50)
                     ) AS v(tbl, col, len)
                     LOOP
                         EXECUTE format('SELECT max(length(%I)) FROM %I', r.col, r.tbl) INTO max_len;
@@ -525,8 +525,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
             migrationBuilder.AlterColumn<string>(
                 name: "ActionType",
                 table: "AuditLogs",
-                type: "character varying(20)",
-                maxLength: 20,
+                type: "character varying(50)",
+                maxLength: 50,
                 nullable: false,
                 oldClrType: typeof(string),
                 oldType: "text");
