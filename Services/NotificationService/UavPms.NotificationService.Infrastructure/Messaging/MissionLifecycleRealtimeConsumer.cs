@@ -15,14 +15,11 @@ namespace UavPms.NotificationService.Infrastructure.Messaging;
 
 public class MissionLifecycleRealtimeConsumer : BackgroundService
 {
+    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
     private readonly ILogger<MissionLifecycleRealtimeConsumer> _logger;
     private readonly RabbitMqConnection _rabbitMqConnection;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    private IConnection? _connection;
-    private IChannel? _channel;
-
-    private const string ExchangeName = "identity-exchange";
     private const string QueueName = "notification.mission-lifecycle-realtime";
     private const string RoutingKey = "identity.event.missionlifecyclerealtimeevent";
 
@@ -40,86 +37,86 @@ public class MissionLifecycleRealtimeConsumer : BackgroundService
     {
         _logger.LogInformation("MissionLifecycleRealtimeConsumer is starting...");
 
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
-            _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
+            try
+            {
+                await using var connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
+                await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-            await _channel.ExchangeDeclareAsync(
-                exchange: ExchangeName,
-                type: ExchangeType.Topic,
-                durable: true,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
+                await RabbitMqExchangeBinding.DeclareAndBindDualExchangeAsync(
+                    channel,
+                    QueueName,
+                    stoppingToken,
+                    RoutingKey);
 
-            await _channel.QueueDeclareAsync(
-                queue: QueueName,
-                durable: true,
-                exclusive: false,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
+                var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                connection.ConnectionShutdownAsync += (_, _) => { disconnected.TrySetResult(); return Task.CompletedTask; };
+                channel.ChannelShutdownAsync += (_, _) => { disconnected.TrySetResult(); return Task.CompletedTask; };
 
-            await _channel.QueueBindAsync(
-                queue: QueueName,
-                exchange: ExchangeName,
-                routingKey: RoutingKey,
-                cancellationToken: stoppingToken);
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += async (sender, ea) =>
+                {
+                    try
+                    {
+                        var body = ea.Body.ToArray();
+                        var json = Encoding.UTF8.GetString(body);
+                        var realtimeEvent = JsonSerializer.Deserialize<MissionLifecycleRealtimeEvent>(json, new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
 
-            var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.ReceivedAsync += async (sender, ea) =>
+                        if (realtimeEvent?.Event != null && !string.IsNullOrWhiteSpace(realtimeEvent.Event.MissionId))
+                        {
+                            var evt = realtimeEvent.Event;
+                            _logger.LogInformation("Received MissionLifecycleRealtimeEvent for mission {MissionId}, type {Type}", evt.MissionId, evt.Type);
+
+                            using var scope = _scopeFactory.CreateScope();
+                            var realtimeService = scope.ServiceProvider.GetRequiredService<IRealtimeNotificationService>();
+                            await realtimeService.SendMissionEventAsync(evt, stoppingToken);
+                        }
+
+                        await channel.BasicAckAsync(ea.DeliveryTag, false, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error processing MissionLifecycleRealtimeEvent");
+                        await channel.BasicNackAsync(ea.DeliveryTag, false, false, stoppingToken);
+                    }
+                };
+
+                await channel.BasicConsumeAsync(
+                    queue: QueueName,
+                    autoAck: false,
+                    consumer: consumer,
+                    cancellationToken: stoppingToken);
+
+                _logger.LogInformation("MissionLifecycleRealtimeConsumer is now listening on queue '{QueueName}'", QueueName);
+
+                await disconnected.Task.WaitAsync(stoppingToken);
+                _logger.LogWarning("MissionLifecycleRealtimeConsumer RabbitMQ connection lost; reconnecting.");
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("MissionLifecycleRealtimeConsumer is stopping.");
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "MissionLifecycleRealtimeConsumer disconnected; retrying in {DelaySeconds}s.", ReconnectDelay.TotalSeconds);
+            }
+
+            if (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var body = ea.Body.ToArray();
-                    var json = Encoding.UTF8.GetString(body);
-                    var realtimeEvent = JsonSerializer.Deserialize<MissionLifecycleRealtimeEvent>(json, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
-
-                    if (realtimeEvent?.Event != null && !string.IsNullOrWhiteSpace(realtimeEvent.Event.MissionId))
-                    {
-                        var evt = realtimeEvent.Event;
-                        _logger.LogInformation("Received MissionLifecycleRealtimeEvent for mission {MissionId}, type {Type}", evt.MissionId, evt.Type);
-
-                        using var scope = _scopeFactory.CreateScope();
-                        var realtimeService = scope.ServiceProvider.GetRequiredService<IRealtimeNotificationService>();
-                        await realtimeService.SendMissionEventAsync(evt, stoppingToken);
-                    }
-
-                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                    await Task.Delay(ReconnectDelay, stoppingToken);
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    _logger.LogError(ex, "Error processing MissionLifecycleRealtimeEvent");
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
+                    break;
                 }
-            };
-
-            await _channel.BasicConsumeAsync(
-                queue: QueueName,
-                autoAck: false,
-                consumer: consumer,
-                cancellationToken: stoppingToken);
-
-            _logger.LogInformation("MissionLifecycleRealtimeConsumer is now listening on queue '{QueueName}'", QueueName);
-
-            await Task.Delay(Timeout.Infinite, stoppingToken);
+            }
         }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("MissionLifecycleRealtimeConsumer is stopping.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "MissionLifecycleRealtimeConsumer encountered an error.");
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_channel != null) await _channel.CloseAsync(cancellationToken);
-        if (_connection != null) await _connection.CloseAsync(cancellationToken);
-        await base.StopAsync(cancellationToken);
     }
 }

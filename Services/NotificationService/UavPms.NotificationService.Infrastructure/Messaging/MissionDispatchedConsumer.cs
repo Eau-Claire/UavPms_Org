@@ -16,12 +16,10 @@ namespace UavPms.NotificationService.Infrastructure.Messaging;
 
 public class MissionDispatchedConsumer : BackgroundService
 {
+    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
     private readonly ILogger<MissionDispatchedConsumer> _logger;
     private readonly RabbitMqConnection _rabbitMqConnection;
     private readonly IServiceScopeFactory _scopeFactory;
-
-    private IConnection? _connection;
-    private IChannel? _channel;
 
     public MissionDispatchedConsumer(
         ILogger<MissionDispatchedConsumer> logger,
@@ -37,112 +35,126 @@ public class MissionDispatchedConsumer : BackgroundService
     {
         _logger.LogInformation("MissionDispatchedConsumer is starting...");
 
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
-            _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
-
-            await _channel.ExchangeDeclareAsync(
-                exchange: EventTopologyConstants.Exchange,
-                type: ExchangeType.Topic,
-                durable: true,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
-
-            await _channel.QueueDeclareAsync(
-                queue: EventTopologyConstants.Queues.NotificationsMissionDispatch,
-                durable: true,
-                exclusive: false,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
-
-            await _channel.QueueBindAsync(
-                queue: EventTopologyConstants.Queues.NotificationsMissionDispatch,
-                exchange: EventTopologyConstants.Exchange,
-                routingKey: EventTopologyConstants.RoutingKeys.MissionDispatched,
-                cancellationToken: stoppingToken);
-
-            var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.ReceivedAsync += async (_, ea) =>
+            try
             {
-                try
+                await using var connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
+                await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
+
+                await channel.ExchangeDeclareAsync(
+                    exchange: EventTopologyConstants.Exchange,
+                    type: ExchangeType.Topic,
+                    durable: true,
+                    autoDelete: false,
+                    cancellationToken: stoppingToken);
+
+                await channel.QueueDeclareAsync(
+                    queue: EventTopologyConstants.Queues.NotificationsMissionDispatch,
+                    durable: true,
+                    exclusive: false,
+                    autoDelete: false,
+                    cancellationToken: stoppingToken);
+
+                await channel.QueueBindAsync(
+                    queue: EventTopologyConstants.Queues.NotificationsMissionDispatch,
+                    exchange: EventTopologyConstants.Exchange,
+                    routingKey: EventTopologyConstants.RoutingKeys.MissionDispatched,
+                    cancellationToken: stoppingToken);
+
+                var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                connection.ConnectionShutdownAsync += (_, _) => { disconnected.TrySetResult(); return Task.CompletedTask; };
+                channel.ChannelShutdownAsync += (_, _) => { disconnected.TrySetResult(); return Task.CompletedTask; };
+
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += async (_, ea) =>
                 {
-                    var body = ea.Body.ToArray();
-                    var json = Encoding.UTF8.GetString(body);
-                    var dispatchedEvent = JsonSerializer.Deserialize<MissionDispatchedEvent>(json);
-
-                    if (dispatchedEvent != null)
+                    try
                     {
-                        _logger.LogInformation("Received MissionDispatchedEvent for mission {MissionId} ({MissionCode})",
-                            dispatchedEvent.MissionId, dispatchedEvent.MissionCode);
+                        var body = ea.Body.ToArray();
+                        var json = Encoding.UTF8.GetString(body);
+                        var dispatchedEvent = JsonSerializer.Deserialize<MissionDispatchedEvent>(json);
 
-                        using var scope = _scopeFactory.CreateScope();
-                        var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
-
-                        // Notify each assigned pilot
-                        if (dispatchedEvent.AssignedPilotIds != null)
+                        if (dispatchedEvent != null)
                         {
-                            foreach (var pilotId in dispatchedEvent.AssignedPilotIds)
+                            _logger.LogInformation("Received MissionDispatchedEvent for mission {MissionId} ({MissionCode})",
+                                dispatchedEvent.MissionId, dispatchedEvent.MissionCode);
+
+                            using var scope = _scopeFactory.CreateScope();
+                            var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+
+                            // Notify each assigned pilot
+                            if (dispatchedEvent.AssignedPilotIds != null)
+                            {
+                                foreach (var pilotId in dispatchedEvent.AssignedPilotIds)
+                                {
+                                    await mediator.Send(new CreateNotificationCommand(
+                                        pilotId,
+                                        "MissionDispatched",
+                                        "Mission",
+                                        dispatchedEvent.MissionId,
+                                        "Nhiệm vụ đã được điều phối thực hiện",
+                                        $"Nhiệm vụ '{dispatchedEvent.MissionCode}' ({dispatchedEvent.Title}) đã hoàn tất thẩm định điều kiện bay và sẵn sàng cất cánh."
+                                    ), stoppingToken);
+                                }
+                            }
+
+                            // Notify manager
+                            if (dispatchedEvent.ManagerId != Guid.Empty)
                             {
                                 await mediator.Send(new CreateNotificationCommand(
-                                    pilotId,
+                                    dispatchedEvent.ManagerId,
                                     "MissionDispatched",
                                     "Mission",
                                     dispatchedEvent.MissionId,
-                                    "Nhiệm vụ đã được điều phối thực hiện",
-                                    $"Nhiệm vụ '{dispatchedEvent.MissionCode}' ({dispatchedEvent.Title}) đã hoàn tất thẩm định điều kiện bay và sẵn sàng cất cánh."
-                                ));
+                                    "Điều phối nhiệm vụ thành công",
+                                    $"Nhiệm vụ '{dispatchedEvent.MissionCode}' đã được điều phối thành công sang trạng thái thực địa."
+                                ), stoppingToken);
                             }
                         }
 
-                        // Notify manager
-                        if (dispatchedEvent.ManagerId != Guid.Empty)
-                        {
-                            await mediator.Send(new CreateNotificationCommand(
-                                dispatchedEvent.ManagerId,
-                                "MissionDispatched",
-                                "Mission",
-                                dispatchedEvent.MissionId,
-                                "Điều phối nhiệm vụ thành công",
-                                $"Nhiệm vụ '{dispatchedEvent.MissionCode}' đã được điều phối thành công sang trạng thái thực địa."
-                            ));
-                        }
+                        await channel.BasicAckAsync(ea.DeliveryTag, false, stoppingToken);
                     }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error processing MissionDispatchedEvent");
+                        await channel.BasicNackAsync(ea.DeliveryTag, false, false, stoppingToken);
+                    }
+                };
 
-                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
-                }
-                catch (Exception ex)
+                await channel.BasicConsumeAsync(
+                    queue: EventTopologyConstants.Queues.NotificationsMissionDispatch,
+                    autoAck: false,
+                    consumer: consumer,
+                    cancellationToken: stoppingToken);
+
+                _logger.LogInformation("MissionDispatchedConsumer is now listening on queue '{QueueName}'",
+                    EventTopologyConstants.Queues.NotificationsMissionDispatch);
+
+                await disconnected.Task.WaitAsync(stoppingToken);
+                _logger.LogWarning("MissionDispatchedConsumer RabbitMQ connection lost; reconnecting.");
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("MissionDispatchedConsumer is stopping.");
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "MissionDispatchedConsumer disconnected; retrying in {DelaySeconds}s.", ReconnectDelay.TotalSeconds);
+            }
+
+            if (!stoppingToken.IsCancellationRequested)
+            {
+                try
                 {
-                    _logger.LogError(ex, "Error processing MissionDispatchedEvent");
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
+                    await Task.Delay(ReconnectDelay, stoppingToken);
                 }
-            };
-
-            await _channel.BasicConsumeAsync(
-                queue: EventTopologyConstants.Queues.NotificationsMissionDispatch,
-                autoAck: false,
-                consumer: consumer,
-                cancellationToken: stoppingToken);
-
-            _logger.LogInformation("MissionDispatchedConsumer is now listening on queue '{QueueName}'",
-                EventTopologyConstants.Queues.NotificationsMissionDispatch);
-
-            await Task.Delay(Timeout.Infinite, stoppingToken);
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+            }
         }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("MissionDispatchedConsumer is stopping.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "MissionDispatchedConsumer encountered an error. It will not retry.");
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_channel != null) await _channel.CloseAsync(cancellationToken);
-        if (_connection != null) await _connection.CloseAsync(cancellationToken);
-        await base.StopAsync(cancellationToken);
     }
 }

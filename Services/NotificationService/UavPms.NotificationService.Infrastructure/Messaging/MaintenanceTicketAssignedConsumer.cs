@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -10,18 +11,18 @@ using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.CreateNotification;
+using UavPms.NotificationService.Domain.Interfaces.Repositories;
+using UavPms.NotificationService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.NotificationService.Infrastructure.Messaging;
 
 public class MaintenanceTicketAssignedConsumer : BackgroundService
 {
+    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
     private readonly ILogger<MaintenanceTicketAssignedConsumer> _logger;
     private readonly RabbitMqConnection _rabbitMqConnection;
     private readonly IServiceScopeFactory _scopeFactory;
-
-    private IConnection? _connection;
-    private IChannel? _channel;
 
     public MaintenanceTicketAssignedConsumer(
         ILogger<MaintenanceTicketAssignedConsumer> logger,
@@ -37,92 +38,119 @@ public class MaintenanceTicketAssignedConsumer : BackgroundService
     {
         _logger.LogInformation("MaintenanceTicketAssignedConsumer is starting...");
 
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
-            _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
+            try
+            {
+                await using var connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
+                await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-            await _channel.ExchangeDeclareAsync(
-                exchange: EventTopologyConstants.Exchange,
-                type: ExchangeType.Topic,
-                durable: true,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
+                await channel.ExchangeDeclareAsync(
+                    exchange: EventTopologyConstants.Exchange,
+                    type: ExchangeType.Topic,
+                    durable: true,
+                    autoDelete: false,
+                    cancellationToken: stoppingToken);
 
-            await _channel.QueueDeclareAsync(
-                queue: EventTopologyConstants.Queues.NotificationsTicketAssign,
-                durable: true,
-                exclusive: false,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
+                await channel.QueueDeclareAsync(
+                    queue: EventTopologyConstants.Queues.NotificationsTicketAssign,
+                    durable: true,
+                    exclusive: false,
+                    autoDelete: false,
+                    cancellationToken: stoppingToken);
 
-            await _channel.QueueBindAsync(
-                queue: EventTopologyConstants.Queues.NotificationsTicketAssign,
-                exchange: EventTopologyConstants.Exchange,
-                routingKey: EventTopologyConstants.RoutingKeys.MaintenanceTicketAssigned,
-                cancellationToken: stoppingToken);
+                await channel.QueueBindAsync(
+                    queue: EventTopologyConstants.Queues.NotificationsTicketAssign,
+                    exchange: EventTopologyConstants.Exchange,
+                    routingKey: EventTopologyConstants.RoutingKeys.MaintenanceTicketAssigned,
+                    cancellationToken: stoppingToken);
 
-            var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.ReceivedAsync += async (_, ea) =>
+                var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                connection.ConnectionShutdownAsync += (_, _) => { disconnected.TrySetResult(); return Task.CompletedTask; };
+                channel.ChannelShutdownAsync += (_, _) => { disconnected.TrySetResult(); return Task.CompletedTask; };
+
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += async (_, ea) =>
+                {
+                    try
+                    {
+                        var body = ea.Body.ToArray();
+                        var json = Encoding.UTF8.GetString(body);
+                        var ticketEvent = JsonSerializer.Deserialize<MaintenanceTicketAssignedEvent>(json);
+
+                        if (ticketEvent != null && ticketEvent.AssignedToUserId != Guid.Empty)
+                        {
+                            _logger.LogInformation("Received MaintenanceTicketAssignedEvent for ticket {TicketCode} to user {UserId}",
+                                ticketEvent.TicketCode, ticketEvent.AssignedToUserId);
+
+                            using var scope = _scopeFactory.CreateScope();
+                            var notificationRepo = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
+                            var existing = (await notificationRepo.FindAsync(n =>
+                                n.UserId == ticketEvent.AssignedToUserId &&
+                                n.ReferenceId == ticketEvent.TicketId &&
+                                n.ReferenceType == "MaintenanceTicket"))?.FirstOrDefault();
+
+                            if (existing != null)
+                            {
+                                var realtimeService = scope.ServiceProvider.GetRequiredService<IRealtimeNotificationService>();
+                                await realtimeService.SendToUserAsync(existing.UserId, existing, stoppingToken);
+                            }
+                            else
+                            {
+                                var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+                                await mediator.Send(new CreateNotificationCommand(
+                                    ticketEvent.AssignedToUserId,
+                                    "TicketAssigned",
+                                    "MaintenanceTicket",
+                                    ticketEvent.TicketId,
+                                    $"Phiếu bảo dưỡng mới: {ticketEvent.TicketCode}",
+                                    $"Bạn đã được phân công xử lý phiếu bảo dưỡng '{ticketEvent.TicketCode}'. Mức độ ưu tiên: {ticketEvent.Priority}. {ticketEvent.AnomalyDescription}"
+                                ), stoppingToken);
+                            }
+                        }
+
+                        await channel.BasicAckAsync(ea.DeliveryTag, false, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error processing MaintenanceTicketAssignedEvent");
+                        await channel.BasicNackAsync(ea.DeliveryTag, false, false, stoppingToken);
+                    }
+                };
+
+                await channel.BasicConsumeAsync(
+                    queue: EventTopologyConstants.Queues.NotificationsTicketAssign,
+                    autoAck: false,
+                    consumer: consumer,
+                    cancellationToken: stoppingToken);
+
+                _logger.LogInformation("MaintenanceTicketAssignedConsumer is now listening on queue '{QueueName}'",
+                    EventTopologyConstants.Queues.NotificationsTicketAssign);
+
+                await disconnected.Task.WaitAsync(stoppingToken);
+                _logger.LogWarning("MaintenanceTicketAssignedConsumer RabbitMQ connection lost; reconnecting.");
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("MaintenanceTicketAssignedConsumer is stopping.");
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "MaintenanceTicketAssignedConsumer disconnected; retrying in {DelaySeconds}s.", ReconnectDelay.TotalSeconds);
+            }
+
+            if (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var body = ea.Body.ToArray();
-                    var json = Encoding.UTF8.GetString(body);
-                    var ticketEvent = JsonSerializer.Deserialize<MaintenanceTicketAssignedEvent>(json);
-
-                    if (ticketEvent != null && ticketEvent.AssignedToUserId != Guid.Empty)
-                    {
-                        _logger.LogInformation("Received MaintenanceTicketAssignedEvent for ticket {TicketCode} to user {UserId}",
-                            ticketEvent.TicketCode, ticketEvent.AssignedToUserId);
-
-                        using var scope = _scopeFactory.CreateScope();
-                        var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
-
-                        await mediator.Send(new CreateNotificationCommand(
-                            ticketEvent.AssignedToUserId,
-                            "TicketAssigned",
-                            "MaintenanceTicket",
-                            ticketEvent.TicketId,
-                            $"Phiếu bảo dưỡng mới: {ticketEvent.TicketCode}",
-                            $"Bạn đã được phân công xử lý phiếu bảo dưỡng '{ticketEvent.TicketCode}'. Mức độ ưu tiên: {ticketEvent.Priority}. {ticketEvent.AnomalyDescription}"
-                        ));
-                    }
-
-                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                    await Task.Delay(ReconnectDelay, stoppingToken);
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    _logger.LogError(ex, "Error processing MaintenanceTicketAssignedEvent");
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
+                    break;
                 }
-            };
-
-            await _channel.BasicConsumeAsync(
-                queue: EventTopologyConstants.Queues.NotificationsTicketAssign,
-                autoAck: false,
-                consumer: consumer,
-                cancellationToken: stoppingToken);
-
-            _logger.LogInformation("MaintenanceTicketAssignedConsumer is now listening on queue '{QueueName}'",
-                EventTopologyConstants.Queues.NotificationsTicketAssign);
-
-            await Task.Delay(Timeout.Infinite, stoppingToken);
+            }
         }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("MaintenanceTicketAssignedConsumer is stopping.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "MaintenanceTicketAssignedConsumer encountered an error. It will not retry.");
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_channel != null) await _channel.CloseAsync(cancellationToken);
-        if (_connection != null) await _connection.CloseAsync(cancellationToken);
-        await base.StopAsync(cancellationToken);
     }
 }

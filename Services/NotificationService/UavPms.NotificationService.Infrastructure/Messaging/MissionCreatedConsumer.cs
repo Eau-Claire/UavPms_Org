@@ -16,14 +16,11 @@ namespace UavPms.NotificationService.Infrastructure.Messaging;
 
 public class MissionCreatedConsumer : BackgroundService
 {
+    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
     private readonly ILogger<MissionCreatedConsumer> _logger;
     private readonly RabbitMqConnection _rabbitMqConnection;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    private IConnection? _connection;
-    private IChannel? _channel;
-
-    private const string ExchangeName = "identity-exchange";
     private const string QueueName = "notification.mission-created";
     private const string RoutingKey = "identity.event.missioncreatedevent";
     private const string AssessmentRoutingKey = "identity.event.missioncreatedfromassessmentevent";
@@ -42,138 +39,132 @@ public class MissionCreatedConsumer : BackgroundService
     {
         _logger.LogInformation("MissionCreatedConsumer is starting...");
 
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
-            _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
+            try
+            {
+                await using var connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
+                await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-            await _channel.ExchangeDeclareAsync(
-                exchange: ExchangeName,
-                type: ExchangeType.Topic,
-                durable: true,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
+                await RabbitMqExchangeBinding.DeclareAndBindDualExchangeAsync(
+                    channel,
+                    QueueName,
+                    stoppingToken,
+                    RoutingKey,
+                    AssessmentRoutingKey);
 
-            await _channel.QueueDeclareAsync(
-                queue: QueueName,
-                durable: true,
-                exclusive: false,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
+                var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                connection.ConnectionShutdownAsync += (_, _) => { disconnected.TrySetResult(); return Task.CompletedTask; };
+                channel.ChannelShutdownAsync += (_, _) => { disconnected.TrySetResult(); return Task.CompletedTask; };
 
-            await _channel.QueueBindAsync(
-                queue: QueueName,
-                exchange: ExchangeName,
-                routingKey: RoutingKey,
-                cancellationToken: stoppingToken);
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += async (sender, ea) =>
+                {
+                    try
+                    {
+                        var body = ea.Body.ToArray();
+                        var json = Encoding.UTF8.GetString(body);
 
-            await _channel.QueueBindAsync(
-                queue: QueueName,
-                exchange: ExchangeName,
-                routingKey: AssessmentRoutingKey,
-                cancellationToken: stoppingToken);
+                        if (ea.RoutingKey.Equals(AssessmentRoutingKey, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var assessmentEvent = JsonSerializer.Deserialize<MissionCreatedFromAssessmentEvent>(json);
+                            if (assessmentEvent != null)
+                            {
+                                _logger.LogInformation("Received MissionCreatedFromAssessmentEvent for mission {MissionId}", assessmentEvent.MissionId);
 
-            var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.ReceivedAsync += async (sender, ea) =>
+                                using var scope = _scopeFactory.CreateScope();
+                                var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+
+                                if (assessmentEvent.ManagerId != Guid.Empty)
+                                {
+                                    await mediator.Send(new CreateNotificationCommand(
+                                        assessmentEvent.ManagerId,
+                                        "MissionCreated",
+                                        "Mission",
+                                        assessmentEvent.MissionId,
+                                        "Nhiệm vụ mới đã tạo từ thẩm định",
+                                        $"Nhiệm vụ '{assessmentEvent.Title}' đã được tạo từ thẩm định {assessmentEvent.AssessmentId} và phân công thành công."
+                                    ), stoppingToken);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            var missionEvent = JsonSerializer.Deserialize<MissionCreatedEvent>(json);
+
+                            if (missionEvent != null)
+                            {
+                                _logger.LogInformation("Received MissionCreatedEvent for mission {MissionId}", missionEvent.MissionId);
+
+                                using var scope = _scopeFactory.CreateScope();
+                                var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+
+                                // Notify the assigned inspector
+                                await mediator.Send(new CreateNotificationCommand(
+                                    missionEvent.AssignedToUserId,
+                                    "MissionAssigned",
+                                    "Mission",
+                                    missionEvent.MissionId,
+                                    "Nhiệm vụ mới được giao",
+                                    $"Bạn đã được giao nhiệm vụ bay kiểm tra '{missionEvent.MissionCode}'. {missionEvent.Description}"
+                                ), stoppingToken);
+
+                                // Notify the manager
+                                if (missionEvent.ManagerId != Guid.Empty && missionEvent.ManagerId != missionEvent.AssignedToUserId)
+                                {
+                                    await mediator.Send(new CreateNotificationCommand(
+                                        missionEvent.ManagerId,
+                                        "MissionCreated",
+                                        "Mission",
+                                        missionEvent.MissionId,
+                                        "Nhiệm vụ mới đã tạo",
+                                        $"Nhiệm vụ '{missionEvent.MissionCode}' đã được tạo và phân công thành công."
+                                    ), stoppingToken);
+                                }
+                            }
+                        }
+
+                        await channel.BasicAckAsync(ea.DeliveryTag, false, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error processing MissionCreatedEvent / MissionCreatedFromAssessmentEvent");
+                        await channel.BasicNackAsync(ea.DeliveryTag, false, false, stoppingToken);
+                    }
+                };
+
+                await channel.BasicConsumeAsync(
+                    queue: QueueName,
+                    autoAck: false,
+                    consumer: consumer,
+                    cancellationToken: stoppingToken);
+
+                _logger.LogInformation("MissionCreatedConsumer is now listening on queue '{QueueName}'", QueueName);
+
+                await disconnected.Task.WaitAsync(stoppingToken);
+                _logger.LogWarning("MissionCreatedConsumer RabbitMQ connection lost; reconnecting.");
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("MissionCreatedConsumer is stopping.");
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "MissionCreatedConsumer disconnected; retrying in {DelaySeconds}s.", ReconnectDelay.TotalSeconds);
+            }
+
+            if (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var body = ea.Body.ToArray();
-                    var json = Encoding.UTF8.GetString(body);
-
-                    if (ea.RoutingKey.Equals(AssessmentRoutingKey, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var assessmentEvent = JsonSerializer.Deserialize<MissionCreatedFromAssessmentEvent>(json);
-                        if (assessmentEvent != null)
-                        {
-                            _logger.LogInformation("Received MissionCreatedFromAssessmentEvent for mission {MissionId}", assessmentEvent.MissionId);
-
-                            using var scope = _scopeFactory.CreateScope();
-                            var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
-
-                            if (assessmentEvent.ManagerId != Guid.Empty)
-                            {
-                                await mediator.Send(new CreateNotificationCommand(
-                                    assessmentEvent.ManagerId,
-                                    "MissionCreated",
-                                    "Mission",
-                                    assessmentEvent.MissionId,
-                                    "Nhiệm vụ mới đã tạo từ thẩm định",
-                                    $"Nhiệm vụ '{assessmentEvent.Title}' đã được tạo từ thẩm định {assessmentEvent.AssessmentId} và phân công thành công."
-                                ));
-                            }
-                        }
-                    }
-                    else
-                    {
-                        var missionEvent = JsonSerializer.Deserialize<MissionCreatedEvent>(json);
-
-                        if (missionEvent != null)
-                        {
-                            _logger.LogInformation("Received MissionCreatedEvent for mission {MissionId}", missionEvent.MissionId);
-
-                            using var scope = _scopeFactory.CreateScope();
-                            var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
-
-                            // Notify the assigned inspector
-                            await mediator.Send(new CreateNotificationCommand(
-                                missionEvent.AssignedToUserId,
-                                "MissionAssigned",
-                                "Mission",
-                                missionEvent.MissionId,
-                                "Nhiệm vụ mới được giao",
-                                $"Bạn đã được giao nhiệm vụ bay kiểm tra '{missionEvent.MissionCode}'. {missionEvent.Description}"
-                            ));
-
-                            // Notify the manager
-                            if (missionEvent.ManagerId != Guid.Empty && missionEvent.ManagerId != missionEvent.AssignedToUserId)
-                            {
-                                await mediator.Send(new CreateNotificationCommand(
-                                    missionEvent.ManagerId,
-                                    "MissionCreated",
-                                    "Mission",
-                                    missionEvent.MissionId,
-                                    "Nhiệm vụ mới đã tạo",
-                                    $"Nhiệm vụ '{missionEvent.MissionCode}' đã được tạo và phân công thành công."
-                                ));
-                            }
-                        }
-                    }
-
-                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                    await Task.Delay(ReconnectDelay, stoppingToken);
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    _logger.LogError(ex, "Error processing MissionCreatedEvent / MissionCreatedFromAssessmentEvent");
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
+                    break;
                 }
-            };
-
-            await _channel.BasicConsumeAsync(
-                queue: QueueName,
-                autoAck: false,
-                consumer: consumer,
-                cancellationToken: stoppingToken);
-
-            _logger.LogInformation("MissionCreatedConsumer is now listening on queue '{QueueName}'", QueueName);
-
-            // Keep alive until cancellation
-            await Task.Delay(Timeout.Infinite, stoppingToken);
+            }
         }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("MissionCreatedConsumer is stopping.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "MissionCreatedConsumer encountered an error. It will not retry.");
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_channel != null) await _channel.CloseAsync(cancellationToken);
-        if (_connection != null) await _connection.CloseAsync(cancellationToken);
-        await base.StopAsync(cancellationToken);
     }
 }

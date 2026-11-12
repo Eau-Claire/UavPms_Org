@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
+using RabbitMQ.Client;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.CreateNotification;
 using UavPms.NotificationService.Domain.Entities;
 using UavPms.NotificationService.Domain.Interfaces.Repositories;
@@ -125,5 +126,45 @@ public class Phase3NotificationConsumersTests
         res.UserId.Should().Be(techId);
         res.Type.Should().Be("TicketAssigned");
         res.Title.Should().Contain("TKT-2026-0099");
+    }
+
+    [Fact]
+    public async Task RabbitMqExchangeBinding_ShouldDeclareAndBindBothPrimaryAndLegacyExchanges()
+    {
+        var channelMock = new Mock<IChannel>();
+        channelMock
+            .Setup(c => c.QueueDeclareAsync(
+                It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<IDictionary<string, object?>>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new QueueDeclareOk("notification.mission-created", 0, 0));
+
+        await RabbitMqExchangeBinding.DeclareAndBindDualExchangeAsync(
+            channelMock.Object,
+            "notification.mission-created",
+            CancellationToken.None,
+            "identity.event.missioncreatedevent",
+            "identity.event.missioncreatedfromassessmentevent");
+
+        channelMock.Verify(c => c.ExchangeDeclareAsync(
+            EventTopologyConstants.Exchange, ExchangeType.Topic, true, false,
+            It.IsAny<IDictionary<string, object?>>(), It.IsAny<bool>(), It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        channelMock.Verify(c => c.ExchangeDeclareAsync(
+            EventTopologyConstants.LegacyExchange, ExchangeType.Topic, true, false,
+            It.IsAny<IDictionary<string, object?>>(), It.IsAny<bool>(), It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        foreach (var exchange in new[] { EventTopologyConstants.Exchange, EventTopologyConstants.LegacyExchange })
+        {
+            foreach (var routingKey in new[] { "identity.event.missioncreatedevent", "identity.event.missioncreatedfromassessmentevent" })
+            {
+                channelMock.Verify(c => c.QueueBindAsync(
+                    "notification.mission-created", exchange, routingKey,
+                    It.IsAny<IDictionary<string, object?>>(), It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()), Times.Once);
+            }
+        }
     }
 }
