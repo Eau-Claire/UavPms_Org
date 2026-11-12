@@ -1,3 +1,3 @@
 namespace UavPms.NotificationService.API.Controllers;
 
-public record ApiResponse(bool Success, string Message, object? Data = null, object? Errors = null);
+public record ApiResponse(bool Success, string Message, object? Data = null, object? Errors = null, string? ErrorCode = null);

@@ -5,6 +5,7 @@ using System.Net;
 using UavPms.OperationsService.API.Controllers;
 using UavPms.OperationsService.Application.Common.Exceptions;
 using UavPms.OperationsService.Infrastructure.Persistence;
+using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Middlewares;
 
@@ -151,21 +152,5 @@ public class GlobalExceptionHandler : IExceptionHandler
     }
 
     /// <summary>Business codes returned as 409 Conflict: the request clashes with the current state of a resource.</summary>
-    public static bool IsConflictCode(string code) => code is "INVALID_MISSION_STATE"
-        or "RESOURCE_BOOKING_CONFLICT"
-        or "MISSION_CONCURRENCY_CONFLICT"
-        or "CONCURRENCY_CONFLICT"
-        or "ASSESSMENT_CONCURRENCY_CONFLICT"
-        or "IDEMPOTENCY_CONFLICT"
-        or "IDEMPOTENCY_KEY_REUSED"
-        or "DUPLICATE_MEDIA"
-        or "ALERT_ALREADY_ACTIVE"
-        or "DUPLICATE_ASSIGNMENT"
-        or "ASSIGNEE_ALREADY_ASSIGNED"
-        or "DUPLICATE_CHECK_IN"
-        or "DUPLICATE_HANDOVER"
-        or "DUPLICATE_RESOURCE"
-        or "DRONE_IN_USE"
-        or "REQUIRED_ACCEPTANCE_PENDING"
-        or "HANDOVER_REJECTED";
+    public static bool IsConflictCode(string code) => ConflictErrorCodes.IsConflict(code);
 }

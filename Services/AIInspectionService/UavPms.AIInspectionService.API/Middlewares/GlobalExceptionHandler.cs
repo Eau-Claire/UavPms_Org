@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using System.Net;
 using UavPms.AIInspectionService.API.Controllers;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.Shared.Contracts.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace UavPms.AIInspectionService.API.Middlewares;
@@ -37,8 +38,8 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Success: false,
                 Message: "One or more validation errors occurred.",
                 Data: null,
-                Errors: errors
-                , ErrorCode: "INVALID_AI_RESPONSE"
+                Errors: errors,
+                ErrorCode: "VALIDATION_ERROR"
             );
         }
         else if (exception is UnauthorizedAccessException unauthorizedAccessException)
@@ -48,8 +49,8 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Success: false,
                 Message: unauthorizedAccessException.Message,
                 Data: null,
-                Errors: null
-                , ErrorCode: "UNAUTHORIZED"
+                Errors: null,
+                ErrorCode: "UNAUTHORIZED"
             );
         }
         else if (exception is ForbiddenException forbiddenException)
@@ -64,8 +65,8 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Success: false,
                 Message: notFoundException.Message,
                 Data: null,
-                Errors: null
-                , ErrorCode: "NOT_FOUND"
+                Errors: null,
+                ErrorCode: "NOT_FOUND"
             );
         }
         else if (exception is KeyNotFoundException keyNotFoundException)
@@ -75,19 +76,37 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Success: false,
                 Message: keyNotFoundException.Message,
                 Data: null,
-                Errors: null
-                , ErrorCode: "NOT_FOUND"
+                Errors: null,
+                ErrorCode: "NOT_FOUND"
+            );
+        }
+        else if (exception is DbUpdateConcurrencyException)
+        {
+            httpContext.Response.StatusCode = (int)HttpStatusCode.Conflict;
+            apiResponse = new ApiResponse(
+                Success: false,
+                Message: "A concurrency conflict occurred. The resource was modified by another operation.",
+                Data: null,
+                Errors: null,
+                ErrorCode: "CONCURRENCY_CONFLICT"
             );
         }
         else if (exception is BusinessRuleException businessRuleException)
         {
-            httpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            var code = !string.IsNullOrWhiteSpace(businessRuleException.Code)
+                ? businessRuleException.Code
+                : "BUSINESS_RULE_VIOLATION";
+
+            httpContext.Response.StatusCode = ConflictErrorCodes.IsConflict(code)
+                ? (int)HttpStatusCode.Conflict
+                : (int)HttpStatusCode.BadRequest;
+
             apiResponse = new ApiResponse(
                 Success: false,
                 Message: businessRuleException.Message,
                 Data: null,
-                Errors: null
-                , ErrorCode: businessRuleException.Code ?? "INVALID_AI_RESPONSE"
+                Errors: null,
+                ErrorCode: code
             );
         }
         else if (exception is DbUpdateException dbUpdateException &&

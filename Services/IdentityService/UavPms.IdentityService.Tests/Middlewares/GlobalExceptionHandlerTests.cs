@@ -1,0 +1,59 @@
+using System.IO;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+using FluentAssertions;
+using FluentValidation;
+using FluentValidation.Results;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using UavPms.IdentityService.API.Middlewares;
+using UavPms.IdentityService.Application.Common.Exceptions;
+using Xunit;
+
+namespace UavPms.IdentityService.Tests.Middlewares;
+
+public class GlobalExceptionHandlerTests
+{
+    private static async Task<(HttpStatusCode Status, string Body)> InvokeAsync(Exception exception)
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+
+        await handler.TryHandleAsync(context, exception, CancellationToken.None);
+        context.Response.Body.Position = 0;
+        using var reader = new StreamReader(context.Response.Body);
+        var body = await reader.ReadToEndAsync();
+        return ((HttpStatusCode)context.Response.StatusCode, body);
+    }
+
+    [Fact]
+    public async Task ConflictBusinessRuleException_ShouldReturn409ConflictWithErrorCode()
+    {
+        var (status, body) = await InvokeAsync(new BusinessRuleException("DUPLICATE_RESOURCE", "Duplicate user."));
+
+        status.Should().Be(HttpStatusCode.Conflict);
+        body.Should().Contain("\"errorCode\":\"DUPLICATE_RESOURCE\"");
+    }
+
+    [Fact]
+    public async Task DbUpdateConcurrencyException_ShouldReturn409Conflict()
+    {
+        var (status, body) = await InvokeAsync(new DbUpdateConcurrencyException("concurrency"));
+
+        status.Should().Be(HttpStatusCode.Conflict);
+        body.Should().Contain("\"errorCode\":\"CONCURRENCY_CONFLICT\"");
+    }
+
+    [Fact]
+    public async Task ValidationException_ShouldReturn400WithStandardValidationErrorCode()
+    {
+        var (status, body) = await InvokeAsync(new ValidationException([new ValidationFailure("Email", "Required")]));
+
+        status.Should().Be(HttpStatusCode.BadRequest);
+        body.Should().Contain("\"errorCode\":\"VALIDATION_ERROR\"");
+    }
+}
+
