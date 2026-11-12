@@ -528,7 +528,7 @@ graph TD
   - Cột không có tọa độ → `400 TOWER_MISSING_GEOLOCATION` (**kể cả khi không có `boundaryWkt`**); boundary sai → `400 INVALID_GEOMETRY`; cột ngoài boundary → `400 TOWER_OUTSIDE_BOUNDARY`.
 - **Idempotency (UC-MF01-01 A1)**: `idempotencyKey` thuộc về manager đã tạo hồ sơ.
   - Gửi lại cùng key, cùng `regionId`/`plannedStart`/`plannedEnd`/tập `towerIds`/`boundaryWkt` → trả hồ sơ cũ (kiểm tra lại quyền ghi; nếu hồ sơ còn `Evaluating` do lần trước lỗi thì đánh giá lại; hết hạn thì trả `Expired`).
-  - Cùng key nhưng khác nội dung, hoặc key đã được manager khác dùng → `IDEMPOTENCY_KEY_REUSED` (dự kiến `409`; hiện GlobalExceptionHandler trả `400` cho tới khi mã này được thêm vào danh sách conflict).
+  - Cùng key nhưng khác nội dung, hoặc key đã được manager khác dùng → `409 IDEMPOTENCY_KEY_REUSED`.
   - Chỉ vi phạm unique của index idempotency mới được coi là trùng key; lỗi DB khác không còn bị đổi thành `IDEMPOTENCY_CONFLICT`.
 - **Kết quả đánh giá (BR-16 – BR-22)**:
   - Ứng viên nhân sự: mọi người dùng có vai trò hiện trường (`Inspector`, `Analyst`, `Technician`/`MaintenanceTechnician`) và không có vai trò `SystemAdmin`/`Manager`; người dùng không Active/chưa xác minh chỉ được liệt kê nếu có scope vùng (lý do `USER_INACTIVE`). Scope của ứng viên chỉ lấy từ scope của chính ứng viên — vai trò `SystemAdmin` của **người đánh giá** không còn làm mọi người "trong scope". `reasonCode` theo thứ tự `USER_INACTIVE` → `INVALID_ROLE` → `OUTSIDE_MANAGEMENT_SCOPE` → `SCHEDULE_CONFLICT`.
@@ -1080,3 +1080,46 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 - **Phân quyền**: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`, `MaintenanceTechnician`). Manager chỉ tải được báo cáo trong phạm vi khu vực của mình; người dùng khác không tải được bản `draft` do người khác tạo.
 - **Query Params**: `format` = `pdf` (mặc định) hoặc `excel` / `xlsx`.
 - **Response `200 OK`**: nội dung tệp nhị phân (không bọc `ApiResponse`), `Content-Type` là `application/pdf` hoặc `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, kèm tên tệp trong `Content-Disposition`.
+
+---
+
+### MODULE 12: LỊCH KIỂM TRA ĐỊNH KỲ (INSPECTION SCHEDULES - OPERATIONSSERVICE)
+
+#### 12.1. [GET] `/api/v1/inspection-schedules`
+- **Mô tả**: Lấy danh sách lịch kiểm tra định kỳ có phân trang và lọc.
+- **Phân quyền**: Toàn bộ người dùng đã xác thực (`AllAuthenticatedRoles`).
+- **Query Params**: `page` (mặc định `1`), `pageSize` (mặc định `10`), `regionId?`, `isActive?`, `search?`
+
+#### 12.2. [GET] `/api/v1/inspection-schedules/{id}`
+- **Mô tả**: Chi tiết một lịch kiểm tra định kỳ.
+- **Phân quyền**: `AllAuthenticatedRoles`.
+
+#### 12.3. [POST] `/api/v1/inspection-schedules` & [PUT] `/api/v1/inspection-schedules/{id}`
+- **Mô tả**: Tạo mới hoặc cập nhật lịch kiểm tra định kỳ theo RRULE (ví dụ: `FREQ=DAILY;INTERVAL=1`, `FREQ=WEEKLY;BYDAY=MO,WE,FR`, `FREQ=MONTHLY;BYMONTHDAY=1`).
+- **Phân quyền**: `SystemAdmin`, `Manager`.
+- **Request Body**:
+  ```json
+  {
+    "regionId": "33333333-3333-3333-3333-333333333333",
+    "name": "Kiểm tra định kỳ tuyến 110kV buổi sáng",
+    "recurrenceRule": "FREQ=WEEKLY;BYDAY=MO,TH",
+    "plannedTime": "08:00:00",
+    "isActive": true
+  }
+  ```
+
+#### 12.4. Điều khiển trạng thái & Kích hoạt thủ công
+- `[PATCH] /api/v1/inspection-schedules/{id}/toggle`: bật/tắt `isActive` (body tùy chọn `{ "isActive": true|false }`).
+- `[POST] /api/v1/inspection-schedules/{id}/activate` và `[POST] /api/v1/inspection-schedules/{id}/deactivate`: kích hoạt hoặc tạm dừng lịch.
+- `[POST] /api/v1/inspection-schedules/{id}/trigger`: kích hoạt chạy ngay lập tức (tạo `PreMissionAssessment` / nhiệm vụ tương ứng).
+- `[DELETE] /api/v1/inspection-schedules/{id}`: xóa mềm lịch kiểm tra.
+- **Phân quyền**: `SystemAdmin`, `Manager`.
+
+---
+
+### PHỤ LỤC: CHUẨN MÃ LỖI XUNG ĐỘT (`409 Conflict` & `ApiResponse.errorCode`)
+Tất cả các lỗi nghiệp vụ thuộc nhóm xung đột trạng thái/tài nguyên/trùng lặp được trả về đồng nhất với HTTP **`409 Conflict`** và trường `errorCode` trong `ApiResponse`:
+- `INVALID_MISSION_STATE`, `MISSION_CONCURRENCY_CONFLICT`, `CONCURRENCY_CONFLICT`, `ASSESSMENT_CONCURRENCY_CONFLICT`
+- `RESOURCE_BOOKING_CONFLICT`, `DRONE_IN_USE`, `DUPLICATE_RESOURCE`
+- `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `DUPLICATE_MEDIA`, `DUPLICATE_REQUEST`, `ALERT_ALREADY_ACTIVE`
+- `DUPLICATE_ASSIGNMENT`, `ASSIGNEE_ALREADY_ASSIGNED`, `DUPLICATE_CHECK_IN`, `DUPLICATE_HANDOVER`, `REQUIRED_ACCEPTANCE_PENDING`, `HANDOVER_REJECTED`

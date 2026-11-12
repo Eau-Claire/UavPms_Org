@@ -29,6 +29,7 @@ x-service-environment: &service-environment
   Cors__AllowedOrigins__4: ${CORS_ALLOWED_ORIGIN_4:-https://uavpms.ddns.net}
 
   AIService__ServiceKey: ${AIService_ServiceKey}
+  InternalServices__SharedKey: ${INTERNAL_SERVICES_SHARED_KEY:-uavpms-internal-shared-key}
 
   # Demo AI worker (no real model deployed yet): results go through the real callback path, so anomalies,
   # alerts and notifications are stored for real. Set MOCK_AI_ENABLED=false once a real AI worker consumes
