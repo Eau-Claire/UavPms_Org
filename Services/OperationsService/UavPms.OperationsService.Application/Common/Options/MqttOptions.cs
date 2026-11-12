@@ -9,7 +9,7 @@ public class MqttOptions
     public bool Enabled { get; init; }
 
     [Required]
-    public string Host { get; init; } = "mosquitto";
+    public string Host { get; init; } = "localhost";
 
     [Range(1, 65535)]
     public int Port { get; init; } = 1883;
