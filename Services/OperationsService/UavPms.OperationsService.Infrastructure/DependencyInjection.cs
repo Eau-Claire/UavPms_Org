@@ -18,6 +18,7 @@ using UavPms.OperationsService.Application.Features.Maintenance;
 using UavPms.OperationsService.Application.Features.Alerts;
 using UavPms.OperationsService.Application.Features.FlightControllers;
 using UavPms.OperationsService.Application.Features.Drones;
+using UavPms.OperationsService.Application.Features.Schedules;
 using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.OperationsService.Infrastructure;
@@ -126,6 +127,9 @@ public static class DependencyInjection
         services.AddScoped<IDroneLiveStateService, NoOpDroneLiveStateService>();
 
         services.AddHostedService<PreMissionAssessmentExpiryJob>();
+        services.AddScoped<InspectionScheduleService>();
+        services.AddScoped<IInspectionScheduleService>(sp => sp.GetRequiredService<InspectionScheduleService>());
+        services.AddHostedService<InspectionScheduleRunnerJob>();
 
         // Đăng ký HttpContextAccessor và CurrentUserServices
         services.AddHttpContextAccessor();
