@@ -286,11 +286,18 @@ public class MissionLinearWorkflowTests
         updatedAnomaly.AnalystNotes.Should().Be("Xác nhận nứt vỡ nguy hiểm cần thay thế.");
 
         updatedAnomaly.TowerId.Should().Be(tower.Id);
-        // Kiểm tra MaintenanceTicket được tự động sinh
+        // Kiểm tra EmergencyAlert và MaintenanceTicket được tự động sinh đồng nhất
+        var alert = await db.EmergencyAlerts.FirstOrDefaultAsync(a => a.AnomalyId == anomaly.Id);
+        alert.Should().NotBeNull();
+        alert!.Status.Should().Be("Active");
+        alert.Priority.Should().Be("Emergency");
+        result.EmergencyAlertId.Should().Be(alert.Id.ToString());
+
         var ticket = await db.MaintenanceTickets.FirstOrDefaultAsync(t => t.AnomalyId == anomaly.Id);
         ticket.Should().NotBeNull();
         ticket!.Status.Should().Be(TicketStatus.Open);
         ticket.Priority.Should().Be(TicketPriority.Emergency);
+        ticket.TechnicianId.Should().BeNull();
     }
 
     [Fact]
@@ -411,7 +418,10 @@ public class MissionLinearWorkflowTests
         };
         db.InspectionMedia.Add(media);
 
-        var tower = new Tower { Id = Guid.NewGuid(), RegionId = Guid.NewGuid(), TowerCode = "Cột 042" };
+        var region = new Region { Id = Guid.NewGuid(), Name = "Truyền tải điện Tây Bắc" };
+        db.Regions.Add(region);
+
+        var tower = new Tower { Id = Guid.NewGuid(), RegionId = region.Id, Region = region, TowerCode = "Cột 042" };
         db.Towers.Add(tower);
 
         var category = new DefectCategory
@@ -460,6 +470,9 @@ public class MissionLinearWorkflowTests
         result[0].Priority.Should().Be("Urgent");
         result[0].Status.Should().Be("Pending");
         result[0].TowerCode.Should().Be("Cột 042");
+        result[0].Title.Should().Be("Bát sứ nứt vỡ");
+        result[0].SuggestedAction.Should().Be("Bát sứ số 4 chuỗi néo bị nứt vỡ");
+        result[0].AssignedTeam.Should().Be("Truyền tải điện Tây Bắc");
     }
 
     [Fact]

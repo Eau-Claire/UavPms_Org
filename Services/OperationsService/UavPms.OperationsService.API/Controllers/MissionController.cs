@@ -84,10 +84,20 @@ public class MissionController : ControllerBase
     public async Task<IActionResult> AssignDrone(Guid id, [FromBody] MissionDroneRequest request, CancellationToken ct) { await _lifecycle!.AssignDroneAsync(id, request.DroneId, ct); return Ok(new ApiResponse(true, "Mission drone assigned")); }
 
     [HttpPost("{id:guid}/drone-handover")]
+    [HttpPost("{id:guid}/drone-handover/deliver")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> Handover(Guid id, [FromBody] MissionHandoverRequest request, CancellationToken ct)
     {
-        var handover = await _lifecycle!.ConfirmHandoverAsync(id, new Mf01Handover(request.DroneId, request.ReceivedBy, request.Condition, request.Accepted), ct);
+        var receivedBy = request.ReceivedBy != Guid.Empty
+            ? request.ReceivedBy
+            : (request.ReceivedByUserId ?? Guid.Empty);
+        var checklistJson = SerializeChecklistJson(request.InitialChecklist);
+        var condition = string.IsNullOrWhiteSpace(request.Condition) ? "PreFlightCheck" : request.Condition;
+
+        var handover = await _lifecycle!.ConfirmHandoverAsync(
+            id,
+            new Mf01Handover(request.DroneId, receivedBy, condition, request.Accepted, checklistJson),
+            ct);
         return Ok(new ApiResponse(true, "Drone handover confirmed", MapHandover(handover)));
     }
 
@@ -96,7 +106,8 @@ public class MissionController : ControllerBase
     public async Task<IActionResult> ReturnHandover(Guid id, [FromBody] ReturnDroneHandoverRequest request, CancellationToken ct)
     {
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
-        var handover = await _lifecycle.ReturnDroneHandoverAsync(id, request.DroneId, request.Condition, ct);
+        var returnChecklistJson = SerializeChecklistJson(request.ReturnChecklist);
+        var handover = await _lifecycle.ReturnDroneHandoverAsync(id, request.DroneId, request.Condition, returnChecklistJson, ct);
         return Ok(new ApiResponse(true, "Drone return handover confirmed", MapHandover(handover)));
     }
 
@@ -110,7 +121,7 @@ public class MissionController : ControllerBase
         if (request?.Longitude.HasValue == true && (request.Longitude < -180 || request.Longitude > 180))
             return BadRequest(new ApiResponse(false, "Longitude must be between -180 and 180."));
 
-        var checkIn = await _lifecycle!.CheckInAsync(id, ct);
+        var checkIn = await _lifecycle!.CheckInAsync(id, request?.Latitude, request?.Longitude, ct);
         return Ok(new ApiResponse(true, "Checked in", MapCheckIn(checkIn)));
     }
 
@@ -140,6 +151,7 @@ public class MissionController : ControllerBase
     public async Task<IActionResult> Complete(Guid id, CancellationToken ct) { await _lifecycle!.CompleteAsync(id, ct); return Ok(new ApiResponse(true, "Mission completed")); }
 
     [HttpPost("{id:guid}/flight-log")]
+    [HttpPost("{id:guid}/flight-logs")]
     [Authorize(Roles = UserRoles.AdminManagerInspector)]
     public async Task<IActionResult> UploadFlightLog(Guid id, [FromBody] UploadFlightLogRequest request, CancellationToken ct)
     {
@@ -547,13 +559,26 @@ public class MissionController : ControllerBase
         Status = r.Status,
         ReportedAt = r.ReportedAt
     };
+    private static string? SerializeChecklistJson(object? checklist) => checklist switch
+    {
+        null => null,
+        string s => string.IsNullOrWhiteSpace(s) ? null : s,
+        JsonElement el => el.ValueKind == JsonValueKind.Null || el.ValueKind == JsonValueKind.Undefined ? null : el.GetRawText(),
+        _ => JsonSerializer.Serialize(checklist)
+    };
 }
 
 public record MissionScopeRequest(string BoundaryWkt);
 public record MissionAssetsRequest(string BoundaryWkt, IReadOnlyCollection<Guid> TowerIds);
 public record MissionAssignmentRequest(Guid UserId, string AssignmentRole, bool IsRequired = true);
 public record MissionDroneRequest(Guid DroneId);
-public record MissionHandoverRequest(Guid DroneId, Guid ReceivedBy, string Condition, bool Accepted);
+public record MissionHandoverRequest(
+    Guid DroneId,
+    Guid ReceivedBy,
+    string Condition,
+    bool Accepted = true,
+    Guid? ReceivedByUserId = null,
+    object? InitialChecklist = null);
 
 public record ConfirmMissionRequest(string? Reason = null);
 public record SuspendMissionRequest(string Reason);

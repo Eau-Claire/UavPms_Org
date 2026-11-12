@@ -289,6 +289,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var now = DateTime.UtcNow;
         var handover = new DroneHandover { MissionId = missionId, DroneId = request.DroneId, HandedOverBy = _current.UserId,
             ReceivedBy = request.ReceivedBy, ReceivedAt = now, Condition = request.Condition,
+            InitialChecklist = !string.IsNullOrWhiteSpace(request.InitialChecklistJson) ? request.InitialChecklistJson : "{}",
             Status = request.Accepted ? DroneHandoverStatus.Accepted : DroneHandoverStatus.Rejected,
             ReturnedAt = request.Accepted ? null : now };
         _db.DroneHandovers.Add(handover); mission.DroneHandovers.Add(handover); mission.RecalculateReadiness(); TouchMission(mission);
@@ -296,7 +297,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         await SaveConcurrency(ct); return handover;
     }
 
-    public async Task<MissionCheckIn> CheckInAsync(Guid missionId, CancellationToken ct)
+    public Task<MissionCheckIn> CheckInAsync(Guid missionId, CancellationToken ct)
+        => CheckInAsync(missionId, null, null, ct);
+
+    public async Task<MissionCheckIn> CheckInAsync(Guid missionId, double? latitude, double? longitude, CancellationToken ct)
     {
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
@@ -314,6 +318,35 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         if (previous?.Status == MissionCheckInStatus.CheckedIn)
             throw new BusinessRuleException("DUPLICATE_CHECK_IN");
 
+        NetTopologySuite.Geometries.Point? checkInLocation = null;
+        if (latitude.HasValue && longitude.HasValue)
+        {
+            if (latitude.Value is < -90 or > 90 || longitude.Value is < -180 or > 180)
+                throw new BusinessRuleException("INVALID_COORDINATES", "Latitude must be in [-90, 90] and Longitude in [-180, 180].");
+
+            var firstTargetTowerId = mission.MissionTargets.Select(t => t.TowerId).FirstOrDefault(id => id != Guid.Empty);
+            if (firstTargetTowerId != Guid.Empty)
+            {
+                var towerGeom = await _db.Towers.AsNoTracking()
+                    .Where(t => t.Id == firstTargetTowerId && !t.IsDeleted)
+                    .Select(t => t.Geom)
+                    .FirstOrDefaultAsync(ct);
+
+                if (towerGeom != null)
+                {
+                    var distanceMeters = CalculateGeodesicDistanceMeters(
+                        latitude.Value, longitude.Value, towerGeom.Coordinate.Y, towerGeom.Coordinate.X);
+                    if (distanceMeters > 200.0)
+                    {
+                        throw new BusinessRuleException("CHECKIN_OUTSIDE_GEOFENCE",
+                            $"Vị trí hiện trường ({latitude.Value:F5}, {longitude.Value:F5}) cách cột mục tiêu {distanceMeters:F1}m, vượt quá bán kính cho phép 200m.");
+                    }
+                }
+            }
+
+            checkInLocation = new NetTopologySuite.Geometries.Point(longitude.Value, latitude.Value) { SRID = 4326 };
+        }
+
         MissionCheckIn checkIn;
         if (previous != null)
         {
@@ -321,10 +354,17 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             checkIn = previous;
             checkIn.Status = MissionCheckInStatus.CheckedIn;
             checkIn.CheckedInAt = DateTime.UtcNow;
+            if (checkInLocation != null) checkIn.CheckInLocation = checkInLocation;
         }
         else
         {
-            checkIn = new MissionCheckIn { MissionId = missionId, UserId = _current.UserId, CheckedInAt = DateTime.UtcNow };
+            checkIn = new MissionCheckIn
+            {
+                MissionId = missionId,
+                UserId = _current.UserId,
+                CheckInLocation = checkInLocation,
+                CheckedInAt = DateTime.UtcNow
+            };
             _db.MissionCheckIns.Add(checkIn);
             mission.CheckIns.Add(checkIn);
         }
@@ -333,6 +373,18 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         if (ready) Audit(mission.Id, "MISSION_READY");
         await SaveConcurrency(ct);
         return checkIn;
+    }
+
+    private static double CalculateGeodesicDistanceMeters(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double earthRadiusMeters = 6371000.0;
+        var dLat = (lat2 - lat1) * Math.PI / 180.0;
+        var dLon = (lon2 - lon1) * Math.PI / 180.0;
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(lat1 * Math.PI / 180.0) * Math.Cos(lat2 * Math.PI / 180.0) *
+                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return earthRadiusMeters * c;
     }
 
     public async Task<MissionAssignment> AcceptAssignmentAsync(Guid missionId, CancellationToken ct)
@@ -1315,66 +1367,88 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             throw new BusinessRuleException("ANOMALY_MISSION_MISMATCH", $"Khuyết tật '{detectionId}' không thuộc nhiệm vụ '{missionId}'.");
         }
 
-        var isApproved = string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(request.Status, "Confirmed", StringComparison.OrdinalIgnoreCase);
-        var isRejected = string.Equals(request.Status, "Rejected", StringComparison.OrdinalIgnoreCase);
-
-        if (!isApproved && !isRejected)
+        if (anomaly.SupersededById.HasValue)
         {
-            throw new BusinessRuleException("INVALID_REVIEW_STATUS", "Trạng thái phê duyệt phải là 'Approved' hoặc 'Rejected'.");
+            throw new BusinessRuleException("ANOMALY_SUPERSEDED", "Khuyết tật đã được thay thế bởi kết quả mới hơn, không thể thẩm định.");
         }
 
-        if (isApproved && !anomaly.TowerId.HasValue)
+        if (!anomaly.IsAwaitingReview)
         {
-            // Bất thường phải gắn cột điện trước khi xác nhận (CK_DetectedAnomalies_ConfirmedRequiresTower).
-            anomaly.TowerId = anomaly.Media.TowerId
-                ?? throw new BusinessRuleException("TOWER_REQUIRED", "Khuyết tật phải được gắn với cột điện trước khi xác nhận.");
+            throw new BusinessRuleException("ANOMALY_NOT_IN_REVIEW", $"Khuyết tật đang ở trạng thái '{anomaly.ValidationStatus}', chỉ được thẩm định khi đang chờ duyệt.");
         }
 
-        anomaly.ValidationStatus = isApproved ? "Confirmed" : "Rejected";
-        anomaly.AnalystId = _current.UserId;
-        anomaly.AnalystNotes = request.ReviewNotes ?? string.Empty;
-        anomaly.ValidatedAt = DateTime.UtcNow;
+        if (!DetectedAnomaly.TryParseReviewDecision(request.Status, out var isApproved))
+        {
+            throw new BusinessRuleException("INVALID_REVIEW_STATUS", "Trạng thái phê duyệt phải là 'Approved'/'Confirmed' hoặc 'Rejected'.");
+        }
 
         string? createdTaskId = null;
+        string? emergencyAlertId = null;
         double? newHealthScore = null; // Tính năng điểm sức khỏe đã bỏ (ERD v2.2); giữ trường null cho tương thích API.
 
         if (isApproved)
         {
-            // 2. Tự động sinh phiếu bảo dưỡng (MaintenanceTask) nếu chưa tồn tại
+            // Bất thường phải gắn cột điện trước khi xác nhận (CK_DetectedAnomalies_ConfirmedRequiresTower).
+            anomaly.TowerId ??= request.TowerId ?? anomaly.Media.TowerId
+                ?? throw new BusinessRuleException("TOWER_REQUIRED", "Khuyết tật phải được gắn với cột điện trước khi xác nhận.");
+
+            anomaly.Confirm(_current.UserId, request.ReviewNotes, request.AnalystFeedbackJson);
+
+            var isEmergency = anomaly.IsEmergencySeverity(request.OverrideSeverity);
+            var now = DateTime.UtcNow;
+
+            // 1. Đảm bảo có EmergencyAlert đang Active khi xác nhận khuyết tật khẩn cấp
+            if (isEmergency)
+            {
+                var existingAlert = await _db.EmergencyAlerts
+                    .FirstOrDefaultAsync(a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted, ct);
+                if (existingAlert == null)
+                {
+                    var alert = new EmergencyAlert
+                    {
+                        Id = Guid.NewGuid(),
+                        AnomalyId = anomaly.Id,
+                        Status = "Active",
+                        Priority = "Emergency",
+                        TriggeredAt = now,
+                        ReceivedAt = now,
+                        Notes = $"Auto-generated on anomaly review: {request.ReviewNotes ?? anomaly.AnalystNotes}",
+                        CreatedAt = now
+                    };
+                    _db.EmergencyAlerts.Add(alert);
+                    emergencyAlertId = alert.Id.ToString();
+                }
+                else
+                {
+                    emergencyAlertId = existingAlert.Id.ToString();
+                }
+            }
+
+            // 2. Tự động sinh phiếu bảo dưỡng (MaintenanceTicket) nếu chưa tồn tại (TechnicianId = null để Manager gán ở MF04)
             var existingTicket = await _db.MaintenanceTickets
                 .SingleOrDefaultAsync(t => t.AnomalyId == anomaly.Id && !t.IsDeleted, ct);
 
             if (existingTicket == null)
             {
-                var priority = TicketPriority.High;
-                if (string.Equals(request.OverrideSeverity, "Critical Risk", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(request.OverrideSeverity, "Urgent", StringComparison.OrdinalIgnoreCase) ||
-                    (anomaly.Category != null && anomaly.Category.IsEmergencyClass) ||
-                    (anomaly.Category != null && anomaly.Category.SeverityWeight >= 4))
-                {
-                    priority = TicketPriority.Emergency;
-                }
-                else if (string.Equals(request.OverrideSeverity, "Low", StringComparison.OrdinalIgnoreCase))
-                {
-                    priority = TicketPriority.Low;
-                }
-
-                var techAssignment = await _db.MissionAssignments
-                    .FirstOrDefaultAsync(a => a.MissionId == missionId && a.AssignmentRole.ToUpper() == "TECHNICIAN" && a.Status == MissionAssignmentStatus.Active, ct);
+                var priority = isEmergency
+                    ? TicketPriority.Emergency
+                    : (string.Equals(request.OverrideSeverity, "Low", StringComparison.OrdinalIgnoreCase)
+                        ? TicketPriority.Low
+                        : TicketPriority.High);
 
                 var ticket = new MaintenanceTicket
                 {
                     Id = Guid.NewGuid(),
-                    TicketCode = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
+                    TicketCode = $"TKT-{now:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
                     AnomalyId = anomaly.Id,
                     ManagerId = mission.ManagerId,
-                    TechnicianId = techAssignment?.UserId,
+                    TechnicianId = null,
+                    AssignedAt = null,
                     Status = TicketStatus.Open,
                     Priority = priority,
-                    Description = $"[Khuyến nghị từ Giám định AI] {anomaly.Category?.CategoryName ?? "Khuyết tật đường dây"}. {request.ReviewNotes ?? anomaly.AnalystNotes}",
-                    AssignedAt = techAssignment != null ? DateTime.UtcNow : null,
-                    DueDate = DateTime.UtcNow.AddDays(priority == TicketPriority.Emergency ? 1 : 7)
+                    Description = $"[AI Review] {anomaly.Category?.CategoryName ?? "Khuyết tật đường dây"}: {request.ReviewNotes ?? anomaly.AnalystNotes}",
+                    DueDate = now.AddDays(isEmergency ? 1 : 7),
+                    CreatedAt = now
                 };
 
                 _db.MaintenanceTickets.Add(ticket);
@@ -1383,6 +1457,27 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             else
             {
                 createdTaskId = existingTicket.Id.ToString();
+            }
+        }
+        else
+        {
+            anomaly.Reject(_current.UserId, request.ReviewNotes, request.AnalystFeedbackJson);
+
+            // Tự động Dismiss các EmergencyAlert đang Active của bất thường bị từ chối (false positive)
+            var activeAlerts = await _db.EmergencyAlerts
+                .Where(a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted)
+                .ToListAsync(ct);
+            var now = DateTime.UtcNow;
+            foreach (var activeAlert in activeAlerts)
+            {
+                activeAlert.Status = "Dismissed";
+                activeAlert.ResolvedAt = now;
+                activeAlert.ReviewedById = _current.UserId;
+                if (!string.IsNullOrWhiteSpace(request.ReviewNotes))
+                {
+                    activeAlert.Notes = request.ReviewNotes;
+                }
+                activeAlert.UpdatedAt = now;
             }
         }
 
@@ -1424,9 +1519,12 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         {
             DetectionId = anomaly.Id.ToString(),
             MissionId = missionId.ToString(),
-            Status = isApproved ? "Approved" : "Rejected",
+            Status = isApproved
+                ? (string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase) ? "Approved" : "Confirmed")
+                : "Rejected",
             ReviewNotes = anomaly.AnalystNotes,
             MaintenanceTaskId = createdTaskId,
+            EmergencyAlertId = emergencyAlertId,
             NewAssetHealthScore = newHealthScore,
             ReviewedAt = anomaly.ValidatedAt ?? DateTime.UtcNow
         };
@@ -1460,10 +1558,12 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
 
         var tickets = await _db.MaintenanceTickets
+            .Include(t => t.Technician)
             .Include(t => t.Anomaly)
                 .ThenInclude(a => a!.Category)
             .Include(t => t.Anomaly!)
-                .ThenInclude(a => a.Tower)
+                .ThenInclude(a => a.Tower!)
+                    .ThenInclude(tw => tw.Region)
             .Where(t => anomalyIds.Contains(t.AnomalyId) && !t.IsDeleted)
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync(ct);
@@ -1488,21 +1588,27 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 _ => "Pending"
             };
 
-            var catName = t.Anomaly?.Category?.CategoryName ?? "Khuyết tật thiết bị";
-            var towerCode = t.Anomaly?.Tower?.TowerCode ?? "Cột chưa xác định";
+            var catName = t.Anomaly?.Category?.CategoryName ?? string.Empty;
+            var towerCode = t.Anomaly?.Tower?.TowerCode ?? string.Empty;
+            var assignedTeam = t.Technician != null
+                ? (!string.IsNullOrWhiteSpace(t.Technician.FullName) ? t.Technician.FullName : t.Technician.Email)
+                : (t.Anomaly?.Tower?.Region?.Name ?? string.Empty);
+            var suggestedAction = !string.IsNullOrWhiteSpace(t.Anomaly?.Category?.Description)
+                ? t.Anomaly.Category.Description
+                : t.Description;
 
             results.Add(new MissionMaintenanceTaskDto
             {
                 Id = t.Id.ToString(),
                 MissionId = missionId.ToString(),
                 DetectionId = t.AnomalyId.ToString(),
-                Title = $"Khắc phục & sửa chữa {catName}",
+                Title = !string.IsNullOrWhiteSpace(catName) ? catName : t.TicketCode,
                 Priority = priorityStr,
                 TowerCode = towerCode,
                 DefectDescription = t.Description,
-                SuggestedAction = $"Cắt điện xuất tuyến, chuẩn bị vật tư và nhân lực chuyên dụng để xử lý {catName} theo quy trình kỹ thuật an toàn.",
+                SuggestedAction = suggestedAction,
                 Status = statusStr,
-                AssignedTeam = "Đội Truyền tải Điện Hà Nội 1",
+                AssignedTeam = assignedTeam,
                 CreatedAt = t.CreatedAt
             });
         }
@@ -1703,7 +1809,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         };
     }
 
-    public async Task<DroneHandover> ReturnDroneHandoverAsync(Guid missionId, Guid droneId, string condition, CancellationToken ct)
+    public Task<DroneHandover> ReturnDroneHandoverAsync(Guid missionId, Guid droneId, string condition, CancellationToken ct)
+        => ReturnDroneHandoverAsync(missionId, droneId, condition, null, ct);
+
+    public async Task<DroneHandover> ReturnDroneHandoverAsync(Guid missionId, Guid droneId, string condition, string? returnChecklistJson, CancellationToken ct)
     {
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
@@ -1716,6 +1825,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             throw new NotFoundException("Active drone handover not found for this mission.");
 
         handover.ReturnedAt = DateTime.UtcNow;
+        if (!string.IsNullOrWhiteSpace(returnChecklistJson))
+        {
+            handover.ReturnChecklist = returnChecklistJson;
+        }
         if (!string.IsNullOrWhiteSpace(condition))
         {
             handover.Condition = string.IsNullOrWhiteSpace(handover.Condition)

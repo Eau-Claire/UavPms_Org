@@ -39,9 +39,11 @@ public class MissionDetectionDto
 }
 
 public record ReviewDetectionRequest(
-    string Status, // "Approved" | "Rejected"
+    string Status, // "Approved" | "Confirmed" | "Rejected"
     string? ReviewNotes = null,
-    string? OverrideSeverity = null);
+    string? OverrideSeverity = null,
+    string? AnalystFeedbackJson = null,
+    Guid? TowerId = null);
 
 public class ReviewDetectionResultDto
 {
@@ -50,6 +52,7 @@ public class ReviewDetectionResultDto
     public string Status { get; set; } = string.Empty;
     public string? ReviewNotes { get; set; }
     public string? MaintenanceTaskId { get; set; }
+    public string? EmergencyAlertId { get; set; }
     public double? NewAssetHealthScore { get; set; }
     public DateTime ReviewedAt { get; set; }
 }
@@ -225,7 +228,8 @@ public record SubmitIncidentReportRequest(
 
 public record ReturnDroneHandoverRequest(
     Guid DroneId,
-    string Condition);
+    string Condition,
+    object? ReturnChecklist = null);
 
 public record MissionCheckInRequest(
     double? Latitude = null,
