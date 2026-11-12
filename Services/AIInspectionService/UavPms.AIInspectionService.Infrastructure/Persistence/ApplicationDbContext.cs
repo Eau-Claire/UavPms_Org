@@ -17,6 +17,8 @@ public class ApplicationDbContext : DbContext
     private readonly ICurrentUserServices? _currentUserServices;
     public DbSet<AIAnalysisRun> AIAnalysisRuns => Set<AIAnalysisRun>();
     public DbSet<DetectedAnomaly> DetectedAnomalies => Set<DetectedAnomaly>();
+    public DbSet<EmergencyAlert> EmergencyAlerts => Set<EmergencyAlert>();
+    public DbSet<MaintenanceTicket> MaintenanceTickets => Set<MaintenanceTicket>();
     public DbSet<DefectCategory> DefectCategories => Set<DefectCategory>();
     public DbSet<InspectionMedia> InspectionMedia => Set<InspectionMedia>();
     public DbSet<Tower> Towers => Set<Tower>();

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -8,10 +10,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ProcessCallbackResults;
+using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.UploadStandaloneAnalysis;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using UavPms.AIInspectionService.Application.Features.VisionBridge.Commands;
 using UavPms.AIInspectionService.Application.Features.VisionBridge.DTOs;
 using UavPms.AIInspectionService.Application.Interfaces;
+using UavPms.AIInspectionService.Domain.Contracts;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
@@ -292,6 +296,186 @@ public class AiInspectionPipelineTests
         cloudAnomaly.SupersededById.Should().BeNull();
     }
 
+    [Fact]
+    public async Task EmergencyDefectDetection_ShouldAutoCreateActiveEmergencyAlert_InCloudAndEdgeFlows()
+    {
+        await using var context = CreateContext();
+        var uavId = Guid.NewGuid();
+        var missionId = Guid.NewGuid();
+        var mediaId = Guid.NewGuid();
+        var runId = Guid.NewGuid();
+
+        context.Uavs.Add(new Uav { Id = uavId, UavCode = "UAV-EMG-01", FlightStatus = "Flying" });
+        context.Missions.Add(new Mission
+        {
+            Id = missionId,
+            MissionCode = "MIS-EMG-001",
+            Title = "Emergency defect inspection",
+            Status = "Executing",
+            ManagerId = Guid.NewGuid(),
+            UavId = uavId
+        });
+        context.InspectionMedia.Add(new InspectionMedia
+        {
+            Id = mediaId,
+            MissionId = missionId,
+            MediaType = "Image",
+            FileUrl = "https://storage.local/missions/mis-emg-001/image.jpg",
+            CapturedAt = DateTime.UtcNow
+        });
+        context.DefectCategories.Add(new DefectCategory
+        {
+            Id = 3001,
+            CategoryCode = "WF",
+            CategoryName = "Wildfire / Flashover",
+            Description = "Fire or flashover near transmission line",
+            SeverityWeight = 5.0,
+            IsEmergencyClass = true
+        });
+        context.AIAnalysisRuns.Add(new AIAnalysisRun
+        {
+            Id = runId,
+            RequestedBy = Guid.NewGuid(),
+            MediaId = mediaId,
+            ExecutionLocation = AIAnalysisRun.Cloud,
+            AnalysisType = AnalysisType.DefectDetection,
+            Status = AIAnalysisStatus.Processing,
+            StartedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+
+        var callbackResult = await CreateCallbackHandler(context).Handle(new ProcessAiAnalysisResultCommand
+        {
+            RequestId = runId,
+            MediaId = mediaId,
+            MissionId = missionId,
+            Status = "Completed",
+            ModelName = "RF-DETR",
+            Detections = new List<DetectionDto>
+            {
+                new()
+                {
+                    Id = "emg-det-1",
+                    CategoryCode = "WF",
+                    ClassName = "Wildfire / Flashover",
+                    Confidence = 0.96,
+                    BoundingBox = new BoundingBoxDto { X = 0.2, Y = 0.2, Width = 0.3, Height = 0.3 }
+                }
+            },
+            CompletedAt = DateTime.UtcNow
+        }, CancellationToken.None);
+
+        callbackResult.SavedDetections.Should().Be(1);
+        callbackResult.CreatedAlerts.Should().Be(1);
+
+        var cloudAnomaly = await context.DetectedAnomalies.SingleAsync(a => a.AnalysisRunId == runId);
+        var cloudAlert = await context.EmergencyAlerts.SingleAsync(a => a.AnomalyId == cloudAnomaly.Id);
+        cloudAlert.Status.Should().Be("Active");
+        cloudAlert.Priority.Should().Be("Critical");
+
+        // Edge emergency detection should also auto-create an active EmergencyAlert
+        var edgeHandler = new ReceiveVisionDetectionCommandHandler(
+            new GenericRepository<Uav>(context),
+            new GenericRepository<Mission>(context),
+            new GenericRepository<InspectionMedia>(context),
+            new GenericRepository<DetectedAnomaly>(context),
+            new GenericRepository<AIAnalysisRun>(context),
+            new GenericRepository<MissionAssignment>(context),
+            new GenericRepository<DefectCategory>(context),
+            new UserRepository(context),
+            new NotificationRepository(context),
+            Mock.Of<IEventPublisher>(),
+            new UnitOfWork(context),
+            Mock.Of<IFileStorageService>(),
+            Mock.Of<ILogger<ReceiveVisionDetectionCommandHandler>>(),
+            new GenericRepository<EmergencyAlert>(context));
+
+        var edgeResult = await edgeHandler.Handle(new ReceiveVisionDetectionCommand
+        {
+            Detection = new VisionDetectionDto
+            {
+                DroneId = "UAV-EMG-01",
+                ClassName = "WF",
+                Confidence = 0.91,
+                Timestamp = DateTime.UtcNow,
+                Latitude = 21.0285,
+                Longitude = 105.8542,
+                TrackId = 99,
+                BoundingBox = new[] { 10, 20, 110, 220 }
+            }
+        }, CancellationToken.None);
+
+        edgeResult.Success.Should().BeTrue();
+        var edgeAlert = await context.EmergencyAlerts.SingleAsync(a => a.AnomalyId == edgeResult.RecordId);
+        edgeAlert.Status.Should().Be("Active");
+        edgeAlert.Priority.Should().Be("Critical");
+    }
+
+    [Fact]
+    public async Task UploadStandaloneAnalysis_ShouldSaveToMinioAndQueueOutboxJob_WithoutMockDetections()
+    {
+        await using var context = CreateContext();
+        var userId = Guid.NewGuid();
+        var currentUser = new Mock<ICurrentUserServices>();
+        currentUser.Setup(u => u.UserId).Returns(userId);
+
+        var fileStorage = new Mock<IFileStorageService>();
+        fileStorage
+            .Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), It.IsAny<string>()))
+            .ReturnsAsync((Stream _, string fileName) => $"https://minio.local/uavpms-ai/images/2026/11/12/{fileName}");
+
+        var handler = new UploadStandaloneAnalysisCommandHandler(
+            new GenericRepository<Mission>(context),
+            new GenericRepository<Tower>(context),
+            new GenericRepository<InspectionMedia>(context),
+            new GenericRepository<AIAnalysisRun>(context),
+            fileStorage.Object,
+            Mock.Of<IEventPublisher>(),
+            currentUser.Object,
+            new UnitOfWork(context),
+            Mock.Of<ILogger<UploadStandaloneAnalysisCommandHandler>>(),
+            new GenericRepository<OutboxMessage>(context));
+
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("real-image-binary-payload"));
+        var result = await handler.Handle(new UploadStandaloneAnalysisCommand
+        {
+            Files = new[]
+            {
+                new UploadedFileInput
+                {
+                    Stream = stream,
+                    FileName = "insulator_tower_01.jpg",
+                    ContentType = "image/jpeg",
+                    Length = stream.Length
+                }
+            },
+            AnalysisType = "DefectDetection",
+            PreferredModel = "RF-DETR",
+            Notes = "Upload thật lên MinIO"
+        }, CancellationToken.None);
+
+        result.Status.Should().Be(AIAnalysisStatus.Pending.ToString());
+        result.FilesCount.Should().Be(1);
+        result.Detections.Should().BeEmpty();
+        result.Runs.Should().ContainSingle();
+        result.Runs[0].FileUrl.Should().Be("https://minio.local/uavpms-ai/images/2026/11/12/insulator_tower_01.jpg");
+
+        fileStorage.Verify(s => s.SaveImageAsync(It.IsAny<Stream>(), "insulator_tower_01.jpg"), Times.Once);
+
+        var savedMedia = await context.InspectionMedia.SingleAsync();
+        savedMedia.FileUrl.Should().Be("https://minio.local/uavpms-ai/images/2026/11/12/insulator_tower_01.jpg");
+        savedMedia.Checksum.Should().NotBeNullOrWhiteSpace();
+
+        var savedRun = await context.AIAnalysisRuns.SingleAsync();
+        savedRun.MediaId.Should().Be(savedMedia.Id);
+        savedRun.Status.Should().Be(AIAnalysisStatus.Pending);
+        savedRun.ModelName.Should().Be("RF-DETR");
+
+        var outboxMsg = await context.OutboxMessages.SingleAsync();
+        outboxMsg.MessageType.Should().Be(nameof(AIAnalysisRequestedEvent));
+        outboxMsg.Payload.Should().Contain(savedRun.Id.ToString());
+    }
+
     private static ProcessAiAnalysisResultCommandHandler CreateCallbackHandler(ApplicationDbContext context)
         => new(
             new GenericRepository<AIAnalysisRun>(context),
@@ -311,7 +495,8 @@ public class AiInspectionPipelineTests
             new GenericRepository<OutboxMessage>(context),
             Mock.Of<ILogger<ProcessAiAnalysisResultCommandHandler>>(),
             new UavPms.AIInspectionService.Infrastructure.Services.SystemSettingService(
-                context, Mock.Of<ILogger<UavPms.AIInspectionService.Infrastructure.Services.SystemSettingService>>()));
+                context, Mock.Of<ILogger<UavPms.AIInspectionService.Infrastructure.Services.SystemSettingService>>()),
+            new GenericRepository<EmergencyAlert>(context));
 
     private static ApplicationDbContext CreateContext()
     {
@@ -320,5 +505,96 @@ public class AiInspectionPipelineTests
             .Options;
         var currentUser = new Mock<ICurrentUserServices>();
         return new ApplicationDbContext(options, currentUser.Object);
+    }
+
+    [Fact]
+    public async Task ReceiveVisionDetection_ShouldMatchInProgressMission_MapAiLabel_AndQueueOutbox()
+    {
+        await using var context = CreateContext();
+        var uavId = Guid.NewGuid();
+        var missionId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+
+        context.Uavs.Add(new Uav { Id = uavId, UavCode = "UAV-INPROG-01" });
+        context.Missions.Add(new Mission
+        {
+            Id = missionId,
+            MissionCode = "MSN-INPROG-01",
+            Title = "InProgress Mission",
+            Status = "InProgress",
+            UavId = uavId,
+            ManagerId = managerId
+        });
+        context.DefectCategories.Add(new DefectCategory
+        {
+            Id = 3001,
+            CategoryCode = "BROKEN_INSULATOR",
+            CategoryName = "Broken Insulator",
+            IsEmergencyClass = true
+        });
+        await context.SaveChangesAsync();
+
+        var settingServiceMock = new Mock<UavPms.Shared.Contracts.Interfaces.ISystemSettingService>();
+        settingServiceMock
+            .Setup(s => s.GetByKeyAsync("AiLabel:insulator_crack", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UavPms.Shared.Contracts.Settings.SystemSettingDto(
+                Guid.NewGuid(),
+                "AiLabel:insulator_crack",
+                "BROKEN_INSULATOR",
+                "String",
+                "AI",
+                null,
+                null));
+
+        var evalMock = new Mock<IInspectionEvaluationClient>();
+        evalMock
+            .Setup(e => e.EvaluateAsync(It.IsAny<DetectionEvaluationRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DetectionEvaluationResult("Critical", "High", 95, true, "Severe crack"));
+
+        var outboxRepo = new GenericRepository<OutboxMessage>(context);
+
+        var handler = new ReceiveVisionDetectionCommandHandler(
+            new GenericRepository<Uav>(context),
+            new GenericRepository<Mission>(context),
+            new GenericRepository<InspectionMedia>(context),
+            new GenericRepository<DetectedAnomaly>(context),
+            new GenericRepository<AIAnalysisRun>(context),
+            new GenericRepository<MissionAssignment>(context),
+            new GenericRepository<DefectCategory>(context),
+            new UserRepository(context),
+            new NotificationRepository(context),
+            Mock.Of<IEventPublisher>(),
+            new UnitOfWork(context),
+            Mock.Of<IFileStorageService>(),
+            Mock.Of<ILogger<ReceiveVisionDetectionCommandHandler>>(),
+            new GenericRepository<EmergencyAlert>(context),
+            settingServiceMock.Object,
+            evalMock.Object,
+            outboxRepo);
+
+        var result = await handler.Handle(new ReceiveVisionDetectionCommand
+        {
+            Detection = new VisionDetectionDto
+            {
+                DroneId = "UAV-INPROG-01",
+                ClassName = "insulator_crack",
+                Confidence = 0.91,
+                Timestamp = DateTime.UtcNow,
+                Latitude = 21.0285,
+                Longitude = 105.8542,
+                TrackId = 42
+            }
+        }, CancellationToken.None);
+
+        result.Success.Should().BeTrue();
+        var anomaly = await context.DetectedAnomalies.SingleAsync();
+        anomaly.CategoryId.Should().Be(3001);
+        anomaly.AnalystNotes.Should().Contain("Severe crack");
+
+        var alert = await context.EmergencyAlerts.SingleAsync();
+        alert.Status.Should().Be("Active");
+
+        var outbox = await context.OutboxMessages.ToListAsync();
+        outbox.Should().Contain(m => m.MessageType == nameof(AiDetectionCompletedEvent));
     }
 }

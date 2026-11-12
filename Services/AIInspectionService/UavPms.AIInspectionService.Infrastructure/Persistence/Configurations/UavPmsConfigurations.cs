@@ -81,6 +81,7 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
         builder.ToTable("Missions");
         builder.HasKey(e => e.Id);
         builder.HasIndex(e => e.MissionCode).IsUnique();
+        builder.Property(e => e.MissionType).HasMaxLength(20);
 
         builder.HasOne(e => e.Uav)
             .WithMany(u => u.Missions)
@@ -131,6 +132,7 @@ public class InspectionMediaConfiguration : IEntityTypeConfiguration<InspectionM
         builder.HasOne(e => e.Mission)
             .WithMany(m => m.InspectionMedias)
             .HasForeignKey(e => e.MissionId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(e => e.Tower)
@@ -163,6 +165,7 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
         builder.ToTable("DetectedAnomalies");
         builder.HasKey(e => e.Id);
         builder.Property(e => e.BoundingBox).HasColumnType("jsonb");
+        builder.Property(e => e.AnalystFeedback).HasColumnType("jsonb");
         builder.Property(e => e.AiDetectionId).HasMaxLength(128);
         builder.Property(e => e.ImageUrl).HasMaxLength(2048);
         builder.Property(e => e.CropUrl).HasMaxLength(2048);
@@ -200,6 +203,61 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
         builder.HasOne(e => e.Analyst)
             .WithMany()
             .HasForeignKey(e => e.AnalystId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class EmergencyAlertConfiguration : IEntityTypeConfiguration<EmergencyAlert>
+{
+    public void Configure(EntityTypeBuilder<EmergencyAlert> builder)
+    {
+        builder.ToTable("EmergencyAlerts");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Status).HasMaxLength(20);
+        builder.HasIndex(e => e.AnomalyId, "IX_EmergencyAlerts_AnomalyId");
+        builder.HasIndex(e => e.AnomalyId, "UX_EmergencyAlerts_ActivePerAnomaly")
+            .IsUnique()
+            .HasFilter("\"Status\" = 'Active' AND NOT \"IsDeleted\" AND \"AnomalyId\" IS NOT NULL");
+
+        builder.HasOne(e => e.Anomaly)
+            .WithMany(a => a.EmergencyAlerts)
+            .HasForeignKey(e => e.AnomalyId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.ReviewedBy)
+            .WithMany()
+            .HasForeignKey(e => e.ReviewedById)
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public class MaintenanceTicketConfiguration : IEntityTypeConfiguration<MaintenanceTicket>
+{
+    public void Configure(EntityTypeBuilder<MaintenanceTicket> builder)
+    {
+        builder.ToTable("MaintenanceTickets");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.TicketCode).HasMaxLength(50);
+        builder.Property(e => e.Status).HasMaxLength(30);
+        builder.Property(e => e.Priority).HasMaxLength(20);
+        builder.HasIndex(e => e.TicketCode).IsUnique();
+        builder.HasIndex(e => new { e.TechnicianId, e.Status });
+
+        builder.HasOne(e => e.Anomaly)
+            .WithMany(a => a.MaintenanceTickets)
+            .HasForeignKey(e => e.AnomalyId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Manager)
+            .WithMany()
+            .HasForeignKey(e => e.ManagerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Technician)
+            .WithMany()
+            .HasForeignKey(e => e.TechnicianId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

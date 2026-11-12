@@ -62,6 +62,9 @@ public class MissionAiDetectionDto
     public string AiSource { get; set; } = string.Empty;
     public Guid? AnalystId { get; set; }
     public string AnalystNotes { get; set; } = string.Empty;
+    public string? AnalystFeedback { get; set; }
+    public string? MaintenanceTaskId { get; set; }
+    public string? EmergencyAlertId { get; set; }
     public MissionAiBoundingBoxDto? BoundingBox { get; set; }
     public string RawBoundingBox { get; set; } = string.Empty;
     public DateTime? ValidatedAt { get; set; }

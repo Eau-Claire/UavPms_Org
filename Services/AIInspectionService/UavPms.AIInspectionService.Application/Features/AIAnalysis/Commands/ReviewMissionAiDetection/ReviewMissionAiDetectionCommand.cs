@@ -10,10 +10,16 @@ public class ReviewMissionAiDetectionCommand : IRequest<MissionAiDetectionDto>
     public Guid DetectionId { get; set; }
     public string Decision { get; set; } = string.Empty;
     public string? Notes { get; set; }
+    public string? AnalystFeedbackJson { get; set; }
+    public string? OverrideSeverity { get; set; }
+    public Guid? TowerId { get; set; }
 }
 
 public class ReviewMissionAiDetectionRequest
 {
     public string Decision { get; set; } = string.Empty;
     public string? Notes { get; set; }
+    public string? AnalystFeedbackJson { get; set; }
+    public string? OverrideSeverity { get; set; }
+    public Guid? TowerId { get; set; }
 }

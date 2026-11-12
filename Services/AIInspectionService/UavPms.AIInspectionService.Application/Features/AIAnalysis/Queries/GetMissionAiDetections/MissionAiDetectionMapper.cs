@@ -39,6 +39,7 @@ public static class MissionAiDetectionMapper
             AiSource = anomaly.GetAiSource(),
             AnalystId = anomaly.AnalystId,
             AnalystNotes = anomaly.AnalystNotes,
+            AnalystFeedback = anomaly.AnalystFeedback,
             BoundingBox = TryParseBoundingBox(anomaly.BoundingBox),
             RawBoundingBox = anomaly.BoundingBox,
             ValidatedAt = anomaly.ValidatedAt,

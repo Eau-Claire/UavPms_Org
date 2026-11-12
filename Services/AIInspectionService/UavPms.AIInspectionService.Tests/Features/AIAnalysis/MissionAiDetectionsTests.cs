@@ -220,4 +220,124 @@ public class MissionAiDetectionsTests
         anomaly.ValidationStatus.Should().Be("Pending");
         unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task ReviewMissionAiDetection_ConfirmEmergency_CreatesEmergencyAlertAndUnassignedTicket_AndRejectDismissesActiveAlert()
+    {
+        var missionId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var analystId = Guid.NewGuid();
+        var towerId = Guid.NewGuid();
+        var mediaId = Guid.NewGuid();
+
+        var anomalyToConfirm = new DetectedAnomaly
+        {
+            Id = Guid.NewGuid(),
+            MediaId = mediaId,
+            Media = new InspectionMedia { Id = mediaId, MissionId = missionId, TowerId = towerId },
+            ValidationStatus = DetectedAnomaly.StatusInReview,
+            Category = new DefectCategory { Id = 1, CategoryCode = "WF", CategoryName = "Wildfire", IsEmergencyClass = true, SeverityWeight = 5 }
+        };
+
+        var anomalyRepoMock = new Mock<IAnomalyRepository>();
+        anomalyRepoMock.Setup(r => r.GetByIdWithDetailAsync(anomalyToConfirm.Id)).ReturnsAsync(anomalyToConfirm);
+        anomalyRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DetectedAnomaly>())).Returns(Task.CompletedTask);
+
+        var alerts = new List<EmergencyAlert>();
+        var alertRepoMock = new Mock<IGenericRepository<EmergencyAlert>>();
+        alertRepoMock
+            .Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<EmergencyAlert, bool>>>(), It.IsAny<bool>()))
+            .ReturnsAsync((System.Linq.Expressions.Expression<Func<EmergencyAlert, bool>> pred, bool _) =>
+                alerts.FindAll(new Predicate<EmergencyAlert>(pred.Compile())));
+        alertRepoMock
+            .Setup(r => r.AddAsync(It.IsAny<EmergencyAlert>()))
+            .Callback<EmergencyAlert>(a => alerts.Add(a))
+            .ReturnsAsync((EmergencyAlert a) => a);
+        alertRepoMock
+            .Setup(r => r.UpdateAsync(It.IsAny<EmergencyAlert>()))
+            .Returns(Task.CompletedTask);
+
+        var tickets = new List<MaintenanceTicket>();
+        var ticketRepoMock = new Mock<IGenericRepository<MaintenanceTicket>>();
+        ticketRepoMock
+            .Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<MaintenanceTicket, bool>>>(), It.IsAny<bool>()))
+            .ReturnsAsync((System.Linq.Expressions.Expression<Func<MaintenanceTicket, bool>> pred, bool _) =>
+                tickets.FindAll(new Predicate<MaintenanceTicket>(pred.Compile())));
+        ticketRepoMock
+            .Setup(r => r.AddAsync(It.IsAny<MaintenanceTicket>()))
+            .Callback<MaintenanceTicket>(t => tickets.Add(t))
+            .ReturnsAsync((MaintenanceTicket t) => t);
+
+        var missionRepoMock = new Mock<IGenericRepository<Mission>>();
+        missionRepoMock
+            .Setup(r => r.GetByIdAsync(missionId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Mission { Id = missionId, ManagerId = managerId });
+
+        var currentUserMock = new Mock<ICurrentUserServices>();
+        currentUserMock.Setup(c => c.UserId).Returns(analystId);
+
+        var handler = new ReviewMissionAiDetectionCommandHandler(
+            anomalyRepoMock.Object,
+            Mock.Of<IUnitOfWork>(),
+            currentUserMock.Object,
+            null!,
+            null!,
+            alertRepoMock.Object,
+            ticketRepoMock.Object,
+            missionRepoMock.Object);
+
+        var confirmResult = await handler.Handle(new ReviewMissionAiDetectionCommand
+        {
+            MissionId = missionId,
+            DetectionId = anomalyToConfirm.Id,
+            Decision = "Confirmed",
+            Notes = "Confirmed flashover danger",
+            AnalystFeedbackJson = "{\"rootCause\":\"Flashover\"}",
+            OverrideSeverity = "Critical"
+        }, CancellationToken.None);
+
+        confirmResult.ValidationStatus.Should().Be("Confirmed");
+        confirmResult.TowerId.Should().Be(towerId);
+        confirmResult.AnalystFeedback.Should().Be("{\"rootCause\":\"Flashover\"}");
+        confirmResult.EmergencyAlertId.Should().NotBeNullOrEmpty();
+        confirmResult.MaintenanceTaskId.Should().NotBeNullOrEmpty();
+
+        alerts.Should().ContainSingle(a => a.AnomalyId == anomalyToConfirm.Id && a.Status == "Active" && a.Priority == "Emergency");
+        tickets.Should().ContainSingle(t =>
+            t.AnomalyId == anomalyToConfirm.Id &&
+            t.ManagerId == managerId &&
+            t.TechnicianId == null &&
+            t.Status == MaintenanceTicket.StatusOpen &&
+            t.Priority == MaintenanceTicket.PriorityEmergency);
+
+        // Now test rejecting a false-positive anomaly that had an auto-generated Active EmergencyAlert
+        var anomalyToReject = new DetectedAnomaly
+        {
+            Id = Guid.NewGuid(),
+            MediaId = mediaId,
+            Media = new InspectionMedia { Id = mediaId, MissionId = missionId, TowerId = towerId },
+            ValidationStatus = DetectedAnomaly.StatusInReview
+        };
+        var activeAlert = new EmergencyAlert
+        {
+            Id = Guid.NewGuid(),
+            AnomalyId = anomalyToReject.Id,
+            Status = "Active",
+            Priority = "Critical"
+        };
+        alerts.Add(activeAlert);
+        anomalyRepoMock.Setup(r => r.GetByIdWithDetailAsync(anomalyToReject.Id)).ReturnsAsync(anomalyToReject);
+
+        await handler.Handle(new ReviewMissionAiDetectionCommand
+        {
+            MissionId = missionId,
+            DetectionId = anomalyToReject.Id,
+            Decision = "Rejected",
+            Notes = "False positive glare"
+        }, CancellationToken.None);
+
+        activeAlert.Status.Should().Be("Dismissed");
+        activeAlert.ReviewedById.Should().Be(analystId);
+        activeAlert.ResolvedAt.Should().NotBeNull();
+    }
 }

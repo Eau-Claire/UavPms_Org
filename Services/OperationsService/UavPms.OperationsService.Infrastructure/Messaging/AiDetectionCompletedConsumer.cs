@@ -18,12 +18,10 @@ namespace UavPms.OperationsService.Infrastructure.Messaging;
 
 public class AiDetectionCompletedConsumer : BackgroundService
 {
+    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
     private readonly ILogger<AiDetectionCompletedConsumer> _logger;
     private readonly RabbitMqConnection _rabbitMqConnection;
     private readonly IServiceScopeFactory _scopeFactory;
-
-    private IConnection? _connection;
-    private IChannel? _channel;
 
     public AiDetectionCompletedConsumer(
         ILogger<AiDetectionCompletedConsumer> logger,
@@ -39,172 +37,206 @@ public class AiDetectionCompletedConsumer : BackgroundService
     {
         _logger.LogInformation("AiDetectionCompletedConsumer is starting...");
 
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
-            _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
+            try
+            {
+                await using var connection = await _rabbitMqConnection.CreateConnectionAsync(stoppingToken);
+                await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-            await _channel.ExchangeDeclareAsync(
-                exchange: EventTopologyConstants.Exchange,
-                type: ExchangeType.Topic,
-                durable: true,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
+                await channel.ExchangeDeclareAsync(
+                    exchange: EventTopologyConstants.Exchange,
+                    type: ExchangeType.Topic,
+                    durable: true,
+                    autoDelete: false,
+                    cancellationToken: stoppingToken);
 
-            await _channel.QueueDeclareAsync(
-                queue: EventTopologyConstants.Queues.OperationsDefectRecord,
-                durable: true,
-                exclusive: false,
-                autoDelete: false,
-                cancellationToken: stoppingToken);
+                await channel.QueueDeclareAsync(
+                    queue: EventTopologyConstants.Queues.OperationsDefectRecord,
+                    durable: true,
+                    exclusive: false,
+                    autoDelete: false,
+                    cancellationToken: stoppingToken);
 
-            await _channel.QueueBindAsync(
-                queue: EventTopologyConstants.Queues.OperationsDefectRecord,
-                exchange: EventTopologyConstants.Exchange,
-                routingKey: EventTopologyConstants.RoutingKeys.AiDetectionCompleted,
-                cancellationToken: stoppingToken);
+                await channel.QueueBindAsync(
+                    queue: EventTopologyConstants.Queues.OperationsDefectRecord,
+                    exchange: EventTopologyConstants.Exchange,
+                    routingKey: EventTopologyConstants.RoutingKeys.AiDetectionCompleted,
+                    cancellationToken: stoppingToken);
 
-            await _channel.QueueBindAsync(
-                queue: EventTopologyConstants.Queues.OperationsDefectRecord,
-                exchange: EventTopologyConstants.Exchange,
-                routingKey: EventTopologyConstants.RoutingKeys.LegacyDefectDetected,
-                cancellationToken: stoppingToken);
+                await channel.QueueBindAsync(
+                    queue: EventTopologyConstants.Queues.OperationsDefectRecord,
+                    exchange: EventTopologyConstants.Exchange,
+                    routingKey: EventTopologyConstants.RoutingKeys.LegacyDefectDetected,
+                    cancellationToken: stoppingToken);
 
-            var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.ReceivedAsync += async (_, ea) =>
+                var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                connection.ConnectionShutdownAsync += (_, _) => { disconnected.TrySetResult(); return Task.CompletedTask; };
+                channel.ChannelShutdownAsync += (_, _) => { disconnected.TrySetResult(); return Task.CompletedTask; };
+
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += async (_, ea) =>
+                {
+                    try
+                    {
+                        var body = ea.Body.ToArray();
+                        var json = Encoding.UTF8.GetString(body);
+
+                        using var scope = _scopeFactory.CreateScope();
+                        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                        AiDetectionCompletedEvent? detectionEvent = null;
+                        if (ea.RoutingKey.Equals(EventTopologyConstants.RoutingKeys.LegacyDefectDetected, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var legacy = JsonSerializer.Deserialize<DefectDetectedEvent>(json);
+                            if (legacy != null)
+                            {
+                                detectionEvent = new AiDetectionCompletedEvent
+                                {
+                                    EventId = Guid.NewGuid(),
+                                    InspectionId = legacy.InspectionId,
+                                    MissionId = legacy.MissionId,
+                                    AnomalyId = legacy.RecordId,
+                                    DefectType = legacy.DefectType,
+                                    IsDefect = legacy.IsDefect,
+                                    ImageUrl = legacy.ImageUrl,
+                                    DetectedAt = legacy.DetectedAt
+                                };
+                            }
+                        }
+                        else
+                        {
+                            detectionEvent = JsonSerializer.Deserialize<AiDetectionCompletedEvent>(json);
+                        }
+
+                        if (detectionEvent != null && detectionEvent.IsDefect)
+                        {
+                            await ProcessDefectRecordAsync(db, detectionEvent, stoppingToken);
+                        }
+
+                        await channel.BasicAckAsync(ea.DeliveryTag, false, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error processing AI detection in OperationsService");
+                        await channel.BasicNackAsync(ea.DeliveryTag, false, false, stoppingToken);
+                    }
+                };
+
+                await channel.BasicConsumeAsync(
+                    queue: EventTopologyConstants.Queues.OperationsDefectRecord,
+                    autoAck: false,
+                    consumer: consumer,
+                    cancellationToken: stoppingToken);
+
+                _logger.LogInformation("AiDetectionCompletedConsumer listening on queue '{QueueName}'",
+                    EventTopologyConstants.Queues.OperationsDefectRecord);
+
+                await disconnected.Task.WaitAsync(stoppingToken);
+                _logger.LogWarning("AiDetectionCompletedConsumer RabbitMQ connection lost; reconnecting.");
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("AiDetectionCompletedConsumer is stopping.");
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AiDetectionCompletedConsumer disconnected; retrying in {DelaySeconds}s.", ReconnectDelay.TotalSeconds);
+            }
+
+            if (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var body = ea.Body.ToArray();
-                    var json = Encoding.UTF8.GetString(body);
-
-                    using var scope = _scopeFactory.CreateScope();
-                    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-                    AiDetectionCompletedEvent? detectionEvent = null;
-                    if (ea.RoutingKey.Equals(EventTopologyConstants.RoutingKeys.LegacyDefectDetected, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var legacy = JsonSerializer.Deserialize<DefectDetectedEvent>(json);
-                        if (legacy != null)
-                        {
-                            detectionEvent = new AiDetectionCompletedEvent
-                            {
-                                EventId = Guid.NewGuid(),
-                                InspectionId = legacy.InspectionId,
-                                MissionId = legacy.MissionId,
-                                AnomalyId = legacy.RecordId,
-                                DefectType = legacy.DefectType,
-                                IsDefect = legacy.IsDefect,
-                                ImageUrl = legacy.ImageUrl,
-                                DetectedAt = legacy.DetectedAt
-                            };
-                        }
-                    }
-                    else
-                    {
-                        detectionEvent = JsonSerializer.Deserialize<AiDetectionCompletedEvent>(json);
-                    }
-
-                    if (detectionEvent != null && detectionEvent.IsDefect)
-                    {
-                        await ProcessDefectRecordAsync(db, detectionEvent, stoppingToken);
-                    }
-
-                    await _channel.BasicAckAsync(ea.DeliveryTag, false, stoppingToken);
+                    await Task.Delay(ReconnectDelay, stoppingToken);
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    _logger.LogError(ex, "Error processing AI detection in OperationsService");
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false, stoppingToken);
+                    break;
                 }
-            };
-
-            await _channel.BasicConsumeAsync(
-                queue: EventTopologyConstants.Queues.OperationsDefectRecord,
-                autoAck: false,
-                consumer: consumer,
-                cancellationToken: stoppingToken);
-
-            _logger.LogInformation("AiDetectionCompletedConsumer listening on queue '{QueueName}'",
-                EventTopologyConstants.Queues.OperationsDefectRecord);
-
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("AiDetectionCompletedConsumer is stopping.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AiDetectionCompletedConsumer encountered an error. It will not retry.");
+            }
         }
     }
 
-    private async Task ProcessDefectRecordAsync(ApplicationDbContext db, AiDetectionCompletedEvent detection, CancellationToken ct)
+    public async Task ProcessDefectRecordAsync(ApplicationDbContext db, AiDetectionCompletedEvent detection, CancellationToken ct)
     {
-        // Idempotency check: check if anomaly already recorded
+        // Idempotency check: check if anomaly already recorded (e.g. written directly by AIInspectionService in the shared DB)
         var existingAnomaly = await db.DetectedAnomalies
             .FirstOrDefaultAsync(a => a.Id == detection.AnomalyId ||
                                      (!string.IsNullOrWhiteSpace(a.AiDetectionId) && a.AiDetectionId == detection.AnomalyId.ToString()), ct);
 
+        Guid targetAnomalyId;
+        var hasChanges = false;
+
         if (existingAnomaly != null)
         {
-            _logger.LogInformation("Detected anomaly {AnomalyId} already exists in OperationsService, skipping.", detection.AnomalyId);
-            return;
+            targetAnomalyId = existingAnomaly.Id;
+            _logger.LogInformation("Detected anomaly {AnomalyId} already exists in shared database; checking EmergencyAlert state.", targetAnomalyId);
+        }
+        else
+        {
+            // AIInspectionService đã ghi run + anomaly vào CSDL dùng chung; nhánh này chỉ bù khi bản ghi chưa có.
+            var runExists = detection.RequestId != Guid.Empty
+                && await db.AIAnalysisRuns.AnyAsync(r => r.Id == detection.RequestId && r.MediaId == detection.MediaId, ct);
+            var categoryId = await db.DefectCategories
+                .Where(c => c.CategoryCode == detection.CategoryCode)
+                .Select(c => (int?)c.Id)
+                .FirstOrDefaultAsync(ct)
+                ?? await db.DefectCategories.Select(c => (int?)c.Id).FirstOrDefaultAsync(ct)
+                ?? 1;
+
+            var anomaly = new DetectedAnomaly
+            {
+                Id = detection.AnomalyId != Guid.Empty ? detection.AnomalyId : Guid.NewGuid(),
+                MediaId = detection.MediaId,
+                AnalysisRunId = runExists ? detection.RequestId : null,
+                TowerId = detection.TowerId,
+                CategoryId = categoryId,
+                AiDetectionId = detection.AnomalyId.ToString(),
+                ImageUrl = detection.ImageUrl,
+                CropUrl = detection.CropUrl,
+                ConfidenceScore = detection.Confidence > 0 ? detection.Confidence : 0.9,
+                ValidationStatus = "Pending",
+                AnalystNotes = $"Detected defect: {detection.DefectType} ({detection.Severity})",
+                CreatedAt = detection.DetectedAt != default ? detection.DetectedAt : DateTime.UtcNow
+            };
+
+            db.DetectedAnomalies.Add(anomaly);
+            targetAnomalyId = anomaly.Id;
+            hasChanges = true;
         }
 
-        // AIInspectionService đã ghi run + anomaly vào CSDL dùng chung; nhánh này chỉ bù khi bản ghi chưa có.
-        var runExists = detection.RequestId != Guid.Empty
-            && await db.AIAnalysisRuns.AnyAsync(r => r.Id == detection.RequestId && r.MediaId == detection.MediaId, ct);
-        var categoryId = await db.DefectCategories
-            .Where(c => c.CategoryCode == detection.CategoryCode)
-            .Select(c => (int?)c.Id)
-            .FirstOrDefaultAsync(ct)
-            ?? await db.DefectCategories.Select(c => (int?)c.Id).FirstOrDefaultAsync(ct)
-            ?? 1;
-
-        var anomaly = new DetectedAnomaly
-        {
-            Id = detection.AnomalyId != Guid.Empty ? detection.AnomalyId : Guid.NewGuid(),
-            MediaId = detection.MediaId,
-            AnalysisRunId = runExists ? detection.RequestId : null,
-            TowerId = detection.TowerId,
-            CategoryId = categoryId,
-            AiDetectionId = detection.AnomalyId.ToString(),
-            ImageUrl = detection.ImageUrl,
-            CropUrl = detection.CropUrl,
-            ConfidenceScore = detection.Confidence > 0 ? detection.Confidence : 0.9,
-            ValidationStatus = "Pending",
-            AnalystNotes = $"Detected defect: {detection.DefectType} ({detection.Severity})",
-            CreatedAt = detection.DetectedAt != default ? detection.DetectedAt : DateTime.UtcNow
-        };
-
-        db.DetectedAnomalies.Add(anomaly);
-
-        // If emergency class / critical, create EmergencyAlert
+        // If emergency class / critical, ensure an active EmergencyAlert exists for targetAnomalyId
         if (detection.IsEmergencyClass || string.Equals(detection.Severity, "Critical", StringComparison.OrdinalIgnoreCase))
         {
-            var alert = new EmergencyAlert
+            var activeAlertExists = await db.EmergencyAlerts
+                .AnyAsync(a => a.AnomalyId == targetAnomalyId && a.Status == "Active" && !a.IsDeleted, ct);
+
+            if (!activeAlertExists)
             {
-                Id = Guid.NewGuid(),
-                AnomalyId = anomaly.Id,
-                Status = "Active",
-                Priority = "Emergency",
-                TriggeredAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
-            };
-            db.EmergencyAlerts.Add(alert);
+                var now = DateTime.UtcNow;
+                var alert = new EmergencyAlert
+                {
+                    Id = Guid.NewGuid(),
+                    AnomalyId = targetAnomalyId,
+                    Status = "Active",
+                    Priority = "Critical",
+                    TriggeredAt = detection.DetectedAt != default ? detection.DetectedAt : now,
+                    ReceivedAt = now,
+                    Notes = $"Auto-generated from AI detection: {detection.DefectType} (confidence: {detection.Confidence:P1}, severity: {detection.Severity})",
+                    CreatedAt = now
+                };
+                db.EmergencyAlerts.Add(alert);
+                hasChanges = true;
+                _logger.LogInformation("Created active EmergencyAlert {AlertId} for anomaly {AnomalyId}.", alert.Id, targetAnomalyId);
+            }
         }
 
-
-        await db.SaveChangesAsync(ct);
-        _logger.LogInformation("Recorded defect anomaly {AnomalyId} in OperationsService.", anomaly.Id);
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_channel != null) await _channel.CloseAsync(cancellationToken);
-        if (_connection != null) await _connection.CloseAsync(cancellationToken);
-        await base.StopAsync(cancellationToken);
+        if (hasChanges)
+        {
+            await db.SaveChangesAsync(ct);
+            _logger.LogInformation("Processed AI defect record for anomaly {AnomalyId} in OperationsService.", targetAnomalyId);
+        }
     }
 }

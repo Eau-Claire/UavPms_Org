@@ -9,6 +9,22 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
 {
     public class MonitorRepository : IMonitorRepository
     {
+        private static readonly MissionStatus[] PendingMissionStatuses =
+        [
+            MissionStatus.Draft,             // also MissionStatus.Pending
+            MissionStatus.PendingAcceptance, // also MissionStatus.PendingConfirmation
+            MissionStatus.Assigned,          // also MissionStatus.Confirmed
+            MissionStatus.Preparing,
+            MissionStatus.Ready,
+            MissionStatus.Postponed
+        ];
+
+        private static readonly MissionStatus[] InProgressMissionStatuses =
+        [
+            MissionStatus.InProgress,        // also MissionStatus.Executing
+            MissionStatus.Suspended
+        ];
+
         private readonly ApplicationDbContext _context;
 
         public MonitorRepository(ApplicationDbContext context)
@@ -117,9 +133,9 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync(cancellationToken);
 
-            var pending = missionStats.FirstOrDefault(m => m.Status == MissionStatus.Pending)?.Count ?? 0;
-            var inProgress = missionStats.FirstOrDefault(m => m.Status == MissionStatus.Executing)?.Count ?? 0;
-            var completed = missionStats.FirstOrDefault(m => m.Status == MissionStatus.Completed)?.Count ?? 0;
+            var pending = missionStats.Where(m => PendingMissionStatuses.Contains(m.Status)).Sum(m => m.Count);
+            var inProgress = missionStats.Where(m => InProgressMissionStatuses.Contains(m.Status)).Sum(m => m.Count);
+            var completed = missionStats.Where(m => m.Status == MissionStatus.Completed).Sum(m => m.Count);
 
             return new MissionStatusOverviewModel
             {
@@ -164,9 +180,9 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync(cancellationToken);
 
-            var pendingMissions = missionStats.FirstOrDefault(s => s.Status == MissionStatus.Pending)?.Count ?? 0;
-            var inProgressMissions = missionStats.FirstOrDefault(s => s.Status == MissionStatus.Executing)?.Count ?? 0;
-            var completedMissions = missionStats.FirstOrDefault(s => s.Status == MissionStatus.Completed)?.Count ?? 0;
+            var pendingMissions = missionStats.Where(s => PendingMissionStatuses.Contains(s.Status)).Sum(s => s.Count);
+            var inProgressMissions = missionStats.Where(s => InProgressMissionStatuses.Contains(s.Status)).Sum(s => s.Count);
+            var completedMissions = missionStats.Where(s => s.Status == MissionStatus.Completed).Sum(s => s.Count);
             var totalMissions = missionStats.Sum(s => s.Count);
 
             // 2. Get total inspection media count

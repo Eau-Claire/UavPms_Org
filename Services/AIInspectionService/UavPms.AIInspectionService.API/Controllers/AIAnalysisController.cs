@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.AnalyzeExistingMedia;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
+using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.UploadStandaloneAnalysis;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetAnalysisById;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using UavPms.AIInspectionService.Domain.Enums;
@@ -66,7 +67,10 @@ public class AIAnalysisController : ControllerBase
             MissionId = missionId,
             DetectionId = detectionId,
             Decision = request.Decision,
-            Notes = request.Notes
+            Notes = request.Notes,
+            AnalystFeedbackJson = request.AnalystFeedbackJson,
+            OverrideSeverity = request.OverrideSeverity,
+            TowerId = request.TowerId
         }, cancellationToken);
 
         return Ok(new ApiResponse(true, "AI detection review saved successfully.", result));
@@ -100,96 +104,76 @@ public class AIAnalysisController : ControllerBase
     }
 
     /// <summary>
-    /// Tải lên ảnh/video trực tiếp để phân tích AI độc lập (AI Studio Standalone Upload).
+    /// Tải lên ảnh/video trực tiếp lên MinIO và đưa vào hàng đợi phân tích AI (AI Studio Standalone Upload).
     /// </summary>
     [HttpPost("upload")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     [Consumes("multipart/form-data")]
-    public IActionResult UploadStandaloneAnalysis(
-        List<IFormFile> files,
+    public async Task<IActionResult> UploadStandaloneAnalysis(
+        List<IFormFile>? files,
+        IFormFile? file,
+        [FromForm] Guid? missionId,
+        [FromForm] Guid? towerId,
         [FromForm] string? analysisType,
+        [FromForm] string? preferredModel,
         [FromForm] string? notes,
         CancellationToken cancellationToken = default)
     {
-        var sessionId = Guid.NewGuid();
-        var safeFiles = files ?? new List<IFormFile>();
-        var detections = new List<object>();
-
-        var mockCategories = new[]
+        var formFiles = new List<IFormFile>();
+        if (files != null && files.Count > 0)
         {
-            new { Title = "Bát cách điện nứt vỡ (Broken Insulator)", Code = "DEF-INS-CRACK", Desc = "Phát hiện vết rạn nứt cấu trúc bát sứ chuỗi néo số 2.", Conf = 94.5, Emergency = true, Box = new { x = 32, y = 22, width = 30, height = 35 } },
-            new { Title = "Bung lỏng bu lông xà (Missing Bolt)", Code = "DEF-BOLT-LOOSE", Desc = "Đai ốc thanh giằng góc có dấu hiệu tuột ren hoặc lỏng.", Conf = 88.0, Emergency = false, Box = new { x = 62, y = 48, width = 20, height = 24 } },
-            new { Title = "Bám bẩn bề mặt cách điện (Dirty Insulator)", Code = "DEF-INS-DIRT", Desc = "Màng bụi ô nhiễm bám dính dày đặc trên gờ đĩa cách điện pha giữa.", Conf = 91.2, Emergency = false, Box = new { x = 22, y = 35, width = 26, height = 30 } },
-            new { Title = "Xơ tước dây dẫn (Conductor Strand Damage)", Code = "DEF-COND-STRAND", Desc = "Tổn thương cơ học đứt tơ dây dẫn tại điểm kẹp treo.", Conf = 87.5, Emergency = true, Box = new { x = 45, y = 55, width = 34, height = 22 } }
-        };
-
-        int fIdx = 0;
-        foreach (var file in safeFiles)
+            formFiles.AddRange(files);
+        }
+        if (file != null)
         {
-            fIdx++;
-            var cat1 = mockCategories[(fIdx - 1) % mockCategories.Length];
-            var cat2 = mockCategories[(fIdx + 1) % mockCategories.Length];
-
-            detections.Add(new
-            {
-                id = $"standalone-{sessionId}-{fIdx}-1",
-                title = cat1.Title,
-                confidence = cat1.Conf,
-                categoryCode = cat1.Code,
-                description = cat1.Desc,
-                mediaType = "image",
-                timestampSeconds = (double?)null,
-                timestampLabel = $"Frame {fIdx}",
-                frameIndex = fIdx,
-                gps = "20.8924, 105.4182",
-                tower = $"Cột 04{fIdx % 5 + 1} (TOW-220KV-04{fIdx % 5 + 1})",
-                missionName = file.FileName,
-                imageUrl = "/images/defect-insulator-crack.png",
-                sourceUrl = "/images/defect-insulator-crack.png",
-                cropImageUrl = "/images/defect-insulator-crack.png",
-                boundingBox = cat1.Box,
-                severityWeight = cat1.Emergency ? 5 : 3,
-                isEmergency = cat1.Emergency,
-                status = "Pending",
-                detectedAt = DateTime.UtcNow.ToString("o")
-            });
-
-            detections.Add(new
-            {
-                id = $"standalone-{sessionId}-{fIdx}-2",
-                title = cat2.Title,
-                confidence = cat2.Conf,
-                categoryCode = cat2.Code,
-                description = cat2.Desc,
-                mediaType = "image",
-                timestampSeconds = (double?)null,
-                timestampLabel = $"Frame {fIdx}",
-                frameIndex = fIdx,
-                gps = "20.8924, 105.4182",
-                tower = $"Cột 04{fIdx % 5 + 1} (TOW-220KV-04{fIdx % 5 + 1})",
-                missionName = file.FileName,
-                imageUrl = "/images/defect-conductor-damage.png",
-                sourceUrl = "/images/defect-conductor-damage.png",
-                cropImageUrl = "/images/defect-conductor-damage.png",
-                boundingBox = cat2.Box,
-                severityWeight = cat2.Emergency ? 5 : 3,
-                isEmergency = cat2.Emergency,
-                status = "Pending",
-                detectedAt = DateTime.UtcNow.ToString("o")
-            });
+            formFiles.Add(file);
+        }
+        if (formFiles.Count == 0 && Request?.HasFormContentType == true && Request.Form.Files.Count > 0)
+        {
+            formFiles.AddRange(Request.Form.Files);
         }
 
-        var sessionResult = new
+        var openedStreams = new List<Stream>(formFiles.Count);
+        try
         {
-            id = sessionId.ToString(),
-            status = "Completed",
-            analysisType = string.IsNullOrWhiteSpace(analysisType) ? "DefectDetection" : analysisType,
-            notes = notes ?? string.Empty,
-            createdAt = DateTime.UtcNow.ToString("o"),
-            filesCount = Math.Max(1, safeFiles.Count),
-            detections
-        };
+            var inputs = new List<UploadedFileInput>(formFiles.Count);
+            foreach (var formFile in formFiles)
+            {
+                if (formFile == null || formFile.Length <= 0)
+                {
+                    continue;
+                }
 
-        return Ok(new ApiResponse(true, "Standalone files processed successfully.", sessionResult));
+                var stream = formFile.OpenReadStream();
+                openedStreams.Add(stream);
+                inputs.Add(new UploadedFileInput
+                {
+                    Stream = stream,
+                    FileName = formFile.FileName,
+                    ContentType = formFile.ContentType ?? string.Empty,
+                    Length = formFile.Length
+                });
+            }
+
+            var command = new UploadStandaloneAnalysisCommand
+            {
+                Files = inputs,
+                MissionId = missionId,
+                TowerId = towerId,
+                AnalysisType = analysisType,
+                PreferredModel = preferredModel,
+                Notes = notes
+            };
+
+            var result = await _mediator.Send(command, cancellationToken);
+            return Ok(new ApiResponse(true, "Files uploaded to MinIO and queued for AI analysis.", result));
+        }
+        finally
+        {
+            foreach (var s in openedStreams)
+            {
+                await s.DisposeAsync();
+            }
+        }
     }
 }

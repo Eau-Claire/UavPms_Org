@@ -25,7 +25,7 @@ public sealed class SharedSchemaMappingTests
         using var context = CreateNpgsqlContext();
         var tables = context.Model.GetEntityTypes().Select(e => e.GetTableName()).ToList();
 
-        tables.Should().Contain(new[] { "AIAnalysisRuns", "UAVs", "MissionAssignments", "DetectedAnomalies", "InspectionMedia" });
+        tables.Should().Contain(new[] { "AIAnalysisRuns", "UAVs", "MissionAssignments", "DetectedAnomalies", "InspectionMedia", "EmergencyAlerts", "MaintenanceTickets" });
         tables.Should().NotContain(new[] { "AIAnalysisRequests", "AssetComponents", "Uavs" });
     }
 

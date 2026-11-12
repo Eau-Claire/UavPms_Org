@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Text.Json;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
@@ -22,6 +24,9 @@ public class ReviewMissionAiDetectionCommandHandler
     private readonly ICurrentUserServices _currentUser;
     private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
     private readonly IEventPublisher? _eventPublisher;
+    private readonly IGenericRepository<EmergencyAlert>? _alertRepository;
+    private readonly IGenericRepository<MaintenanceTicket>? _ticketRepository;
+    private readonly IGenericRepository<Mission>? _missionRepository;
 
     [ActivatorUtilitiesConstructor]
     public ReviewMissionAiDetectionCommandHandler(
@@ -29,20 +34,26 @@ public class ReviewMissionAiDetectionCommandHandler
         IUnitOfWork unitOfWork,
         ICurrentUserServices currentUser,
         IGenericRepository<OutboxMessage> outboxRepository,
-        IEventPublisher eventPublisher)
+        IEventPublisher eventPublisher,
+        IGenericRepository<EmergencyAlert>? alertRepository = null,
+        IGenericRepository<MaintenanceTicket>? ticketRepository = null,
+        IGenericRepository<Mission>? missionRepository = null)
     {
         _anomalyRepository = anomalyRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _outboxRepository = outboxRepository;
         _eventPublisher = eventPublisher;
+        _alertRepository = alertRepository;
+        _ticketRepository = ticketRepository;
+        _missionRepository = missionRepository;
     }
 
     public ReviewMissionAiDetectionCommandHandler(
         IAnomalyRepository anomalyRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserServices currentUser)
-        : this(anomalyRepository, unitOfWork, currentUser, null!, null!) { }
+        : this(anomalyRepository, unitOfWork, currentUser, null!, null!, null, null, null) { }
 
     public async Task<MissionAiDetectionDto> Handle(
         ReviewMissionAiDetectionCommand request,
@@ -54,25 +65,118 @@ public class ReviewMissionAiDetectionCommandHandler
             throw new KeyNotFoundException($"Detected anomaly with ID '{request.DetectionId}' was not found.");
         }
 
-        if (anomaly.Media == null || anomaly.Media.MissionId != request.MissionId)
+        if (request.MissionId != Guid.Empty && (anomaly.Media == null || anomaly.Media.MissionId != request.MissionId))
         {
             throw new KeyNotFoundException($"Detected anomaly with ID '{request.DetectionId}' was not found in mission '{request.MissionId}'.");
         }
 
-        var decision = NormalizeDecision(request.Decision);
+        if (anomaly.SupersededById.HasValue)
+        {
+            throw new BusinessRuleException("ANOMALY_SUPERSEDED",
+                "Superseded detections cannot be reviewed.");
+        }
+
         if (!anomaly.IsAwaitingReview)
         {
             throw new BusinessRuleException("ANOMALY_NOT_IN_REVIEW",
                 $"Detection is '{anomaly.ValidationStatus}'; only detections in review can be confirmed or rejected.");
         }
-        var publishConfirmed = decision == "Accepted" && anomaly.ValidationStatus != "Confirmed";
-        if (decision == "Accepted")
+
+        if (!DetectedAnomaly.TryParseReviewDecision(request.Decision, out var isApproved))
+        {
+            throw new BusinessRuleException("INVALID_REVIEW_STATUS",
+                "Decision must be either 'Confirmed' ('Accepted'/'Approved') or 'Rejected'.");
+        }
+
+        var publishConfirmed = isApproved && anomaly.ValidationStatus != DetectedAnomaly.StatusConfirmed;
+        string? createdTaskId = null;
+        string? emergencyAlertId = null;
+
+        if (isApproved)
         {
             // ERD v2.2: an anomaly must be linked to a tower before it can be Confirmed.
-            anomaly.TowerId ??= anomaly.Media.TowerId;
+            anomaly.TowerId ??= request.TowerId ?? anomaly.Media?.TowerId;
             if (anomaly.TowerId == null)
                 throw new BusinessRuleException("TOWER_REQUIRED", "The detection must be linked to a tower before it can be confirmed.");
-            anomaly.Confirm(_currentUser.UserId, request.Notes ?? string.Empty);
+
+            anomaly.Confirm(_currentUser.UserId, request.Notes, request.AnalystFeedbackJson);
+
+            var isEmergency = anomaly.IsEmergencySeverity(request.OverrideSeverity);
+            var now = DateTime.UtcNow;
+
+            // 1. Ensure Active EmergencyAlert exists when emergency
+            if (isEmergency && _alertRepository != null)
+            {
+                var existingAlerts = await _alertRepository.FindAsync(
+                    a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted);
+                var existingAlert = existingAlerts?.FirstOrDefault();
+                if (existingAlert == null)
+                {
+                    var alert = new EmergencyAlert
+                    {
+                        Id = Guid.NewGuid(),
+                        AnomalyId = anomaly.Id,
+                        Status = "Active",
+                        Priority = "Emergency",
+                        TriggeredAt = now,
+                        ReceivedAt = now,
+                        Notes = $"Auto-generated on anomaly review: {request.Notes ?? anomaly.AnalystNotes}",
+                        CreatedAt = now
+                    };
+                    await _alertRepository.AddAsync(alert);
+                    emergencyAlertId = alert.Id.ToString();
+                }
+                else
+                {
+                    emergencyAlertId = existingAlert.Id.ToString();
+                }
+            }
+
+            // 2. Ensure Open MaintenanceTicket exists (unassigned technician; Manager assigns later in MF04)
+            if (_ticketRepository != null)
+            {
+                var existingTickets = await _ticketRepository.FindAsync(
+                    t => t.AnomalyId == anomaly.Id && !t.IsDeleted);
+                var existingTicket = existingTickets?.FirstOrDefault();
+                if (existingTicket == null)
+                {
+                    var missionId = request.MissionId != Guid.Empty
+                        ? request.MissionId
+                        : (anomaly.Media?.MissionId ?? Guid.Empty);
+                    var mission = (_missionRepository != null && missionId != Guid.Empty)
+                        ? await _missionRepository.GetByIdAsync(missionId, false, cancellationToken)
+                        : null;
+                    var managerId = mission?.ManagerId ?? _currentUser.UserId;
+
+                    var priority = isEmergency
+                        ? MaintenanceTicket.PriorityEmergency
+                        : (string.Equals(request.OverrideSeverity, "Low", StringComparison.OrdinalIgnoreCase)
+                            ? MaintenanceTicket.PriorityLow
+                            : MaintenanceTicket.PriorityHigh);
+
+                    var ticket = new MaintenanceTicket
+                    {
+                        Id = Guid.NewGuid(),
+                        TicketCode = $"TKT-{now:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
+                        AnomalyId = anomaly.Id,
+                        ManagerId = managerId,
+                        TechnicianId = null,
+                        AssignedAt = null,
+                        Status = MaintenanceTicket.StatusOpen,
+                        Priority = priority,
+                        Description = $"[AI Review] {anomaly.Category?.CategoryName ?? "Defect"}: {request.Notes ?? anomaly.AnalystNotes}",
+                        DueDate = now.AddDays(isEmergency ? 1 : 7),
+                        CreatedAt = now
+                    };
+                    await _ticketRepository.AddAsync(ticket);
+                    createdTaskId = ticket.Id.ToString();
+                }
+                else
+                {
+                    createdTaskId = existingTicket.Id.ToString();
+                }
+            }
+
             if (publishConfirmed && _outboxRepository != null)
             {
                 var confirmedEvent = CreateConfirmedEvent(anomaly);
@@ -81,13 +185,36 @@ public class ReviewMissionAiDetectionCommandHandler
                     Id = Guid.NewGuid(),
                     MessageType = nameof(DefectDetectedEvent),
                     Payload = JsonSerializer.Serialize(confirmedEvent),
-                    OccurredAt = DateTime.UtcNow
+                    OccurredAt = now
                 });
             }
         }
         else
         {
-            anomaly.Reject(_currentUser.UserId, request.Notes ?? string.Empty);
+            anomaly.Reject(_currentUser.UserId, request.Notes, request.AnalystFeedbackJson);
+
+            // Dismiss any Active EmergencyAlert for a rejected false-positive anomaly
+            if (_alertRepository != null)
+            {
+                var activeAlerts = await _alertRepository.FindAsync(
+                    a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted, track: true);
+                if (activeAlerts != null)
+                {
+                    var now = DateTime.UtcNow;
+                    foreach (var activeAlert in activeAlerts)
+                    {
+                        activeAlert.Status = "Dismissed";
+                        activeAlert.ResolvedAt = now;
+                        activeAlert.ReviewedById = _currentUser.UserId;
+                        if (!string.IsNullOrWhiteSpace(request.Notes))
+                        {
+                            activeAlert.Notes = request.Notes;
+                        }
+                        activeAlert.UpdatedAt = now;
+                        await _alertRepository.UpdateAsync(activeAlert);
+                    }
+                }
+            }
         }
 
         await _anomalyRepository.UpdateAsync(anomaly);
@@ -96,38 +223,20 @@ public class ReviewMissionAiDetectionCommandHandler
         if (publishConfirmed && _outboxRepository == null && _eventPublisher != null)
             await _eventPublisher.PublishAsync(CreateConfirmedEvent(anomaly));
 
-        return MissionAiDetectionMapper.MapDetection(anomaly);
+        var dto = MissionAiDetectionMapper.MapDetection(anomaly);
+        dto.MaintenanceTaskId = createdTaskId;
+        dto.EmergencyAlertId = emergencyAlertId;
+        return dto;
     }
 
     private static DefectDetectedEvent CreateConfirmedEvent(DetectedAnomaly anomaly) => new()
     {
-        InspectionId = anomaly.Media!.MissionId,
+        InspectionId = anomaly.Media?.MissionId ?? Guid.Empty,
         RecordId = anomaly.Id,
-        MissionId = anomaly.Media.MissionId,
-        ImageUrl = anomaly.ImageUrl ?? anomaly.Media.FileUrl,
+        MissionId = anomaly.Media?.MissionId ?? Guid.Empty,
+        ImageUrl = anomaly.ImageUrl ?? anomaly.Media?.FileUrl ?? string.Empty,
         IsDefect = true,
         DefectType = anomaly.Category?.CategoryName ?? anomaly.CategoryId.ToString(),
         DetectedAt = anomaly.ValidatedAt ?? DateTime.UtcNow
     };
-
-    private static string NormalizeDecision(string decision)
-    {
-        if (string.Equals(decision, "Accepted", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(decision, "Accept", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(decision, "Confirmed", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(decision, "Confirm", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(decision, "Approved", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Accepted";
-        }
-
-        if (string.Equals(decision, "Rejected", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(decision, "Reject", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(decision, "Denied", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Rejected";
-        }
-
-        throw new ArgumentException("Decision must be either 'Accepted' or 'Rejected'.", nameof(decision));
-    }
 }

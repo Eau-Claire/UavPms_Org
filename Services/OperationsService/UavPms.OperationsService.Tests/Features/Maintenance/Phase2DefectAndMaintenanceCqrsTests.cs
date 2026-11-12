@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,12 +15,16 @@ using UavPms.OperationsService.Application.Features.Maintenance.Commands.Complet
 using UavPms.OperationsService.Application.Features.Maintenance.Commands.CreateMaintenanceTicket;
 using UavPms.OperationsService.Application.Features.Maintenance.Commands.ReviewDetectedAnomaly;
 using UavPms.OperationsService.Application.Features.Maintenance.Commands.UploadMaintenanceProof;
+using UavPms.OperationsService.Application.Features.Maintenance.DTOs;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Infrastructure.Authorization;
 using UavPms.OperationsService.Infrastructure.Persistence;
 using UavPms.OperationsService.Infrastructure.Repositories;
+using UavPms.OperationsService.Infrastructure.Services;
+using UavPms.Shared.Contracts.Constants;
+using UavPms.Shared.Contracts.Events;
 using Xunit;
 
 namespace UavPms.OperationsService.Tests.Features.Maintenance;
@@ -346,5 +351,106 @@ public class Phase2DefectAndMaintenanceCqrsTests
         result.Should().NotBeNull();
         result.Status.Should().Be("Closed");
         result.ResolvedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task MaintenanceTicketService_CreateAndAssign_QueuesMaintenanceTicketAssignedEventInOutbox()
+    {
+        var managerId = Guid.NewGuid();
+        var techId = Guid.NewGuid();
+        var userMock = CreateUserMock(managerId);
+        await using var db = CreateContext(userMock.Object);
+
+        var role = new Role { Id = 10, RoleName = UserRoles.MaintenanceTechnician };
+        var tech = new User { Id = techId, FullName = "Kỹ thuật viên A", Email = "tech@evn.vn", Status = "Active" };
+        db.Roles.Add(role);
+        db.Users.Add(tech);
+        db.UserRoles.Add(new UserRole { UserId = techId, RoleId = role.Id, Role = role, User = tech });
+
+        var towerId = Guid.NewGuid();
+        db.Towers.Add(new Tower { Id = towerId, RegionId = Guid.NewGuid(), TowerCode = "T-500" });
+
+        var anomaly1 = new DetectedAnomaly { Id = Guid.NewGuid(), TowerId = towerId };
+        var anomaly2 = new DetectedAnomaly { Id = Guid.NewGuid(), TowerId = towerId };
+        var unassignedTicket = new MaintenanceTicket
+        {
+            Id = Guid.NewGuid(),
+            TicketCode = "TCK-20261112-099",
+            AnomalyId = anomaly2.Id,
+            Anomaly = anomaly2,
+            ManagerId = managerId,
+            TechnicianId = null,
+            Status = TicketStatus.Open,
+            Priority = TicketPriority.High,
+            Description = "Phiếu tự sinh chờ giao kỹ thuật viên"
+        };
+        db.DetectedAnomalies.AddRange(anomaly1, anomaly2);
+        db.MaintenanceTickets.Add(unassignedTicket);
+        await db.SaveChangesAsync();
+
+        var service = new MaintenanceTicketService(db, userMock.Object);
+
+        // 1. CreateTicketAsync should queue MaintenanceTicketAssignedEvent in OutboxMessages
+        var createdDto = await service.CreateTicketAsync(new CreateMaintenanceTicketRequest
+        {
+            AnomalyId = anomaly1.Id,
+            TechnicianId = techId,
+            Priority = "High",
+            Description = "Thay thế chuỗi cách điện pha A",
+            DueDate = DateTime.UtcNow.AddDays(3)
+        });
+
+        createdDto.TowerId.Should().Be(towerId);
+
+        // 2. AssignTechnicianAsync should also queue MaintenanceTicketAssignedEvent in OutboxMessages
+        var assignedDto = await service.AssignTechnicianAsync(unassignedTicket.Id, new AssignTechnicianRequest
+        {
+            TechnicianId = techId,
+            DueDate = DateTime.UtcNow.AddDays(2)
+        });
+
+        assignedDto.TechnicianId.Should().Be(techId);
+
+        var outboxMessages = await db.OutboxMessages
+            .Where(m => m.MessageType == nameof(MaintenanceTicketAssignedEvent))
+            .ToListAsync();
+
+        outboxMessages.Should().HaveCount(2);
+        outboxMessages.Should().Contain(m => m.Payload.Contains(createdDto.Id.ToString()));
+        outboxMessages.Should().Contain(m => m.Payload.Contains(unassignedTicket.Id.ToString()));
+    }
+
+    [Fact]
+    public async Task MonitorRepository_MissionStatusOverviewAndSummary_CountAllWorkflowStatuses()
+    {
+        var userMock = CreateUserMock(Guid.NewGuid());
+        await using var db = CreateContext(userMock.Object);
+
+        var managerId = Guid.NewGuid();
+        db.Missions.AddRange(
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-1", Title = "Draft", ManagerId = managerId, Status = MissionStatus.Draft },
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-2", Title = "PendingAcceptance", ManagerId = managerId, Status = MissionStatus.PendingAcceptance },
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-3", Title = "Assigned", ManagerId = managerId, Status = MissionStatus.Assigned },
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-4", Title = "Preparing", ManagerId = managerId, Status = MissionStatus.Preparing },
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-5", Title = "Ready", ManagerId = managerId, Status = MissionStatus.Ready },
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-6", Title = "Postponed", ManagerId = managerId, Status = MissionStatus.Postponed },
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-7", Title = "InProgress", ManagerId = managerId, Status = MissionStatus.InProgress },
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-8", Title = "Suspended", ManagerId = managerId, Status = MissionStatus.Suspended },
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-9", Title = "Completed", ManagerId = managerId, Status = MissionStatus.Completed }
+        );
+        await db.SaveChangesAsync();
+
+        var repo = new MonitorRepository(db);
+        var overview = await repo.GetMissionStatusOverviewAsync(CancellationToken.None);
+        var summary = await repo.GetSummaryAsync(CancellationToken.None);
+
+        overview.Pending.Should().Be(6);
+        overview.InProgress.Should().Be(2);
+        overview.Completed.Should().Be(1);
+
+        summary.TotalMissions.Should().Be(9);
+        summary.PendingMissions.Should().Be(6);
+        summary.InProgressMissions.Should().Be(2);
+        summary.CompletedMissions.Should().Be(1);
     }
 }

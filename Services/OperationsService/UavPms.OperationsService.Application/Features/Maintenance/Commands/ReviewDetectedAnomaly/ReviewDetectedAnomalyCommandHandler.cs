@@ -46,42 +46,62 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
         if (anomaly == null)
             throw new NotFoundException("DetectedAnomaly", request.AnomalyId);
 
-        var isApproved = string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(request.Status, "Confirmed", StringComparison.OrdinalIgnoreCase);
-        var isRejected = string.Equals(request.Status, "Rejected", StringComparison.OrdinalIgnoreCase);
-
-        if (!isApproved && !isRejected)
-            throw new BusinessRuleException("INVALID_STATUS", "Status must be either 'Confirmed' (or Approved) or 'Rejected'.");
-
-        if (isApproved && !anomaly.TowerId.HasValue)
+        if (anomaly.Media == null || anomaly.Category == null)
         {
-            // Bất thường phải gắn cột điện trước khi xác nhận; lấy theo media nếu media đã gắn cột.
-            var media = anomaly.Media ?? (await _anomalyRepository.GetByIdWithDetailAsync(anomaly.Id))?.Media;
-            anomaly.TowerId = media?.TowerId;
-            if (!anomaly.TowerId.HasValue)
-                throw new BusinessRuleException("TOWER_REQUIRED", "The anomaly must be linked to a tower before it can be confirmed.");
+            var detailed = await _anomalyRepository.GetByIdWithDetailAsync(anomaly.Id);
+            if (detailed != null)
+            {
+                anomaly = detailed;
+            }
         }
 
-        anomaly.ValidationStatus = isApproved ? "Confirmed" : "Rejected";
-        anomaly.AnalystId = _currentUser.UserId;
-        anomaly.AnalystNotes = request.ReviewNotes ?? string.Empty;
-        anomaly.AnalystFeedback = !string.IsNullOrWhiteSpace(request.AnalystFeedbackJson) ? request.AnalystFeedbackJson : "{}";
-        anomaly.ValidatedAt = DateTime.UtcNow;
+        if (request.MissionId != Guid.Empty &&
+            anomaly.Media != null &&
+            anomaly.Media.MissionId != Guid.Empty &&
+            anomaly.Media.MissionId != request.MissionId)
+        {
+            throw new BusinessRuleException("ANOMALY_MISSION_MISMATCH",
+                $"The anomaly '{request.AnomalyId}' does not belong to mission '{request.MissionId}'.");
+        }
+
+        if (anomaly.SupersededById.HasValue)
+        {
+            throw new BusinessRuleException("ANOMALY_SUPERSEDED",
+                "Superseded anomalies cannot be reviewed.");
+        }
+
+        if (!anomaly.IsAwaitingReview)
+        {
+            throw new BusinessRuleException("ANOMALY_NOT_IN_REVIEW",
+                $"Anomaly is '{anomaly.ValidationStatus}'; only anomalies in review can be confirmed or rejected.");
+        }
+
+        if (!DetectedAnomaly.TryParseReviewDecision(request.Status, out var isApproved))
+        {
+            throw new BusinessRuleException("INVALID_STATUS",
+                "Status must be either 'Confirmed' (or Approved/Accepted) or 'Rejected'.");
+        }
 
         string? createdTaskId = null;
-        Guid? resolvedTowerId = anomaly.TowerId;
+        string? emergencyAlertId = null;
 
         if (isApproved)
         {
-            var isEmergency = string.Equals(request.OverrideSeverity, "Critical", StringComparison.OrdinalIgnoreCase) ||
-                              string.Equals(request.OverrideSeverity, "Emergency", StringComparison.OrdinalIgnoreCase) ||
-                              string.Equals(request.OverrideSeverity, "Urgent", StringComparison.OrdinalIgnoreCase) ||
-                              (anomaly.Category != null && (anomaly.Category.IsEmergencyClass || anomaly.Category.SeverityWeight >= 4));
+            // Bất thường phải gắn cột điện trước khi xác nhận; lấy theo request hoặc media nếu chưa gắn cột.
+            anomaly.TowerId ??= request.TowerId ?? anomaly.Media?.TowerId;
+            if (!anomaly.TowerId.HasValue)
+                throw new BusinessRuleException("TOWER_REQUIRED", "The anomaly must be linked to a tower before it can be confirmed.");
 
-            // 1. Create EmergencyAlert if critical
+            anomaly.Confirm(_currentUser.UserId, request.ReviewNotes, request.AnalystFeedbackJson);
+
+            var isEmergency = anomaly.IsEmergencySeverity(request.OverrideSeverity);
+            var now = DateTime.UtcNow;
+
+            // 1. Create EmergencyAlert if critical/emergency
             if (isEmergency)
             {
-                var existingAlerts = await _alertRepository.FindAsync(a => a.AnomalyId == anomaly.Id && !a.IsDeleted, track: false);
+                var existingAlerts = await _alertRepository.FindAsync(
+                    a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted, track: false);
                 if (existingAlerts.Count == 0)
                 {
                     var alert = new EmergencyAlert
@@ -90,33 +110,51 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
                         AnomalyId = anomaly.Id,
                         Status = "Active",
                         Priority = "Emergency",
-                        TriggeredAt = DateTime.UtcNow,
-                        Notes = $"Auto-generated on anomaly review: {request.ReviewNotes}",
-                        CreatedAt = DateTime.UtcNow
+                        TriggeredAt = now,
+                        ReceivedAt = now,
+                        Notes = $"Auto-generated on anomaly review: {request.ReviewNotes ?? anomaly.AnalystNotes}",
+                        CreatedAt = now
                     };
                     await _alertRepository.AddAsync(alert);
+                    emergencyAlertId = alert.Id.ToString();
+                }
+                else
+                {
+                    emergencyAlertId = existingAlerts[0].Id.ToString();
                 }
             }
 
-            // 3. Create MaintenanceTicket if not exists
+            // 2. Create MaintenanceTicket if not exists (unassigned technician; Manager assigns later in MF04)
             var existingTickets = await _ticketRepository.FindAsync(t => t.AnomalyId == anomaly.Id && !t.IsDeleted, track: false);
             if (existingTickets.Count == 0)
             {
-                var mission = await _missionRepository.GetByIdAsync(request.MissionId);
+                var resolvedMissionId = request.MissionId != Guid.Empty
+                    ? request.MissionId
+                    : (anomaly.Media?.MissionId ?? Guid.Empty);
+                var mission = resolvedMissionId != Guid.Empty
+                    ? await _missionRepository.GetByIdAsync(resolvedMissionId)
+                    : null;
                 var managerId = mission?.ManagerId ?? _currentUser.UserId;
+
+                var priority = isEmergency
+                    ? TicketPriority.Emergency
+                    : (string.Equals(request.OverrideSeverity, "Low", StringComparison.OrdinalIgnoreCase)
+                        ? TicketPriority.Low
+                        : TicketPriority.High);
 
                 var ticket = new MaintenanceTicket
                 {
                     Id = Guid.NewGuid(),
-                    TicketCode = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
+                    TicketCode = $"TKT-{now:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
                     AnomalyId = anomaly.Id,
                     ManagerId = managerId,
-                    TechnicianId = null, // assigned later by the manager
+                    TechnicianId = null,
+                    AssignedAt = null,
                     Status = TicketStatus.Open,
-                    Priority = isEmergency ? TicketPriority.Emergency : TicketPriority.High,
+                    Priority = priority,
                     Description = $"[AI Review] {anomaly.Category?.CategoryName ?? "Defect"}: {request.ReviewNotes ?? anomaly.AnalystNotes}",
-                    DueDate = DateTime.UtcNow.AddDays(isEmergency ? 1 : 7),
-                    CreatedAt = DateTime.UtcNow
+                    DueDate = now.AddDays(isEmergency ? 1 : 7),
+                    CreatedAt = now
                 };
 
                 await _ticketRepository.AddAsync(ticket);
@@ -127,6 +165,27 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
                 createdTaskId = existingTickets[0].Id.ToString();
             }
         }
+        else
+        {
+            anomaly.Reject(_currentUser.UserId, request.ReviewNotes, request.AnalystFeedbackJson);
+
+            // Dismiss any Active EmergencyAlert for a rejected false-positive anomaly
+            var activeAlerts = await _alertRepository.FindAsync(
+                a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted, track: true);
+            var now = DateTime.UtcNow;
+            foreach (var activeAlert in activeAlerts)
+            {
+                activeAlert.Status = "Dismissed";
+                activeAlert.ResolvedAt = now;
+                activeAlert.ReviewedById = _currentUser.UserId;
+                if (!string.IsNullOrWhiteSpace(request.ReviewNotes))
+                {
+                    activeAlert.Notes = request.ReviewNotes;
+                }
+                activeAlert.UpdatedAt = now;
+                await _alertRepository.UpdateAsync(activeAlert);
+            }
+        }
 
         await _anomalyRepository.UpdateAsync(anomaly);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -134,11 +193,12 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
         return new ReviewDetectionResultDto
         {
             DetectionId = anomaly.Id.ToString(),
-            MissionId = request.MissionId.ToString(),
+            MissionId = (request.MissionId != Guid.Empty ? request.MissionId : (anomaly.Media?.MissionId ?? Guid.Empty)).ToString(),
             Status = anomaly.ValidationStatus,
             ReviewNotes = anomaly.AnalystNotes,
             MaintenanceTaskId = createdTaskId,
-            ReviewedAt = anomaly.ValidatedAt.Value
+            EmergencyAlertId = emergencyAlertId,
+            ReviewedAt = anomaly.ValidatedAt ?? DateTime.UtcNow
         };
     }
 }

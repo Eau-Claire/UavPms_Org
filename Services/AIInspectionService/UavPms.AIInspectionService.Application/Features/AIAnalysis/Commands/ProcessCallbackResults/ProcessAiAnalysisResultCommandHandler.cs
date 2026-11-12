@@ -35,6 +35,7 @@ public class ProcessAiAnalysisResultCommandHandler
     private readonly IGenericRepository<OutboxMessage> _outboxRepository;
     private readonly ILogger<ProcessAiAnalysisResultCommandHandler> _logger;
     private readonly ISystemSettingService _systemSettingService;
+    private readonly IGenericRepository<EmergencyAlert>? _alertRepo;
 
     /// <summary>SystemSettings key prefix mapping a raw model label to a DefectCategory code, e.g. "AiLabel:bird_nest".</summary>
     public const string ModelLabelSettingPrefix = "AiLabel:";
@@ -49,7 +50,8 @@ public class ProcessAiAnalysisResultCommandHandler
         IEventPublisher eventPublisher,
         IGenericRepository<OutboxMessage> outboxRepository,
         ILogger<ProcessAiAnalysisResultCommandHandler> logger,
-        ISystemSettingService systemSettingService)
+        ISystemSettingService systemSettingService,
+        IGenericRepository<EmergencyAlert>? alertRepo = null)
     {
         _systemSettingService = systemSettingService;
         _runRepo = runRepo;
@@ -61,6 +63,7 @@ public class ProcessAiAnalysisResultCommandHandler
         _eventPublisher = eventPublisher;
         _outboxRepository = outboxRepository;
         _logger = logger;
+        _alertRepo = alertRepo;
     }
 
     public async Task<AiAnalysisCallbackResponseDto> Handle(
@@ -241,6 +244,39 @@ public class ProcessAiAnalysisResultCommandHandler
                         ? anomaly.AnalystNotes
                         : $"AI evaluation: severity={evaluation.Severity}, risk={evaluation.RiskLevel}, score={evaluation.PriorityScore}. {evaluation.Reason}";
 
+                    var isEmergency = category.IsEmergencyClass ||
+                                      evaluation?.RequiresImmediateAlert == true ||
+                                      string.Equals(evaluation?.Severity, "Critical", StringComparison.OrdinalIgnoreCase);
+
+                    var resolvedSeverity = evaluation?.Severity ?? (isEmergency ? "Critical" : "Medium");
+
+                    if (isEmergency)
+                    {
+                        if (_alertRepo != null)
+                        {
+                            var existingAlerts = await _alertRepo.FindAsync(
+                                a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted);
+                            if (existingAlerts == null || !existingAlerts.Any())
+                            {
+                                var now = DateTime.UtcNow;
+                                await _alertRepo.AddAsync(new EmergencyAlert
+                                {
+                                    Id = Guid.NewGuid(),
+                                    AnomalyId = anomaly.Id,
+                                    Status = "Active",
+                                    Priority = "Critical",
+                                    TriggeredAt = anomaly.CreatedAt,
+                                    ReceivedAt = now,
+                                    Notes = string.IsNullOrWhiteSpace(anomaly.AnalystNotes)
+                                        ? $"Auto-generated from AI detection: {category.CategoryName} (confidence: {detection.Confidence:P1}, severity: {resolvedSeverity})"
+                                        : anomaly.AnalystNotes,
+                                    CreatedAt = now
+                                });
+                            }
+                        }
+                        createdAlerts++;
+                    }
+
                     await QueueEventAsync(new AiDetectionCompletedEvent
                     {
                         EventId = Guid.NewGuid(),
@@ -253,8 +289,8 @@ public class ProcessAiAnalysisResultCommandHandler
                         CategoryCode = category.CategoryCode,
                         DefectType = category.CategoryName,
                         Confidence = Math.Round(detection.Confidence, 3),
-                        Severity = evaluation?.Severity ?? "Medium",
-                        IsEmergencyClass = category.IsEmergencyClass,
+                        Severity = resolvedSeverity,
+                        IsEmergencyClass = isEmergency,
                         IsDefect = true,
                         ImageUrl = anomaly.ImageUrl ?? media.FileUrl,
                         CropUrl = anomaly.CropUrl,

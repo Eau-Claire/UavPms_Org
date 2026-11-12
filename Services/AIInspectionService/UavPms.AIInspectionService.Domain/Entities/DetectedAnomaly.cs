@@ -15,6 +15,7 @@ public class DetectedAnomaly : BaseEntity
     public const string StatusInReview = "InReview";
     public const string StatusConfirmed = "Confirmed";
     public const string StatusRejected = "Rejected";
+    public const string StatusResolved = "Resolved";
 
     public Guid MediaId { get; set; }
 
@@ -42,6 +43,7 @@ public class DetectedAnomaly : BaseEntity
     public double ConfidenceScore { get; set; }
     public string ValidationStatus { get; set; } = string.Empty;
     public string AnalystNotes { get; set; } = string.Empty;
+    public string? AnalystFeedback { get; set; } = "{}";
     public DateTime? ValidatedAt { get; set; }
 
     public virtual InspectionMedia? Media { get; set; }
@@ -50,26 +52,87 @@ public class DetectedAnomaly : BaseEntity
     public virtual Tower? Tower { get; set; }
     public virtual DefectCategory? Category { get; set; }
     public virtual User? Analyst { get; set; }
+    public virtual ICollection<EmergencyAlert> EmergencyAlerts { get; set; } = new List<EmergencyAlert>();
+    public virtual ICollection<MaintenanceTicket> MaintenanceTickets { get; set; } = new List<MaintenanceTicket>();
 
     #region Rich domain methods
 
     public bool IsAwaitingReview =>
         ValidationStatus is StatusInReview or StatusPending || string.IsNullOrWhiteSpace(ValidationStatus);
 
-    public void Confirm(Guid analystId, string notes)
+    public void Confirm(Guid analystId, string? notes, string? feedbackJson = null)
     {
         AnalystId = analystId;
         AnalystNotes = notes ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(feedbackJson))
+        {
+            AnalystFeedback = feedbackJson;
+        }
+        else if (string.IsNullOrWhiteSpace(AnalystFeedback))
+        {
+            AnalystFeedback = "{}";
+        }
         ValidationStatus = StatusConfirmed;
         ValidatedAt = DateTime.UtcNow;
     }
 
-    public void Reject(Guid analystId, string notes)
+    public void Reject(Guid analystId, string? notes, string? feedbackJson = null)
     {
         AnalystId = analystId;
         AnalystNotes = notes ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(feedbackJson))
+        {
+            AnalystFeedback = feedbackJson;
+        }
+        else if (string.IsNullOrWhiteSpace(AnalystFeedback))
+        {
+            AnalystFeedback = "{}";
+        }
         ValidationStatus = StatusRejected;
         ValidatedAt = DateTime.UtcNow;
+    }
+
+    public bool IsEmergencySeverity(string? overrideSeverity = null)
+    {
+        if (string.Equals(overrideSeverity, "Critical", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(overrideSeverity, "Critical Risk", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(overrideSeverity, "Emergency", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(overrideSeverity, "Urgent", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return Category != null && (Category.IsEmergencyClass || Category.SeverityWeight >= 4);
+    }
+
+    public static bool TryParseReviewDecision(string? decisionOrStatus, out bool isApproved)
+    {
+        isApproved = false;
+        if (string.IsNullOrWhiteSpace(decisionOrStatus))
+            return false;
+
+        var normalized = decisionOrStatus.Trim();
+        if (string.Equals(normalized, "Confirmed", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Confirm", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Approved", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Approve", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Accepted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Accept", StringComparison.OrdinalIgnoreCase))
+        {
+            isApproved = true;
+            return true;
+        }
+
+        if (string.Equals(normalized, "Rejected", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Reject", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Denied", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "Dismissed", StringComparison.OrdinalIgnoreCase))
+        {
+            isApproved = false;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

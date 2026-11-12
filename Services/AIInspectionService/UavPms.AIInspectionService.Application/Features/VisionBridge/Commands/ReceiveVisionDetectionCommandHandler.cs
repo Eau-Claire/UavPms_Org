@@ -1,18 +1,22 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
 using UavPms.AIInspectionService.Application.Common.Security;
 using UavPms.AIInspectionService.Application.Features.VisionBridge.DTOs;
+using UavPms.AIInspectionService.Application.Interfaces;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Enums;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Events;
+using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.AIInspectionService.Application.Features.VisionBridge.Commands;
 
@@ -32,7 +36,12 @@ public class ReceiveVisionDetectionCommandHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
     private readonly ILogger<ReceiveVisionDetectionCommandHandler> _logger;
+    private readonly IGenericRepository<EmergencyAlert>? _alertRepository;
+    private readonly ISystemSettingService? _systemSettingService;
+    private readonly IInspectionEvaluationClient? _inspectionEvaluationClient;
+    private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
 
+    [ActivatorUtilitiesConstructor]
     public ReceiveVisionDetectionCommandHandler(
         IGenericRepository<Uav> uavRepository,
         IGenericRepository<Mission> missionRepository,
@@ -46,7 +55,11 @@ public class ReceiveVisionDetectionCommandHandler
         IEventPublisher eventPublisher,
         IUnitOfWork unitOfWork,
         IFileStorageService fileStorageService,
-        ILogger<ReceiveVisionDetectionCommandHandler> logger)
+        ILogger<ReceiveVisionDetectionCommandHandler> logger,
+        IGenericRepository<EmergencyAlert>? alertRepository = null,
+        ISystemSettingService? systemSettingService = null,
+        IInspectionEvaluationClient? inspectionEvaluationClient = null,
+        IGenericRepository<OutboxMessage>? outboxRepository = null)
     {
         _uavRepository = uavRepository;
         _missionRepository = missionRepository;
@@ -61,6 +74,10 @@ public class ReceiveVisionDetectionCommandHandler
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
         _logger = logger;
+        _alertRepository = alertRepository;
+        _systemSettingService = systemSettingService;
+        _inspectionEvaluationClient = inspectionEvaluationClient;
+        _outboxRepository = outboxRepository;
     }
 
     /// <summary>Model name recorded on Edge runs created from VisionEdge/MQTT detections.</summary>
@@ -105,8 +122,11 @@ public class ReceiveVisionDetectionCommandHandler
             };
         }
 
-        var missions = await _missionRepository.FindAsync(m => m.UavId == uav.Id && m.Status == "Executing");
-        var activeMission = missions.FirstOrDefault();
+        var missions = await _missionRepository.FindAsync(
+            m => m.UavId == uav.Id && (m.Status == "InProgress" || m.Status == "Executing"));
+        var activeMission = missions
+            .OrderByDescending(m => m.Status == "InProgress")
+            .FirstOrDefault();
 
         if (activeMission == null)
         {
@@ -175,7 +195,27 @@ public class ReceiveVisionDetectionCommandHandler
             })
             : "{}";
 
-        var categories = await _defectCategoryRepository.FindAsync(c => c.CategoryCode == detection.ClassName);
+        var mappedCategoryCode = detection.ClassName?.Trim() ?? string.Empty;
+        if (_systemSettingService != null && !string.IsNullOrWhiteSpace(mappedCategoryCode))
+        {
+            var setting = await _systemSettingService.GetByKeyAsync($"AiLabel:{mappedCategoryCode}", cancellationToken);
+            if (setting != null)
+            {
+                if (string.IsNullOrWhiteSpace(setting.Value) || setting.Value.Equals("NONE", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("Edge label {Label} is configured as non-defect; skipping.", mappedCategoryCode);
+                    return new VisionDetectionResultDto
+                    {
+                        Success = false,
+                        Message = $"Label '{detection.ClassName}' is configured as non-defect.",
+                        ReceivedAt = receivedAt
+                    };
+                }
+                mappedCategoryCode = setting.Value.Trim();
+            }
+        }
+
+        var categories = await _defectCategoryRepository.FindAsync(c => c.CategoryCode == mappedCategoryCode);
         var category = categories.FirstOrDefault();
         var categoryId = category?.Id ?? 1;
 
@@ -201,18 +241,80 @@ public class ReceiveVisionDetectionCommandHandler
             "Detection linked: Mission={MissionCode}, AnomalyId={AnomalyId}",
             activeMission.MissionCode, anomaly.Id);
 
+        DetectionEvaluationResult? evaluation = null;
+        if (_inspectionEvaluationClient != null && category != null)
+        {
+            evaluation = await _inspectionEvaluationClient.EvaluateAsync(
+                new DetectionEvaluationRequest(
+                    category.CategoryCode,
+                    category.CategoryName,
+                    detection.Confidence,
+                    category.IsEmergencyClass,
+                    activeMission.Id,
+                    media.Id,
+                    anomaly.AiDetectionId ?? string.Empty),
+                cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(evaluation?.Reason))
+            {
+                anomaly.AnalystNotes = $"AI evaluation: severity={evaluation.Severity}, risk={evaluation.RiskLevel}, score={evaluation.PriorityScore}. {evaluation.Reason}";
+                await _anomalyRepository.UpdateAsync(anomaly);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         // Xác định khuyết tật nguy hiểm (Critical Anomaly)
-        bool isCritical = false;
-        if (category != null && category.IsEmergencyClass)
+        bool isCritical = (category != null && category.IsEmergencyClass) ||
+                          evaluation?.RequiresImmediateAlert == true ||
+                          string.Equals(evaluation?.Severity, "Critical", StringComparison.OrdinalIgnoreCase) ||
+                          detection.ClassName.Contains("Anomaly", StringComparison.OrdinalIgnoreCase) ||
+                          detection.ClassName.Contains("Critical", StringComparison.OrdinalIgnoreCase) ||
+                          detection.ClassName.Contains("Emergency", StringComparison.OrdinalIgnoreCase);
+
+        var resolvedSeverity = evaluation?.Severity ?? (isCritical ? "Critical" : "Medium");
+
+        if (isCritical && _alertRepository != null)
         {
-            isCritical = true;
+            var existingAlerts = await _alertRepository.FindAsync(
+                a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted);
+            if (existingAlerts == null || !existingAlerts.Any())
+            {
+                await _alertRepository.AddAsync(new EmergencyAlert
+                {
+                    Id = Guid.NewGuid(),
+                    AnomalyId = anomaly.Id,
+                    Status = "Active",
+                    Priority = "Critical",
+                    TriggeredAt = receivedAt,
+                    ReceivedAt = receivedAt,
+                    Notes = $"Auto-generated from Edge detection: {detection.ClassName} (confidence: {detection.Confidence:P1}, severity: {resolvedSeverity})",
+                    CreatedAt = receivedAt
+                });
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
         }
-        else if (detection.ClassName.Contains("Anomaly", StringComparison.OrdinalIgnoreCase) || 
-                 detection.ClassName.Contains("Critical", StringComparison.OrdinalIgnoreCase) || 
-                 detection.ClassName.Contains("Emergency", StringComparison.OrdinalIgnoreCase))
+
+        await PublishIntegrationEventAsync(new AiDetectionCompletedEvent
         {
-            isCritical = true;
-        }
+            EventId = Guid.NewGuid(),
+            RequestId = run.Id,
+            InspectionId = activeMission.Id,
+            MissionId = activeMission.Id,
+            MediaId = media.Id,
+            TowerId = anomaly.TowerId,
+            AnomalyId = anomaly.Id,
+            CategoryCode = category?.CategoryCode ?? mappedCategoryCode,
+            DefectType = category?.CategoryName ?? detection.ClassName,
+            Confidence = Math.Round(detection.Confidence, 3),
+            Severity = resolvedSeverity,
+            IsEmergencyClass = isCritical,
+            IsDefect = true,
+            ImageUrl = anomaly.ImageUrl ?? media.FileUrl,
+            CropUrl = anomaly.CropUrl,
+            DetectedAt = anomaly.CreatedAt
+        }, cancellationToken);
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         try
         {
@@ -254,8 +356,7 @@ public class ReceiveVisionDetectionCommandHandler
                 };
 
                 await _notificationRepository.AddAsync(notification);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _eventPublisher.PublishAsync(new NotificationPushEvent
+                await PublishIntegrationEventAsync(new NotificationPushEvent
                 {
                     UserId = notification.UserId,
                     NotificationId = notification.Id,
@@ -266,22 +367,15 @@ public class ReceiveVisionDetectionCommandHandler
                     ReferenceId = notification.ReferenceId,
                     IsRead = notification.ReadAt != null,
                     SentAt = notification.SentAt
-                });
+                }, cancellationToken);
 
-                // Nếu là khuyết tật nguy hiểm (Critical), push email lập tức cho người tham gia!
+                // Nếu là khuyết tật nguy hiểm (Critical), đánh dấu đã push
                 if (isCritical && !string.IsNullOrEmpty(user.Email))
                 {
-                    try
-                    {
-                        notification.PushedAt = DateTime.UtcNow;
-                        await _notificationRepository.UpdateAsync(notification);
-                        await _unitOfWork.SaveChangesAsync(cancellationToken);
-                    }
-                    catch (Exception emailEx)
-                    {
-                        _logger.LogError(emailEx, "Failed to immediately push notification email to {Email}", user.Email);
-                    }
+                    notification.PushedAt = DateTime.UtcNow;
                 }
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
         }
         catch (Exception ex)
@@ -296,5 +390,22 @@ public class ReceiveVisionDetectionCommandHandler
             RecordId = anomaly.Id,
             ReceivedAt = receivedAt
         };
+    }
+
+    private async Task PublishIntegrationEventAsync<T>(T integrationEvent, CancellationToken cancellationToken) where T : class
+    {
+        if (_outboxRepository != null)
+        {
+            await _outboxRepository.AddAsync(new OutboxMessage
+            {
+                Id = Guid.NewGuid(),
+                MessageType = typeof(T).Name,
+                Payload = JsonSerializer.Serialize(integrationEvent),
+                OccurredAt = DateTime.UtcNow
+            });
+            return;
+        }
+
+        await _eventPublisher.PublishAsync(integrationEvent);
     }
 }

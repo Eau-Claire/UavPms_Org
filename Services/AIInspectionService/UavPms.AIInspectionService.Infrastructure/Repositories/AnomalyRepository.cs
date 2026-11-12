@@ -15,6 +15,7 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
     {
         return await _context.DetectedAnomalies
             .Include(a => a.Media)
+                .ThenInclude(m => m!.Mission)
             .Include(a => a.Category)
             .Include(a => a.Analyst)
             .Include(a => a.AnalysisRun)
@@ -26,6 +27,7 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
     {
         return await _context.DetectedAnomalies
             .Include(a => a.Media)
+                .ThenInclude(m => m!.Mission)
             .Include(a => a.Category)
             .Include(a => a.Analyst)
             .Include(a => a.AnalysisRun)
@@ -37,6 +39,7 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
     {
         return await _context.DetectedAnomalies
             .Include(a => a.Media)
+                .ThenInclude(m => m!.Mission)
             .Include(a => a.Category)
             .Include(a => a.Analyst)
             .Include(a => a.AnalysisRun)
@@ -49,6 +52,7 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
     {
         return await _context.DetectedAnomalies
             .Include(a => a.Media)
+                .ThenInclude(m => m!.Mission)
             .Include(a => a.Category)
             .Include(a => a.Analyst)
             .Include(a => a.AnalysisRun)

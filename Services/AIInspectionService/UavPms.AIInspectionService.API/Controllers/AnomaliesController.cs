@@ -9,19 +9,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
 using UavPms.AIInspectionService.Application.Features.Anomalies;
+using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.AIInspectionService.API.Controllers;
-
-public record AssignAnomalyTowerRequest(Guid TowerId);
-
-public record AnomalyValidateRequestDto(
-    string Status,
-    string? AnalystNotes
-);
 
 [ApiController]
 [ApiVersion("1.0")]
@@ -96,8 +91,11 @@ public class AnomaliesController : ControllerBase
             var s = search.Trim().ToLowerInvariant();
             anomalies = anomalies.Where(a =>
                 (a.Category?.CategoryName != null && a.Category.CategoryName.ToLowerInvariant().Contains(s)) ||
+                (a.Category?.CategoryCode != null && a.Category.CategoryCode.ToLowerInvariant().Contains(s)) ||
                 (a.Tower?.TowerCode != null && a.Tower.TowerCode.ToLowerInvariant().Contains(s)) ||
-                (a.TowerId != null && a.TowerId.Value.ToString().Contains(s))
+                (a.TowerId != null && a.TowerId.Value.ToString().Contains(s)) ||
+                (a.Media?.Mission?.MissionCode != null && a.Media.Mission.MissionCode.ToLowerInvariant().Contains(s)) ||
+                (a.Media?.Mission?.Title != null && a.Media.Mission.Title.ToLowerInvariant().Contains(s))
             ).ToList();
         }
 
@@ -109,23 +107,24 @@ public class AnomaliesController : ControllerBase
             .Select(a => new
             {
                 id = a.Id.ToString(),
-                mediaUrl = a.ImageUrl ?? a.Media?.FileUrl ?? "/images/defect-insulator-crack.png",
+                mediaUrl = a.ImageUrl ?? a.CropUrl ?? a.Media?.FileUrl ?? string.Empty,
                 towerId = a.TowerId,
-                towerCode = a.Tower?.TowerCode ?? a.TowerId?.ToString(),
-                missionCode = a.Media?.MissionId != null ? a.Media.MissionId.ToString() : "MIS-2026-001",
-                missionName = "Khảo sát định kỳ tuyến 220kV",
-                categoryName = a.Category?.CategoryName ?? "Bát cách điện nứt vỡ (Insulator Damage)",
-                categoryCode = a.Category?.CategoryCode ?? "DEF-INS-CRACK",
+                towerCode = a.Tower?.TowerCode ?? string.Empty,
+                missionId = a.Media?.MissionId,
+                missionCode = a.Media?.Mission?.MissionCode ?? string.Empty,
+                missionName = a.Media?.Mission?.Title ?? string.Empty,
+                categoryName = a.Category?.CategoryName ?? string.Empty,
+                categoryCode = a.Category?.CategoryCode ?? string.Empty,
                 boundingBox = a.BoundingBox,
-                confidenceScore = a.ConfidenceScore > 0 ? a.ConfidenceScore : 90,
-                validationStatus = string.IsNullOrWhiteSpace(a.ValidationStatus) ? "Pending" : a.ValidationStatus,
+                confidenceScore = a.ConfidenceScore,
+                validationStatus = string.IsNullOrWhiteSpace(a.ValidationStatus) ? DetectedAnomaly.StatusInReview : a.ValidationStatus,
                 analystNotes = a.AnalystNotes,
                 aiModelName = a.GetAiSource(),
                 aiSource = a.GetAiSource(),
                 analysisRunId = a.AnalysisRunId,
                 supersededById = a.SupersededById,
                 createdAt = a.CreatedAt.ToString("o"),
-                severity = a.Category?.SeverityWeight ?? 4,
+                severity = a.Category?.SeverityWeight ?? 0,
                 isEmergency = a.Category?.IsEmergencyClass == true
             })
             .ToList();
@@ -141,7 +140,7 @@ public class AnomaliesController : ControllerBase
     }
 
     /// <summary>
-    /// Thẩm định anomaly (Xác nhận Confirmed hoặc Bác bỏ Rejected)
+    /// Thẩm định anomaly (Xác nhận Confirmed hoặc Bác bỏ Rejected) — chuẩn hóa cùng một luồng với ReviewMissionAiDetection
     /// </summary>
     [HttpPut("{id:guid}/validate")]
     [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
@@ -150,46 +149,34 @@ public class AnomaliesController : ControllerBase
         [FromBody] AnomalyValidateRequestDto request,
         CancellationToken cancellationToken = default)
     {
-        var anomaly = await _anomalyRepository.GetByIdWithDetailAsync(id);
-        if (anomaly == null)
+        try
         {
-            return NotFound(new ApiResponse(false, $"Anomaly with ID {id} was not found."));
-        }
-
-        var analystId = _currentUserServices.UserId;
-        var notes = request.AnalystNotes ?? string.Empty;
-
-        if (!anomaly.IsAwaitingReview)
-        {
-            throw new BusinessRuleException("ANOMALY_NOT_IN_REVIEW",
-                $"Anomaly is '{anomaly.ValidationStatus}'; only anomalies in review can be confirmed or rejected.");
-        }
-
-        if (string.Equals(request.Status, "Confirmed", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase))
-        {
-            // ERD v2.2: an anomaly must be linked to a tower before it can be Confirmed.
-            anomaly.TowerId ??= anomaly.Media?.TowerId;
-            if (anomaly.TowerId == null)
+            var result = await _mediator.Send(new ReviewMissionAiDetectionCommand
             {
-                throw new BusinessRuleException("TOWER_REQUIRED", "The anomaly must be linked to a tower before it can be confirmed.");
-            }
-            anomaly.Confirm(analystId, notes);
-        }
-        else if (string.Equals(request.Status, "Rejected", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(request.Status, "Dismissed", StringComparison.OrdinalIgnoreCase))
-        {
-            anomaly.Reject(analystId, notes);
-        }
-        else
-        {
-            throw new BusinessRuleException("INVALID_ANOMALY_STATUS",
-                $"Status '{request.Status}' is not allowed; use 'Confirmed' or 'Rejected'.");
-        }
+                MissionId = Guid.Empty,
+                DetectionId = id,
+                Decision = request.Status,
+                Notes = request.AnalystNotes,
+                AnalystFeedbackJson = request.AnalystFeedbackJson,
+                OverrideSeverity = request.OverrideSeverity,
+                TowerId = request.TowerId
+            }, cancellationToken);
 
-        await _anomalyRepository.UpdateAsync(anomaly);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return Ok(new ApiResponse(true, "Anomaly validated successfully."));
+            return Ok(new ApiResponse(true, "Anomaly validated successfully.", result));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new ApiResponse(false, $"Anomaly with ID {id} was not found.", ErrorCode: "NOT_FOUND"));
+        }
     }
 }
+
+public record AssignAnomalyTowerRequest(Guid TowerId);
+
+public record AnomalyValidateRequestDto(
+    string Status,
+    string? AnalystNotes = null,
+    string? AnalystFeedbackJson = null,
+    string? OverrideSeverity = null,
+    Guid? TowerId = null
+);

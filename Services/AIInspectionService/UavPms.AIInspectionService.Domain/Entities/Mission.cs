@@ -14,6 +14,7 @@ public class Mission : BaseEntity
     public Guid ManagerId { get; set; }
     public Guid? UavId { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string MissionType { get; set; } = "AdHoc";
     public DateTime? StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }
     public string? Description { get; set; }

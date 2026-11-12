@@ -275,4 +275,51 @@ public class EmergencyAlertServiceTests
         (await act.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be("ALERT_ALREADY_ACTIVE");
         (await db.EmergencyAlerts.CountAsync(a => a.AnomalyId == anomalyId)).Should().Be(1);
     }
+
+    [Fact]
+    public async Task AiDetectionCompletedConsumer_WhenAnomalyAlreadyExistsInSharedDb_ShouldStillCreateActiveEmergencyAlertIdempotently()
+    {
+        await using var db = CreateContext();
+        var anomalyId = Guid.NewGuid();
+        var mediaId = Guid.NewGuid();
+
+        db.DetectedAnomalies.Add(new DetectedAnomaly
+        {
+            Id = anomalyId,
+            MediaId = mediaId,
+            CategoryId = 1,
+            ValidationStatus = "InReview",
+            ConfidenceScore = 0.95
+        });
+        await db.SaveChangesAsync();
+
+        var consumer = new UavPms.OperationsService.Infrastructure.Messaging.AiDetectionCompletedConsumer(
+            NullLogger<UavPms.OperationsService.Infrastructure.Messaging.AiDetectionCompletedConsumer>.Instance,
+            null!,
+            null!);
+
+        var detectionEvent = new AiDetectionCompletedEvent
+        {
+            EventId = Guid.NewGuid(),
+            AnomalyId = anomalyId,
+            MediaId = mediaId,
+            CategoryCode = "WF",
+            DefectType = "Wildfire / Flashover",
+            Confidence = 0.95,
+            Severity = "Critical",
+            IsEmergencyClass = true,
+            IsDefect = true,
+            DetectedAt = DateTime.UtcNow
+        };
+
+        await consumer.ProcessDefectRecordAsync(db, detectionEvent, CancellationToken.None);
+
+        var alert = await db.EmergencyAlerts.SingleAsync(a => a.AnomalyId == anomalyId);
+        alert.Status.Should().Be("Active");
+        alert.Priority.Should().Be("Critical");
+
+        // Second delivery of the same event must not create a duplicate Active alert
+        await consumer.ProcessDefectRecordAsync(db, detectionEvent, CancellationToken.None);
+        (await db.EmergencyAlerts.CountAsync(a => a.AnomalyId == anomalyId && a.Status == "Active")).Should().Be(1);
+    }
 }

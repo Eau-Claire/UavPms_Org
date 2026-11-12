@@ -10,5 +10,6 @@ public record ReviewDetectedAnomalyCommand(
     string Status,
     string? ReviewNotes = null,
     string? AnalystFeedbackJson = null,
-    string? OverrideSeverity = null
+    string? OverrideSeverity = null,
+    Guid? TowerId = null
 ) : IRequest<ReviewDetectionResultDto>;

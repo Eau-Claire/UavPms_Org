@@ -71,8 +71,10 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         // 5. Cột điện của phiếu suy ra từ bất thường (anomaly.TowerId), không nhận từ request.
 
         // 6. Anomaly validation
-        var anomalyExists = await _db.DetectedAnomalies.AnyAsync(a => a.Id == request.AnomalyId && !a.IsDeleted, ct);
-        if (!anomalyExists)
+        var anomaly = await _db.DetectedAnomalies
+            .Include(a => a.Tower)
+            .FirstOrDefaultAsync(a => a.Id == request.AnomalyId && !a.IsDeleted, ct);
+        if (anomaly == null)
         {
             throw new NotFoundException("Anomaly not found");
         }
@@ -83,20 +85,23 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         var ticketCode = $"TCK-{DateTime.UtcNow:yyyyMMdd}-{(countToday + 1):D3}";
 
         var managerId = _currentUser.UserId != Guid.Empty ? _currentUser.UserId : (tech.CreatedBy ?? Guid.Empty);
+        var now = DateTime.UtcNow;
 
         var ticket = new MaintenanceTicket
         {
             Id = Guid.NewGuid(),
             TicketCode = ticketCode,
             AnomalyId = request.AnomalyId,
+            Anomaly = anomaly,
             ManagerId = managerId,
             TechnicianId = request.TechnicianId,
+            Technician = tech,
             Status = TicketStatus.Open,
             Priority = parsedPriority,
             Description = request.Description,
             DueDate = request.DueDate,
-            AssignedAt = DateTime.UtcNow,
-            CreatedAt = DateTime.UtcNow,
+            AssignedAt = now,
+            CreatedAt = now,
             IsDeleted = false
         };
 
@@ -114,8 +119,20 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             OldValues = "{}",
             IpAddress = _currentUser.IpAddress ?? "",
             UserAgent = _currentUser.UserAgent ?? "",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = now
         });
+
+        _db.Notifications.Add(new Notification
+        {
+            UserId = tech.Id,
+            Title = "Phiếu bảo trì mới",
+            Body = $"Bạn được giao phiếu bảo trì {ticket.TicketCode}.",
+            Type = "MAINTENANCE_ASSIGNED",
+            ReferenceType = "MaintenanceTicket",
+            ReferenceId = ticket.Id,
+        });
+
+        QueueMaintenanceTicketAssignedEvent(ticket, tech.Id, anomaly.TowerId, now);
 
         await _db.SaveChangesAsync(ct);
 
@@ -129,6 +146,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
     {
         var ticket = await _db.MaintenanceTickets
             .Include(t => t.Anomaly)
+                .ThenInclude(a => a!.Tower)
             .FirstOrDefaultAsync(t => t.Id == ticketId && !t.IsDeleted, ct)
             ?? throw new NotFoundException("Maintenance ticket not found");
 
@@ -144,11 +162,13 @@ public class MaintenanceTicketService : IMaintenanceTicketService
 
         var tech = await LoadTechnicianAsync(request.TechnicianId, ct);
         var old = new { ticket.TechnicianId, ticket.DueDate };
+        var now = DateTime.UtcNow;
 
         ticket.TechnicianId = tech.Id;
+        ticket.Technician = tech;
         ticket.DueDate = request.DueDate ?? ticket.DueDate;
-        ticket.AssignedAt = DateTime.UtcNow;
-        ticket.UpdatedAt = DateTime.UtcNow;
+        ticket.AssignedAt = now;
+        ticket.UpdatedAt = now;
 
         _db.AuditLogs.Add(new AuditLog
         {
@@ -161,7 +181,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             NewValues = JsonSerializer.Serialize(new { ticket.TechnicianId, ticket.DueDate }),
             IpAddress = _currentUser.IpAddress ?? "",
             UserAgent = _currentUser.UserAgent ?? "",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = now
         });
 
         _db.Notifications.Add(new Notification
@@ -174,8 +194,34 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             ReferenceId = ticket.Id,
         });
 
+        QueueMaintenanceTicketAssignedEvent(ticket, tech.Id, ticket.Anomaly?.TowerId, now);
+
         await _db.SaveChangesAsync(ct);
         return MapToDto(ticket);
+    }
+
+    private void QueueMaintenanceTicketAssignedEvent(MaintenanceTicket ticket, Guid technicianId, Guid? towerId, DateTime assignedAt)
+    {
+        var ticketAssignedEvent = new MaintenanceTicketAssignedEvent
+        {
+            EventId = Guid.NewGuid(),
+            TicketId = ticket.Id,
+            TicketCode = ticket.TicketCode,
+            Title = $"Phiếu bảo trì {ticket.TicketCode}",
+            TowerId = towerId ?? Guid.Empty,
+            AssignedToUserId = technicianId,
+            Priority = ticket.Priority.ToString(),
+            AnomalyDescription = ticket.Description,
+            AssignedAt = assignedAt
+        };
+
+        _db.OutboxMessages.Add(new OutboxMessage
+        {
+            Id = ticketAssignedEvent.EventId,
+            MessageType = nameof(MaintenanceTicketAssignedEvent),
+            Payload = JsonSerializer.Serialize(ticketAssignedEvent),
+            OccurredAt = assignedAt
+        });
     }
 
     /// <summary>Kỹ thuật viên đang hoạt động kèm số phiếu chưa đóng, để chọn khi giao phiếu.</summary>
