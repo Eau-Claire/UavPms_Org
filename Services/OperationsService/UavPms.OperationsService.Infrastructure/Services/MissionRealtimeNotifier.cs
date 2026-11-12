@@ -56,35 +56,7 @@ public class MissionRealtimeNotifier : IMissionRealtimeNotifier
         // 2. Direct HTTP broadcast fallback to NotificationService (only if RabbitMQ failed)
         if (!rabbitMqSuccess)
         {
-            try
-            {
-                var baseUrl = _configuration["Services:NotificationServiceUrl"]
-                    ?? _configuration["NotificationService:BaseUrl"]
-                    ?? "http://notificationservice:8080";
-
-                var endpoint = $"{baseUrl.TrimEnd('/')}/api/v1/notifications/realtime/mission-event";
-
-                using var httpClient = _httpClientFactory.CreateClient();
-                httpClient.Timeout = TimeSpan.FromSeconds(3);
-
-                var json = JsonSerializer.Serialize(evt);
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await httpClient.PostAsync(endpoint, content, cancellationToken);
-                if (response.IsSuccessStatusCode)
-                {
-                    _logger.LogDebug("Successfully dispatched direct HTTP realtime event for mission {MissionId}", evt.MissionId);
-                }
-                else
-                {
-                    _logger.LogDebug("NotificationService direct HTTP dispatch returned status {StatusCode}", response.StatusCode);
-                }
-            }
-            catch (Exception ex)
-            {
-                // Do not fail user action if notification service HTTP endpoint is unreachable
-                _logger.LogDebug(ex, "Direct HTTP realtime dispatch skipped/failed for mission {MissionId}", evt.MissionId);
-            }
+            await PostDirectFallbackAsync("/api/v1/notifications/realtime/mission-event", evt, "mission", evt.MissionId, cancellationToken);
         }
     }
 
@@ -113,34 +85,51 @@ public class MissionRealtimeNotifier : IMissionRealtimeNotifier
         // 2. Direct HTTP broadcast fallback to NotificationService (if RabbitMQ failed)
         if (!rabbitMqSuccess)
         {
-            try
+            await PostDirectFallbackAsync("/api/v1/notifications/realtime/assessment-event", evt, "assessment", evt.AssessmentId, cancellationToken);
+        }
+    }
+
+    private async Task PostDirectFallbackAsync(string relativePath, object payload, string entityLabel, string entityId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var baseUrl = _configuration["Services:NotificationServiceUrl"]
+                ?? _configuration["NotificationService:BaseUrl"]
+                ?? "http://notificationservice:8080";
+
+            var endpoint = $"{baseUrl.TrimEnd('/')}{relativePath}";
+
+            using var httpClient = _httpClientFactory.CreateClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(3);
+
+            var sharedKey = _configuration["InternalServices:SharedKey"];
+            if (string.IsNullOrWhiteSpace(sharedKey))
             {
-                var baseUrl = _configuration["Services:NotificationServiceUrl"]
-                    ?? _configuration["NotificationService:BaseUrl"]
-                    ?? "http://notificationservice:8080";
-
-                var endpoint = $"{baseUrl.TrimEnd('/')}/api/v1/notifications/realtime/assessment-event";
-
-                using var httpClient = _httpClientFactory.CreateClient();
-                httpClient.Timeout = TimeSpan.FromSeconds(3);
-
-                var json = JsonSerializer.Serialize(evt);
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await httpClient.PostAsync(endpoint, content, cancellationToken);
-                if (response.IsSuccessStatusCode)
-                {
-                    _logger.LogDebug("Successfully dispatched direct HTTP realtime event for assessment {AssessmentId}", evt.AssessmentId);
-                }
-                else
-                {
-                    _logger.LogDebug("NotificationService direct HTTP dispatch returned status {StatusCode}", response.StatusCode);
-                }
+                sharedKey = _configuration["AIService:ServiceKey"];
             }
-            catch (Exception ex)
+
+            if (!string.IsNullOrWhiteSpace(sharedKey))
             {
-                _logger.LogDebug(ex, "Direct HTTP realtime dispatch skipped/failed for assessment {AssessmentId}", evt.AssessmentId);
+                httpClient.DefaultRequestHeaders.TryAddWithoutValidation("X-Internal-Key", sharedKey);
             }
+
+            var json = JsonSerializer.Serialize(payload);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await httpClient.PostAsync(endpoint, content, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogDebug("Successfully dispatched direct HTTP realtime event for {EntityLabel} {EntityId}", entityLabel, entityId);
+            }
+            else
+            {
+                _logger.LogDebug("NotificationService direct HTTP dispatch returned status {StatusCode}", response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Do not fail user action if notification service HTTP endpoint is unreachable
+            _logger.LogDebug(ex, "Direct HTTP realtime dispatch skipped/failed for {EntityLabel} {EntityId}", entityLabel, entityId);
         }
     }
 }

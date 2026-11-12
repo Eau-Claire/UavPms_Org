@@ -1,11 +1,17 @@
 using System;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UavPms.NotificationService.API.Hubs;
 using UavPms.NotificationService.Domain.Entities;
@@ -18,6 +24,8 @@ namespace UavPms.NotificationService.API.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/notifications/realtime")]
+[AllowAnonymous]
+[InternalServiceOrAdminAuth]
 public class RealtimeMissionBroadcastController : ControllerBase
 {
     private readonly IHubContext<NotificationHub> _hubContext;
@@ -35,14 +43,13 @@ public class RealtimeMissionBroadcastController : ControllerBase
     }
 
     [HttpPost("mission-event")]
-    [Authorize(Roles = UserRoles.SystemAdmin)]
     public async Task<IActionResult> BroadcastMissionEvent(
         [FromBody] MissionLifecycleEventDto evt,
         CancellationToken cancellationToken = default)
     {
         if (evt == null || string.IsNullOrWhiteSpace(evt.MissionId))
         {
-            return BadRequest("Invalid event payload or missing mission id.");
+            return BadRequest(new ApiResponse(false, "Invalid event payload or missing mission id.", ErrorCode: "INVALID_PAYLOAD"));
         }
 
         var missionGroup = NotificationHub.MissionGroupName(evt.MissionId);
@@ -135,7 +142,7 @@ public class RealtimeMissionBroadcastController : ControllerBase
                 break;
         }
 
-        return Ok(new { success = true, broadcastGroup = missionGroup, type = evt.Type });
+        return Ok(new ApiResponse(true, "Realtime mission event broadcasted.", new { broadcastGroup = missionGroup, type = evt.Type }));
     }
 
     [HttpPost("assessment-event")]
@@ -145,7 +152,7 @@ public class RealtimeMissionBroadcastController : ControllerBase
     {
         if (evt == null || string.IsNullOrWhiteSpace(evt.AssessmentId))
         {
-            return BadRequest("Invalid event payload or missing assessment id.");
+            return BadRequest(new ApiResponse(false, "Invalid event payload or missing assessment id.", ErrorCode: "INVALID_PAYLOAD"));
         }
 
         var assessmentGroup = NotificationHub.AssessmentGroupName(evt.AssessmentId);
@@ -167,6 +174,53 @@ public class RealtimeMissionBroadcastController : ControllerBase
             await _hubContext.Clients.Group(managerGroup).SendAsync(evt.Type, evt, cancellationToken);
         }
 
-        return Ok(new { success = true, broadcastGroup = assessmentGroup, type = evt.Type });
+        return Ok(new ApiResponse(true, "Realtime assessment event broadcasted.", new { broadcastGroup = assessmentGroup, type = evt.Type }));
+    }
+}
+
+/// <summary>
+/// Secures internal realtime broadcast endpoints: requires either an authenticated SystemAdmin JWT
+/// or a matching internal service key (X-Internal-Key / X-Service-Key against InternalServices:SharedKey or AIService:ServiceKey).
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
+public sealed class InternalServiceOrAdminAuthAttribute : Attribute, IAuthorizationFilter
+{
+    public void OnAuthorization(AuthorizationFilterContext context)
+    {
+        var user = context.HttpContext.User;
+        if (user.Identity?.IsAuthenticated == true && user.IsInRole(UserRoles.SystemAdmin))
+        {
+            return;
+        }
+
+        var config = context.HttpContext.RequestServices.GetService<IConfiguration>();
+        var configuredKey = config?["InternalServices:SharedKey"];
+        if (string.IsNullOrWhiteSpace(configuredKey))
+        {
+            configuredKey = config?["AIService:ServiceKey"];
+        }
+
+        if (!string.IsNullOrWhiteSpace(configuredKey))
+        {
+            var providedKey = context.HttpContext.Request.Headers["X-Internal-Key"].FirstOrDefault()
+                              ?? context.HttpContext.Request.Headers["X-Service-Key"].FirstOrDefault();
+
+            if (!string.IsNullOrWhiteSpace(providedKey) && FixedTimeEquals(providedKey, configuredKey))
+            {
+                return;
+            }
+        }
+
+        context.Result = new UnauthorizedObjectResult(new ApiResponse(
+            false,
+            "Authentication required: provide a SystemAdmin JWT or valid internal service key.",
+            ErrorCode: "UNAUTHORIZED"));
+    }
+
+    private static bool FixedTimeEquals(string a, string b)
+    {
+        var bytesA = Encoding.UTF8.GetBytes(a);
+        var bytesB = Encoding.UTF8.GetBytes(b);
+        return bytesA.Length == bytesB.Length && CryptographicOperations.FixedTimeEquals(bytesA, bytesB);
     }
 }

@@ -4,6 +4,7 @@ using Asp.Versioning;
 using MediatR;
 using UavPms.NotificationService.Application.Features.Notifications.Queries.GetNotifications;
 using UavPms.NotificationService.Application.Features.Notifications.Queries.GetNotificationById;
+using UavPms.NotificationService.Application.Features.Notifications.Queries.GetUnreadCount;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.CreateNotification;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.DeleteNotification;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.MarkNotificationAsRead;
@@ -72,6 +73,43 @@ public class NotificationController : ControllerBase
         }));
     }
 
+    [HttpGet("unread-count")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    public async Task<IActionResult> GetUnreadCount(
+        [FromQuery] string? userId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUserIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub")
+            ?? User.FindFirstValue("uid");
+
+        Guid targetGuid;
+        if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var userGuid))
+        {
+            targetGuid = userGuid;
+            if (Guid.TryParse(currentUserIdStr, out var currentUserId) && currentUserId != userGuid)
+            {
+                var isManagerOrAdmin = User.IsInRole(UserRoles.Manager) || User.IsInRole(UserRoles.SystemAdmin);
+                if (!isManagerOrAdmin)
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden,
+                        new ApiResponse(false, "Forbidden: You can only access your own notifications.", ErrorCode: "FORBIDDEN"));
+                }
+            }
+        }
+        else if (!string.IsNullOrEmpty(currentUserIdStr) && Guid.TryParse(currentUserIdStr, out var currentUserId))
+        {
+            targetGuid = currentUserId;
+        }
+        else
+        {
+            return BadRequest(new ApiResponse(false, "Invalid UserId format.", ErrorCode: "VALIDATION_ERROR"));
+        }
+
+        var count = await _mediator.Send(new GetUnreadCountQuery(targetGuid), cancellationToken);
+        return Ok(new ApiResponse(true, "Unread notification count retrieved successfully.", new { unreadCount = count }));
+    }
+
 
     [HttpGet("{id:guid}")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
@@ -106,7 +144,10 @@ public class NotificationController : ControllerBase
         );
         
         var result = await _mediator.Send(command, cancellationToken);
-        return CreatedAtAction(nameof(GetHistory), new { userId = result.UserId.ToString() }, result);
+        return CreatedAtAction(
+            nameof(GetHistory),
+            new { userId = result.UserId.ToString() },
+            new ApiResponse(true, "Notification created successfully.", result));
     }
 
     [HttpDelete("{id:guid}")]

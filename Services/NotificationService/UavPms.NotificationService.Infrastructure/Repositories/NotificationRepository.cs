@@ -19,6 +19,12 @@ public class NotificationRepository : GenericRepository<Notification>, INotifica
             .ToListAsync();
     }
 
+    public async Task<int> GetUnreadCountByUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Notifications
+            .CountAsync(x => x.UserId == userId && x.ReadAt == null, cancellationToken);
+    }
+
     public async Task MarkAsReadAsync(Guid id)
     {
         var notification = await _context.Notifications.FindAsync(id);
