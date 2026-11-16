@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - ensure-outbox-table
+          - allow-anomaly-resolved-status
 
 concurrency:
   group: production-database-maintenance
@@ -16,14 +17,15 @@ concurrency:
 
 jobs:
   maintenance:
-    name: Ensure OutboxMessages table
-    if: ${{ inputs.operation == 'ensure-outbox-table' }}
+    name: Run Database Maintenance
+    if: ${{ inputs.operation == 'ensure-outbox-table' || inputs.operation == 'allow-anomaly-resolved-status' }}
     runs-on: ubuntu-latest
     environment:
       name: production
 
     steps:
       - name: Ensure OutboxMessages table over SSH
+        if: ${{ inputs.operation == 'ensure-outbox-table' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -99,3 +101,37 @@ jobs:
               -c 'SELECT count(*) AS row_count FROM public."OutboxMessages";'
 
             echo "Production database maintenance completed successfully."
+
+      - name: Allow Resolved in DetectedAnomalies ValidationStatus
+        if: ${{ inputs.operation == 'allow-anomaly-resolved-status' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            CONTAINER_STATUS="$(docker inspect uavpms-db --format '{{.State.Status}}')"
+            if [ "$CONTAINER_STATUS" != "running" ]; then
+              echo "ERROR: uavpms-db is not running (status: $CONTAINER_STATUS)."
+              exit 1
+            fi
+
+            echo "========== FIX CK_DetectedAnomalies_ValidationStatus =========="
+            docker exec uavpms-db psql \
+              -v ON_ERROR_STOP=1 \
+              -U uavpms \
+              -d uavpms \
+              -c 'ALTER TABLE "DetectedAnomalies" DROP CONSTRAINT IF EXISTS "CK_DetectedAnomalies_ValidationStatus"; ALTER TABLE "DetectedAnomalies" ADD CONSTRAINT "CK_DetectedAnomalies_ValidationStatus" CHECK (("ValidationStatus")::text = ANY (ARRAY['\''Pending'\''::character varying, '\''InReview'\''::character varying, '\''Confirmed'\''::character varying, '\''Rejected'\''::character varying, '\''Resolved'\''::character varying]::text[]));'
+
+            echo "========== VERIFY CONSTRAINT =========="
+            docker exec uavpms-db psql \
+              -v ON_ERROR_STOP=1 \
+              -U uavpms \
+              -d uavpms \
+              -c 'SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = '\''public."DetectedAnomalies"'\''::regclass AND conname = '\''CK_DetectedAnomalies_ValidationStatus'\'';'
+
+            echo "Constraint updated successfully."

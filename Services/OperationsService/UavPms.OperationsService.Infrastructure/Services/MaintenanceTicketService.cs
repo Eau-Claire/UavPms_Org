@@ -534,7 +534,15 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             CreatedAt = DateTime.UtcNow
         });
 
-        await _db.SaveChangesAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (anomaly != null && ex.InnerException?.Message.Contains("CK_DetectedAnomalies_ValidationStatus") == true)
+        {
+            _db.Entry(anomaly).State = EntityState.Unchanged;
+            await _db.SaveChangesAsync(ct);
+        }
 
         if (_notifier != null && ticket.AnomalyId != Guid.Empty)
         {
