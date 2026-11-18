@@ -146,7 +146,8 @@ public record PreMissionAssessmentDto(
     AssessmentCheckResultDto Technical,
     AssessmentCheckResultDto Personnel,
     DateTime CreatedAt,
-    DateTime? UpdatedAt
+    DateTime? UpdatedAt,
+    string? ManagerName = null
 )
 {
     public Guid? CompletedMissionId => ConsumedByMissionId;

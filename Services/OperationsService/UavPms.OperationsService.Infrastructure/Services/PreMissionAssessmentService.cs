@@ -176,6 +176,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
     private Task<PreMissionAssessment?> FindByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct) =>
         _db.PreMissionAssessments
+            .Include(a => a.Manager)
             .Include(a => a.Mission)
             .Include(x => x.Towers).ThenInclude(a => a.Tower)
             .Include(x => x.PersonnelCandidates).ThenInclude(p => p.User)
@@ -272,6 +273,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         await RequireAssessmentReader(ct);
 
         var assessment = await _db.PreMissionAssessments
+            .Include(a => a.Manager)
             .Include(a => a.Mission)
             .Include(x => x.Towers).ThenInclude(a => a.Tower)
             .Include(x => x.PersonnelCandidates).ThenInclude(p => p.User)
@@ -333,6 +335,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         }
 
         var query = visible
+            .Include(a => a.Manager)
             .Include(a => a.Mission)
             .Include(x => x.Towers)
             .Include(x => x.PersonnelCandidates)
@@ -405,6 +408,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         await RequireManager(ct);
 
         var assessment = await _db.PreMissionAssessments
+            .Include(a => a.Manager)
             .Include(a => a.Mission)
             .Include(x => x.Towers)
             .Include(x => x.PersonnelCandidates)
@@ -941,6 +945,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         await RequireManager(ct);
 
         var assessment = await _db.PreMissionAssessments
+            .Include(a => a.Manager)
             .Include(a => a.Mission)
             .Include(x => x.Towers)
             .Include(x => x.PersonnelCandidates)
@@ -1000,6 +1005,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         await RequireManager(ct);
 
         var assessment = await _db.PreMissionAssessments
+            .Include(a => a.Manager)
             .Include(a => a.Mission)
             .Include(x => x.Towers)
             .Include(x => x.PersonnelCandidates)

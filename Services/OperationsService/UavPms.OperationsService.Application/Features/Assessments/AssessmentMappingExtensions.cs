@@ -137,7 +137,8 @@ public static class AssessmentMappingExtensions
             technicalCheck,
             personnelCheck,
             entity.CreatedAt,
-            entity.UpdatedAt
+            entity.UpdatedAt,
+            entity.Manager?.FullName ?? entity.Manager?.Email
         );
     }
 
