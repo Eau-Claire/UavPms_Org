@@ -1,0 +1,14 @@
+﻿,,,,,
+,TEST REPORT DOCUMENT,,,,
+,,,,,
+Project Name,UAV-based Powerline Maintenance Management System (UAV-PMS),,,Creator,GFA26SE66 Project Team
+Project Code,GFA26SE66,,,Issue Date,04/11/2026
+Document Code,GFA26SE66-UAVPMS-TR-v1.2,,,Version,1.2
+,,,,,
+,,,,,
+Record of change,,,,,
+Effective Date,Version,Change Item,"*A,D,M",Change description,Reference
+13/10/2026,1.0,A,GFA26SE66,Initial System & Integration Test Specification for MF01-MF04 and CF01-CF02 (100 Test Cases),Report 2 SRS & Report 3 SDD
+20/10/2026,1.1,M,GFA26SE66,"Executed Test Round 1 across all 6 feature modules (92 Passed, 8 Failed; logged DEF-001 to DEF-008)",Test Round 1 Execution Log
+27/10/2026,1.1,M,GFA26SE66,"Executed Test Round 2 after bug fixes (98 Passed, 2 Failed; verified booking overlap & ActionType fixes)",Test Round 2 Execution Log
+04/11/2026,1.2,M,GFA26SE66,"Executed Final Regression Round 3 on Production/Staging (100/100 Passed, 100% Successful Coverage)",CI/CD Regression Pipeline #3

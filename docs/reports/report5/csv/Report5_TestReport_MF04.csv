@@ -1,0 +1,36 @@
+,,,,,,,,,,,,,,,,,
+Feature,MF04 - AI-Powered Defect Analysis & Inspector Verification,,,,,GFA26SE66 QA,,,GFA26SE66 QA,,,GFA26SE66 QA,,,,,Passed
+Test requirement,"Verify YOLOv8 visual/thermal defect detection, severity classification, Inspector verification/annotation editing, and PDF/CSV inspection report generation.",,,,,20/10/2026,,,27/10/2026,,,04/11/2026,,,,,Failed
+Number of TCs,18,,,,,,,,,,,,,,,,Pending
+Testing Round,Passed,Failed,Pending,N/A,,,,,,,,,,,,,N/A
+Round 1,17,1,0,0,,,,,,,,,,,,,
+Round 2,18,0,0,0,,,,,,,,,,,,,
+Round 3,18,0,0,0,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,
+Test Case ID,Test Case Description,Test Case Procedure,Expected Results,Pre-conditions,Round 1,Test date,Tester,Round 2,Test date,Tester,Round 3,Test date,Tester,Note,,,
+MF04.1 - Trigger Automated YOLOv8 Defect Detection Job,,,,,,,,,,,,,,,,,
+MF04-TC01,Trigger asynchronous AI defect detection job for completed session,"1. Authenticate as Inspector/Manager
+2. POST /api/v1/analysis/jobs with sessionId",HTTP 202 Accepted; AnalysisJob created (Queued -> Running -> Completed),Session has 10 uploaded images,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC02,Poll AI analysis job progress and completion metrics,1. GET /api/v1/analysis/jobs/{jobId},"HTTP 200 OK; returns processedImages=10/10, status=Completed, inferenceTimeMs",AnalysisJob running/completed,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC03,Reject duplicate AI analysis job while session job is already Running,1. POST /api/v1/analysis/jobs for same sessionId while status=Running,HTTP 409 Conflict; an analysis job is already running for this session,Job currently Running,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC04,Handle missing MinIO image object gracefully during batch inference,1. Trigger job where 1 media key is missing in MinIO,Job marks missing file as FailedItem and completes remaining 9 images,Simulated missing MinIO key,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+"MF04.2 - Classify Visual Defects (Insulator, Corrosion, Damper)",,,,,,,,,,,,,,,,,
+MF04-TC05,"Detect Broken/Flashover Insulator with normalized bounding box [x,y,w,h]","1. Run YOLOv8 inference on insulator test image
+2. GET /api/v1/sessions/{id}/defects",HTTP 200 OK; returns BrokenInsulator defect with confidence >= 0.85 and valid bbox,Insulator defect image seeded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC06,"Detect Structural Corrosion, Missing Cotter Pin, and Bird Nest on crossarm",1. Run YOLOv8 inference on multi-defect tower image,HTTP 200 OK; all 3 defect classes detected and linked to Tower T-005,Multi-defect image seeded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC07,Filter out low-confidence noise detections below 0.50 threshold,1. Run inference with threshold=0.50 on clean insulator image (noise score 0.22),HTTP 200 OK; sub-threshold detections filtered out (0 false alarms),Clean tower image seeded,Failed,20/10/2026,DEF-005: Detections with conf 0.35 were saved,Passed,27/10/2026,Enforced >= 0.50 confidence filter,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC08,Retain boundary detection with confidence score exactly equal to 0.50,1. Verify detection at exact confidence=0.50 boundary,HTTP 200 OK; detection retained as PendingReview,Boundary test fixture,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04.3 - Analyze Thermal Hotspots & Delta-T Severity,,,,,,,,,,,,,,,,,
+MF04-TC09,Classify Critical thermal hotspot when Delta-T >= +35 C above ambient,"1. Analyze thermal image with clamp temp=78C, ambient=34C (Delta-T=+44C)",HTTP 200 OK; defect classified as ThermalHotspot with severity=Critical,Thermal image uploaded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC10,Classify Medium thermal anomaly at boundary Delta-T = +15.0 C,1. Analyze thermal image with Delta-T=+15.0C,HTTP 200 OK; defect classified with severity=Medium,Thermal image uploaded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC11,Verify normal thermal profile (Delta-T = +2.0 C) logs no thermal defect,1. Analyze normal operating thermal image,HTTP 200 OK; 0 thermal defects created,Normal thermal image,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+"MF04.4 - Inspector Verification, Annotation Edit & Approval",,,,,,,,,,,,,,,,,
+MF04-TC12,"Inspector confirms AI defect, adjusts bounding box, and approves severity","1. Authenticate as Inspector
+2. PUT /api/v1/defects/{id}/verify with status=Confirmed, severity=High, updated bbox","HTTP 200 OK; defect status=Confirmed, verifiedBy and verifiedAt recorded",PendingReview defect exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC13,Inspector rejects false-positive AI detection with mandatory reason,"1. PUT /api/v1/defects/{id}/verify with status=Rejected, note='Sunlight glare on insulator'",HTTP 200 OK; defect marked Rejected and excluded from active maintenance queue,PendingReview defect exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC14,Inspector manually draws a new defect annotation missed by AI,"1. POST /api/v1/media/{mediaId}/defects with manual bbox, class=DamperSlippage, severity=Medium",HTTP 201 Created; manual defect saved with source=ManualInspector,Logged in as Inspector,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC15,Reject defect rejection when Inspector omits mandatory rejection reason,1. PUT /api/v1/defects/{id}/verify with status=Rejected and note='',HTTP 400 Bad Request; rejection note is required,PendingReview defect exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04.5 - Generate & Export Inspection Defect Summary Report,,,,,,,,,,,,,,,,,
+MF04-TC16,Generate PDF inspection report with annotated defect thumbnails & tower map,1. POST /api/v1/missions/{id}/reports/pdf,HTTP 200 OK; returns valid PDF document with all confirmed defects and tower GPS,Mission defects verified,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC17,Export corridor defect statistics and severity breakdown to CSV,1. GET /api/v1/corridors/{id}/defects/export-csv,HTTP 200 OK; returns UTF-8 CSV matching verified defect counts,Verified defects exist,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF04-TC18,Verify rejected false-positive detections are excluded from final PDF report,1. Generate PDF report for mission with 3 Confirmed and 1 Rejected defect,PDF report lists only the 3 Confirmed defects,Mixed Confirmed/Rejected defects,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,

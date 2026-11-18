@@ -1,0 +1,19 @@
+﻿,,,,,,,
+,,,,Function List,,,
+,,,,,,,
+,UAV-based Powerline Maintenance Management System (UAV-PMS),,,Integrated UAV–AI Inspection and Maintenance Management System for Electrical Infrastructure,,,
+,GFA26SE66,,,SEP490-UAV-AIInspec,,,
+,GFA26SE66-UAVPMS-UT-v1.2,,,6,,,
+,,,,"1. .NET unit-test project configured and buildable.
+2. Mocks/stubs available for repository, clock and external readiness dependencies.
+3. MF01 domain/service classes and validation policies available.
+4. Test data builders for assessments, personnel, UAVs and technical inspections.",,,
+,,,,,,,
+,,,,,,,
+,,,,,,,
+1,InfrastructureService,CorridorService / TowerService,CreateCorridorAndImportTowersAsync,MF01-UT,MF01,"Validate transmission corridor creation, voltage level, GeoJSON boundary, and tower sequence import",PostgreSQL & PostGIS test fixture initialized; authenticated Manager/Admin context
+2,OperationsService,MissionPlanningService,CreateMissionAndScheduleBookingsAsync,MF02-UT,MF02,"Validate inspection mission creation, booking overlap detection, pilot qualification, and waypoint generation","Active corridor, towers, UAV, battery, and pilot records seeded in test DB"
+3,OperationsService,FlightExecutionService,SubmitInspectionSessionAndUploadMediaAsync,MF03-UT,MF03,"Validate pre-flight technical check, flight log ingestion, and MinIO presigned image upload",Scheduled mission in ReadyForFlight state and MinIO bucket available
+4,AIService / AnalyticsService,DefectAnalysisService,RunYoloInferenceAndVerifyDefectAsync,MF04-UT,MF04,"Validate YOLOv8 thermal/visual defect inference, severity classification, and engineer verification",Uploaded inspection media in MinIO and YOLOv8 model weights loaded
+5,IdentityService,AuthenticationService,AuthenticateUserAndManageRbacAsync,CF01-UT,CF01,"Validate JWT login, BCrypt password check, OTP verification, refresh token rotation, and RBAC","IdentityDbContext seeded with Admin, Manager, Pilot, and Inspector accounts"
+6,FleetService / MaintenanceService,FleetAndWorkOrderService,RegisterUavAndManageWorkOrderAsync,CF02-UT,CF02,"Validate UAV/battery health tracking, maintenance work order creation, resolution, and audit logging",FleetDbContext and OperationsDbContext initialized with sample UAVs and defects

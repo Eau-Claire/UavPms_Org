@@ -1,0 +1,34 @@
+﻿,,,TEST CASE LIST,,
+,,,,,
+,Project Name,,UAV-based Powerline Maintenance Management System (UAV-PMS),,
+,Project Code,,GFA26SE66,,
+,Test Environment Setup Description,,GFA26SE66-UAVPMS-TR-v1.2,,
+,,,,,
+,,,,,
+,No,Function Name,Sheet Name,Description,Pre-Condition
+,1,Create & Update Transmission Corridor,MF01,Verify creating and updating high-voltage corridors (500kV/220kV/110kV) with GeoJSON LineString boundaries,Logged in as Admin or Manager; Region exists
+,2,"List, Search & Filter Corridors by Region",MF01,"Verify spatial bounding-box search, voltage filtering, pagination, and regional isolation of corridors",Corridors seeded across North/Central/South regions
+,3,Register & Bulk Import Transmission Towers,MF01,Verify adding individual towers and bulk CSV/GeoJSON tower import with PostGIS coordinate validation,Target Corridor exists in InfrastructureDbContext
+,4,Update Tower Specifications & Insulator Metadata,MF01,"Verify updating tower structure type (Suspension/Tension), height, phase configuration, and insulator count",Target Tower exists in Corridor
+,5,Archive / Delete Unassigned Corridor or Tower,MF01,Verify soft-deleting unassigned towers/corridors and blocking deletion when active missions exist,Logged in as Admin or Manager
+,6,Create Inspection Mission & Assign Target Towers,MF02,Verify creating scheduled inspection missions and linking ordered target towers within a corridor,Active Corridor and Towers exist
+,7,"Book UAV, Battery & Pilot with Overlap Check",MF02,Verify resource booking conflict detection and exclusion of soft-deleted bookings from overlap checks,"Available UAV, Battery (SOH >= 70%), and Pilot exist"
+,8,Generate 3D Flight Waypoints & Safety Parameters,MF02,Verify automated 3D waypoint trajectory generation around tower insulator strings and altitude limits,Mission created with target towers
+,9,"Approve, Dispatch & Transition Mission Lifecycle",MF02,Verify Manager approval (Draft -> Scheduled -> ReadyForFlight) and Pilot mission notification,Mission has valid resource bookings and waypoints
+,10,Reschedule or Cancel Inspection Mission,MF02,Verify rescheduling mission windows and releasing UAV/Battery/Pilot bookings upon cancellation,Scheduled Mission exists
+,11,Submit Drone Pre-Flight Technical Inspection,MF03,"Verify Pilot submitting pre-flight checklist (propellers, gimbal, RTK, battery voltage, weather)",Mission is in ReadyForFlight status; logged in as Pilot
+,12,"Start, Track & Complete Flight Inspection Session",MF03,"Verify starting flight session, recording actual takeoff/landing timestamps, and completing session",Pre-flight technical inspection passed
+,13,Ingest UAV Flight Telemetry & Battery Drain Log,MF03,"Verify uploading SRT/CSV flight logs, parsing GPS trajectory points, and updating battery cycle stats",Active or completed InspectionSession exists
+,14,Upload RGB & Thermal Media via MinIO Presigned URL,MF03,"Verify requesting MinIO presigned PUT URLs, uploading high-res RGB/Thermal images, and EXIF GPS tower linking",InspectionSession exists and MinIO storage online
+,15,Trigger Automated YOLOv8 Defect Detection Job,MF04,Verify triggering asynchronous AI inference over uploaded session images and tracking job progress,Inspection media uploaded for session
+,16,"Classify Visual Defects (Insulator, Corrosion, Damper)",MF04,"Verify YOLOv8 bounding-box detection of broken insulators, rust/corrosion, bird nests, and missing pins",AI worker online with YOLOv8 weights loaded
+,17,Analyze Thermal Hotspots & Delta-T Severity,MF04,Verify radiometric thermal Delta-T calculation and severity mapping (Critical/High/Medium/Low),Thermal RJPEG/TIFF images uploaded
+,18,"Inspector Verification, Annotation Edit & Approval",MF04,"Verify Inspector confirming/rejecting AI detections, adjusting bounding boxes, and overriding severity",Logged in as Inspector or Manager; AI job completed
+,19,Generate & Export Inspection Defect Summary Report,MF04,"Verify generating PDF/CSV inspection reports with annotated defect crops, tower GPS, and statistics",Defects reviewed for mission
+,20,"User Login, JWT Token Rotation & Logout",CF01,"Verify email/password login, BCrypt check, access/refresh token rotation, and token revocation on logout",Active user account seeded in IdentityDbContext
+,21,OTP Verification & Password Recovery / Change,CF01,"Verify 6-digit OTP verification, expiry enforcement, and password complexity validation",Registered user email exists
+,22,Role-Based Access Control (RBAC) & User Management,CF01,"Verify Admin user creation, role assignment (Admin/Manager/Pilot/Inspector), and endpoint authorization",Logged in as Admin
+,23,UAV & Battery Fleet Registration & Health Tracking,CF02,"Verify registering UAVs and batteries, tracking flight hours, cycle count, and SOH degradation alerts",Logged in as Manager or Admin
+,24,Create & Assign Maintenance Work Orders from Defects,CF02,Verify automatic and manual work order creation from Critical/High defects with SLA due dates,Confirmed Critical/High defect exists
+,25,"Execute Repair, Upload Evidence & Close Work Order",CF02,"Verify logging repair actions, uploading post-repair photos, and resolving linked tower defects",Open Maintenance WorkOrder exists
+,26,System Audit Trail Logging & Security Event Query,CF02,Verify recording security/operational audit logs (ActionType varchar 100) and filtering by date/user,Logged in as Admin

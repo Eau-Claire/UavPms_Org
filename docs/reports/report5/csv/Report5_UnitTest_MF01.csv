@@ -1,0 +1,42 @@
+﻿,,,,,,,,,,,,,,,,,,,
+Function Code,,MF01-UT,,,Function Name,,,,,,CreateCorridorAndImportTowersAsync,,,,,,,,
+Created By,,GFA26SE66 Project Team,,,Executed By,,,,,,GFA26SE66 QA Team,,,,,,,,
+Lines of code,,480,,,Lack of test cases,,,,,,0,,,,,,,,
+Test requirement,,"Verify transmission corridor creation, voltage level & GeoJSON validation, tower sequence bulk import, and PostGIS spatial coordinate bounds.",,,,,,,,,,,,,,,,,
+Passed,,Failed,,,Untested,,,,,,N/A/B,,,Total Test Cases,,,,,
+15,,0,,,0,,,,,,6,6,3,15,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,UT-001,UT-002,UT-003,UT-004,UT-005,UT-006,UT-007,UT-008,UT-009,UT-010,UT-011,UT-012,UT-013,UT-014,UT-015
+Condition,,,,,,,,,,,,,,,,,,,
+,1. Corridor Code & Name,,"Valid unique corridor code (""COR-500KV-NORTH-01"")",,O,O,O,O,O,O,,O,O,,,O,O,O,O
+,,,Corridor code at max length boundary (50 chars),,,,,,,,O,,,,,,,,
+,,,"Empty or whitespace corridor code ("""")",,,,,,,,,,,O,,,,,
+,,,Duplicate corridor code already in InfrastructureDbContext,,,,,,,,,,,,O,,,,
+,2. Voltage Level & Region,,"Valid voltage level (""500kV"" / ""220kV"") and active RegionId",,O,O,O,O,O,O,O,,O,O,O,,,O,O
+,,,"Boundary voltage level (""110kV"" minimum supported transmission tier)",,,,,,,,,O,,,,,,,
+,,,"Unsupported voltage level (""0kV"" or negative)",,,,,,,,,,,,,O,,,
+,,,Non-existent RegionId GUID,,,,,,,,,,,,,,O,,
+,3. GeoJSON & Tower Coordinates,,Valid GeoJSON LineString & tower coordinates inside Vietnam bounds,,O,O,O,O,O,O,O,,O,O,O,O,O,,O
+,,,"Boundary coordinates on border (Lat=8.5000, Lon=102.1400)",,,,,,,,,O,,,,,,,
+,,,"Invalid latitude/longitude out of range (Lat=95.0, Lon=200.0)",,,,,,,,,,,,,,,O,
+,,,"Valid ordered tower sequence (T-001 to T-020, height 45m)",,O,O,O,O,O,O,O,O,,O,O,O,O,,
+,4. Tower Sequence & Structure,,"Boundary single-tower micro-corridor (1 tower, height=15m min)",,,,,,,,,,O,,,,,,
+,,,Duplicate tower sequence number in import batch (T-001 twice),,,,,,,,,,,,,,,O,
+,,,Unauthorized caller role (Pilot role instead of Manager/Admin),,,,,,,,,,,,,,,,O
+,,,,,,,,,,,,,,,,,,,
+,5. Authorization & DB Context,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,Return / HTTP Status,,Returns 201 Created / 200 OK with persisted CorridorDto & TowerDtos,,O,O,O,O,O,O,,,,,,,,,
+,,,Returns 201 Created for boundary input (max length / border coords / 1 tower),,,,,,,,O,O,O,,,,,,
+Confirm,,,Returns 400 Bad Request / 409 Conflict / 403 Forbidden error response,,,,,,,,,,,O,O,O,O,O,O
+,,,Database transaction committed (for valid) or rolled back (for invalid),,,,,,,,,,,,,,,,
+,Exception / Log,,,,201 Created (Corridor + 20 Towers),200 OK (Corridor updated),201 Created (Bulk CSV 20 towers),200 OK (Tower insulator updated),200 OK (Spatial query matched),200 OK (Soft-delete unassigned tower),201 Created (50-char code accepted),201 Created (110kV & border coords),201 Created (Single-tower 15m min),400 Bad Request,409 Conflict,400 Bad Request,404 Not Found,400 Bad Request,403 Forbidden
+,Expected Exception,,Exception Class Thrown / Caught,,None,None,None,None,None,None,None,None,None,ValidationException,DuplicateResourceException,ValidationException,EntityNotFoundException,SpatialValidationException,ForbiddenAccessException
+,Log / Response Message,,Returned Message / Audit Log Entry,,"""Corridor COR-500KV-NORTH-01 created successfully""","""Corridor metadata updated successfully""","""Imported 20 towers into corridor""","""Tower T-005 specification updated""","""Returned 20 towers within bounding box""","""Tower T-020 archived successfully""","""Corridor created with max-length code""","""Tower saved at boundary coordinates""","""Single-tower corridor initialized""","""Corridor code is required""","""Corridor code COR-500KV-NORTH-01 already exists""","""Unsupported voltage level: 0kV""","""RegionId was not found""","""Coordinates out of bounds or duplicate sequence""","""Role Pilot is not permitted to modify corridors"""
+Result,"Type (N: Normal, A: Abnormal, B: Boundary)",,,,N,N,N,N,N,N,B,B,B,A,A,A,A,A,A
+,Passed/Failed,,,,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P
+,Executed Date,,,,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026
+,Defect ID,,,,,,,,,,,,,,,,,,

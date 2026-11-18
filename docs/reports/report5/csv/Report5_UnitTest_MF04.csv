@@ -1,0 +1,42 @@
+﻿,,,,,,,,,,,,,,,,,,,
+Function Code,,MF04-UT,,,Function Name,,,,,,RunYoloInferenceAndVerifyDefectAsync,,,,,,,,
+Created By,,GFA26SE66 Project Team,,,Executed By,,,,,,GFA26SE66 QA Team,,,,,,,,
+Lines of code,,510,,,Lack of test cases,,,,,,0,,,,,,,,
+Test requirement,,"Verify YOLOv8 visual/thermal defect detection, bounding box normalization, severity classification, Inspector verification, and PDF report export.",,,,,,,,,,,,,,,,,
+Passed,,Failed,,,Untested,,,,,,N/A/B,,,Total Test Cases,,,,,
+15,,0,,,0,,,,,,6,6,3,15,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,UT-001,UT-002,UT-003,UT-004,UT-005,UT-006,UT-007,UT-008,UT-009,UT-010,UT-011,UT-012,UT-013,UT-014,UT-015
+Condition,,,,,,,,,,,,,,,,,,,
+,1. Image Input & Batch,,Valid batch of 10 RGB + Thermal inspection images in MinIO,,O,O,O,O,O,O,,O,O,O,,O,O,O,O
+,,,Boundary batch size (Single image=1 or max batch=100 images),,,,,,,,O,,,,,,,,
+,,,Empty image list (0 images) or missing object key in MinIO,,,,,,,,,,,,O,,,,
+,,,Detections with high confidence score (0.88 for broken insulator / corrosion),,O,O,O,O,O,O,O,,O,,O,O,O,O,O
+,2. YOLOv8 Confidence Score,,Boundary confidence score exactly at threshold (Confidence = 0.50),,,,,,,,,O,,,,,,,
+,,,"Low confidence noise below threshold (Confidence = 0.22 < 0.50, filtered)",,,,,,,,,,,O,,,,,
+,,,Thermal hotspot Delta-T = +42 C -> classified as Critical severity,,O,O,O,O,O,O,O,O,,,O,O,O,O,O
+,,,Boundary thermal Delta-T = +15.0 C -> classified as Medium severity threshold,,,,,,,,,,O,,,,,,
+,3. Thermal Delta-T & Severity,,Normal component temperature (Delta-T = +1.5 C -> Normal / No defect),,,,,,,,,,,O,,,,,
+,,,"Inspector confirms defect, adjusts bounding box, and approves severity",,O,O,O,O,,O,O,O,O,O,O,,O,O,O
+,,,Inspector marks false-positive detection as Rejected with mandatory reason,,,,,,O,,,,,,,,,,
+,,,Inspector attempts to reject defect without providing rejection note,,,,,,,,,,,,,O,,,
+,4. Inspector Review Action,,Valid completed analysis job exported to PDF/CSV summary report,,O,O,O,O,O,O,O,O,O,O,O,O,,,
+,,,Duplicate analysis job trigger while session job is already Running,,,,,,,,,,,,,,O,,
+,,,AI inference timeout or malformed bounding box (x2 < x1),,,,,,,,,,,,,,,O,O
+,,,,,,,,,,,,,,,,,,,
+,5. Report & Service State,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,Return / HTTP Status,,"Returns 200 OK / 201 Created with AnalysisJobDto, DefectDtos & PDF stream",,O,O,,,O,O,,,,O,,,,,
+,,,Returns 200 OK for boundary batch size / 0.50 confidence / 15.0C Delta-T,,,,,,,,O,O,O,,,,,,
+Confirm,,,Returns 400 Bad Request / 404 Not Found / 409 Conflict / 504 Timeout,,,,,,,,,,,,O,O,O,O,O
+,,,Persists verified defects and triggers Maintenance WorkOrder when Critical/High,,,,O,O,,,,,,,,,,,
+,Exception / Log,,,,202 Accepted (AnalysisJob queued),200 OK (3 visual defects detected),200 OK (Critical thermal hotspot),200 OK (Defect Confirmed),200 OK (False positive Rejected),200 OK (PDF Report generated),200 OK (Boundary 1 & 100 images),200 OK (Confidence=0.50 retained),200 OK (Delta-T=15.0C -> Medium),200 OK (0 defects - clean image),404 Not Found,400 Bad Request,409 Conflict,400 Bad Request,504 Gateway Timeout
+,Expected Exception,,Exception Class Thrown / Caught,,None,None,None,None,None,None,None,None,None,None,MediaObjectNotFoundException,ValidationException,JobAlreadyRunningException,InvalidBoundingBoxException,AiInferenceTimeoutException
+,Log / Response Message,,Returned Message / Audit Log Entry,,"""AI analysis job started for 10 images""","""YOLOv8 detected BrokenInsulator (conf=0.88)""","""Thermal Delta-T +42C classified as Critical""","""Inspector confirmed defect DEF-101""","""Defect marked as FalsePositive with note""","""Generated inspection report PDF (1.4 MB)""","""Processed boundary batch size successfully""","""Detection at 0.50 threshold retained""","""Classified 15.0C hotspot as Medium severity""","""Filtered sub-threshold noise; 0 defects logged""","""Inspection media file not found in MinIO""","""Rejection reason is required when rejecting defect""","""Analysis job is already running for this session""","""Bounding box coordinates must satisfy x2 > x1""","""AI worker timed out; job queued for retry"""
+Result,"Type (N: Normal, A: Abnormal, B: Boundary)",,,,N,N,N,N,N,N,B,B,B,B,A,A,A,A,A
+,Passed/Failed,,,,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P
+,Executed Date,,,,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026
+,Defect ID,,,,,,,,,,,,,,,,,,

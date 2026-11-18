@@ -1,0 +1,37 @@
+﻿,,,,,,,,,,,,,,,,,
+Feature,MF01 - Infrastructure & Transmission Corridor Management,,,,,GFA26SE66 QA,,,GFA26SE66 QA,,,GFA26SE66 QA,,,,,Passed
+Test requirement,"Verify CRUD, spatial search, bulk tower import, insulator metadata management, and regional isolation for high-voltage corridors and transmission towers.",,,,,20/10/2026,,,27/10/2026,,,04/11/2026,,,,,Failed
+Number of TCs,18,,,,,,,,,,,,,,,,Pending
+Testing Round,Passed,Failed,Pending,N/A,,,,,,,,,,,,,N/A
+Round 1,17,1,0,0,,,,,,,,,,,,,
+Round 2,18,0,0,0,,,,,,,,,,,,,
+Round 3,18,0,0,0,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,
+Test Case ID,Test Case Description,Test Case Procedure,Expected Results,Pre-conditions,Round 1,Test date,Tester,Round 2,Test date,Tester,Round 3,Test date,Tester,Note,,,
+MF01.1 - Create & Update Transmission Corridor,,,,,,,,,,,,,,,,,
+MF01-TC01,Create valid 500kV corridor with GeoJSON LineString,"1. Authenticate as Manager
+2. POST /api/v1/corridors with valid code COR-500KV-NORTH-01, voltage 500kV, RegionId, and GeoJSON",HTTP 201 Created; corridor persisted in InfrastructureDbContext with spatial geometry,Manager JWT valid,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC02,"Update existing corridor name, length, and voltage tier","1. Authenticate as Manager
+2. PUT /api/v1/corridors/{id} with updated name and 220kV voltage",HTTP 200 OK; corridor metadata updated and audit log recorded,Corridor COR-500KV-NORTH-01 exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC03,Reject corridor creation with duplicate corridor code,1. POST /api/v1/corridors using existing code COR-500KV-NORTH-01,"HTTP 409 Conflict with message ""Corridor code already exists""",Corridor COR-500KV-NORTH-01 exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC04,Reject corridor creation with empty name or invalid voltage (0kV),1. POST /api/v1/corridors with name='' and voltage='0kV',HTTP 400 Bad Request with field validation errors,Manager JWT valid,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+"MF01.2 - List, Search & Filter Corridors by Region",,,,,,,,,,,,,,,,,
+MF01-TC05,Filter corridors by RegionId and voltage level (500kV),1. GET /api/v1/corridors?regionId={north}&voltage=500kV&page=1&pageSize=20,HTTP 200 OK; returns only 500kV corridors belonging to North region,Multi-region corridors seeded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC06,Query corridors and towers within PostGIS spatial bounding box,1. GET /api/v1/corridors/spatial?minLat=20.5&maxLat=21.5&minLon=105.5&maxLon=106.5,HTTP 200 OK; returns corridors and towers intersecting bounding box,PostGIS index active,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC07,Verify regional isolation between North and South region datasets,"1. Authenticate as North Region Manager
+2. GET /api/v1/corridors",HTTP 200 OK; South region corridors are isolated and not mixed into North scope,Regional Manager account,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC08,Search corridors by keyword with empty match result,1. GET /api/v1/corridors?search=NON_EXISTENT_LINE_999,HTTP 200 OK; returns empty items array [] with totalCount=0,Authenticated user,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01.3 - Register & Bulk Import Transmission Towers,,,,,,,,,,,,,,,,,
+MF01-TC09,Add single transmission tower with valid GPS & sequence number,"1. POST /api/v1/corridors/{id}/towers with code T-001, lat 21.0285, lon 105.8542, height 45m",HTTP 201 Created; tower saved and linked to corridor,Target corridor exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC10,Bulk import 20 ordered towers from CSV/GeoJSON file,1. POST /api/v1/corridors/{id}/towers/import with 20-tower CSV payload,HTTP 201 Created; all 20 towers imported in atomic transaction,Target corridor exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC11,Reject tower import when GPS latitude/longitude is out of range,"1. POST /api/v1/corridors/{id}/towers/import with row containing lat=95.5, lon=190.0",HTTP 400 Bad Request; entire batch rolled back with row-level error detail,Target corridor exists,Failed,20/10/2026,DEF-001: Partial rows committed before rollback fix,Passed,27/10/2026,Verified atomic transaction rollback,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC12,Reject duplicate tower sequence number within the same corridor,1. POST /api/v1/corridors/{id}/towers with duplicate sequenceNumber=1,HTTP 409 Conflict; duplicate sequence number rejected,Tower #1 already exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01.4 - Update Tower Specifications & Insulator Metadata,,,,,,,,,,,,,,,,,
+MF01-TC13,Update tower structure type (Tension) and glass insulator count,"1. PUT /api/v1/towers/{id} with type=Tension, insulatorType=ToughenedGlass, strings=6",HTTP 200 OK; tower technical attributes updated,Tower T-005 exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC14,Retrieve tower detail with historical defect count & last inspection date,1. GET /api/v1/towers/{id}/summary,"HTTP 200 OK; returns tower metadata, coordinates, and defect summary",Tower T-005 exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC15,Reject tower update with negative tower height (-10m),1. PUT /api/v1/towers/{id} with heightMeters=-10,HTTP 400 Bad Request; height must be between 10m and 250m,Tower T-005 exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01.5 - Archive / Delete Unassigned Corridor or Tower,,,,,,,,,,,,,,,,,
+MF01-TC16,Soft-delete unassigned tower with no mission history,1. DELETE /api/v1/towers/{unassignedId} as Manager,HTTP 200 OK; tower IsDeleted=true and excluded from active queries,Unassigned tower exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC17,Block deletion of corridor/tower referenced by active scheduled mission,1. DELETE /api/v1/corridors/{activeCorridorId},HTTP 409 Conflict; cannot delete corridor with active inspection missions,Corridor has active mission,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF01-TC18,Block Pilot or Inspector role from deleting infrastructure assets,"1. Authenticate as Pilot
+2. DELETE /api/v1/towers/{id}",HTTP 403 Forbidden; insufficient role permissions,Logged in as Pilot,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,

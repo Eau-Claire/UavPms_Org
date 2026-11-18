@@ -71,6 +71,145 @@ public class AnomaliesController : ControllerBase
     }
 
     /// <summary>
+    /// Lấy chi tiết anomaly theo Id
+    /// </summary>
+    [HttpGet("{id:guid}")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    public async Task<IActionResult> GetAnomalyById([FromRoute] Guid id, CancellationToken cancellationToken = default)
+    {
+        var a = await _anomalyRepository.GetByIdWithDetailAsync(id);
+        if (a == null)
+        {
+            return NotFound(new ApiResponse(false, $"Anomaly with ID {id} was not found.", ErrorCode: "NOT_FOUND"));
+        }
+
+        return Ok(new ApiResponse(true, "Anomaly retrieved successfully.", new
+        {
+            id = a.Id.ToString(),
+            mediaUrl = a.ImageUrl ?? a.CropUrl ?? a.Media?.FileUrl ?? string.Empty,
+            towerId = a.TowerId,
+            towerCode = a.Tower?.TowerCode ?? string.Empty,
+            missionId = a.Media?.MissionId,
+            missionCode = a.Media?.Mission?.MissionCode ?? string.Empty,
+            missionName = a.Media?.Mission?.Title ?? string.Empty,
+            categoryName = a.Category?.CategoryName ?? string.Empty,
+            categoryCode = a.Category?.CategoryCode ?? string.Empty,
+            boundingBox = a.BoundingBox,
+            confidenceScore = a.ConfidenceScore,
+            validationStatus = string.IsNullOrWhiteSpace(a.ValidationStatus) ? DetectedAnomaly.StatusInReview : a.ValidationStatus,
+            analystNotes = a.AnalystNotes,
+            aiModelName = a.GetAiSource(),
+            aiSource = a.GetAiSource(),
+            analysisRunId = a.AnalysisRunId,
+            supersededById = a.SupersededById,
+            createdAt = a.CreatedAt.ToString("o"),
+            severity = a.Category?.SeverityWeight ?? 0,
+            isEmergency = a.Category?.IsEmergencyClass == true
+        }));
+    }
+
+    /// <summary>
+    /// Lấy danh sách các anomaly/phát hiện với bộ lọc trạng thái (All, Pending, Confirmed, Rejected, Resolved)
+    /// </summary>
+    [HttpGet]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    public async Task<IActionResult> GetAnomalies(
+        [FromQuery] int pageIndex = 1,
+        [FromQuery] int pageSize = 12,
+        [FromQuery] string? status = null,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (pageIndex < 1) pageIndex = 1;
+        if (pageSize < 1) pageSize = 12;
+
+        IReadOnlyList<DetectedAnomaly> allAnomalies;
+        var sStatus = status?.Trim().ToLowerInvariant();
+        if (sStatus == "pending" || sStatus == "inreview")
+        {
+            allAnomalies = await _anomalyRepository.GetPendingWithDetailsAsync();
+        }
+        else
+        {
+            allAnomalies = await _anomalyRepository.GetAllWithDetailsAsync();
+            if (!string.IsNullOrWhiteSpace(sStatus) && sStatus != "all")
+            {
+                allAnomalies = allAnomalies.Where(a =>
+                    string.Equals(a.ValidationStatus, sStatus, StringComparison.OrdinalIgnoreCase) ||
+                    (sStatus == "confirmed" && (a.ValidationStatus == DetectedAnomaly.StatusConfirmed || a.ValidationStatus == "Confirmed")) ||
+                    (sStatus == "rejected" && (a.ValidationStatus == DetectedAnomaly.StatusRejected || a.ValidationStatus == "Rejected")) ||
+                    (sStatus == "resolved" && (a.ValidationStatus == "Resolved" || a.ValidationStatus == "resolved"))
+                ).ToList();
+            }
+        }
+
+        var currentUserId = _currentUserServices.UserId;
+        if (currentUserId != Guid.Empty && User.IsInRole(UserRoles.Analyst))
+        {
+            allAnomalies = allAnomalies.Where(a =>
+                a.Media?.Mission == null ||
+                a.Media.Mission.Assignments.Any(asg =>
+                    asg.UserId == currentUserId &&
+                    (asg.AssignmentRole == "ANALYST" || asg.AssignmentRole.Equals("Analyst", StringComparison.OrdinalIgnoreCase)) &&
+                    asg.Status == "Active")
+            ).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLowerInvariant();
+            allAnomalies = allAnomalies.Where(a =>
+                (a.Category?.CategoryName != null && a.Category.CategoryName.ToLowerInvariant().Contains(s)) ||
+                (a.Category?.CategoryCode != null && a.Category.CategoryCode.ToLowerInvariant().Contains(s)) ||
+                (a.Tower?.TowerCode != null && a.Tower.TowerCode.ToLowerInvariant().Contains(s)) ||
+                (a.TowerId != null && a.TowerId.Value.ToString().Contains(s)) ||
+                (a.Media?.Mission?.MissionCode != null && a.Media.Mission.MissionCode.ToLowerInvariant().Contains(s)) ||
+                (a.Media?.Mission?.Title != null && a.Media.Mission.Title.ToLowerInvariant().Contains(s)) ||
+                a.Id.ToString().ToLowerInvariant().Contains(s)
+            ).ToList();
+        }
+
+        var totalCount = allAnomalies.Count;
+        var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+        var pagedItems = allAnomalies
+            .Skip((pageIndex - 1) * pageSize)
+            .Take(pageSize)
+            .Select(a => new
+            {
+                id = a.Id.ToString(),
+                mediaUrl = a.ImageUrl ?? a.CropUrl ?? a.Media?.FileUrl ?? string.Empty,
+                towerId = a.TowerId,
+                towerCode = a.Tower?.TowerCode ?? string.Empty,
+                missionId = a.Media?.MissionId,
+                missionCode = a.Media?.Mission?.MissionCode ?? string.Empty,
+                missionName = a.Media?.Mission?.Title ?? string.Empty,
+                categoryName = a.Category?.CategoryName ?? string.Empty,
+                categoryCode = a.Category?.CategoryCode ?? string.Empty,
+                boundingBox = a.BoundingBox,
+                confidenceScore = a.ConfidenceScore,
+                validationStatus = string.IsNullOrWhiteSpace(a.ValidationStatus) ? DetectedAnomaly.StatusInReview : a.ValidationStatus,
+                analystNotes = a.AnalystNotes,
+                aiModelName = a.GetAiSource(),
+                aiSource = a.GetAiSource(),
+                analysisRunId = a.AnalysisRunId,
+                supersededById = a.SupersededById,
+                createdAt = a.CreatedAt.ToString("o"),
+                severity = a.Category?.SeverityWeight ?? 0,
+                isEmergency = a.Category?.IsEmergencyClass == true
+            })
+            .ToList();
+
+        return Ok(new ApiResponse(true, "Anomalies retrieved successfully.", new
+        {
+            items = pagedItems,
+            totalCount,
+            pageIndex,
+            pageSize,
+            totalPages
+        }));
+    }
+
+    /// <summary>
     /// Lấy danh sách các anomaly/phát hiện đang chờ thẩm định (Pending validation)
     /// </summary>
     [HttpGet("pending")]

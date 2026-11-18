@@ -1,0 +1,42 @@
+,,,,,,,,,,,,,,,,,,,
+Function Code,,MF02-UT,,,Function Name,,,,,,CreateMissionAndScheduleBookingsAsync,,,,,,,,
+Created By,,GFA26SE66 Project Team,,,Executed By,,,,,,GFA26SE66 QA Team,,,,,,,,
+Lines of code,,520,,,Lack of test cases,,,,,,0,,,,,,,,
+Test requirement,,"Verify inspection mission creation, tower target assignment, UAV/Battery/Pilot booking overlap exclusion, and 3D waypoint trajectory generation.",,,,,,,,,,,,,,,,,
+Passed,,Failed,,,Untested,,,,,,N/A/B,,,Total Test Cases,,,,,
+15,,0,,,0,,,,,,6,6,3,15,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,UT-001,UT-002,UT-003,UT-004,UT-005,UT-006,UT-007,UT-008,UT-009,UT-010,UT-011,UT-012,UT-013,UT-014,UT-015
+Condition,,,,,,,,,,,,,,,,,,,
+,1. Mission Schedule Window,,"Valid future schedule window (StartTime < EndTime, duration 2h)",,O,O,O,O,O,O,,O,O,,O,O,O,O,O
+,,,Boundary schedule window (Minimum 15-minute mission slot),,,,,,,,O,,,,,,,,
+,,,Invalid time window (EndTime <= StartTime or in the past),,,,,,,,,,,O,,,,,
+,,,Valid active CorridorId with 5 target towers in same region,,O,O,O,O,O,O,,O,O,O,,O,O,O,O
+,2. Corridor & Target Towers,,Boundary target list (Single tower inspection mission),,,,,,,,O,,,,,,,,
+,,,Target tower belongs to a different corridor/region (cross-region mismatch),,,,,,,,,,,,O,,,,
+,,,"Available UAV (Status=Active) and Battery (SOH=92%, Charge=100%)",,O,O,O,,O,O,O,,O,O,O,,,O,O
+,,,"Boundary Battery SOH at minimum threshold (SOH=70%, Charge=85%)",,,,,,,,,O,,,,,,,
+,3. UAV & Battery Resource,,UAV or Battery already booked in overlapping active mission window,,,,,,,,,,,,,O,O,,
+,,,"Soft-deleted prior booking in same window (IsDeleted=true, should NOT block)",,,,,O,,,,,,,,,,,
+,,,Certified active Pilot in same region with no overlapping booking,,O,O,O,O,O,O,O,O,O,O,O,O,O,,O
+,,,Pilot certificate expired or assigned to another overlapping mission,,,,,,,,,,,,,,,O,
+,4. Pilot Qualification & Role,,"Valid flight parameters (Altitude=60m, Speed=8m/s, Gimbal=-45 deg)",,O,O,O,O,O,O,O,O,,O,O,O,O,O,
+,,,"Boundary flight altitude (Max legal ceiling 120m, Speed=15m/s)",,,,,,,,,,O,,,,,,
+,,,Unsafe flight altitude (<10m collision risk or >150m airspace limit),,,,,,,,,,,,,,,,O
+,,,,,,,,,,,,,,,,,,,
+,5. Waypoint & Flight Params,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,Return / HTTP Status,,"Returns 201 Created / 200 OK with MissionDto, ResourceBookings & Waypoints",,O,O,O,,O,O,,,,,,,,,
+,,,Returns 201 Created for boundary slot / single tower / 70% SOH / 120m ceiling,,,,,,,,O,O,O,,,,,,
+Confirm,,,Returns 400 Bad Request / 409 Conflict when schedule or resource is invalid,,,,,,,,,,,O,O,O,O,O,O
+,,,Excludes soft-deleted bookings and commits atomic mission schedule,,,,,O,,,,,,,,,,,
+,Exception / Log,,,,201 Created (Mission + 5 Towers),200 OK (ResourceBookings created),200 OK (42 Waypoints generated),201 Created (Ignored deleted booking),200 OK (Status -> Ready),200 OK (Mission cancelled & freed),201 Created (15-min 1-tower slot),201 Created (Battery SOH=70% min),201 Created (Altitude=120m max),400 Bad Request,400 Bad Request,409 Conflict,409 Conflict,409 Conflict,400 Bad Request
+,Expected Exception,,Exception Class Thrown / Caught,,None,None,None,None,None,None,None,None,None,ValidationException,CrossRegionMismatchException,ResourceBookingOverlapException,ResourceBookingOverlapException,PilotUnavailableException,ValidationException
+,Log / Response Message,,Returned Message / Audit Log Entry,,"""Mission MSN-2026-001 scheduled successfully""","""UAV, Battery, and Pilot booked without conflict""","""Generated 3D waypoint trajectory for 5 towers""","""Re-booked slot previously held by cancelled mission""","""Mission approved by Manager and dispatched""","""Mission cancelled; resource bookings soft-deleted""","""Minimum duration single-tower mission scheduled""","""Battery accepted at minimum 70% SOH threshold""","""Waypoints generated at 120m ceiling boundary""","""Mission EndTime must be greater than StartTime""","""Target tower does not belong to selected corridor""","""UAV is already booked during the requested window""","""Battery pack has an overlapping booking""","""Pilot certificate expired or schedule conflict""","""Flight altitude 160m exceeds safety limit (120m)"""
+Result,"Type (N: Normal, A: Abnormal, B: Boundary)",,,,N,N,N,N,N,N,B,B,B,A,A,A,A,A,A
+,Passed/Failed,,,,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P
+,Executed Date,,,,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026
+,Defect ID,,,,,,,,,,,,,,,,,,

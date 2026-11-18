@@ -1,0 +1,36 @@
+,,,,,,,,,,,,,,,,,
+Feature,MF02 - Inspection Mission Planning & Resource Scheduling,,,,,GFA26SE66 QA,,,GFA26SE66 QA,,,GFA26SE66 QA,,,,,Passed
+Test requirement,"Verify inspection mission creation, target tower assignment, UAV/Battery/Pilot booking overlap exclusion, 3D waypoint generation, and approval lifecycle.",,,,,20/10/2026,,,27/10/2026,,,04/11/2026,,,,,Failed
+Number of TCs,18,,,,,,,,,,,,,,,,Pending
+Testing Round,Passed,Failed,Pending,N/A,,,,,,,,,,,,,N/A
+Round 1,17,1,0,0,,,,,,,,,,,,,
+Round 2,17,1,0,0,,,,,,,,,,,,,
+Round 3,18,0,0,0,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,
+Test Case ID,Test Case Description,Test Case Procedure,Expected Results,Pre-conditions,Round 1,Test date,Tester,Round 2,Test date,Tester,Round 3,Test date,Tester,Note,,,
+MF02.1 - Create Inspection Mission & Assign Target Towers,,,,,,,,,,,,,,,,,
+MF02-TC01,Create Routine inspection mission with 5 target towers in corridor,"1. Authenticate as Manager
+2. POST /api/v1/missions with corridorId, missionType=Routine, start/end window, and 5 towerIds",HTTP 201 Created; mission created in Draft/Scheduled state with 5 MissionTarget records,Corridor & 5 towers exist,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC02,Create Emergency post-storm inspection mission for single priority tower,1. POST /api/v1/missions with priority=Emergency and 1 target tower,HTTP 201 Created; emergency priority flagged for immediate dispatch,Corridor & tower exist,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC03,Reject mission creation when EndTime is earlier than StartTime,"1. POST /api/v1/missions with startTime=2026-11-10T10:00Z, endTime=2026-11-10T08:00Z",HTTP 400 Bad Request; EndTime must be after StartTime,Manager JWT valid,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC04,Reject mission creation when target tower belongs to a different corridor,1. POST /api/v1/missions with corridor A and towerId belonging to corridor B,HTTP 400 Bad Request; cross-corridor target tower mismatch rejected,Two corridors exist,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+"MF02.2 - Book UAV, Battery & Pilot with Overlap Check",,,,,,,,,,,,,,,,,
+MF02-TC05,"Book available UAV, Battery pack (SOH 94%), and certified Pilot","1. POST /api/v1/missions/{id}/bookings with uavId, batteryId, pilotId for 08:00-10:00",HTTP 201 Created; ResourceBookings created without conflict,Resources available,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC06,Reject booking when UAV is already reserved in overlapping time slot,1. POST /api/v1/missions/{id2}/bookings using same uavId for 09:00-11:00,HTTP 409 Conflict; UAV booking overlap detected,UAV booked 08:00-10:00,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC07,Allow re-booking time slot after prior mission booking was soft-deleted,"1. Cancel Mission 1 (soft-deleting its bookings)
+2. Book same UAV & Pilot in Mission 2 for 08:00-10:00",HTTP 201 Created; soft-deleted bookings (IsDeleted=true) excluded from overlap query,Prior booking soft-deleted,Failed,20/10/2026,DEF-002: Soft-deleted bookings blocked new booking,Failed,27/10/2026,DEF-002: Migration pending on staging,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC08,Reject booking when Battery SOH is below 70% safety threshold,1. POST /api/v1/missions/{id}/bookings with batteryId having SOH=62%,HTTP 400 Bad Request; battery SOH below minimum 70% flight safety threshold,Degraded battery seeded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02.3 - Generate 3D Flight Waypoints & Safety Parameters,,,,,,,,,,,,,,,,,
+MF02-TC09,Auto-generate 3D waypoints around 5 target towers with camera gimbal angles,"1. POST /api/v1/missions/{id}/waypoints/generate with altitude=60m, speed=8m/s, gimbal=-45","HTTP 200 OK; ordered 3D waypoints generated for approach, hover, and insulator scan",Mission has 5 target towers,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC10,Customize individual waypoint hover duration and capture mode (RGB+Thermal),"1. PUT /api/v1/missions/{id}/waypoints with hoverSeconds=10, captureMode=DualRgbThermal",HTTP 200 OK; waypoint parameters updated,Waypoints exist,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC11,Validate boundary flight altitude at maximum legal ceiling (120m AGL),1. POST /api/v1/missions/{id}/waypoints/generate with altitude=120m,HTTP 200 OK; 120m boundary accepted,Mission exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC12,Reject unsafe waypoint altitude (>150m airspace limit or <10m collision risk),1. POST /api/v1/missions/{id}/waypoints/generate with altitude=165m,HTTP 400 Bad Request; altitude exceeds 120m safety ceiling,Mission exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+"MF02.4 - Approve, Dispatch & Transition Mission Lifecycle",,,,,,,,,,,,,,,,,
+MF02-TC13,Manager approves scheduled mission and transitions to ReadyForFlight,1. POST /api/v1/missions/{id}/approve as Manager,HTTP 200 OK; status transitions Scheduled -> ReadyForFlight and Pilot notified,Bookings & waypoints complete,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC14,"Block mission approval when UAV, Battery, or Pilot booking is missing",1. POST /api/v1/missions/{unbookedId}/approve,HTTP 422 Unprocessable Entity; cannot approve mission without assigned resources,Draft mission with no bookings,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC15,Block Pilot role from self-approving a mission,"1. Authenticate as Pilot
+2. POST /api/v1/missions/{id}/approve",HTTP 403 Forbidden; only Manager or Admin can approve missions,Logged in as Pilot,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02.5 - Reschedule or Cancel Inspection Mission,,,,,,,,,,,,,,,,,
+MF02-TC16,Reschedule mission to a new conflict-free time window,1. PUT /api/v1/missions/{id}/schedule with new startTime/endTime tomorrow,HTTP 200 OK; mission and resource booking windows updated,Scheduled mission exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC17,Cancel scheduled mission and automatically release resource bookings,1. POST /api/v1/missions/{id}/cancel with reason='Severe thunderstorm warning',HTTP 200 OK; mission status=Cancelled and ResourceBookings soft-deleted,Scheduled mission exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF02-TC18,Block rescheduling a mission that is already Completed,1. PUT /api/v1/missions/{completedId}/schedule,HTTP 409 Conflict; completed missions are immutable,Completed mission exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,

@@ -1,0 +1,42 @@
+,,,,,,,,,,,,,,,,,,,
+Function Code,,CF02-UT,,,Function Name,,,,,,RegisterUavAndManageWorkOrderAsync,,,,,,,,
+Created By,,GFA26SE66 Project Team,,,Executed By,,,,,,GFA26SE66 QA Team,,,,,,,,
+Lines of code,,440,,,Lack of test cases,,,,,,0,,,,,,,,
+Test requirement,,"Verify UAV & battery fleet registration, SOH degradation alerts, maintenance work order lifecycle, and system-wide audit log persistence.",,,,,,,,,,,,,,,,,
+Passed,,Failed,,,Untested,,,,,,N/A/B,,,Total Test Cases,,,,,
+15,,0,,,0,,,,,,6,6,3,15,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,UT-001,UT-002,UT-003,UT-004,UT-005,UT-006,UT-007,UT-008,UT-009,UT-010,UT-011,UT-012,UT-013,UT-014,UT-015
+Condition,,,,,,,,,,,,,,,,,,,
+,1. UAV Registration & Serial,,"Valid unique UAV SerialNumber (""DJI-M350-VN01"") and RTK/Thermal payload",,O,O,O,O,O,O,O,O,O,,,O,O,O,O
+,,,Duplicate UAV SerialNumber or missing model specification,,,,,,,,,,,O,,,,,
+,,, Attempt to decommission UAV while assigned to an active scheduled mission,,,,,,,,,,,,O,,,,
+,,,"Valid Battery pack (CycleCount=45, SOH=94%, Status=Available)",,O,O,O,O,O,O,,O,O,O,O,,O,O,O
+,2. Battery SOH & Cycle Count,,Boundary Battery SOH=70% and CycleCount=300 (triggers maintenance warning),,,,,,,,O,,,,,,,,
+,,,Invalid Battery SOH (>100% or negative) or CycleCount < 0,,,,,,,,,,,,,O,,,
+,,,Valid Maintenance WorkOrder linked to verified Critical/High DefectId,,O,O,O,O,O,O,O,,O,O,O,O,,O,O
+,,,Boundary SLA due date (24 hours for Critical severity defect),,,,,,,,,O,,,,,,,
+,3. Work Order Creation & SLA,,WorkOrder creation with non-existent DefectId or TowerId,,,,,,,,,,,,,,O,,
+,,,Valid WorkOrder resolution with repair notes and post-repair evidence photo,,O,O,O,O,O,O,O,O,O,O,O,O,O,,
+,,,Attempt to close WorkOrder without resolution notes or repair evidence,,,,,,,,,,,,,,,O,
+,,,Attempt to transition already Closed WorkOrder back to InProgress,,,,,,,,,,,,,,,,O
+,4. Work Order Resolution,,Valid AuditLog entry with ActionType length <= 100 chars,,O,O,O,O,O,O,O,O,,O,O,O,O,O,
+,,,Boundary AuditLog ActionType length at exactly 100 characters,,,,,,,,,,O,,,,,,
+,,,AuditLog query with invalid date range (FromDate > ToDate),,,,,,,,,,,,,,,,O
+,,,,,,,,,,,,,,,,,,,
+,5. Audit Log & ActionType,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,Return / HTTP Status,,"Returns 201 Created / 200 OK with UavDto, BatteryDto, WorkOrderDto, AuditLogDto",,O,O,O,O,,O,,,,,,,,,
+,,,Returns 200 OK for boundary SOH=70% / 24h SLA / 100-char ActionType,,,,,,,,O,O,O,,,,,,
+Confirm,,,Returns 400 Bad Request / 404 Not Found / 409 Conflict on invalid state,,,,,,,,,,,O,O,O,O,O,O
+,,,Transitions WorkOrder status PendingVerification -> Closed when verified,,,,,,O,,,,,,,,,,
+,Exception / Log,,,,201 Created (UAV registered),201 Created (Battery registered),201 Created (WorkOrder WO-001),200 OK (Assigned to Technician),200 OK (WorkOrder Closed),200 OK (AuditLogs paged list),200 OK (SOH=70% warning flagged),201 Created (24h Critical SLA),201 Created (100-char ActionType),409 Conflict,409 Conflict,400 Bad Request,404 Not Found,400 Bad Request,409 Conflict / 400 Bad Request
+,Expected Exception,,Exception Class Thrown / Caught,,None,None,None,None,None,None,None,None,None,DuplicateResourceException,ResourceInUseException,ValidationException,EntityNotFoundException,ValidationException,InvalidStateTransitionException
+,Log / Response Message,,Returned Message / Audit Log Entry,,"""UAV DJI-M350-VN01 registered in FleetDbContext""","""Battery BAT-TB65-01 registered (SOH 94%)""","""Created maintenance work order from defect DEF-101""","""WorkOrder WO-001 assigned and InProgress""","""WorkOrder verified and closed (Status=Closed)""","""Returned 50 audit log records matching filter""","""Battery flagged for replacement at 70% SOH boundary""","""Critical work order scheduled with 24h SLA""","""AuditLog persisted with 100-char ActionType""","""UAV serial number DJI-M350-VN01 already exists""","""Cannot decommission UAV with active scheduled missions""","""Battery SOH must be between 0 and 100""","""Referenced DefectId was not found""","""Resolution notes and repair photo are required""","""Cannot reopen closed WorkOrder or invalid date range"""
+Result,"Type (N: Normal, A: Abnormal, B: Boundary)",,,,N,N,N,N,N,N,B,B,B,A,A,A,A,A,A
+,Passed/Failed,,,,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P
+,Executed Date,,,,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026
+,Defect ID,,,,,,,,,,,,,,,,,,

@@ -1,0 +1,42 @@
+﻿,,,,,,,,,,,,,,,,,,,
+Function Code,,CF01-UT,,,Function Name,,,,,,AuthenticateUserAndManageRbacAsync,,,,,,,,
+Created By,,GFA26SE66 Project Team,,,Executed By,,,,,,GFA26SE66 QA Team,,,,,,,,
+Lines of code,,410,,,Lack of test cases,,,,,,0,,,,,,,,
+Test requirement,,"Verify user authentication, BCrypt password hashing, 6-digit OTP verification, JWT access/refresh token rotation, and role-based access control.",,,,,,,,,,,,,,,,,
+Passed,,Failed,,,Untested,,,,,,N/A/B,,,Total Test Cases,,,,,
+15,,0,,,0,,,,,,6,6,3,15,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,UT-001,UT-002,UT-003,UT-004,UT-005,UT-006,UT-007,UT-008,UT-009,UT-010,UT-011,UT-012,UT-013,UT-014,UT-015
+Condition,,,,,,,,,,,,,,,,,,,
+,1. Credentials & Account State,,Valid email and matching BCrypt password for Active user account,,O,O,O,O,O,O,O,O,O,,,O,O,O,O
+,,,Invalid password or non-existent email address,,,,,,,,,,,O,,,,,
+,,,Deactivated/Locked user account (IsActive=false or 5 failed attempts),,,,,,,,,,,,O,,,,
+,,,"Valid strong password (12 chars, upper, lower, digit, symbol)",,O,O,O,O,O,O,,O,O,O,O,,O,O,O
+,2. Password Complexity,,Boundary password length (Exactly 8 characters minimum),,,,,,,,O,,,,,,,,
+,,,Weak password (<8 chars or missing digit/uppercase),,,,,,,,,,,,,O,,,
+,,,Valid 6-digit OTP code verified within 5-minute expiration window,,O,O,O,O,O,O,O,,O,O,O,O,,O,O
+,,,Boundary OTP verification at exactly 300th second before expiry,,,,,,,,,O,,,,,,,
+,3. OTP Verification,,Invalid or expired 6-digit OTP code,,,,,,,,,,,,,,O,,
+,,,Valid unexpired Refresh Token rotated for new JWT pair,,O,O,O,O,O,O,O,O,O,O,O,O,O,,O
+,,,Expired or already-revoked Refresh Token (replay attempt),,,,,,,,,,,,,,,O,
+,,,"Admin user assigning valid role (Manager, Pilot, Inspector) & RegionId",,O,O,O,O,O,O,O,O,,O,O,O,O,O,
+,4. JWT & Refresh Token,,Boundary token lifetime check (Access token valid at 59m59s),,,,,,,,,,O,,,,,,
+,,,Non-Admin user attempting to invoke /api/v1/users role assignment,,,,,,,,,,,,,,,,O
+,,,Duplicate email registration attempt,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,5. RBAC & Region Scope,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,Return / HTTP Status,,Returns 200 OK / 201 Created with AuthTokenResponseDto or UserDto,,O,O,O,,,,,,,,,,,,
+,,,Returns 200 OK for boundary 8-char password / 300s OTP / 59m59s JWT,,,,,,,,O,O,O,,,,,,
+Confirm,,,Returns 400 Bad Request / 401 Unauthorized / 403 Forbidden / 409 Conflict,,,,,,,,,,,O,O,O,O,O,O
+,,,Writes security event to AuditLogs with ActionType <= 100 chars,,,,,O,O,O,,,,,,,,,
+,Exception / Log,,,,200 OK (JWT + RefreshToken issued),200 OK (Token pair rotated),200 OK (OTP verified),201 Created (User created by Admin),200 OK (Role & Region updated),200 OK (Session logged out),200 OK (8-char min password),200 OK (OTP at 300s boundary),200 OK (JWT valid at 59m59s),401 Unauthorized,403 Forbidden,400 Bad Request,400 Bad Request,401 Unauthorized,403 Forbidden / 409 Conflict
+,Expected Exception,,Exception Class Thrown / Caught,,None,None,None,None,None,None,None,None,None,InvalidCredentialsException,AccountLockedException,PasswordPolicyException,InvalidOtpException,SecurityTokenException,ForbiddenAccessException
+,Log / Response Message,,Returned Message / Audit Log Entry,,"""User authenticated successfully""","""Refresh token rotated and old token revoked""","""OTP code verified; password reset enabled""","""Created user account and logged AuditLog entry""","""Updated user role to Inspector for North Region""","""Refresh token revoked on logout""","""Accepted minimum 8-character complex password""","""OTP accepted at exact 300-second expiry boundary""","""JWT validated before 60-minute expiration""","""Invalid email or password""","""Account is deactivated or temporarily locked""","""Password does not meet complexity requirements""","""Invalid or expired OTP verification code""","""Refresh token is expired or has been revoked""","""Caller lacks Admin role or email already exists"""
+Result,"Type (N: Normal, A: Abnormal, B: Boundary)",,,,N,N,N,N,N,N,B,B,B,A,A,A,A,A,A
+,Passed/Failed,,,,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P
+,Executed Date,,,,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026
+,Defect ID,,,,,,,,,,,,,,,,,,

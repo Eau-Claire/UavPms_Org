@@ -1,0 +1,42 @@
+,,,,,,,,,,,,,,,,,,,
+Function Code,,MF03-UT,,,Function Name,,,,,,SubmitInspectionSessionAndUploadMediaAsync,,,,,,,,
+Created By,,GFA26SE66 Project Team,,,Executed By,,,,,,GFA26SE66 QA Team,,,,,,,,
+Lines of code,,460,,,Lack of test cases,,,,,,0,,,,,,,,
+Test requirement,,"Verify pre-flight technical inspection checklist, flight session start/completion, telemetry ingestion, and MinIO presigned inspection image upload.",,,,,,,,,,,,,,,,,
+Passed,,Failed,,,Untested,,,,,,N/A/B,,,Total Test Cases,,,,,
+15,,0,,,0,,,,,,6,6,3,15,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,UT-001,UT-002,UT-003,UT-004,UT-005,UT-006,UT-007,UT-008,UT-009,UT-010,UT-011,UT-012,UT-013,UT-014,UT-015
+Condition,,,,,,,,,,,,,,,,,,,
+,1. Pre-Flight Checklist,,"All 8 pre-flight technical check items passed (Propellers, Gimbal, RTK, Battery)",,O,O,O,O,O,O,,O,O,,,O,O,O,O
+,,,Boundary battery voltage (22.2V min takeoff) & wind speed (10.0 m/s max),,,,,,,,O,,,,,,,,
+,,,Critical pre-flight check item failed (RTK GPS unlocked or cracked blade),,,,,,,,,,,O,,,,,
+,,,Checklist payload contains multiple value types on single item (schema error),,,,,,,,,,,,O,,,,
+,2. Session State & Role,,Authenticated Pilot assigned to mission in Ready state,,O,O,O,O,O,O,O,O,O,O,O,,O,O,O
+,,,Unauthorized caller role (Inspector/Analyst attempting to submit drone check),,,,,,,,,,,,,O,,,
+,,,Valid SRT/CSV flight log with 600 telemetry points & normal battery drain,,O,O,O,O,O,O,O,O,O,O,O,O,,O,O
+,,,Corrupted or empty telemetry log payload (0 points),,,,,,,,,,,,,,O,,
+,3. Telemetry & Weather,,Valid RGB/Thermal JPEG image (12 MB) uploaded via MinIO presigned URL,,O,O,O,O,O,O,O,,O,O,O,O,O,,O
+,,,Boundary image size at maximum limit (50 MB high-res radiometric TIFF),,,,,,,,,O,,,,,,,
+,,,Unsupported file format (.exe / .mp3) or size > 50 MB,,,,,,,,,,,,,,,O,
+,,,Valid EXIF GPS coordinates within 30m of target tower T-005,,O,O,O,O,O,O,O,O,,O,O,O,O,,
+,4. Media Format & Size,,Boundary EXIF GPS distance exactly 50m from tower center,,,,,,,,,,O,,,,,,
+,,,Missing EXIF GPS tags or coordinates > 5 km away from corridor,,,,,,,,,,,,,,,O,
+,,,Non-existent InspectionSessionId GUID,,,,,,,,,,,,,,,,O
+,,,,,,,,,,,,,,,,,,,
+,5. EXIF GPS & Tower Link,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,Return / HTTP Status,,Returns 201 Created / 200 OK with InspectionSessionDto & MediaFileDto,,O,O,O,O,,,,,,,,,,,
+,,,Returns 201 Created for boundary voltage / wind speed / 50MB file / 50m radius,,,,,,,,O,O,O,,,,,,
+Confirm,,,Returns 400 Bad Request / 403 Forbidden / 404 Not Found / 422 Unprocessable,,,,,,,,,,,O,O,O,O,O,O
+,,,Updates mission status to Uploaded and publishes media event for AI analysis,,,,,,O,O,,,,,,,,,
+,Exception / Log,,,,201 Created (Pre-flight passed),201 Created (Session InFlight),200 OK (600 telemetry points saved),200 OK (Presigned URL issued),201 Created (Media linked to T-005),200 OK (Session -> Completed),201 Created (22.2V & 10m/s wind),201 Created (50MB max TIFF file),201 Created (50m max GPS radius),422 Unprocessable Entity,400 Bad Request,403 Forbidden,400 Bad Request,400 Bad Request,404 Not Found
+,Expected Exception,,Exception Class Thrown / Caught,,None,None,None,None,None,None,None,None,None,PreFlightCheckFailedException,ValidationException,ForbiddenAccessException,InvalidTelemetryException,UnsupportedMediaTypeException,EntityNotFoundException
+,Log / Response Message,,Returned Message / Audit Log Entry,,"""Drone technical inspection recorded (PASS)""","""Inspection session started for MSN-2026-001""","""Flight telemetry log parsed and stored""","""Generated MinIO presigned PUT URL (15m TTL)""","""Media metadata persisted and linked to tower T-005""","""Inspection session completed; ready for AI analysis""","""Pre-flight passed at boundary weather/voltage""","""Accepted 50MB radiometric thermal image""","""Auto-tagged image at 50m boundary radius""","""Cannot launch flight: critical RTK check failed""","""Inspection item must specify exactly one value type""","""Role Inspector/Analyst cannot submit drone check""","""Flight telemetry log contains 0 valid points""","""Unsupported media type or EXIF GPS out of corridor""","""InspectionSessionId was not found"""
+Result,"Type (N: Normal, A: Abnormal, B: Boundary)",,,,N,N,N,N,N,N,B,B,B,A,A,A,A,A,A
+,Passed/Failed,,,,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P
+,Executed Date,,,,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026
+,Defect ID,,,,,,,,,,,,,,,,,,

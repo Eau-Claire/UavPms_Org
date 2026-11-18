@@ -1,0 +1,14 @@
+﻿,,,,,
+,UNIT TEST DOCUMENT,,,,
+Project Name,Integrated UAV–AI Inspection and Maintenance Management System for Electrical Infrastructure,,,Creator,Project Team
+Project Code,UAV-based Powerline Maintenance Management System (UAV-PMS),,,Issue Date,04/11/2026
+Document Code,GFA26SE66,,,Version,1.2
+,GFA26SE66-UAVPMS-UT-v1.2,,,,
+,,,,,
+Record of change,,,,,
+Effective Date,Version,Change Item,"*A,D,M",Change description,Reference
+15/09/2026,1.0,MF01 Unit Test,A,Initial MF01 unit-test specification,MF01 v2.0 requirements
+13/10/2026,1.0,A,GFA26SE66,Initial Unit Test Specification for MF01 (Infrastructure & Corridor Management),Report 3 SDD v1.2
+20/10/2026,1.1,A,GFA26SE66,Added Unit Test Matrices for MF02 (Inspection Mission Planning) & MF03 (Flight Execution & Evidence),Report 3 SDD v1.2
+27/10/2026,1.1,A,GFA26SE66,"Added Unit Test Matrices for MF04 (AI Defect Analysis) & CF01/CF02 (Auth, RBAC, Fleet & Maintenance)",Report 3 SDD v1.2
+04/11/2026,1.2,M,GFA26SE66,"Updated unit test execution results (90/90 Passed, 100% coverage) after Regression Round 3",Report 5 v1.2

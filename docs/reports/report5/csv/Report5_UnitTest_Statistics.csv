@@ -1,0 +1,23 @@
+﻿,,,,,,,,
+UNIT TEST REPORT,,,,,,,,
+Project Name,UAV-based Powerline Maintenance Management System (UAV-PMS),,Creator,Project Team,,,,
+Project Code,GFA26SE66,,Reviewer/Approver,,,,,
+Document Code,GFA26SE66-UAVPMS-UT-v1.2,,Issue Date,,04/11/2026,,,
+Notes,MF01 – Pre-Mission Feasibility & Resource Readiness,,,,,,,
+,,,,,,,,
+,,,,,,,,
+,,,,,,,,
+No,Function code,Passed,Failed,Untested,N,A,B,Total Test Cases
+1,MF01-UT,15,0,0,6,6,3,15
+2,MF02-UT,15,0,0,6,6,3,15
+3,MF03-UT,15,0,0,6,6,3,15
+4,MF04-UT,15,0,0,6,6,3,15
+5,CF01-UT,15,0,0,6,6,3,15
+6,CF02-UT,15,0,0,6,6,3,15
+,Sub total,90,0,0,36,36,18,90
+,,Test coverage,,100,%,,,
+,,Test successful coverage,,100,%,,,
+,,,,,,,,
+,Normal case,,40,%,,,,
+,Abnormal case,,40,%,,,,
+,Boundary case,,20,%,,,,

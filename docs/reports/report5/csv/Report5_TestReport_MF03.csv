@@ -1,0 +1,36 @@
+,,,,,,,,,,,,,,,,,
+Feature,MF03 - UAV Flight Execution & Inspection Evidence Collection,,,,,GFA26SE66 QA,,,GFA26SE66 QA,,,GFA26SE66 QA,,,,,Passed
+Test requirement,"Verify pre-flight technical inspection checklist, flight session execution, telemetry ingestion, and MinIO presigned inspection media upload.",,,,,20/10/2026,,,27/10/2026,,,04/11/2026,,,,,Failed
+Number of TCs,16,,,,,,,,,,,,,,,,Pending
+Testing Round,Passed,Failed,Pending,N/A,,,,,,,,,,,,,N/A
+Round 1,14,2,0,0,,,,,,,,,,,,,
+Round 2,16,0,0,0,,,,,,,,,,,,,
+Round 3,16,0,0,0,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,
+Test Case ID,Test Case Description,Test Case Procedure,Expected Results,Pre-conditions,Round 1,Test date,Tester,Round 2,Test date,Tester,Round 3,Test date,Tester,Note,,,
+MF03.1 - Submit Drone Pre-Flight Technical Inspection,,,,,,,,,,,,,,,,,
+MF03-TC01,Pilot submits valid pre-flight technical inspection checklist (all PASS),"1. Authenticate as assigned Pilot
+2. POST /api/v1/drone-technical-inspections with valid boolean/numeric check items",HTTP 201 Created; pre-flight inspection stored and flight cleared for launch,Mission in ReadyForFlight state,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC02,Retrieve latest pre-flight technical inspection for mission/UAV,1. GET /api/v1/drone-technical-inspections/latest?uavId={id},HTTP 200 OK; returns most recent inspection record with item values,Inspection record exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC03,Reject pre-flight check when item specifies multiple value types simultaneously,1. POST /api/v1/drone-technical-inspections with item having both boolValue and numValue,HTTP 400 Bad Request; exactly one value type allowed per checklist item,Logged in as Pilot,Failed,20/10/2026,DEF-003: Dual value types accepted without 400 error,Passed,27/10/2026,Fixed validator & added regression test,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC04,Reject pre-flight technical inspection submitted by Inspector or Analyst role,"1. Authenticate as Inspector
+2. POST /api/v1/drone-technical-inspections",HTTP 403 Forbidden; only Pilot/Technician/Admin may submit drone checks,Logged in as Inspector,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+"MF03.2 - Start, Track & Complete Flight Inspection Session",,,,,,,,,,,,,,,,,
+MF03-TC05,Start flight inspection session after passing pre-flight check,1. POST /api/v1/missions/{id}/sessions/start with takeoffTime and weather notes,HTTP 201 Created; InspectionSession created in InFlight status,Pre-flight check passed,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC06,Complete flight inspection session and record landing battery level,1. POST /api/v1/sessions/{id}/complete with landingTime and remainingBattery=34%,"HTTP 200 OK; session status=Completed, UAV flight hours incremented",Session is InFlight,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC07,Block starting flight session when critical pre-flight check failed,"1. Submit pre-flight check with RTK=FAIL
+2. POST /api/v1/missions/{id}/sessions/start",HTTP 422 Unprocessable Entity; flight launch blocked due to failed safety check,Pre-flight check failed,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC08,Return 404 Not Found when querying latest inspection for unknown UAV,1. GET /api/v1/drone-technical-inspections/latest?uavId={randomGuid},HTTP 404 Not Found,Authenticated user,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03.3 - Ingest UAV Flight Telemetry & Battery Drain Log,,,,,,,,,,,,,,,,,
+MF03-TC09,Upload valid SRT/CSV flight telemetry log with 600 GPS points,1. POST /api/v1/sessions/{id}/telemetry with valid CSV flight trajectory,"HTTP 200 OK; 600 telemetry points parsed, max altitude & speed recorded",InspectionSession exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC10,Verify battery cycle count and temperature update after telemetry ingestion,"1. Upload telemetry with peak battery temp=44C
+2. GET /api/v1/fleet/batteries/{id}",HTTP 200 OK; battery cycle count incremented by 1 and telemetry linked,Telemetry uploaded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC11,Reject corrupted or empty flight telemetry file (0 points),1. POST /api/v1/sessions/{id}/telemetry with empty/malformed CSV,HTTP 400 Bad Request; telemetry log contains no valid GPS records,InspectionSession exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC12,Flag airspace deviation warning when telemetry exceeds corridor buffer,1. POST /api/v1/sessions/{id}/telemetry containing points 250m outside corridor,HTTP 200 OK with deviationWarning=true logged in session summary,InspectionSession exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03.4 - Upload RGB & Thermal Media via MinIO Presigned URL,,,,,,,,,,,,,,,,,
+MF03-TC13,Request MinIO presigned PUT URL and upload high-res RGB JPEG image,"1. POST /api/v1/sessions/{id}/media/presigned-url
+2. PUT image to MinIO URL
+3. POST /api/v1/sessions/{id}/media/confirm",HTTP 201 Created; media persisted and auto-linked to nearest tower T-005 via EXIF GPS,MinIO bucket online,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC14,Upload radiometric Thermal image pair and link to RGB frame,1. Upload thermal RJPEG/TIFF at boundary size (50 MB) and confirm metadata,HTTP 201 Created; thermal media linked to tower T-005 and queued for AI,MinIO bucket online,Failed,20/10/2026,DEF-004: EXIF negative longitude Hemisphere parsing bug,Passed,27/10/2026,Fixed EXIF GPS coordinate parser,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC15,Reject unsupported media file extension (.exe / .mp3) or >50MB payload,1. POST /api/v1/sessions/{id}/media/presigned-url with fileName='malware.exe',"HTTP 400 Bad Request; only .jpg, .jpeg, .png, .tif, .tiff allowed",Logged in as Pilot,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+MF03-TC16,Flag manual tower assignment required when image has no EXIF GPS tags,1. Confirm uploaded image stripped of EXIF GPS metadata,HTTP 201 Created with towerAssignmentStatus=ManualRequired,InspectionSession exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
