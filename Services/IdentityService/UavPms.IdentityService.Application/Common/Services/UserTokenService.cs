@@ -58,7 +58,18 @@ public class UserTokenService : IUserTokenService
             ? tokenSettings.AccessTokenExpiryMinutes
             : _jwtOptions.ExpiryMinutes;
 
-        // 4. Tạo entity RefreshToken & Băm RefreshToken với hạn cấu hình động từ database
+        // 4. Chính sách đăng nhập đơn thiết bị (Single Active Session):
+        // Thu hồi toàn bộ Refresh Token đang hoạt động trước đó của người dùng
+        var activeTokens = await _refreshTokenRepository.FindAsync(
+            x => x.UserId == user.Id && x.RevokedAt == null,
+            track: true);
+        foreach (var oldToken in activeTokens)
+        {
+            oldToken.RevokedAt = DateTime.UtcNow;
+            await _refreshTokenRepository.UpdateAsync(oldToken);
+        }
+
+        // 5. Tạo entity RefreshToken & Băm RefreshToken với hạn cấu hình động từ database
         var refreshTokenEntity = new RefreshTokenEntity
         {
             UserId = user.Id,

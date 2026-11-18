@@ -45,8 +45,20 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        var deviceTrustToken = Request.Cookies["device_trust_token"] 
-            ?? Request.Headers["X-Device-Trust-Token"].ToString();
+        var deviceTrustToken = request.DeviceTrustToken;
+        if (string.IsNullOrWhiteSpace(deviceTrustToken))
+        {
+            deviceTrustToken = Request.Cookies["device_trust_token"];
+        }
+        if (string.IsNullOrWhiteSpace(deviceTrustToken))
+        {
+            deviceTrustToken = Request.Headers["X-Device-Trust-Token"].ToString();
+        }
+        if (string.IsNullOrWhiteSpace(deviceTrustToken))
+        {
+            deviceTrustToken = null;
+        }
+
         var userAgent = Request.Headers["User-Agent"].ToString();
         var command = new LoginCommand(request.Email, request.Password, deviceTrustToken, userAgent);
         var result  = await _mediator.Send(command);
@@ -109,6 +121,25 @@ public class AuthController : ControllerBase
         }));
     }
 
+    [HttpPost("validate-session")]
+    public async Task<IActionResult> ValidateSession(
+        [FromBody] RefreshTokenRequest request,
+        [FromServices] UavPms.IdentityService.Domain.Interfaces.Repositories.IGenericRepository<UavPms.IdentityService.Domain.Entities.RefreshToken> refreshTokenRepository)
+    {
+        if (string.IsNullOrWhiteSpace(request?.RefreshToken))
+            return Unauthorized(new ApiResponse(false, "RefreshToken is required."));
+
+        var hash = UavPms.IdentityService.Application.Common.Utilities.TokenHasher.Hash(request.RefreshToken);
+        var tokens = await refreshTokenRepository.FindAsync(
+            x => x.TokenHash == hash && x.RevokedAt == null && x.ExpiresAt > DateTime.UtcNow,
+            track: false);
+
+        if (!tokens.Any())
+            return Unauthorized(new ApiResponse(false, "SESSION_TERMINATED", null, null, "SESSION_TERMINATED"));
+
+        return Ok(new ApiResponse(true, "Session active."));
+    }
+
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
@@ -123,6 +154,7 @@ public class LoginRequest
 {
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+    public string? DeviceTrustToken { get; set; }
 }
 
 public record RefreshTokenRequest(string RefreshToken);
