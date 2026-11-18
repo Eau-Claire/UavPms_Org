@@ -1259,9 +1259,23 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         CancellationToken ct)
     {
         await RequireActiveCaller(ct);
-        await AccessibleMission(missionId, ct, false);
+        var mission = await AccessibleMission(missionId, ct, true);
 
-        var mediaQuery = _db.InspectionMedia.Where(m => m.MissionId == missionId && !m.IsDeleted);
+        // BR: Chỉ có Analyst nằm trong nhiệm vụ mà defect đó được phát hiện mới có quyền xem
+        var isAssignedAnalyst = mission.ActiveAssignments().Any(a =>
+            a.UserId == _current.UserId &&
+            (a.AssignmentRole.Equals("ANALYST", StringComparison.OrdinalIgnoreCase) || a.AssignmentRole.Equals("Analyst", StringComparison.OrdinalIgnoreCase)) &&
+            a.ResponseStatus != MissionAssignmentResponse.Replaced &&
+            a.ResponseStatus != MissionAssignmentResponse.Cancelled);
+
+        if (!isAssignedAnalyst)
+        {
+            throw new ForbiddenException("CHỈ CHUYÊN VIÊN PHÂN TÍCH (ANALYST) ĐƯỢC PHÂN CÔNG TRONG NHIỆM VỤ MỚI CÓ QUYỀN XEM KẾT QUẢ KHUYẾT TẬT");
+        }
+
+        var mediaQuery = _db.InspectionMedia
+            .Include(m => m.Tower)
+            .Where(m => m.MissionId == missionId && !m.IsDeleted);
         if (!string.IsNullOrWhiteSpace(mediaType))
         {
             var mt = mediaType.Trim().ToLowerInvariant();
@@ -1344,6 +1358,60 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             });
         }
 
+        // Đồng thời hiển thị các khung hình/media bình thường (không có khuyết tật) để phân tích viên xác nhận đạt chuẩn:
+        var mediaWithAnomalies = anomalies.Select(a => a.MediaId).ToHashSet();
+        var normalMediaList = mediaList.Where(m => !mediaWithAnomalies.Contains(m.Id)).ToList();
+        foreach (var m in normalMediaList)
+        {
+            var mediaStatus = string.Equals(m.ValidationStatus, "Confirmed", StringComparison.OrdinalIgnoreCase) ||
+                              string.Equals(m.ValidationStatus, "Approved", StringComparison.OrdinalIgnoreCase)
+                ? "Approved"
+                : (string.Equals(m.ValidationStatus, "Rejected", StringComparison.OrdinalIgnoreCase) ? "Rejected" : "Pending");
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                var s = status.Trim().ToLowerInvariant();
+                if ((s is "approved" or "confirmed") && mediaStatus != "Approved") continue;
+                if (s == "rejected" && mediaStatus != "Rejected") continue;
+                if (s == "pending" && mediaStatus != "Pending") continue;
+            }
+
+            if (isEmergency.HasValue && isEmergency.Value)
+            {
+                continue;
+            }
+
+            var isVideo = (m.MediaType ?? "").ToLower().Contains("video");
+            var tower = m.Tower?.TowerCode ?? "Cột chưa xác định";
+
+            results.Add(new MissionDetectionDto
+            {
+                Id = m.Id.ToString(),
+                MissionId = missionId.ToString(),
+                MediaId = m.Id.ToString(),
+                Title = "Bình thường - Không phát hiện khuyết tật",
+                Confidence = 98.0,
+                CategoryCode = "NORMAL",
+                SeverityWeight = 0,
+                IsEmergency = false,
+                Status = mediaStatus,
+                BoundingBox = null,
+                TimestampSeconds = null,
+                TimestampLabel = isVideo ? "00:00" : null,
+                FrameIndex = null,
+                ImageUrl = m.FileUrl,
+                SourceUrl = m.FileUrl,
+                TowerId = m.TowerId?.ToString(),
+                Tower = tower,
+                Gps = m.CaptureLocation == null ? null : JsonSerializer.Serialize(new { lat = m.CaptureLocation.Coordinate.Y, lng = m.CaptureLocation.Coordinate.X }),
+                Description = "Khung hình khảo sát đạt tiêu chuẩn kỹ thuật vận hành, AI không ghi nhận bất thường hoặc khuyết tật thiết bị.",
+                DetectedAt = m.CapturedAt,
+                ReviewedByUserId = null,
+                ReviewedAt = null,
+                ReviewNotes = null
+            });
+        }
+
         return results;
     }
 
@@ -1354,13 +1422,51 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         CancellationToken ct)
     {
         await RequireActiveCaller(ct);
-        var mission = await AccessibleMission(missionId, ct, false);
+        var mission = await AccessibleMission(missionId, ct, true);
+
+        // BR: Chỉ có Analyst nằm trong nhiệm vụ mà defect đó được phát hiện mới có quyền duyệt
+        var isAssignedAnalyst = mission.ActiveAssignments().Any(a =>
+            a.UserId == _current.UserId &&
+            (a.AssignmentRole.Equals("ANALYST", StringComparison.OrdinalIgnoreCase) || a.AssignmentRole.Equals("Analyst", StringComparison.OrdinalIgnoreCase)) &&
+            a.ResponseStatus != MissionAssignmentResponse.Replaced &&
+            a.ResponseStatus != MissionAssignmentResponse.Cancelled);
+
+        if (!isAssignedAnalyst)
+        {
+            throw new ForbiddenException("CHỈ CHUYÊN VIÊN PHÂN TÍCH (ANALYST) ĐƯỢC PHÂN CÔNG TRONG NHIỆM VỤ MỚI CÓ QUYỀN DUYỆT KHUYẾT TẬT");
+        }
 
         var anomaly = await _db.DetectedAnomalies
             .Include(a => a.Category)
             .Include(a => a.Media)
-            .SingleOrDefaultAsync(a => a.Id == detectionId && !a.IsDeleted, ct)
-            ?? throw new NotFoundException("DetectedAnomaly", detectionId);
+            .SingleOrDefaultAsync(a => a.Id == detectionId && !a.IsDeleted, ct);
+
+        if (anomaly == null)
+        {
+            var media = await _db.InspectionMedia
+                .SingleOrDefaultAsync(m => m.Id == detectionId && m.MissionId == missionId && !m.IsDeleted, ct);
+
+            if (media == null)
+            {
+                throw new NotFoundException("DetectedAnomaly", detectionId);
+            }
+
+            var isConfirmed = string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                              string.Equals(request.Status, "Confirmed", StringComparison.OrdinalIgnoreCase);
+            var normalizedStatus = isConfirmed ? "Confirmed" : "Rejected";
+
+            media.ValidationStatus = normalizedStatus;
+            await _db.SaveChangesAsync(ct);
+
+            return new ReviewDetectionResultDto
+            {
+                DetectionId = detectionId.ToString(),
+                MissionId = missionId.ToString(),
+                Status = isConfirmed ? "Approved" : "Rejected",
+                ReviewedAt = DateTime.UtcNow,
+                ReviewNotes = request.ReviewNotes
+            };
+        }
 
         if (anomaly.Media == null || anomaly.Media.MissionId != missionId)
         {
@@ -1986,6 +2092,13 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 TryGetJsonDouble(root, "width", out var w) &&
                 TryGetJsonDouble(root, "height", out var h))
             {
+                if (x >= 0 && x <= 1 && y >= 0 && y <= 1 && w > 0 && w <= 1 && h > 0 && h <= 1)
+                {
+                    x = Math.Round(x * 100, 2);
+                    y = Math.Round(y * 100, 2);
+                    w = Math.Round(w * 100, 2);
+                    h = Math.Round(h * 100, 2);
+                }
                 return new MissionDetectionBoundingBoxDto { X = x, Y = y, Width = w, Height = h };
             }
             if (TryGetJsonDouble(root, "x1", out var x1) &&
@@ -1993,7 +2106,32 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 TryGetJsonDouble(root, "x2", out var x2) &&
                 TryGetJsonDouble(root, "y2", out var y2))
             {
-                return new MissionDetectionBoundingBoxDto { X = x1, Y = y1, Width = Math.Max(0, x2 - x1), Height = Math.Max(0, y2 - y1) };
+                var w1 = Math.Max(0, x2 - x1);
+                var h1 = Math.Max(0, y2 - y1);
+                if (x1 >= 0 && x1 <= 1 && y1 >= 0 && y1 <= 1 && w1 > 0 && w1 <= 1 && h1 > 0 && h1 <= 1)
+                {
+                    x1 = Math.Round(x1 * 100, 2);
+                    y1 = Math.Round(y1 * 100, 2);
+                    w1 = Math.Round(w1 * 100, 2);
+                    h1 = Math.Round(h1 * 100, 2);
+                }
+                return new MissionDetectionBoundingBoxDto { X = x1, Y = y1, Width = w1, Height = h1 };
+            }
+            if (TryGetJsonDouble(root, "xmin", out var xmin) &&
+                TryGetJsonDouble(root, "ymin", out var ymin) &&
+                TryGetJsonDouble(root, "xmax", out var xmax) &&
+                TryGetJsonDouble(root, "ymax", out var ymax))
+            {
+                var w2 = Math.Max(0, xmax - xmin);
+                var h2 = Math.Max(0, ymax - ymin);
+                if (xmin >= 0 && xmin <= 1 && ymin >= 0 && ymin <= 1 && w2 > 0 && w2 <= 1 && h2 > 0 && h2 <= 1)
+                {
+                    xmin = Math.Round(xmin * 100, 2);
+                    ymin = Math.Round(ymin * 100, 2);
+                    w2 = Math.Round(w2 * 100, 2);
+                    h2 = Math.Round(h2 * 100, 2);
+                }
+                return new MissionDetectionBoundingBoxDto { X = xmin, Y = ymin, Width = w2, Height = h2 };
             }
         }
         catch { }
