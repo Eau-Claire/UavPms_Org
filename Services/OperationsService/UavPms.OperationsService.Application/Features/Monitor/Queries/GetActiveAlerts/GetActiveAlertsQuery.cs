@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,7 +14,10 @@ public record ActiveAlertDto(
     string Title,
     string Message,
     DateTime CreatedAt,
-    bool IsRead
+    bool IsRead,
+    string? Type = null,
+    string? ReferenceType = null,
+    Guid? ReferenceId = null
 );
 
 public record ActiveAlertsResponse(

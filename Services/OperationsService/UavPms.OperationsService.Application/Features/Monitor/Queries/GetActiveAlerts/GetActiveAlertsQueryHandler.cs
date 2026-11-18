@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,7 +28,10 @@ public class GetActiveAlertsQueryHandler : IRequestHandler<GetActiveAlertsQuery,
             a.Title,
             a.Message,
             a.CreatedAt,
-            a.IsRead
+            a.IsRead,
+            a.Type,
+            a.ReferenceType,
+            a.ReferenceId
         )).ToList();
 
         return new ActiveAlertsResponse(dtos);

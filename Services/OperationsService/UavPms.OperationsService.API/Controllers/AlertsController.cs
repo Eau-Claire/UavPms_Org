@@ -34,7 +34,7 @@ public class AlertsController : ControllerBase
     /// Lấy danh sách toàn bộ cảnh báo khẩn cấp đang active
     /// </summary>
     [HttpGet("active")]
-    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     [ProducesResponseType(typeof(List<ActiveEmergencyAlertDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetActiveAlerts(CancellationToken ct)
     {
@@ -46,7 +46,7 @@ public class AlertsController : ControllerBase
     /// Lấy danh sách lịch sử cảnh báo (có phân trang và lọc trạng thái)
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     [ProducesResponseType(typeof(PaginatedAlertsResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAlerts(
         [FromQuery] string? status,
@@ -62,7 +62,7 @@ public class AlertsController : ControllerBase
     /// Lấy thông tin chi tiết một cảnh báo khẩn cấp (kèm lịch sử chuyển cấp)
     /// </summary>
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     [ProducesResponseType(typeof(EmergencyAlertDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAlertById([FromRoute] Guid id, CancellationToken ct)
@@ -77,10 +77,10 @@ public class AlertsController : ControllerBase
     }
 
     /// <summary>
-    /// Thẩm định cảnh báo khẩn cấp (Analyst, Manager, Admin) - Xác nhận hoặc Bác bỏ cảnh báo
+    /// Thẩm định cảnh báo khẩn cấp (Chỉ Analyst) - Xác nhận hoặc Bác bỏ cảnh báo
     /// </summary>
     [HttpPut("{id:guid}/review")]
-    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
+    [Authorize(Roles = UserRoles.Analyst)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReviewAlert(

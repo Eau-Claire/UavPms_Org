@@ -37,13 +37,17 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
         {
             return await _context.Notifications
                 .AsNoTracking()
-                .Where(n => n.UserId == userId && n.ReadAt == null)
+                .Where(n => n.UserId == userId)
                 .OrderByDescending(n => n.SentAt)
+                .Take(50)
                 .Select(n => new ActiveAlertModel
                 {
                     NotificationId = n.Id,
                     Title = n.Title,
                     Message = n.Body,
+                    Type = n.Type,
+                    ReferenceType = n.ReferenceType,
+                    ReferenceId = n.ReferenceId,
                     CreatedAt = n.SentAt,
                     IsRead = n.ReadAt != null
                 })
