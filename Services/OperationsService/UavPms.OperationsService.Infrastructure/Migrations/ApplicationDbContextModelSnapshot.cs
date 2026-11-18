@@ -864,15 +864,13 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Checksum")
-                        .IsUnique()
-                        .HasFilter("\"Checksum\" IS NOT NULL AND NOT \"IsDeleted\"");
-
-                    b.HasIndex("MissionId");
-
                     b.HasIndex("TowerId");
 
                     b.HasIndex("UploadedBy");
+
+                    b.HasIndex("MissionId", "Checksum")
+                        .IsUnique()
+                        .HasFilter("\"Checksum\" IS NOT NULL AND NOT \"IsDeleted\"");
 
                     b.ToTable("InspectionMedia", (string)null);
                 });

@@ -480,7 +480,7 @@ public class InspectionMediaConfiguration : IEntityTypeConfiguration<InspectionM
         builder.ToTable("InspectionMedia");
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Checksum).HasMaxLength(64);
-        builder.HasIndex(e => e.Checksum).IsUnique().HasFilter("\"Checksum\" IS NOT NULL AND NOT \"IsDeleted\"");
+        builder.HasIndex(e => new { e.MissionId, e.Checksum }).IsUnique().HasFilter("\"Checksum\" IS NOT NULL AND NOT \"IsDeleted\"");
         builder.HasIndex(e => e.TowerId);
         builder.HasOne(e => e.Mission)
             .WithMany(m => m.InspectionMedias)

@@ -325,17 +325,12 @@ public class UploadInspectionImageCommandHandler
     }
 
     /// <summary>
-    /// Existing media with this checksum. The checksum is unique across all missions, so the same file
-    /// already stored for another mission is a conflict rather than a duplicate to return.
+    /// Existing media with this checksum in the current mission.
+    /// Checksum uniqueness is scoped to each mission, allowing the same media file to be inspected across multiple missions.
     /// </summary>
     private async Task<InspectionMedia?> FindByChecksumAsync(string checksum, Guid missionId)
     {
-        var existing = (await _mediaRepository.FindAsync(m => m.Checksum == checksum, track: false))?.FirstOrDefault();
-        if (existing != null && existing.MissionId != missionId)
-        {
-            throw new BusinessRuleException("DUPLICATE_MEDIA",
-                $"This file was already uploaded to another mission (media {existing.Id}, mission {existing.MissionId}).");
-        }
+        var existing = (await _mediaRepository.FindAsync(m => m.Checksum == checksum && m.MissionId == missionId, track: false))?.FirstOrDefault();
         return existing;
     }
 }
