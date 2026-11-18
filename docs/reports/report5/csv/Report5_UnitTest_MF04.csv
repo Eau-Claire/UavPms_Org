@@ -1,42 +1,42 @@
-﻿,,,,,,,,,,,,,,,,,,,
-Function Code,,MF04-UT,,,Function Name,,,,,,RunYoloInferenceAndVerifyDefectAsync,,,,,,,,
-Created By,,GFA26SE66 Project Team,,,Executed By,,,,,,GFA26SE66 QA Team,,,,,,,,
-Lines of code,,510,,,Lack of test cases,,,,,,0,,,,,,,,
-Test requirement,,"Verify YOLOv8 visual/thermal defect detection, bounding box normalization, severity classification, Inspector verification, and PDF report export.",,,,,,,,,,,,,,,,,
-Passed,,Failed,,,Untested,,,,,,N/A/B,,,Total Test Cases,,,,,
-15,,0,,,0,,,,,,6,6,3,15,,,,,
-,,,,,,,,,,,,,,,,,,,
+﻿
+Function Code,,MF04-UT,,,Function Name,,,,,,ProcessYoloDetectionsReviewAndManageTicketsAsync
+Created By,,GFA26SE66 Project Team,,,Executed By,,,,,,GFA26SE66 QA Team
+Lines of code,,595,,,Lack of test cases,,,,,,0
+Test requirement,,"Verify YOLO26m REST detection ingestion, DetectionEvaluationEngine scoring, Analyst Confirm/Reject & tower linking, PDF/CSV inspection report export, and MaintenanceTicketService lifecycle."
+Passed,,Failed,,,Untested,,,,,,N/A/B,,,Total Test Cases
+15,,0,,,0,,,,,,6,6,3,15
+
 ,,,,,UT-001,UT-002,UT-003,UT-004,UT-005,UT-006,UT-007,UT-008,UT-009,UT-010,UT-011,UT-012,UT-013,UT-014,UT-015
-Condition,,,,,,,,,,,,,,,,,,,
-,1. Image Input & Batch,,Valid batch of 10 RGB + Thermal inspection images in MinIO,,O,O,O,O,O,O,,O,O,O,,O,O,O,O
-,,,Boundary batch size (Single image=1 or max batch=100 images),,,,,,,,O,,,,,,,,
-,,,Empty image list (0 images) or missing object key in MinIO,,,,,,,,,,,,O,,,,
-,,,Detections with high confidence score (0.88 for broken insulator / corrosion),,O,O,O,O,O,O,O,,O,,O,O,O,O,O
-,2. YOLOv8 Confidence Score,,Boundary confidence score exactly at threshold (Confidence = 0.50),,,,,,,,,O,,,,,,,
-,,,"Low confidence noise below threshold (Confidence = 0.22 < 0.50, filtered)",,,,,,,,,,,O,,,,,
-,,,Thermal hotspot Delta-T = +42 C -> classified as Critical severity,,O,O,O,O,O,O,O,O,,,O,O,O,O,O
-,,,Boundary thermal Delta-T = +15.0 C -> classified as Medium severity threshold,,,,,,,,,,O,,,,,,
-,3. Thermal Delta-T & Severity,,Normal component temperature (Delta-T = +1.5 C -> Normal / No defect),,,,,,,,,,,O,,,,,
-,,,"Inspector confirms defect, adjusts bounding box, and approves severity",,O,O,O,O,,O,O,O,O,O,O,,O,O,O
-,,,Inspector marks false-positive detection as Rejected with mandatory reason,,,,,,O,,,,,,,,,,
-,,,Inspector attempts to reject defect without providing rejection note,,,,,,,,,,,,,O,,,
-,4. Inspector Review Action,,Valid completed analysis job exported to PDF/CSV summary report,,O,O,O,O,O,O,O,O,O,O,O,O,,,
-,,,Duplicate analysis job trigger while session job is already Running,,,,,,,,,,,,,,O,,
-,,,AI inference timeout or malformed bounding box (x2 < x1),,,,,,,,,,,,,,,O,O
-,,,,,,,,,,,,,,,,,,,
-,5. Report & Service State,,,,,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,,,
-,Return / HTTP Status,,"Returns 200 OK / 201 Created with AnalysisJobDto, DefectDtos & PDF stream",,O,O,,,O,O,,,,O,,,,,
-,,,Returns 200 OK for boundary batch size / 0.50 confidence / 15.0C Delta-T,,,,,,,,O,O,O,,,,,,
-Confirm,,,Returns 400 Bad Request / 404 Not Found / 409 Conflict / 504 Timeout,,,,,,,,,,,,O,O,O,O,O
-,,,Persists verified defects and triggers Maintenance WorkOrder when Critical/High,,,,O,O,,,,,,,,,,,
-,Exception / Log,,,,202 Accepted (AnalysisJob queued),200 OK (3 visual defects detected),200 OK (Critical thermal hotspot),200 OK (Defect Confirmed),200 OK (False positive Rejected),200 OK (PDF Report generated),200 OK (Boundary 1 & 100 images),200 OK (Confidence=0.50 retained),200 OK (Delta-T=15.0C -> Medium),200 OK (0 defects - clean image),404 Not Found,400 Bad Request,409 Conflict,400 Bad Request,504 Gateway Timeout
-,Expected Exception,,Exception Class Thrown / Caught,,None,None,None,None,None,None,None,None,None,None,MediaObjectNotFoundException,ValidationException,JobAlreadyRunningException,InvalidBoundingBoxException,AiInferenceTimeoutException
-,Log / Response Message,,Returned Message / Audit Log Entry,,"""AI analysis job started for 10 images""","""YOLOv8 detected BrokenInsulator (conf=0.88)""","""Thermal Delta-T +42C classified as Critical""","""Inspector confirmed defect DEF-101""","""Defect marked as FalsePositive with note""","""Generated inspection report PDF (1.4 MB)""","""Processed boundary batch size successfully""","""Detection at 0.50 threshold retained""","""Classified 15.0C hotspot as Medium severity""","""Filtered sub-threshold noise; 0 defects logged""","""Inspection media file not found in MinIO""","""Rejection reason is required when rejecting defect""","""Analysis job is already running for this session""","""Bounding box coordinates must satisfy x2 > x1""","""AI worker timed out; job queued for retry"""
-Result,"Type (N: Normal, A: Abnormal, B: Boundary)",,,,N,N,N,N,N,N,B,B,B,B,A,A,A,A,A
+Condition
+,1. Vision/AI Result Ingestion,,Valid YOLO26m JSON detections received via /api/v1/vision/detections or AI callback,,O,O,O,O,O,O,O,O,O,,O,O,O,O,O
+,,,Boundary detection confidence score = 0.80 (EmergencyConfidenceThreshold) / 0.50,,,,,,,,O
+,,,Duplicate analysis media key (DUPLICATE_MEDIA) or superseded anomaly edit,,,,,,,,,,,O
+,2. DetectionEvaluationEngine Scoring,,"gRPC EvaluationThresholdOptions computes Critical >= 90, High >= 75, Medium >= 50",,O,O,O,O,O,O,,O,O,,,O,O,O,O
+,,,Boundary evaluation score = 50 -> Medium severity threshold,,,,,,,,,O
+,,,Unauthorized reviewer role (non-assigned user or non-Analyst),,,,,,,,,,,,O
+,3. Analyst Review & Tower Linking,,Analyst links TowerId and Confirms or Rejects (with reason) DetectedAnomaly,,O,O,O,O,O,O,O,O,O,,,O,O,O
+,,,Confirming anomaly without TowerId linked (TOWER_REQUIRED) or invalid status,,,,,,,,,,,,,O
+,,,Rejected false positives excluded from active defect report statistics,,,,,,O
+,4. Report Export & Ticket Creation,,Generate PDF/CSV report & create MaintenanceTicket with Priority Emergency/High/Med/Low,,O,O,O,O,O,O,O,O,O,,O,O,O,O
+,,,Boundary MaintenanceTicket description length = 1000 chars max,,,,,,,,,,O
+,,,Creating/closing ticket without repair proof photo or past dueDate,,,,,,,,,,,,,,O,O
+,5. Ticket Workflow & Closure,,"Assign Technician, transition Open -> InProgress -> PendingVerification -> Closed",,,,,O,O,O,,,O
+,,,Non-Manager attempting to close MaintenanceTicket (TICKET_CLOSE_REQUIRES_MANAGER),,,,,,,,,,,,,,,,O
+,,,Modifying already Closed/Resolved ticket (TICKET_CLOSED),,,,,,,,,,,,,,,,O
+
+
+
+
+
+
+,Return / HTTP Status,,"Returns 200 OK / 201 Created / 202 Accepted with Anomaly, Report, or MaintenanceTicket DTO",,O,O,O,O,O,O
+,,,"Returns 200 OK / 201 Created at 0.80/0.50 confidence, score=50 Medium, and 1000-char boundary",,,,,,,,O,O,O
+Confirm,,,Returns 400 Bad Request / 403 Forbidden / 404 Not Found / 409 Conflict with domain code,,,,,,,,,,,O,O,O,O,O,O
+,,,Transitions ticket PendingVerification -> Closed and updates DetectedAnomaly status to Resolved,,,,,O,,O
+,Exception / Log,,,,202 Accepted (AI analysis queued),200 OK (YOLO26m + Eval scored),200 OK (Tower linked & Confirmed),201 Created (Ticket TKT created),200 OK (PDF/CSV exported),200 OK (Ticket Closed -> Resolved),200 OK (Conf=0.80 emergency gate),200 OK (Eval score=50 -> Medium),201 Created (1000-char desc max),409 Conflict,403 Forbidden,400 Bad Request,400 Bad Request,404 Not Found,403 Forbidden / 409 Conflict
+,Expected Exception,,Exception Class Thrown / Caught,,None,None,None,None,None,None,None,None,None,BusinessRuleException,ForbiddenException,BusinessRuleException,BusinessRuleException,NotFoundException,ForbiddenException
+,Log / Response Message,,Returned Message / Audit Log Entry,,AI analysis job queued via RabbitMQ (Status=Pending),YOLO26m detections scored (Score=92 -> Critical),Analyst confirmed anomaly linked to Tower T-005,MaintenanceTicket TKT-20261118-4821 created (Status=Open),Inspection report PDF generated excluding Rejected items,Manager closed ticket; anomaly status -> Resolved,Emergency alert flagged at confidence 0.80 boundary,DetectionEvaluationEngine returned Medium at score=50,MaintenanceTicket accepted 1000-char description boundary,DUPLICATE_MEDIA / ANOMALY_SUPERSEDED,Only mission-assigned Analyst can review detections,TOWER_REQUIRED / INVALID_REVIEW_STATUS,Cannot close ticket without repair proof photo,Maintenance ticket or Anomaly not found,TICKET_CLOSE_REQUIRES_MANAGER / TICKET_CLOSED
+Result,"Type (N: Normal, A: Abnormal, B: Boundary)",,,,N,N,N,N,N,N,B,B,B,A,A,A,A,A,A
 ,Passed/Failed,,,,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P
-,Executed Date,,,,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026
-,Defect ID,,,,,,,,,,,,,,,,,,
+,Executed Date,,,,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026
+,Defect ID

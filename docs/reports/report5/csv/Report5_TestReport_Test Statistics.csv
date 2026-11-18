@@ -1,12 +1,12 @@
-﻿,TEST STATISTICS,,,,,,
-,,,,,,,
-,Project Name,Integrated UAV–AI Inspection and Maintenance Management System for Electrical Infrastructure,UAV-based Powerline Maintenance Management System (UAV-PMS),Creator,,,GFA26SE66 QA Team
-,Project Code,SEP490-UAV-AIInspec,GFA26SE66,Reviewer/Approver,,,GFA26SE66 Project Manager
-,Document Code,SEP490-UAV-AIInspec_Test Report_v1.0,GFA26SE66-UAVPMS-TR-v1.2,Issue Date,,,04/11/2026
-,Notes,MF01 – Pre-Mission Feasibility & Resource Readiness,,,,,
-,,,,,,,
-,,,,,,,
-,,,,,,,
+﻿,TEST STATISTICS
+
+,Project Name,Integrated UAV–AI Inspection and Maintenance Management System for Electrical Infrastructure (UAV-PMS),,Creator,,,GFA26SE66 QA Team
+,Project Code,GFA26SE66,,Reviewer/Approver,,,GFA26SE66 Project Manager
+,Document Code,GFA26SE66-UAVPMS-TR-v1.3,,Issue Date,,,18/11/2026
+,Notes,"All 6 Functional Modules (MF01–MF04, CF01–CF02) – Round 3: 100/100 Passed (100%)"
+
+
+
 ,No,Module code,Passed,Failed,Pending,N/A,Number of  test cases
 ,1,MF01,18,0,0,0,18
 ,2,MF02,18,0,0,0,18
@@ -15,6 +15,6 @@
 ,5,CF01,14,0,0,0,14
 ,6,CF02,16,0,0,0,16
 ,,Sub total,100,0,0,0,100
-,,,,,,,
-,,Test coverage,,100,%,,
-,,Test successful coverage,,100,%,,
+
+,,Test coverage,,100,%
+,,Test successful coverage,,100,%

@@ -1,34 +1,45 @@
-,,,,,,,,,,,,,,,,,
-Feature,"CF02 - UAV Fleet, Maintenance Work Orders & System Audit Logs",,,,,GFA26SE66 QA,,,GFA26SE66 QA,,,GFA26SE66 QA,,,,,Passed
-Test requirement,"Verify UAV and battery fleet management, SOH health alerts, defect-to-repair maintenance work orders, and system-wide audit trail logging.",,,,,20/10/2026,,,27/10/2026,,,04/11/2026,,,,,Failed
+﻿
+Feature,"CF02 - Infrastructure GIS Assets, UAV Fleet, Notifications & Platform Services",,,,,GFA26SE66 QA,,,GFA26SE66 QA,,,GFA26SE66 QA,,,,,Passed
+Test requirement,"Verify Regions & Transmission Towers (/api/v1/regions, /api/v1/towers, /api/v1/gis/infrastructure), UAV Fleet & FlightControllers (/api/v1/drones, /api/v1/flight-controllers), Notifications (/api/v1/notifications), and AuditLogs/SystemSettings.",,,,,20/10/2026,,,27/10/2026,,,18/11/2026,,,,,Failed
 Number of TCs,16,,,,,,,,,,,,,,,,Pending
 Testing Round,Passed,Failed,Pending,N/A,,,,,,,,,,,,,N/A
-Round 1,14,2,0,0,,,,,,,,,,,,,
-Round 2,15,1,0,0,,,,,,,,,,,,,
-Round 3,16,0,0,0,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,
-Test Case ID,Test Case Description,Test Case Procedure,Expected Results,Pre-conditions,Round 1,Test date,Tester,Round 2,Test date,Tester,Round 3,Test date,Tester,Note,,,
-CF02.1 - UAV & Battery Fleet Registration & Health Tracking,,,,,,,,,,,,,,,,,
-CF02-TC01,Register new UAV airframe with RTK & Thermal camera payload specs,"1. Authenticate as Manager
-2. POST /api/v1/fleet/uavs with serial='DJI-M350-VN01', model='Matrice 350 RTK'",HTTP 201 Created; UAV persisted with status=Available,Logged in as Manager,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC02,Register smart battery pack and track cycle count & SOH percentage,"1. POST /api/v1/fleet/batteries with serial='BAT-TB65-01', cycleCount=12, soh=98%",HTTP 201 Created; battery registered in FleetDbContext,Logged in as Manager,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC03,Trigger maintenance alert when battery SOH drops to 70% boundary or cycles >= 300,"1. PUT /api/v1/fleet/batteries/{id}/health with soh=70%, cycleCount=300",HTTP 200 OK; battery status flagged as MaintenanceRequired,Battery exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC04,Block decommissioning UAV while it is assigned to an active scheduled mission,1. DELETE /api/v1/fleet/uavs/{bookedUavId},HTTP 409 Conflict; cannot decommission UAV with active mission bookings,UAV has active booking,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02.2 - Create & Assign Maintenance Work Orders from Defects,,,,,,,,,,,,,,,,,
-CF02-TC05,Create Maintenance Work Order from confirmed Critical defect with 24h SLA,"1. POST /api/v1/work-orders with defectId={criticalId}, priority=Critical, dueHours=24",HTTP 201 Created; WorkOrder created in Open state and linked to Tower & Defect,Confirmed Critical defect exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC06,Assign Maintenance Work Order to regional field repair team,1. PUT /api/v1/work-orders/{id}/assign with assigneeId and scheduledRepairDate,HTTP 200 OK; WorkOrder status transitions Open -> Assigned,Open WorkOrder exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC07,Reject Work Order creation referencing non-existent DefectId or TowerId,1. POST /api/v1/work-orders with defectId={randomGuid},HTTP 404 Not Found,Logged in as Manager,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC08,"Filter Maintenance Work Orders by priority (Critical/High), status, and region",1. GET /api/v1/work-orders?priority=Critical&status=Open,HTTP 200 OK; returns matching work orders ordered by SLA due date,WorkOrders seeded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-"CF02.3 - Execute Repair, Upload Evidence & Close Work Order",,,,,,,,,,,,,,,,,
-CF02-TC09,Technician logs repair action and uploads post-repair verification photo,1. POST /api/v1/work-orders/{id}/complete with resolutionNotes='Replaced broken glass insulator string' and photoUrl,HTTP 200 OK; WorkOrder status transitions InProgress -> PendingVerification -> Closed,InProgress WorkOrder exists,Failed,20/10/2026,DEF-007: Closing WorkOrder did not require PendingVerification step,Passed,27/10/2026,Enforced PendingVerification -> Closed transition,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC10,Reject closing Work Order without mandatory resolution notes or repair evidence,1. POST /api/v1/work-orders/{id}/complete with resolutionNotes='',HTTP 400 Bad Request; resolution notes and repair evidence are required,InProgress WorkOrder exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC11,Block reopening or modifying an already Closed Work Order without Admin override,1. PUT /api/v1/work-orders/{closedId}/assign as Technician,HTTP 409 Conflict; closed work order cannot be modified,Closed WorkOrder exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC12,Verify tower health score updates to Healthy after all open defects are resolved,"1. Complete last open WorkOrder on Tower T-005
-2. GET /api/v1/towers/{id}/summary",HTTP 200 OK; openDefectCount=0 and healthStatus=Healthy,WorkOrder completed,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02.4 - System Audit Trail Logging & Security Event Query,,,,,,,,,,,,,,,,,
-CF02-TC13,Persist long ActionType (up to 100 chars) in AuditLogs without truncation error,"1. Trigger drone technical inspection & mission workflow generating 75-char ActionType
-2. Verify AuditLogs table",HTTP 201 Created; AuditLog stored cleanly in varchar(100) ActionType column,Migration 20261031055707 applied,Failed,20/10/2026,DEF-008: String truncation error on varchar(50) ActionType,Failed,27/10/2026,DEF-008: Pending production DB migration,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC14,"Query and filter AuditLogs by date range, userId, and ActionType","1. Authenticate as Admin
-2. GET /api/v1/audit-logs?from=2026-10-01&to=2026-11-04&actionType=MissionApproved",HTTP 200 OK; returns paginated audit log entries in reverse chronological order,Logged in as Admin,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC15,Verify AuditLog entries are immutable (PUT/DELETE rejected),1. DELETE /api/v1/audit-logs/{id} as Admin,HTTP 405 Method Not Allowed / 403 Forbidden; audit logs are append-only,AuditLog entry exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF02-TC16,Reject AuditLog query when FromDate is later than ToDate,1. GET /api/v1/audit-logs?from=2026-11-10&to=2026-10-01,HTTP 400 Bad Request; FromDate must be <= ToDate,Logged in as Admin,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+Round 1,15,1,0,0
+Round 2,15,1,0,0
+Round 3,16,0,0,0
+
+Test Case ID,Test Case Description,Test Case Procedure,Expected Results,Pre-conditions,Round 1,Test date,Tester,Round 2,Test date,Tester,Round 3,Test date,Tester,Note
+CF02.1 - Region & Transmission Tower GIS Management
+CF02-TC-001,Create Region and Transmission Tower with PostGIS coordinates,"1. Authenticate as Manager/SystemAdmin
+2. POST /api/v1/regions & POST /api/v1/towers with valid lat/lon",HTTP 201 Created; PostGIS Point geometry stored cleanly,Manager/SystemAdmin JWT valid,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified GIS asset creation
+CF02-TC-002,Bulk import towers and query spatial infrastructure on Leaflet GIS map,"1. POST /api/v1/towers/import
+2. POST /api/v1/towers/spatial-query & GET /api/v1/gis/infrastructure",HTTP 200 / 201 OK; imported towers returned within spatial bounding query,Region seeded in OperationsDb,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified PostGIS spatial query
+CF02-TC-003,Retrieve tower inspection history (/api/v1/towers/{id}/history) and update specs,"1. PUT /api/v1/towers/{id}
+2. GET /api/v1/towers/{id}/history",HTTP 200 OK; tower metadata updated and defect/mission history listed,Tower exists with history,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified tower history
+CF02-TC-004,Block deleting Region/Tower referenced by active missions or unauthorized user,"1. DELETE /api/v1/towers/{activeTowerId} as Manager
+2. Attempt DELETE as Inspector",HTTP 409 Conflict for in-use asset; HTTP 403 Forbidden for Inspector role,Tower referenced by active mission,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified referential & RBAC guards
+CF02.2 - UAV Fleet & Flight Controller Management
+CF02-TC-005,Register UAV asset and pair FlightController UID serial,"1. POST /api/v1/drones with unique UavCode
+2. PUT /api/v1/drones/{droneId}/flight-controller",HTTP 201 / 200 OK; UAV registered and FlightController UID resolved by /flight-controllers/{uid}/drone,Logged in as Manager/SystemAdmin,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified UAV & FC pairing
+CF02-TC-006,Query available/eligible UAVs and estimate GIS coverage scope,"1. GET /api/v1/drones/available & GET /api/v1/drones/eligible
+2. POST /api/v1/drones/estimate-gis-scope",HTTP 200 OK; returns conflict-free drones and accurate GIS coverage estimate,Multiple UAVs seeded,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified UAV eligibility queries
+CF02-TC-007,Update UAV operational status (Available -> Maintenance) and monitor summary,"1. PUT /api/v1/drones/{id}/status with Maintenance
+2. GET /api/v1/monitor/summary",HTTP 200 OK; UAV status updated and MonitorController summary metrics refreshed,Idle Available UAV exists,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified status & monitor API
+CF02-TC-008,Block decommissioning or setting Maintenance on UAV flying active mission,1. PUT /api/v1/drones/{flyingDroneId}/status with Maintenance,HTTP 409 Conflict with DRONE_IN_USE,UAV assigned to InProgress mission,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified DRONE_IN_USE guard
+CF02.3 - Notification Center & Real-Time Push
+CF02-TC-009,Query user notification history and unread count via /api/v1/notifications,"1. GET /api/v1/notifications/history
+2. GET /api/v1/notifications/unread-count",HTTP 200 OK; returns paginated notification items and accurate unreadCount,Authenticated user with notifications,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified NotificationController
+CF02-TC-010,Mark notification as read and decrement unread count cleanly,"1. PUT /api/v1/notifications/{id}/read
+2. GET /api/v1/notifications/unread-count",HTTP 200 OK; notification marked IsRead=true and unreadCount decremented,Unread notification exists,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified mark-as-read
+CF02-TC-011,Deliver real-time mission & alert broadcasts over SignalR hub,"1. Trigger RealtimeMissionBroadcastController / RabbitMQ AssessmentRealtimeConsumer
+2. Inspect SignalR client",Connected Angular client receives real-time push event without polling delay,NotificationService & RabbitMQ online,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified SignalR delivery
+CF02-TC-012,Enqueue and schedule SMTP email notifications reliably,"1. POST /api/v1/notifications/enqueue-email
+2. POST /api/v1/notifications/schedule",HTTP 200 / 202 OK; email job enqueued via Hangfire/RabbitMQ worker,NotificationService worker up,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified email queue
+CF02.4 - Immutable Audit Logs & System Settings
+CF02-TC-013,Persist long ActionType strings (up to 100 chars) in AuditLogs without truncation,"1. Execute workflows producing long ActionType (>50 chars)
+2. GET /api/v1/audit-logs",HTTP 200 OK; AuditLog persisted cleanly in varchar(100) ActionType column,Migration 20261031055707 applied,Failed,20/10/2026,Trần Ánh Quốc,Failed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,DEF-008: varchar(50) truncation failed in R1 and R2 before staging migration 20261031055707 applied for R3
+CF02-TC-014,"Filter AuditLogs by user, ActionType, and valid FromDate <= ToDate range","1. Authenticate as SystemAdmin
+2. GET /api/v1/audit-logs?from=2026-10-01&to=2026-11-18",HTTP 200 OK; returns audit trail entries in reverse chronological order,Logged in as SystemAdmin,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified AuditLogs query
+CF02-TC-015,Reject AuditLog query with invalid date range (FromDate > ToDate),1. GET /api/v1/audit-logs?from=2026-11-20&to=2026-10-01,HTTP 400 Bad Request; GetAuditLogsQueryValidator rejects inverted date range,Logged in as SystemAdmin,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified date validator
+CF02-TC-016,Update SystemSettings value and reload configuration cache,"1. PUT /api/v1/system-settings/{key}
+2. POST /api/v1/system-settings/reload
+3. GET /api/v1/system-settings/{key}",HTTP 200 OK; updated setting persisted and reflected immediately across cache,Logged in as SystemAdmin,Passed,20/10/2026,Trần Ánh Quốc,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Trần Ánh Quốc,Verified system-settings reload

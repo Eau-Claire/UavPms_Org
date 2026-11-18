@@ -1,37 +1,43 @@
-﻿,,,,,,,,,,,,,,,,,
-Feature,MF01 - Infrastructure & Transmission Corridor Management,,,,,GFA26SE66 QA,,,GFA26SE66 QA,,,GFA26SE66 QA,,,,,Passed
-Test requirement,"Verify CRUD, spatial search, bulk tower import, insulator metadata management, and regional isolation for high-voltage corridors and transmission towers.",,,,,20/10/2026,,,27/10/2026,,,04/11/2026,,,,,Failed
+﻿
+Feature,MF01 - Pre-Mission Feasibility Assessment & Resource Readiness,,,,,GFA26SE66 QA,,,GFA26SE66 QA,,,GFA26SE66 QA,,,,,Passed
+Test requirement,"Verify PreMissionAssessment lifecycle, Open-Meteo weather feasibility, Inspector & MaintenanceTechnician readiness, DroneTechnicalInspection validation, and consolidated Ready/NotReady decisions via /api/v1/pre-mission-assessments & /api/v1/drone-technical-inspections.",,,,,20/10/2026,,,27/10/2026,,,18/11/2026,,,,,Failed
 Number of TCs,18,,,,,,,,,,,,,,,,Pending
 Testing Round,Passed,Failed,Pending,N/A,,,,,,,,,,,,,N/A
-Round 1,17,1,0,0,,,,,,,,,,,,,
-Round 2,18,0,0,0,,,,,,,,,,,,,
-Round 3,18,0,0,0,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,
-Test Case ID,Test Case Description,Test Case Procedure,Expected Results,Pre-conditions,Round 1,Test date,Tester,Round 2,Test date,Tester,Round 3,Test date,Tester,Note,,,
-MF01.1 - Create & Update Transmission Corridor,,,,,,,,,,,,,,,,,
-MF01-TC01,Create valid 500kV corridor with GeoJSON LineString,"1. Authenticate as Manager
-2. POST /api/v1/corridors with valid code COR-500KV-NORTH-01, voltage 500kV, RegionId, and GeoJSON",HTTP 201 Created; corridor persisted in InfrastructureDbContext with spatial geometry,Manager JWT valid,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC02,"Update existing corridor name, length, and voltage tier","1. Authenticate as Manager
-2. PUT /api/v1/corridors/{id} with updated name and 220kV voltage",HTTP 200 OK; corridor metadata updated and audit log recorded,Corridor COR-500KV-NORTH-01 exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC03,Reject corridor creation with duplicate corridor code,1. POST /api/v1/corridors using existing code COR-500KV-NORTH-01,"HTTP 409 Conflict with message ""Corridor code already exists""",Corridor COR-500KV-NORTH-01 exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC04,Reject corridor creation with empty name or invalid voltage (0kV),1. POST /api/v1/corridors with name='' and voltage='0kV',HTTP 400 Bad Request with field validation errors,Manager JWT valid,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-"MF01.2 - List, Search & Filter Corridors by Region",,,,,,,,,,,,,,,,,
-MF01-TC05,Filter corridors by RegionId and voltage level (500kV),1. GET /api/v1/corridors?regionId={north}&voltage=500kV&page=1&pageSize=20,HTTP 200 OK; returns only 500kV corridors belonging to North region,Multi-region corridors seeded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC06,Query corridors and towers within PostGIS spatial bounding box,1. GET /api/v1/corridors/spatial?minLat=20.5&maxLat=21.5&minLon=105.5&maxLon=106.5,HTTP 200 OK; returns corridors and towers intersecting bounding box,PostGIS index active,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC07,Verify regional isolation between North and South region datasets,"1. Authenticate as North Region Manager
-2. GET /api/v1/corridors",HTTP 200 OK; South region corridors are isolated and not mixed into North scope,Regional Manager account,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC08,Search corridors by keyword with empty match result,1. GET /api/v1/corridors?search=NON_EXISTENT_LINE_999,HTTP 200 OK; returns empty items array [] with totalCount=0,Authenticated user,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01.3 - Register & Bulk Import Transmission Towers,,,,,,,,,,,,,,,,,
-MF01-TC09,Add single transmission tower with valid GPS & sequence number,"1. POST /api/v1/corridors/{id}/towers with code T-001, lat 21.0285, lon 105.8542, height 45m",HTTP 201 Created; tower saved and linked to corridor,Target corridor exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC10,Bulk import 20 ordered towers from CSV/GeoJSON file,1. POST /api/v1/corridors/{id}/towers/import with 20-tower CSV payload,HTTP 201 Created; all 20 towers imported in atomic transaction,Target corridor exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC11,Reject tower import when GPS latitude/longitude is out of range,"1. POST /api/v1/corridors/{id}/towers/import with row containing lat=95.5, lon=190.0",HTTP 400 Bad Request; entire batch rolled back with row-level error detail,Target corridor exists,Failed,20/10/2026,DEF-001: Partial rows committed before rollback fix,Passed,27/10/2026,Verified atomic transaction rollback,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC12,Reject duplicate tower sequence number within the same corridor,1. POST /api/v1/corridors/{id}/towers with duplicate sequenceNumber=1,HTTP 409 Conflict; duplicate sequence number rejected,Tower #1 already exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01.4 - Update Tower Specifications & Insulator Metadata,,,,,,,,,,,,,,,,,
-MF01-TC13,Update tower structure type (Tension) and glass insulator count,"1. PUT /api/v1/towers/{id} with type=Tension, insulatorType=ToughenedGlass, strings=6",HTTP 200 OK; tower technical attributes updated,Tower T-005 exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC14,Retrieve tower detail with historical defect count & last inspection date,1. GET /api/v1/towers/{id}/summary,"HTTP 200 OK; returns tower metadata, coordinates, and defect summary",Tower T-005 exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC15,Reject tower update with negative tower height (-10m),1. PUT /api/v1/towers/{id} with heightMeters=-10,HTTP 400 Bad Request; height must be between 10m and 250m,Tower T-005 exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01.5 - Archive / Delete Unassigned Corridor or Tower,,,,,,,,,,,,,,,,,
-MF01-TC16,Soft-delete unassigned tower with no mission history,1. DELETE /api/v1/towers/{unassignedId} as Manager,HTTP 200 OK; tower IsDeleted=true and excluded from active queries,Unassigned tower exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC17,Block deletion of corridor/tower referenced by active scheduled mission,1. DELETE /api/v1/corridors/{activeCorridorId},HTTP 409 Conflict; cannot delete corridor with active inspection missions,Corridor has active mission,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-MF01-TC18,Block Pilot or Inspector role from deleting infrastructure assets,"1. Authenticate as Pilot
-2. DELETE /api/v1/towers/{id}",HTTP 403 Forbidden; insufficient role permissions,Logged in as Pilot,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+Round 1,17,1,0,0
+Round 2,18,0,0,0
+Round 3,18,0,0,0
+
+Test Case ID,Test Case Description,Test Case Procedure,Expected Results,Pre-conditions,Round 1,Test date,Tester,Round 2,Test date,Tester,Round 3,Test date,Tester,Note
+MF01.1 - Pre-Mission Assessment Lifecycle
+MF01-TC-001,"Create Pre-Mission Assessment with valid Region, target towers & future schedule","1. Authenticate as Manager
+2. POST /api/v1/pre-mission-assessments with regionId, towerIds, plannedStart/End",HTTP 201 Created; assessment created in Draft status with ValidUntil window,Manager JWT valid; towers seeded,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified in regression suite
+MF01-TC-002,Retrieve Pre-Mission Assessment details and resource readiness breakdown,"1. GET /api/v1/pre-mission-assessments/{id}
+2. GET /api/v1/pre-mission-assessments/{id}/resource-readiness","HTTP 200 OK; returns assessment status, weather, personnel & drone readiness DTOs",Assessment exists in OperationsDb,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified in regression suite
+MF01-TC-003,Cancel active Pre-Mission Assessment cleanly with reason,1. POST /api/v1/pre-mission-assessments/{id}/cancel as Manager,HTTP 200 OK; assessment status transitions to Cancelled and audit entry logged,Assessment not Completed/Expired,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified in regression suite
+MF01-TC-004,Auto-expire stale assessment when ValidUntil / PlannedEnd has elapsed,"1. Seed assessment past ValidUntil
+2. GET /api/v1/pre-mission-assessments/{id}",HTTP 200 OK with Status = Expired and ASSESSMENT_EXPIRED audited,Assessment ValidUntil in past,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified AssessmentExpiryPolicy
+MF01.2 - Site & Weather Assessment (Open-Meteo)
+MF01-TC-005,Evaluate site weather readiness via Open-Meteo with favorable flight forecast,1. POST /api/v1/pre-mission-assessments/{id}/evaluate with clear forecast from api.open-meteo.com,HTTP 200 OK; weather readiness passes without site blocker,Open-Meteo returns wind <= 10 m/s,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified Open-Meteo integration
+MF01-TC-006,Flag weather safety blocker when Open-Meteo reports severe storm/wind gusts,"1. Mock Open-Meteo storm/high wind forecast
+2. POST /api/v1/pre-mission-assessments/{id}/evaluate",HTTP 200 OK / 400 BusinessRule; assessment evaluates NotReady with SITE_FEASIBILITY_FAILED details,High-wind forecast mocked,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified weather safety gate
+MF01-TC-007,Reject assessment creation when PlannedEnd <= PlannedStart or empty TowerIds,1. POST /api/v1/pre-mission-assessments with towerIds=[] or endTime <= startTime,HTTP 400 Bad Request with INVALID_PROPOSED_SCOPE or INVALID_PLANNED_TIME,Manager JWT valid,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified BR-14 guard
+MF01-TC-008,Reject assessment when target TowerIds lie outside Manager regional scope,"1. Authenticate as North Region Manager
+2. POST /api/v1/pre-mission-assessments with South towerId",HTTP 403 Forbidden with TOWER_OUTSIDE_MANAGEMENT_SCOPE,Multi-region towers seeded,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified GeographicScope isolation
+MF01.3 - Personnel Readiness Verification
+MF01-TC-009,Verify Inspector and MaintenanceTechnician regional readiness without conflicts,1. Evaluate assessment assigning active Inspector within RegionId and conflict-free window,HTTP 200 OK; personnel readiness check passes,Active Inspector in North region,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified personnel readiness
+MF01-TC-010,Detect personnel schedule overlap during Pre-Mission Assessment evaluation,"1. Assign Inspector already booked in overlapping mission window
+2. POST /api/v1/pre-mission-assessments/{id}/evaluate",Evaluation flags personnel conflict or NotReady; prevents double booking,Overlapping mission booking exists,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified overlap check
+MF01-TC-011,Block assessment reuse with mismatched IdempotencyKey payload,1. Send second POST /api/v1/pre-mission-assessments with same IdempotencyKey but different Title/Towers,HTTP 409 Conflict with IDEMPOTENCY_KEY_REUSED,Prior assessment created with key,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified idempotency check
+MF01.4 - UAV Fleet & Technical Inspection Check
+MF01-TC-012,MaintenanceTechnician submits valid Drone Technical Inspection (all PASS),"1. Authenticate as MaintenanceTechnician
+2. POST /api/v1/drone-technical-inspections with valid boolean/numeric items",HTTP 201 Created; inspection persisted and UAV health/eligibility updated,Logged in as MaintenanceTechnician,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified MaintenanceTechnician flow
+MF01-TC-013,Retrieve latest Drone Technical Inspection via UAV endpoint,1. GET /api/v1/drone-technical-inspections/drone/{droneId}/latest,HTTP 200 OK; returns most recent technical inspection record and item values,Inspection record exists for UAV,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified latest query
+MF01-TC-014,Reject technical inspection item specifying multiple value types simultaneously,1. POST /api/v1/drone-technical-inspections with item populating both boolValue and numericValue,HTTP 400 Bad Request; validator rejects ambiguous multi-value checklist item,Logged in as MaintenanceTechnician,Failed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,DEF-001: Multi-value item accepted in R1; fixed validator before R2
+MF01-TC-015,Block Inspector or Analyst from submitting Drone Technical Inspection,"1. Authenticate as Inspector
+2. POST /api/v1/drone-technical-inspections",HTTP 403 Forbidden; only MaintenanceTechnician/Technician/Manager/SystemAdmin authorized,Logged in as Inspector,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified RBAC policy
+MF01.5 - Consolidated Readiness Decision
+MF01-TC-016,Evaluate and confirm overall Ready outcome when all readiness pillars pass,"1. POST /api/v1/pre-mission-assessments/{id}/evaluate
+2. POST /api/v1/pre-mission-assessments/{id}/confirm",HTTP 200 OK; assessment transitions Evaluating -> Ready and is eligible for mission creation,"Weather, personnel & UAV checks pass",Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified consolidated Ready
+MF01-TC-017,Re-evaluate NotReady assessment to Ready after swapping unavailable UAV,"1. Swap Critical/Maintenance UAV for Available UAV
+2. POST /api/v1/pre-mission-assessments/{id}/re-evaluate",HTTP 200 OK; assessment transitions NotReady -> Ready,Assessment in NotReady state,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified re-evaluation flow
+MF01-TC-018,Block creating mission directly from Expired or Cancelled assessment,1. POST /api/v1/pre-mission-assessments/{expiredId}/create-mission,HTTP 400 / 409 Conflict with ASSESSMENT_EXPIRED or ASSESSMENT_CANCELLED,Assessment in Expired/Cancelled state,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Nguyễn Quốc Khánh,Passed,18/11/2026,Nguyễn Nhật An,Verified terminal state guard

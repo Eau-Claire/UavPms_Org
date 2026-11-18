@@ -1,33 +1,35 @@
-﻿,,,,,,,,,,,,,,,,,
-Feature,"CF01 - Identity, Authentication & Role-Based Access Control (RBAC)",,,,,GFA26SE66 QA,,,GFA26SE66 QA,,,GFA26SE66 QA,,,,,Passed
-Test requirement,"Verify JWT login, BCrypt password validation, 6-digit OTP verification, refresh token rotation, and RBAC permission boundaries.",,,,,20/10/2026,,,27/10/2026,,,04/11/2026,,,,,Failed
+﻿
+Feature,"CF01 - Identity, Authentication, OTP & Role-Based Access Control (RBAC)",,,,,GFA26SE66 QA,,,GFA26SE66 QA,,,GFA26SE66 QA,,,,,Passed
+Test requirement,"Verify BCrypt login, untrusted-device & reset 6-digit Redis OTP verification, JWT refresh-token rotation, password recovery/change, and SystemAdmin user/role/GeographicScope management via /api/v1/auth & /api/v1/users.",,,,,20/10/2026,,,27/10/2026,,,18/11/2026,,,,,Failed
 Number of TCs,14,,,,,,,,,,,,,,,,Pending
 Testing Round,Passed,Failed,Pending,N/A,,,,,,,,,,,,,N/A
-Round 1,13,1,0,0,,,,,,,,,,,,,
-Round 2,14,0,0,0,,,,,,,,,,,,,
-Round 3,14,0,0,0,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,
-Test Case ID,Test Case Description,Test Case Procedure,Expected Results,Pre-conditions,Round 1,Test date,Tester,Round 2,Test date,Tester,Round 3,Test date,Tester,Note,,,
-"CF01.1 - User Login, JWT Token Rotation & Logout",,,,,,,,,,,,,,,,,
-CF01-TC01,Login with valid email and password returns JWT Access & Refresh tokens,1. POST /api/v1/auth/login with valid email and password,"HTTP 200 OK; returns signed JWT accessToken, refreshToken, role, and regionId",Active user seeded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC02,Reject login with invalid password or unregistered email,1. POST /api/v1/auth/login with wrong password,HTTP 401 Unauthorized with generic invalid credentials message,Active user seeded,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC03,Rotate Refresh Token for new JWT pair and revoke old Refresh Token,"1. POST /api/v1/auth/refresh with valid refreshToken
-2. Replay old refreshToken",First call returns 200 OK; replay of old token returns 401 Unauthorized,Logged in user,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC04,Revoke active Refresh Token upon user logout,"1. POST /api/v1/auth/logout
-2. Attempt POST /api/v1/auth/refresh",HTTP 200 OK on logout; subsequent refresh returns 401 Unauthorized,Logged in user,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC05,Block login for deactivated or locked user account,"1. Admin deactivates user
-2. POST /api/v1/auth/login as deactivated user",HTTP 403 Forbidden; account is disabled,Deactivated user account,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01.2 - OTP Verification & Password Recovery / Change,,,,,,,,,,,,,,,,,
-CF01-TC06,Verify valid 6-digit OTP code within 5-minute expiration window,"1. POST /api/v1/auth/forgot-password
-2. POST /api/v1/auth/verify-otp with valid 6-digit code",HTTP 200 OK; OTP verified and password reset token issued,Registered user email,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC07,Reject invalid or expired 6-digit OTP verification code,1. POST /api/v1/auth/verify-otp with code='000000',HTTP 400 Bad Request; invalid or expired OTP code,OTP requested,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC08,"Change password with valid complexity (min 8 chars, upper, lower, digit, symbol)",1. POST /api/v1/auth/change-password with currentPassword and strong newPassword,HTTP 200 OK; BCrypt password hash updated,Authenticated user,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC09,Reject weak password (<8 chars or missing uppercase/digit),1. POST /api/v1/auth/change-password with newPassword='12345',HTTP 400 Bad Request; password policy violation,Authenticated user,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01.3 - Role-Based Access Control (RBAC) & User Management,,,,,,,,,,,,,,,,,
-CF01-TC10,Admin creates new user account and assigns Role (Inspector) & Region,"1. Authenticate as Admin
-2. POST /api/v1/users with email, fullName, role=Inspector, regionId",HTTP 201 Created; user created in IdentityDbContext,Logged in as Admin,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC11,Admin updates user role and regional scope assignment,"1. PUT /api/v1/users/{id}/role with role=Manager, regionId={central}",HTTP 200 OK; role updated and reflected in subsequent JWT claims,Logged in as Admin,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC12,Block unauthenticated request to protected API endpoints,1. GET /api/v1/missions without Authorization Bearer header,HTTP 401 Unauthorized,No JWT header,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC13,Block non-Admin user (Pilot/Inspector) from accessing Admin User Management API,"1. Authenticate as Pilot
-2. POST /api/v1/users",HTTP 403 Forbidden,Logged in as Pilot,Failed,20/10/2026,"DEF-006: Missing [Authorize(Roles=""Admin"")] on user list endpoint",Passed,27/10/2026,Added strict Admin role policy,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
-CF01-TC14,Reject user creation with duplicate email address,1. POST /api/v1/users with existing email admin@uavpms.vn,HTTP 409 Conflict; email already registered,Email already exists,Passed,20/10/2026,,Passed,27/10/2026,,Passed,04/11/2026,Verified in CI/CD Regression Suite,,,,
+Round 1,13,1,0,0
+Round 2,14,0,0,0
+Round 3,14,0,0,0
+
+Test Case ID,Test Case Description,Test Case Procedure,Expected Results,Pre-conditions,Round 1,Test date,Tester,Round 2,Test date,Tester,Round 3,Test date,Tester,Note
+CF01.1 - Authentication & Device OTP Verification
+CF01-TC-001,Login with valid credentials on trusted device returns JWT & RefreshToken,"1. POST /api/v1/auth/login with seeded email, BCrypt password, and deviceId","HTTP 200 OK; returns accessToken, refreshToken, roles (UserRoles), and user profile",Active user seeded in IdentityDb,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified in regression suite
+CF01-TC-002,Reject login with wrong password or unregistered email,1. POST /api/v1/auth/login with incorrect password,HTTP 401 Unauthorized without leaking internal user details,Active user seeded,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified dummy hash timing
+CF01-TC-003,Challenge untrusted device with 6-digit OTP and extend 30-day device trust,"1. POST /api/v1/auth/login (new deviceId)
+2. POST /api/v1/auth/otp/verify with 6-digit code",HTTP 200 OK; device registered as trusted (+30 days) and JWT issued,Redis OTP store & SMTP online,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified LoginOtpStrategy
+CF01-TC-004,Reject expired or exceeded-attempts (> 5) OTP code with structured 400 response,1. POST /api/v1/auth/otp/verify with expired OTP or after 5 invalid tries,HTTP 400 Bad Request with structured validation message (no 500 error),OTP expired in Redis,Failed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,DEF-007: Expired OTP threw unhandled 500 in R1; mapped to 400 Bad Request R2-R3
+CF01-TC-005,Rotate RefreshToken for new token pair and block replay of revoked token,"1. POST /api/v1/auth/refresh-token with valid token
+2. POST /api/v1/auth/refresh-token with old token",First returns 200 OK with new token pair; replay of revoked token returns 401 Unauthorized,Logged in user,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified token rotation
+CF01.2 - Password Recovery & Security Policies
+CF01-TC-006,Send Forgot-Password OTP via /api/v1/auth/otp/send,1. POST /api/v1/auth/otp/send with registered email and purpose=ForgotPassword,HTTP 200 OK; OTP stored in Redis with TTL and email enqueued,Registered user email,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified ForgotPasswordOtpHandler
+CF01-TC-007,Reset forgotten password after OTP verification,"1. POST /api/v1/auth/reset-password with valid reset token and strong newPassword
+2. Login with new password",HTTP 200 OK; BCrypt hash updated and new password authenticates,ForgotPassword OTP verified,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified password reset
+CF01-TC-008,Change password while authenticated and validate session endpoint,"1. POST /api/v1/users/change-password with valid current/new password
+2. POST /api/v1/auth/validate-session",HTTP 200 OK; password changed cleanly and session check valid,Authenticated user,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified change-password
+CF01-TC-009,Reject weak password (<8 chars / missing complexity) & block Suspended user,"1. Test weak password on change-password
+2. POST /api/v1/users/{id}/suspend & attempt login",HTTP 400 on weak password; HTTP 403 Forbidden on login by Suspended account,SystemAdmin & target user exist,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified password policy & suspend
+"CF01.3 - User Management, RBAC & Geographic Scope"
+CF01-TC-010,SystemAdmin creates user with valid role (Manager/Inspector/Analyst/Technician),"1. Authenticate as SystemAdmin
+2. POST /api/v1/users with email, fullName, role=Inspector",HTTP 201 Created; user created in IdentityDbContext and visible via GET /api/v1/users/{id},Logged in as SystemAdmin,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified user creation
+CF01-TC-011,Assign regional GeographicScope to user and verify /api/v1/users/assignable,"1. PUT /api/v1/users/{userId}/geographic-scopes with North regionId
+2. GET /api/v1/users/assignable",HTTP 200 OK; scope saved and user listed as assignable for North Region,SystemAdmin/Manager JWT valid,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified geographic scope API
+CF01-TC-012,Block unauthenticated API requests lacking Bearer JWT token,1. GET /api/v1/missions and GET /api/v1/users/me without Authorization header,HTTP 401 Unauthorized returned by Ocelot Gateway / microservice JWT bearer middleware,No Authorization header,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified Ocelot + JWT auth
+CF01-TC-013,Block non-SystemAdmin user from Admin user/settings management endpoints,"1. Authenticate as Inspector
+2. POST /api/v1/users and PUT /api/v1/system-settings/{key}",HTTP 403 Forbidden; strict [Authorize(Roles = UserRoles.AdminOnly)] enforced,Logged in as Inspector,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified RBAC boundary
+CF01-TC-014,Reject duplicate email user creation with 409 Conflict,1. POST /api/v1/users using existing email address,HTTP 409 Conflict; duplicate account registration prevented,Email already exists in DB,Passed,20/10/2026,Nguyễn Nhật An,Passed,27/10/2026,Trần Ánh Quốc,Passed,18/11/2026,Nguyễn Nhật An,Verified uniqueness constraint

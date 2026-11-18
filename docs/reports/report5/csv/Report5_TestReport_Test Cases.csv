@@ -1,34 +1,34 @@
-﻿,,,TEST CASE LIST,,
-,,,,,
-,Project Name,,UAV-based Powerline Maintenance Management System (UAV-PMS),,
-,Project Code,,GFA26SE66,,
-,Test Environment Setup Description,,GFA26SE66-UAVPMS-TR-v1.2,,
-,,,,,
-,,,,,
+﻿,,,TEST CASE LIST
+
+,Project Name,,Integrated UAV–AI Inspection and Maintenance Management System for Electrical Infrastructure (UAV-PMS)
+,Project Code,,GFA26SE66
+,Test Environment Setup Description,,"Docker Compose stack (.NET 9 microservices, Ocelot Gateway, Angular 19 Web Portal, Python 3.12 YOLO26m Vision Service, PostgreSQL 16/PostGIS, RabbitMQ, MinIO, Open-Meteo API)"
+
+
 ,No,Function Name,Sheet Name,Description,Pre-Condition
-,1,Create & Update Transmission Corridor,MF01,Verify creating and updating high-voltage corridors (500kV/220kV/110kV) with GeoJSON LineString boundaries,Logged in as Admin or Manager; Region exists
-,2,"List, Search & Filter Corridors by Region",MF01,"Verify spatial bounding-box search, voltage filtering, pagination, and regional isolation of corridors",Corridors seeded across North/Central/South regions
-,3,Register & Bulk Import Transmission Towers,MF01,Verify adding individual towers and bulk CSV/GeoJSON tower import with PostGIS coordinate validation,Target Corridor exists in InfrastructureDbContext
-,4,Update Tower Specifications & Insulator Metadata,MF01,"Verify updating tower structure type (Suspension/Tension), height, phase configuration, and insulator count",Target Tower exists in Corridor
-,5,Archive / Delete Unassigned Corridor or Tower,MF01,Verify soft-deleting unassigned towers/corridors and blocking deletion when active missions exist,Logged in as Admin or Manager
-,6,Create Inspection Mission & Assign Target Towers,MF02,Verify creating scheduled inspection missions and linking ordered target towers within a corridor,Active Corridor and Towers exist
-,7,"Book UAV, Battery & Pilot with Overlap Check",MF02,Verify resource booking conflict detection and exclusion of soft-deleted bookings from overlap checks,"Available UAV, Battery (SOH >= 70%), and Pilot exist"
-,8,Generate 3D Flight Waypoints & Safety Parameters,MF02,Verify automated 3D waypoint trajectory generation around tower insulator strings and altitude limits,Mission created with target towers
-,9,"Approve, Dispatch & Transition Mission Lifecycle",MF02,Verify Manager approval (Draft -> Scheduled -> ReadyForFlight) and Pilot mission notification,Mission has valid resource bookings and waypoints
-,10,Reschedule or Cancel Inspection Mission,MF02,Verify rescheduling mission windows and releasing UAV/Battery/Pilot bookings upon cancellation,Scheduled Mission exists
-,11,Submit Drone Pre-Flight Technical Inspection,MF03,"Verify Pilot submitting pre-flight checklist (propellers, gimbal, RTK, battery voltage, weather)",Mission is in ReadyForFlight status; logged in as Pilot
-,12,"Start, Track & Complete Flight Inspection Session",MF03,"Verify starting flight session, recording actual takeoff/landing timestamps, and completing session",Pre-flight technical inspection passed
-,13,Ingest UAV Flight Telemetry & Battery Drain Log,MF03,"Verify uploading SRT/CSV flight logs, parsing GPS trajectory points, and updating battery cycle stats",Active or completed InspectionSession exists
-,14,Upload RGB & Thermal Media via MinIO Presigned URL,MF03,"Verify requesting MinIO presigned PUT URLs, uploading high-res RGB/Thermal images, and EXIF GPS tower linking",InspectionSession exists and MinIO storage online
-,15,Trigger Automated YOLOv8 Defect Detection Job,MF04,Verify triggering asynchronous AI inference over uploaded session images and tracking job progress,Inspection media uploaded for session
-,16,"Classify Visual Defects (Insulator, Corrosion, Damper)",MF04,"Verify YOLOv8 bounding-box detection of broken insulators, rust/corrosion, bird nests, and missing pins",AI worker online with YOLOv8 weights loaded
-,17,Analyze Thermal Hotspots & Delta-T Severity,MF04,Verify radiometric thermal Delta-T calculation and severity mapping (Critical/High/Medium/Low),Thermal RJPEG/TIFF images uploaded
-,18,"Inspector Verification, Annotation Edit & Approval",MF04,"Verify Inspector confirming/rejecting AI detections, adjusting bounding boxes, and overriding severity",Logged in as Inspector or Manager; AI job completed
-,19,Generate & Export Inspection Defect Summary Report,MF04,"Verify generating PDF/CSV inspection reports with annotated defect crops, tower GPS, and statistics",Defects reviewed for mission
-,20,"User Login, JWT Token Rotation & Logout",CF01,"Verify email/password login, BCrypt check, access/refresh token rotation, and token revocation on logout",Active user account seeded in IdentityDbContext
-,21,OTP Verification & Password Recovery / Change,CF01,"Verify 6-digit OTP verification, expiry enforcement, and password complexity validation",Registered user email exists
-,22,Role-Based Access Control (RBAC) & User Management,CF01,"Verify Admin user creation, role assignment (Admin/Manager/Pilot/Inspector), and endpoint authorization",Logged in as Admin
-,23,UAV & Battery Fleet Registration & Health Tracking,CF02,"Verify registering UAVs and batteries, tracking flight hours, cycle count, and SOH degradation alerts",Logged in as Manager or Admin
-,24,Create & Assign Maintenance Work Orders from Defects,CF02,Verify automatic and manual work order creation from Critical/High defects with SLA due dates,Confirmed Critical/High defect exists
-,25,"Execute Repair, Upload Evidence & Close Work Order",CF02,"Verify logging repair actions, uploading post-repair photos, and resolving linked tower defects",Open Maintenance WorkOrder exists
-,26,System Audit Trail Logging & Security Event Query,CF02,Verify recording security/operational audit logs (ActionType varchar 100) and filtering by date/user,Logged in as Admin
+,1,MF01.1 Pre-Mission Assessment Lifecycle,MF01,"Verify creating Evaluating assessments, querying details, cancelling, and auto-expiring stale assessments",Logged in as Manager or SystemAdmin; Region and Towers seeded
+,2,MF01.2 Site & Weather Assessment (Open-Meteo),MF01,"Verify Open-Meteo weather feasibility checks, wind/precipitation blockers, and boundary wind threshold",Assessment created with valid GPS target towers
+,3,MF01.3 Personnel Readiness Verification,MF01,Verify Inspector and MaintenanceTechnician regional scope availability and conflicting mission checks,Users with active roles & GeographicScopes seeded
+,4,MF01.4 UAV Fleet & Technical Inspection Check,MF01,"Verify MaintenanceTechnician UAV technical inspection submission, single value-type rule, and role restrictions",Logged in as MaintenanceTechnician; UAV registered
+,5,MF01.5 Consolidated Readiness Decision,MF01,"Verify aggregate Ready/NotReady evaluation, Completed transition on mission creation, and concurrency guard","Site, Personnel, and Drone checks recorded"
+,6,MF02.1 Create Mission from Ready Assessment,MF02,"Verify creating missions from Ready assessments, resolving target towers, and rejecting Expired/NotReady assessments",PreMissionAssessment in Ready state exists
+,7,MF02.2 Personnel Assignment & Regional Scope,MF02,Verify assigning Inspector within mission RegionId and blocking cross-region or inactive members,Draft/Assigned mission and regional Inspectors exist
+,8,MF02.3 UAV Resource Allocation & Conflict Check,MF02,"Verify Available UAV allocation, /check-resource-conflicts overlap check, and soft-deleted booking exclusion",Available UAVs and sample overlapping mission exist
+,9,MF02.4 Mission Dispatch & Atomic Resource Booking,MF02,"Verify mission dispatch (Assigned -> PendingAcceptance), atomic ResourceBookings lock, and SignalR/email notice","Target towers, Inspector, and UAV assigned"
+,10,MF02.5 Assignment Response & Post-Dispatch Changes,MF02,"Verify Inspector acceptance/postpone, rescheduling/reassignment, and Cancel releasing active bookings",Dispatched mission exists
+,11,MF03.1 Field Check-In & UAV Handover Prerequisite,MF03,"Verify geodesic <= 200m field check-in, rejecting out-of-geofence GPS, and UAV deliver/return handover",Inspector accepted assignment; mission Ready
+,12,MF03.2 Mission Execution Lifecycle,MF03,"Verify mission start (Ready -> InProgress), start guards, completion, suspend/resume, and weather postpone/cancel",Check-in and UAV handover completed
+,13,MF03.3 Field Media & EXIF Telemetry Upload,MF03,Verify uploading RGB/thermal JPEG/PNG/TIFF media with EXIF GPS/tower link to MinIO and invalid file rejection,Mission is InProgress; MinIO online
+,14,MF03.4 Critical Anomaly Alerting & Flight Log Upload,MF03,"Verify real-time critical alerts (/api/v1/alerts), review/escalate workflow, and JSON GPS flight log upload",Mission is InProgress or Completed
+,15,MF04.1 Media Submission & AI Analysis Queuing,MF04,"Verify triggering AI analysis jobs, RabbitMQ media processing, status polling, and DUPLICATE_MEDIA idempotency",Inspection media uploaded to MinIO
+,16,MF04.2 YOLO26m Defect Detection & Severity Scoring,MF04,"Verify Vision Bridge REST (/api/v1/vision/detections), YOLO26m bounding boxes, and gRPC DetectionEvaluationEngine scoring",AI Vision service & Evaluation gRPC online
+,17,"MF04.3 Analyst Review, Verification & Tower Linking",MF04,Verify Analyst linking towers (/api/v1/anomalies/{id}/tower) and Confirm/Reject detection review with reason,DetectedAnomaly records in Pending status
+,18,MF04.4 Inspection Summary & Defect Report Export,MF04,"Verify generating, submitting, approving inspection reports and exporting PDF/CSV defect statistics",Mission anomalies reviewed
+,19,MF04.5 Maintenance Ticket Lifecycle,MF04,"Verify creating MaintenanceTicket, assigning Technician, uploading repair proof, and Manager/Admin closure",Confirmed High/Emergency anomaly exists
+,20,CF01.1 Authentication & Device OTP Verification,CF01,"Verify BCrypt login, untrusted device 6-digit OTP verification, refresh token rotation, and token expiry handling",Active user seeded in IdentityDbContext
+,21,CF01.2 Password Recovery & Security Policies,CF01,"Verify forgot-password OTP flow, ResetPassword, authenticated ChangePassword, and password complexity rules",Registered user email exists
+,22,"CF01.3 User Management, RBAC & Geographic Scope",CF01,"Verify SystemAdmin user CRUD, 5-role RBAC enforcement, user suspension, and /geographic-scopes isolation",Logged in as SystemAdmin
+,23,CF02.1 Region & Transmission Tower GIS Management,CF02,"Verify Region/Tower CRUD, bulk tower import, PostGIS spatial queries, and active-mission deletion guards",Logged in as Manager or SystemAdmin
+,24,CF02.2 UAV Fleet & Flight Controller Management,CF02,"Verify Drone registration, FlightController UID pairing, operational status updates, and DRONE_IN_USE protection",Logged in as Manager or SystemAdmin
+,25,CF02.3 Notification Center & Real-Time Push,CF02,"Verify Notification CRUD, /unread-count, mark read, email queue, and SignalR broadcast delivery",NotificationService & RabbitMQ online
+,26,CF02.4 Immutable Audit Logs & System Settings,CF02,"Verify AuditLog varchar(100) ActionType persistence, query date validation, and SystemSettings update/reload",Logged in as SystemAdmin

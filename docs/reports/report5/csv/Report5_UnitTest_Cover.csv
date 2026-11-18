@@ -1,14 +1,14 @@
-﻿,,,,,
-,UNIT TEST DOCUMENT,,,,
-Project Name,Integrated UAV–AI Inspection and Maintenance Management System for Electrical Infrastructure,,,Creator,Project Team
-Project Code,UAV-based Powerline Maintenance Management System (UAV-PMS),,,Issue Date,04/11/2026
-Document Code,GFA26SE66,,,Version,1.2
-,GFA26SE66-UAVPMS-UT-v1.2,,,,
-,,,,,
-Record of change,,,,,
+﻿
+,UNIT TEST DOCUMENT
+
+Project Name,Integrated UAV–AI Inspection and Maintenance Management System for Electrical Infrastructure (UAV-PMS),,,Creator,GFA26SE66 Project Team
+Project Code,GFA26SE66,,,Issue Date,18/11/2026
+Document Code,GFA26SE66-UAVPMS-UT-v1.3,,,Version,1.3
+
+Record of change
 Effective Date,Version,Change Item,"*A,D,M",Change description,Reference
-15/09/2026,1.0,MF01 Unit Test,A,Initial MF01 unit-test specification,MF01 v2.0 requirements
-13/10/2026,1.0,A,GFA26SE66,Initial Unit Test Specification for MF01 (Infrastructure & Corridor Management),Report 3 SDD v1.2
-20/10/2026,1.1,A,GFA26SE66,Added Unit Test Matrices for MF02 (Inspection Mission Planning) & MF03 (Flight Execution & Evidence),Report 3 SDD v1.2
-27/10/2026,1.1,A,GFA26SE66,"Added Unit Test Matrices for MF04 (AI Defect Analysis) & CF01/CF02 (Auth, RBAC, Fleet & Maintenance)",Report 3 SDD v1.2
-04/11/2026,1.2,M,GFA26SE66,"Updated unit test execution results (90/90 Passed, 100% coverage) after Regression Round 3",Report 5 v1.2
+10/10/2026,1.0,MF01-UT,A,Initial Unit Test Specification for MF01 (Pre-Mission Feasibility & Drone Technical Inspection),Report 3 SRS & Report 4 SDD
+18/10/2026,1.1,"MF02-UT, MF03-UT",A,"Added Unit Test Matrices for MF02 (Mission Dispatch & Bookings) and MF03 (Execution, Media & Alerts)",Report 3 SRS & Report 4 SDD
+25/10/2026,1.1,"MF04-UT, CF01-UT, CF02-UT",A,"Added Unit Test Matrices for MF04 (YOLO26m Detection & Maintenance Tickets) and CF01/CF02 (IAM, GIS, Fleet)",Report 3 SRS & Report 4 SDD
+04/11/2026,1.2,All UT Sheets,M,"Aligned UT matrices with Ocelot Gateway, Angular 19 Web Portal, .NET 9 CQRS handlers and Vision REST API",Codebase main
+18/11/2026,1.3,All UT Sheets,M,"Aligned 90/90 UT cases, domain exceptions, and handlers cleanly with codebase main (db66153)",Report 5 v1.3

@@ -1,42 +1,42 @@
-﻿,,,,,,,,,,,,,,,,,,,
-Function Code,,MF01-UT,,,Function Name,,,,,,CreateCorridorAndImportTowersAsync,,,,,,,,
-Created By,,GFA26SE66 Project Team,,,Executed By,,,,,,GFA26SE66 QA Team,,,,,,,,
-Lines of code,,480,,,Lack of test cases,,,,,,0,,,,,,,,
-Test requirement,,"Verify transmission corridor creation, voltage level & GeoJSON validation, tower sequence bulk import, and PostGIS spatial coordinate bounds.",,,,,,,,,,,,,,,,,
-Passed,,Failed,,,Untested,,,,,,N/A/B,,,Total Test Cases,,,,,
-15,,0,,,0,,,,,,6,6,3,15,,,,,
-,,,,,,,,,,,,,,,,,,,
+﻿
+Function Code,,MF01-UT,,,Function Name,,,,,,EvaluateReadinessAndSubmitTechnicalCheckAsync
+Created By,,GFA26SE66 Project Team,,,Executed By,,,,,,GFA26SE66 QA Team
+Lines of code,,540,,,Lack of test cases,,,,,,0
+Test requirement,,"Verify PreMissionAssessment lifecycle, Open-Meteo wind/weather evaluation, personnel readiness, and DroneTechnicalInspection single-value-type & MaintenanceTechnician RBAC rules in OperationsService."
+Passed,,Failed,,,Untested,,,,,,N/A/B,,,Total Test Cases
+15,,0,,,0,,,,,,6,6,3,15
+
 ,,,,,UT-001,UT-002,UT-003,UT-004,UT-005,UT-006,UT-007,UT-008,UT-009,UT-010,UT-011,UT-012,UT-013,UT-014,UT-015
-Condition,,,,,,,,,,,,,,,,,,,
-,1. Corridor Code & Name,,"Valid unique corridor code (""COR-500KV-NORTH-01"")",,O,O,O,O,O,O,,O,O,,,O,O,O,O
-,,,Corridor code at max length boundary (50 chars),,,,,,,,O,,,,,,,,
-,,,"Empty or whitespace corridor code ("""")",,,,,,,,,,,O,,,,,
-,,,Duplicate corridor code already in InfrastructureDbContext,,,,,,,,,,,,O,,,,
-,2. Voltage Level & Region,,"Valid voltage level (""500kV"" / ""220kV"") and active RegionId",,O,O,O,O,O,O,O,,O,O,O,,,O,O
-,,,"Boundary voltage level (""110kV"" minimum supported transmission tier)",,,,,,,,,O,,,,,,,
-,,,"Unsupported voltage level (""0kV"" or negative)",,,,,,,,,,,,,O,,,
-,,,Non-existent RegionId GUID,,,,,,,,,,,,,,O,,
-,3. GeoJSON & Tower Coordinates,,Valid GeoJSON LineString & tower coordinates inside Vietnam bounds,,O,O,O,O,O,O,O,,O,O,O,O,O,,O
-,,,"Boundary coordinates on border (Lat=8.5000, Lon=102.1400)",,,,,,,,,O,,,,,,,
-,,,"Invalid latitude/longitude out of range (Lat=95.0, Lon=200.0)",,,,,,,,,,,,,,,O,
-,,,"Valid ordered tower sequence (T-001 to T-020, height 45m)",,O,O,O,O,O,O,O,O,,O,O,O,O,,
-,4. Tower Sequence & Structure,,"Boundary single-tower micro-corridor (1 tower, height=15m min)",,,,,,,,,,O,,,,,,
-,,,Duplicate tower sequence number in import batch (T-001 twice),,,,,,,,,,,,,,,O,
-,,,Unauthorized caller role (Pilot role instead of Manager/Admin),,,,,,,,,,,,,,,,O
-,,,,,,,,,,,,,,,,,,,
-,5. Authorization & DB Context,,,,,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,,,
-,,,,,,,,,,,,,,,,,,,
-,Return / HTTP Status,,Returns 201 Created / 200 OK with persisted CorridorDto & TowerDtos,,O,O,O,O,O,O,,,,,,,,,
-,,,Returns 201 Created for boundary input (max length / border coords / 1 tower),,,,,,,,O,O,O,,,,,,
-Confirm,,,Returns 400 Bad Request / 409 Conflict / 403 Forbidden error response,,,,,,,,,,,O,O,O,O,O,O
-,,,Database transaction committed (for valid) or rolled back (for invalid),,,,,,,,,,,,,,,,
-,Exception / Log,,,,201 Created (Corridor + 20 Towers),200 OK (Corridor updated),201 Created (Bulk CSV 20 towers),200 OK (Tower insulator updated),200 OK (Spatial query matched),200 OK (Soft-delete unassigned tower),201 Created (50-char code accepted),201 Created (110kV & border coords),201 Created (Single-tower 15m min),400 Bad Request,409 Conflict,400 Bad Request,404 Not Found,400 Bad Request,403 Forbidden
-,Expected Exception,,Exception Class Thrown / Caught,,None,None,None,None,None,None,None,None,None,ValidationException,DuplicateResourceException,ValidationException,EntityNotFoundException,SpatialValidationException,ForbiddenAccessException
-,Log / Response Message,,Returned Message / Audit Log Entry,,"""Corridor COR-500KV-NORTH-01 created successfully""","""Corridor metadata updated successfully""","""Imported 20 towers into corridor""","""Tower T-005 specification updated""","""Returned 20 towers within bounding box""","""Tower T-020 archived successfully""","""Corridor created with max-length code""","""Tower saved at boundary coordinates""","""Single-tower corridor initialized""","""Corridor code is required""","""Corridor code COR-500KV-NORTH-01 already exists""","""Unsupported voltage level: 0kV""","""RegionId was not found""","""Coordinates out of bounds or duplicate sequence""","""Role Pilot is not permitted to modify corridors"""
+Condition
+,1. Assessment Scope & Window,,"Valid active RegionId, distinct TowerIds (1..10), future PlannedStart < PlannedEnd",,O,O,O,O,O,O,O,O,O,,,O,O,O
+,,,Boundary minimum schedule window (PlannedEnd - PlannedStart = 15 minutes),,,,,,,,O
+,,,Empty/duplicate TowerIds (INVALID_PROPOSED_SCOPE) or PlannedStart >= PlannedEnd,,,,,,,,,,,O
+,2. Open-Meteo Weather & Site Check,,"Favorable Open-Meteo forecast (windSpeed <= 10 m/s, precipitationProb <= 20%)",,O,O,O,O,O,O,,O,O,,,O,O
+,,,Boundary max safe wind speed threshold (windSpeed = 12.0 m/s),,,,,,,,,O
+,,,Expired assessment or non-existent AssessmentId / RegionId,,,,,,,,,,,,O
+,3. Personnel & Drone Eligibility,,Active Inspector(s) in regional scope & Available UAV with Healthy/Warning status,,O,O,O,O,O,O,O,O,O,,O,,O
+,,,Boundary drone readiness check at valid-until window edge (4h max before PlannedEnd),,,,,,,,,,O
+,,,Assigned user outside RegionId or UAV OperationalStatus != Available,,,,,,,,,,,,,O
+,4. Drone Technical Inspection,,Checklist item uses single value type (boolValue XOR numericValue) via MaintenanceTechnician,,O,O,O,O,O,O,O,O,O,,O,O,,O
+,,,Critical/Warning flight controller health flag or multiple value types on single item,,,,,,,,,,,,,,O
+,,,Unauthorized caller role (Inspector/Analyst submitting DroneTechnicalInspection),,,,,,,,,,,,,,,O
+,5. Evaluation & Concurrency,,IdempotencyKey matches existing request or assessment transitions Evaluating -> Ready,,O,O,O,O,O,O,O,O,O,,,O,O,O
+,,,Reused IdempotencyKey with different payload or stale RowVersion concurrency,,,,,,,,,,,,,,,,O
+,,,Evaluation confirms Ready state or rejects invalid transition cleanly
+
+
+
+
+
+
+,Return / HTTP Status,,Returns 201 Created / 200 OK with PreMissionAssessmentDto or DroneTechnicalInspectionDto,,O,O,O,O,O,O
+,,,"Returns 201 Created / 200 OK for boundary 15-min slot, 12.0 m/s wind limit, and 4h ValidUntil",,,,,,,,O,O,O
+Confirm,,,Returns 400 Bad Request / 403 Forbidden / 404 Not Found / 409 Conflict with BusinessRuleException code,,,,,,,,,,,O,O,O,O,O,O
+,,,Persists Evaluating -> Ready readiness evaluation and technical check audit log atomically,,,O,,,O
+,Exception / Log,,,,201 Created (Draft assessment),200 OK (Evaluation Ready),200 OK (Open-Meteo favorable),201 Created (TechCheck PASS),200 OK (Evaluated from NotReady),200 OK (Assessment Confirmed),201 Created (15-min min window),200 OK (Wind 12.0 m/s border),200 OK (4h ValidUntil boundary),400 Bad Request,404 Not Found,409 Conflict,400 Bad Request,403 Forbidden,409 Conflict
+,Expected Exception,,Exception Class Thrown / Caught,,None,None,None,None,None,None,None,None,None,BusinessRuleException,NotFoundException,BusinessRuleException,BusinessRuleException,ForbiddenException,BusinessRuleException
+,Log / Response Message,,Returned Message / Audit Log Entry,,Assessment PMA-2026-001 created in Draft status,Pre-mission readiness evaluated: Status = Ready,Open-Meteo forecast verified within flight limits,Drone technical inspection recorded for UAV-01,Re-evaluation transitioned NotReady -> Ready,Assessment confirmed by Manager,Accepted minimum 15-minute planned flight window,Accepted wind speed at 12.0 m/s threshold,"Set ValidUntil = min(UtcNow+4h, PlannedEnd)",INVALID_PROPOSED_SCOPE / INVALID_PLANNED_TIME,PreMissionAssessment was not found,DRONE_NOT_AVAILABLE / REGION_MANAGEMENT_SCOPE_REQUIRED,Checklist item cannot populate both boolValue and numericValue,Role Inspector cannot submit drone technical inspection,ASSESSMENT_CONCURRENCY_CONFLICT / IDEMPOTENCY_KEY_REUSED
 Result,"Type (N: Normal, A: Abnormal, B: Boundary)",,,,N,N,N,N,N,N,B,B,B,A,A,A,A,A,A
 ,Passed/Failed,,,,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P
-,Executed Date,,,,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026,04/11/2026
-,Defect ID,,,,,,,,,,,,,,,,,,
+,Executed Date,,,,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026,18/11/2026
+,Defect ID
