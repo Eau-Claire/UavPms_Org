@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using FluentValidation;
 using MediatR;
 using NetTopologySuite;
@@ -29,8 +31,8 @@ public record UpdateTowerCommand(
 
 public record DeleteTowerCommand(Guid Id) : IRequest;
 
-/// <summary>Excel: cột 1 = mã khu vực (Regions.Code) hoặc RegionId, 2 = mã cột, 3 = vĩ độ, 4 = kinh độ, 5 = loại cột, 6 = địa chỉ.</summary>
-public record ImportTowersCommand(Stream FileStream) : IRequest<ImportTowersResponse>;
+/// <summary>Excel/CSV: cột 1 = mã khu vực (Regions.Code) hoặc RegionId, 2 = mã cột, 3 = vĩ độ, 4 = kinh độ, 5 = loại cột, 6 = địa chỉ.</summary>
+public record ImportTowersCommand(Stream FileStream, string? FileName = null) : IRequest<ImportTowersResponse>;
 
 public record ImportTowersResponse(bool Success, int ImportedCount, int SkippedCount);
 
@@ -186,11 +188,56 @@ public class ImportTowersCommandHandler : IRequestHandler<ImportTowersCommand, I
 
     public async Task<ImportTowersResponse> Handle(ImportTowersCommand request, CancellationToken cancellationToken)
     {
-        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-        using var package = new ExcelPackage(request.FileStream);
-        var worksheet = package.Workbook.Worksheets.FirstOrDefault()
-            ?? throw new ArgumentException("Tệp Excel trống hoặc không hợp lệ");
-        var rowCount = worksheet.Dimension?.Rows ?? 0;
+        var rawRows = new List<(string? RegionKey, string? TowerCode, double? Lat, double? Lng, string? PoleType, string? Address)>();
+        var isCsv = !string.IsNullOrEmpty(request.FileName) && request.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
+
+        if (isCsv)
+        {
+            using var reader = new StreamReader(request.FileStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+            string? line;
+            bool isHeader = true;
+            while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (isHeader)
+                {
+                    isHeader = false;
+                    continue;
+                }
+                var cols = ParseCsvLine(line);
+                if (cols.Count >= 4)
+                {
+                    rawRows.Add((
+                        cols.ElementAtOrDefault(0)?.Trim(),
+                        cols.ElementAtOrDefault(1)?.Trim(),
+                        TryParseDouble(cols.ElementAtOrDefault(2)),
+                        TryParseDouble(cols.ElementAtOrDefault(3)),
+                        cols.ElementAtOrDefault(4)?.Trim(),
+                        cols.ElementAtOrDefault(5)?.Trim()
+                    ));
+                }
+            }
+        }
+        else
+        {
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            using var package = new ExcelPackage(request.FileStream);
+            var worksheet = package.Workbook.Worksheets.FirstOrDefault()
+                ?? throw new ArgumentException("Tệp Excel trống hoặc không hợp lệ");
+            var rowCount = worksheet.Dimension?.Rows ?? 0;
+
+            for (var row = 2; row <= rowCount; row++) // Dòng 1 là tiêu đề
+            {
+                rawRows.Add((
+                    worksheet.Cells[row, 1].Value?.ToString()?.Trim(),
+                    worksheet.Cells[row, 2].Value?.ToString()?.Trim(),
+                    TryParseDouble(worksheet.Cells[row, 3].Value?.ToString()),
+                    TryParseDouble(worksheet.Cells[row, 4].Value?.ToString()),
+                    worksheet.Cells[row, 5].Value?.ToString()?.Trim(),
+                    worksheet.Cells[row, 6].Value?.ToString()?.Trim()
+                ));
+            }
+        }
 
         var regions = await _regionRepository.GetAllAsync();
         var existingCodes = (await _towerRepository.GetAllAsync()).Select(t => t.TowerCode)
@@ -200,17 +247,16 @@ public class ImportTowersCommandHandler : IRequestHandler<ImportTowersCommand, I
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
-            for (var row = 2; row <= rowCount; row++) // Dòng 1 là tiêu đề
+            foreach (var r in rawRows)
             {
-                var regionKey = worksheet.Cells[row, 1].Value?.ToString()?.Trim();
-                var towerCode = worksheet.Cells[row, 2].Value?.ToString()?.Trim();
-                var region = regions.FirstOrDefault(r => !r.IsDeleted
-                    && (string.Equals(r.Code, regionKey, StringComparison.OrdinalIgnoreCase)
-                        || (Guid.TryParse(regionKey, out var regionId) && r.Id == regionId)));
+                var regionKey = r.RegionKey;
+                var towerCode = r.TowerCode;
+                var region = regions.FirstOrDefault(reg => !reg.IsDeleted
+                    && (string.Equals(reg.Code, regionKey, StringComparison.OrdinalIgnoreCase)
+                        || (Guid.TryParse(regionKey, out var regionId) && reg.Id == regionId)));
 
                 if (region == null || string.IsNullOrEmpty(towerCode) || existingCodes.Contains(towerCode)
-                    || !double.TryParse(worksheet.Cells[row, 3].Value?.ToString(), out var lat)
-                    || !double.TryParse(worksheet.Cells[row, 4].Value?.ToString(), out var lng))
+                    || !r.Lat.HasValue || !r.Lng.HasValue)
                 {
                     skipped++;
                     continue;
@@ -221,9 +267,9 @@ public class ImportTowersCommandHandler : IRequestHandler<ImportTowersCommand, I
                     Id = Guid.NewGuid(),
                     RegionId = region.Id,
                     TowerCode = towerCode,
-                    PoleType = worksheet.Cells[row, 5].Value?.ToString()?.Trim(),
-                    Address = worksheet.Cells[row, 6].Value?.ToString()?.Trim(),
-                    Geom = TowerGeometry.Point(lat, lng)
+                    PoleType = r.PoleType,
+                    Address = r.Address,
+                    Geom = TowerGeometry.Point(r.Lat.Value, r.Lng.Value)
                 });
                 existingCodes.Add(towerCode);
                 imported++;
@@ -239,5 +285,54 @@ public class ImportTowersCommandHandler : IRequestHandler<ImportTowersCommand, I
         }
 
         return new ImportTowersResponse(true, imported, skipped);
+    }
+
+    private static double? TryParseDouble(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        var clean = input.Trim().Replace(',', '.');
+        if (double.TryParse(clean, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
+            return val;
+        if (double.TryParse(input.Trim(), out var valLocal))
+            return valLocal;
+        return null;
+    }
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrEmpty(line)) return result;
+
+        char delimiter = line.Contains(';') && !line.Contains(',') ? ';' : ',';
+        var inQuotes = false;
+        var token = new StringBuilder();
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (c == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    token.Append('"');
+                    i++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+            }
+            else if (c == delimiter && !inQuotes)
+            {
+                result.Add(token.ToString().Trim());
+                token.Clear();
+            }
+            else
+            {
+                token.Append(c);
+            }
+        }
+        result.Add(token.ToString().Trim());
+        return result;
     }
 }

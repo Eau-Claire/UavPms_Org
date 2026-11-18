@@ -100,7 +100,7 @@ public class TowerController : ControllerBase
     }
 
     /// <summary>
-    /// Nhập cột điện từ Excel. Cột: mã khu vực (hoặc RegionId), mã cột, vĩ độ, kinh độ, loại cột, địa chỉ.
+    /// Nhập cột điện từ Excel hoặc CSV. Cột: mã khu vực (hoặc RegionId), mã cột, vĩ độ, kinh độ, loại cột, địa chỉ.
     /// </summary>
     [HttpPost("import")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
@@ -108,11 +108,11 @@ public class TowerController : ControllerBase
     {
         if (file == null || file.Length == 0)
         {
-            return BadRequest(new ApiResponse(false, "Vui lòng chọn tệp Excel hợp lệ."));
+            return BadRequest(new ApiResponse(false, "Vui lòng chọn tệp Excel hoặc CSV hợp lệ."));
         }
 
         using var stream = file.OpenReadStream();
-        var result = await _mediator.Send(new ImportTowersCommand(stream));
+        var result = await _mediator.Send(new ImportTowersCommand(stream, file.FileName));
         return Ok(new ApiResponse(true, "Nhập dữ liệu cột điện hàng loạt thành công.", result));
     }
 
