@@ -423,7 +423,7 @@ graph TD
   - `GET /api/v1/drones/{id}/technical-inspections`: lịch sử kiểm định kỹ thuật.
 
 #### 3.3. [POST] `/api/v1/drones` · [PUT] `/api/v1/drones/{id}` · [DELETE] `/api/v1/drones/{id}`
-- **Phân quyền**: `Manager`, `SystemAdmin`, `MaintenanceTechnician` (DELETE chỉ `Manager`, `SystemAdmin`).
+- **Phân quyền**: `Manager`, `SystemAdmin`, `Technician` (DELETE chỉ `Manager`, `SystemAdmin`).
 - **Request Body (POST/PUT)**:
   ```json
   {
@@ -445,7 +445,7 @@ graph TD
 
 #### 3.4. [POST] `/api/v1/drone-technical-inspections`
 - **Mô tả**: Nộp biên bản kiểm định kỹ thuật kèm chỉ số từng phân hệ. Hệ thống chốt `Passed`/`Failed`, tính `validUntil` và cập nhật `technicalHealth` của drone.
-- **Phân quyền**: `MaintenanceTechnician`, `Manager`, `SystemAdmin`.
+- **Phân quyền**: `Technician`, `Manager`, `SystemAdmin`.
 - **Alias**: `POST /api/v1/uavs/{droneId}/inspections` (lấy `droneId` từ path).
 - **Request Body**:
   ```json
@@ -495,7 +495,6 @@ graph TD
 > Route gốc là `/api/v1/pre-mission-assessments` (cũng nhận `/api/v2/...`). Controller v0.9 cũ đã deprecated.
 > Phân quyền mặc định: `SystemAdmin`, `Manager`, `Inspector`. Endpoint trả DTO trực tiếp (không bọc `ApiResponse`).
 > Trạng thái hồ sơ: `Draft` → `Evaluating` → `Ready` / `NotReady` → `Completed`; ngoài ra `Expired`, `Cancelled`.
-> Giá trị cũ `Consumed` = `Completed`, `Incomplete` = `NotReady`.
 
 #### 4.1. [POST] `/api/v1/pre-mission-assessments`
 - **Mô tả**: Tạo hồ sơ đánh giá tiền khả thi cho một chiến dịch bay dự kiến.
@@ -531,13 +530,13 @@ graph TD
   - Cùng key nhưng khác nội dung, hoặc key đã được manager khác dùng → `409 IDEMPOTENCY_KEY_REUSED`.
   - Chỉ vi phạm unique của index idempotency mới được coi là trùng key; lỗi DB khác không còn bị đổi thành `IDEMPOTENCY_CONFLICT`.
 - **Kết quả đánh giá (BR-16 – BR-22)**:
-  - Ứng viên nhân sự: mọi người dùng có vai trò hiện trường (`Inspector`, `Analyst`, `Technician`/`MaintenanceTechnician`) và không có vai trò `SystemAdmin`/`Manager`; người dùng không Active/chưa xác minh chỉ được liệt kê nếu có scope vùng (lý do `USER_INACTIVE`). Scope của ứng viên chỉ lấy từ scope của chính ứng viên — vai trò `SystemAdmin` của **người đánh giá** không còn làm mọi người "trong scope". `reasonCode` theo thứ tự `USER_INACTIVE` → `INVALID_ROLE` → `OUTSIDE_MANAGEMENT_SCOPE` → `SCHEDULE_CONFLICT`.
+  - Ứng viên nhân sự: mọi người dùng có vai trò hiện trường (`Inspector`, `Analyst`, `Technician`) và không có vai trò `SystemAdmin`/`Manager`; người dùng không Active/chưa xác minh chỉ được liệt kê nếu có scope vùng (lý do `USER_INACTIVE`). Scope của ứng viên chỉ lấy từ scope của chính ứng viên — vai trò `SystemAdmin` của **người đánh giá** không còn làm mọi người "trong scope". `reasonCode` theo thứ tự `USER_INACTIVE` → `INVALID_ROLE` → `OUTSIDE_MANAGEMENT_SCOPE` → `SCHEDULE_CONFLICT`.
   - Ứng viên UAV: dùng biên bản kiểm định **hoàn tất mới nhất bất kể kết quả** (biên bản `Failed` mới hơn không bị che bởi biên bản `Passed` cũ). Không có biên bản còn hạn tại `plannedStart` → `technicalEligibilityStatus = RequiresInspection`, `reasonCode = NO_VALID_TECHNICAL_INSPECTION`, **không đủ điều kiện** (trước đây vẫn đủ điều kiện nhờ `technicalHealth` lưu trên drone). `reasonCode`: `DRONE_NOT_AVAILABLE` → `SCHEDULE_CONFLICT` → `TECHNICAL_HEALTH_CRITICAL` / `NO_VALID_TECHNICAL_INSPECTION` / `TECHNICAL_HEALTH_DEGRADED` → `SCOPE_EXCEEDS_CAPABILITY`. `suitability` chỉ phản ánh phạm vi (xem Module 3.1); `coverageDistanceKm` = quãng đường tối đa một chuyến (min(tầm bay, quãng bay theo thời gian hiệu dụng)).
 
 #### 4.2. [GET] `/api/v1/pre-mission-assessments` · [GET] `/api/v1/pre-mission-assessments/{id}`
 - **Query Params (list)**: `status`, `search`, `page`, `pageSize` (mặc định 20).
-- Hết hạn (BR-17) được áp dụng **trước** khi lọc `status` và được ghi audit `ASSESSMENT_EXPIRED`, nên `?status=NOT_READY`/`READY` không còn trả hồ sơ đã quá `validUntil`/`plannedEnd`.
-- **Quyền đọc**: `SystemAdmin`; manager tạo hồ sơ; `Manager` có scope vùng; mọi `Inspector`/`Technician`/`MaintenanceTechnician`.
+- Hết hạn (BR-17) được áp dụng **trước** khi lọc `status` và được ghi audit `ASSESSMENT_EXPIRED`, nên `?status=NotReady`/`Ready` không còn trả hồ sơ đã quá `validUntil`/`plannedEnd`.
+- **Quyền đọc**: `SystemAdmin`; manager tạo hồ sơ; `Manager` có scope vùng; mọi `Inspector`/`Technician`.
 - **Endpoint liên quan**: `GET /api/v1/pre-mission-assessments/{id}/resource-readiness`: kết quả nhân sự và drone **của lần đánh giá gần nhất**. Endpoint này **chỉ đọc**: không đánh giá lại, không gia hạn `validUntil`, không tăng `version`, không đổi `Ready` → `NotReady`. `evaluatedAt` là thời điểm chụp ứng viên. Muốn làm mới, gọi `POST /{id}/re-evaluate`.
 
 #### 4.3. Chuyển trạng thái hồ sơ
@@ -616,8 +615,6 @@ graph TD
 - **Mô tả**: Đổi UAV của nhiệm vụ trước khi bắt đầu (cũng nhận `POST`). UAV mới phải `Available`, sức khỏe `Healthy`/`Warning`, flight status `Idle`, không `Unsuitable` với phạm vi hồ sơ, không trùng lịch. **Mọi** booking UAV `Active` khác của nhiệm vụ bị `Cancelled`; bàn giao đang mở của UAV cũ được đóng.
 - **Request Body**: `{ "droneId": "88888888-8888-8888-8888-888888888888" }`
 - **Lỗi**: `400 DRONE_NOT_AVAILABLE`, `DRONE_CRITICAL_HEALTH`, `DRONE_HEALTH_UNKNOWN`, `DRONE_UNSUITABLE`, `DRONE_UNAVAILABLE`, `MISSION_IMMUTABLE_AFTER_START`; `409 RESOURCE_BOOKING_CONFLICT`.
-- **Endpoint liên quan**: `POST /{id}/drone-handover` và `POST /{id}/drone-handover/return`: bàn giao và hoàn trả drone.
-  - Bàn giao do thành viên hoặc quản lý của vùng ghi nhận; mỗi UAV chỉ có một bàn giao đang mở trên các nhiệm vụ chưa kết thúc → `409 DUPLICATE_HANDOVER`. Bàn giao bị **từ chối** (`accepted: false`) được đóng ngay (`returnedAt` có giá trị) nên có thể bàn giao lại.
 
 #### 5.6. Điều phối vòng đời
 - `POST /{id}/confirm`: tương đương `assignments/accept` của **chính người gọi** (kèm nhật ký liên lạc). Không còn nhảy trạng thái: nhiệm vụ chỉ thành `Assigned` khi mọi người bắt buộc đã nhận. Người gọi không phải thành viên → `403 USER_NOT_ASSIGNED`; sai trạng thái → `409 INVALID_MISSION_STATE`.
@@ -633,12 +630,11 @@ graph TD
   - nhiệm vụ `Ready`/`Assigned`/`Preparing` và mọi người bắt buộc đã nhận (`409 REQUIRED_ACCEPTANCE_PENDING`, `409 INVALID_MISSION_STATE`);
   - không sớm hơn `plannedStart - Mission:StartToleranceMinutes` (mặc định 120 phút) → `400 MISSION_START_TOO_EARLY`;
   - UAV còn dùng được: `400 DRONE_ASSIGNMENT_REQUIRED`, `DRONE_NOT_AVAILABLE` (Maintenance/Unavailable/Lost/InUse), `DRONE_CRITICAL_HEALTH`; `409 DRONE_IN_USE` khi UAV đang bay nhiệm vụ khác, flight status không phải `Idle`/`Online`, hoặc đang được bàn giao ở nhiệm vụ khác;
-  - bàn giao gần nhất của UAV không bị từ chối → `409 HANDOVER_REJECTED`.
   - Khi bắt đầu từ `Assigned`/`Preparing`, hệ thống ghi check-in cho người gọi (nếu là thành viên đã nhận) và một bàn giao `Accepted` nếu chưa có.
 - `POST /{id}/complete`: UAV về `Idle` chỉ khi không nhiệm vụ `InProgress` nào khác dùng UAV; mọi booking `Active` → `Released`.
 
 #### 5.8. Mã lỗi xung đột (HTTP 409)
-Vi phạm ràng buộc CSDL không còn trả `500`: ràng buộc chống trùng lịch (`23P01`) → `RESOURCE_BOOKING_CONFLICT`; trùng khóa (`23505`) → `DUPLICATE_ASSIGNMENT`, `DUPLICATE_CHECK_IN`, `DUPLICATE_HANDOVER`, `IDEMPOTENCY_KEY_REUSED`, `DUPLICATE_RESOURCE` (bảng khác); deadlock/serialization → `CONCURRENCY_CONFLICT`. Các mã `409` khác của module: `INVALID_MISSION_STATE`, `MISSION_CONCURRENCY_CONFLICT`, `ASSIGNEE_ALREADY_ASSIGNED`, `DRONE_IN_USE`, `REQUIRED_ACCEPTANCE_PENDING`, `HANDOVER_REJECTED`. `DUPLICATE_CHECK_IN` và `DUPLICATE_HANDOVER` trước đây trả `400`, nay trả `409`.
+Vi phạm ràng buộc CSDL không còn trả `500`: ràng buộc chống trùng lịch (`23P01`) → `RESOURCE_BOOKING_CONFLICT`; trùng khóa (`23505`) → `DUPLICATE_ASSIGNMENT`, `DUPLICATE_CHECK_IN`, `IDEMPOTENCY_KEY_REUSED`, `DUPLICATE_RESOURCE` (bảng khác); deadlock/serialization → `CONCURRENCY_CONFLICT`. Các mã `409` khác của module: `INVALID_MISSION_STATE`, `MISSION_CONCURRENCY_CONFLICT`, `ASSIGNEE_ALREADY_ASSIGNED`, `DRONE_IN_USE`, `REQUIRED_ACCEPTANCE_PENDING`. `DUPLICATE_CHECK_IN` trước đây trả `400`, nay trả `409`.
 
 ---
 
@@ -655,27 +651,7 @@ Vi phạm ràng buộc CSDL không còn trả `500`: ràng buộc chống trùng
   }
   ```
 
-#### 6.2. [POST] `/api/v1/missions/{id}/drone-handover/deliver`
-- **Mô tả**: Ký biên bản bàn giao drone trước chuyến bay giữa Thủ kho/Kỹ thuật viên và Phi công trưởng.
-- **Request Body**:
-  ```json
-  {
-    "droneId": "88888888-8888-8888-8888-888888888888",
-    "receivedByUserId": "77777777-7777-7777-7777-777777777777",
-    "initialChecklist": {
-      "propellersSecure": true,
-      "cameraLensClean": true,
-      "gimbalCalibrated": true,
-      "batteryPercentage": 100,
-      "gpsLockAcquired": true
-    }
-  }
-  ```
-
-#### 6.3. [POST] `/api/v1/missions/{id}/drone-handover/return`
-- **Mô tả**: Ký biên bản thu hồi drone sau khi hoàn thành chuyến bay (Ghi nhận hư hại vật lý, số pin còn lại).
-
-#### 6.4. [POST] `/api/v1/missions/{id}/flight-logs`
+#### 6.2. [POST] `/api/v1/missions/{id}/flight-logs`
 - **Mô tả**: Nạp file log bay telemetry ghi nhận quỹ đạo GPS, độ cao tối đa, mức pin thấp nhất và thời lượng bay.
 - **Request Body**:
   ```json
@@ -691,7 +667,7 @@ Vi phạm ràng buộc CSDL không còn trả `500`: ràng buộc chống trùng
   }
   ```
 
-#### 6.5. [POST] `/api/v1/missions/{id}/incidents`
+#### 6.3. [POST] `/api/v1/missions/{id}/incidents`
 - **Mô tả**: Lập biên bản sự cố phát sinh tại hiện trường (Va chạm vật cản, thời tiết cực đoan, lỗi mất sóng). Sự cố chỉ gồm thông tin mô tả, **không có tệp đính kèm** (ERD v2.2 đã bỏ `incident_reports.file_url`).
 - **Phân quyền**: `SystemAdmin`, `Manager`, `Inspector`
 - **Request Body**:
@@ -959,7 +935,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 - **Query Params**: `pageIndex` (mặc định `0`), `pageSize` (mặc định `10`), `status`, `priority`
 
 #### 8.5a. [GET] `/api/v1/maintenance/tickets/technicians`
-- **Mô tả**: Danh sách kỹ thuật viên đang hoạt động (vai trò `Technician` hoặc `MaintenanceTechnician`) để chọn khi giao phiếu, kèm số phiếu chưa đóng của từng người.
+- **Mô tả**: Danh sách kỹ thuật viên đang hoạt động (vai trò `Technician`) để chọn khi giao phiếu, kèm số phiếu chưa đóng của từng người.
 - **Phân quyền**: `SystemAdmin`, `Manager`
 - **Response `200 OK`** (`data`): `[{ "id", "fullName", "email", "activeTicketCount" }]`
 
@@ -972,12 +948,12 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 #### 8.5c. [PUT] `/api/v1/maintenance/tickets/{id}/status` · [POST] `/api/v1/maintenance/tickets/{id}/materials` · [GET] `/api/v1/maintenance/tickets/my` · [GET] `/api/v1/maintenance/tickets/{id}`
 - `status`: body `{ "status": "InProgress" | "PendingVerification" }`. `InProgress` chỉ từ `Open` và cần đã giao kỹ thuật viên; `PendingVerification` chỉ từ `InProgress` và cần ít nhất một ảnh minh chứng.
 - `materials`: body `{ "componentName", "componentCode", "quantityUsed" (> 0), "unit", "fieldObservations" }`.
-- `my`: phiếu được giao cho kỹ thuật viên đang đăng nhập (`Technician`, `MaintenanceTechnician`).
+- `my`: phiếu được giao cho kỹ thuật viên đang đăng nhập (`Technician`).
 - `{id}`: chi tiết phiếu; `anomaly` gồm `categoryCode`, `categoryName`, `isEmergencyClass`, `imageUrl`, `cropUrl`, `boundingBox`, `mediaId`, `missionId`.
 
 #### 8.6. [POST] `/api/v1/maintenance/tickets/{id}/proof`
 - **Mô tả**: Kỹ thuật viên tải ảnh minh chứng sửa chữa (`multipart/form-data`: `file`, `technicianNotes?`). Mỗi tệp là một dòng `maintenance_proofs` (`proofType` = `Before`, `After` hoặc `Document`).
-- **Phân quyền**: `Technician`, `MaintenanceTechnician`, `SystemAdmin`, `Manager`
+- **Phân quyền**: `Technician`, `SystemAdmin`, `Manager`
 
 #### 8.7. [PUT] `/api/v1/maintenance/tickets/{id}/close`
 - **Mô tả**: Nghiệm thu và đóng phiếu sửa chữa. Phiếu phải có ít nhất một ảnh minh chứng. Hệ thống chuyển phiếu sang `Closed`, ghi `resolvedAt` và chuyển bất thường của phiếu sang `validationStatus = "Resolved"`. Không có bộ đếm lỗi hay bảng lịch sử tình trạng cột cần cập nhật: số bất thường đang mở của một cột được tính trực tiếp từ `detected_anomalies` (xem `GET /api/v1/towers/{id}/history`).
@@ -1045,7 +1021,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 
 #### 11.4. [POST] `/api/v1/reports`
 - **Mô tả**: Tạo báo cáo mới (trạng thái `draft`).
-- **Phân quyền**: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`, `MaintenanceTechnician`)
+- **Phân quyền**: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`)
 - **Request Body**:
   ```json
   {
@@ -1063,21 +1039,21 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 
 #### 11.5. [PUT] `/api/v1/reports/{id}`
 - **Mô tả**: Cập nhật báo cáo khi còn ở `draft`.
-- **Phân quyền**: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`, `MaintenanceTechnician`)
+- **Phân quyền**: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`)
 - **Request Body**: `title`, `description?`, `regionId?`, `missionIds?`, `dateFrom?`, `dateTo?` (không đổi `type`).
 
 #### 11.6. [DELETE] `/api/v1/reports/{id}`
 - **Mô tả**: Xóa mềm báo cáo khi còn ở `draft`.
-- **Phân quyền**: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`, `MaintenanceTechnician`)
+- **Phân quyền**: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`)
 
 #### 11.7. Luồng duyệt
-- `[PUT] /api/v1/reports/{id}/submit`: `draft` → `pending`. Phân quyền: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`, `MaintenanceTechnician`).
+- `[PUT] /api/v1/reports/{id}/submit`: `draft` → `pending`. Phân quyền: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`).
 - `[PUT] /api/v1/reports/{id}/approve`: `pending` → `approved`, đồng thời ghi `snapshot`. Phân quyền: `SystemAdmin`, `Manager`. `approved` là trạng thái cuối: không sửa, xóa hay từ chối được nữa, nên snapshot luôn khớp metadata.
 - `[PUT] /api/v1/reports/{id}/reject`: `pending` → `draft`, body `{ "reason": "..." }`. Phân quyền: `SystemAdmin`, `Manager`.
 
 #### 11.8. [GET] `/api/v1/reports/{id}/download` và [POST] `/api/v1/reports/{id}/generate`
 - **Mô tả**: Cả hai endpoint sinh tệp tại thời điểm gọi và stream về client, không lưu tệp. Báo cáo `approved` có snapshot được sinh **từ snapshot** (số liệu lúc duyệt); các báo cáo còn lại sinh từ dữ liệu hiện tại theo phạm vi báo cáo. Hai nguồn dùng chung bố cục PDF/Excel. `/generate` giữ lại để tương thích và tương đương `/download`.
-- **Phân quyền**: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`, `MaintenanceTechnician`). Manager chỉ tải được báo cáo trong phạm vi khu vực của mình; người dùng khác không tải được bản `draft` do người khác tạo.
+- **Phân quyền**: mọi vai trò (hằng `AdminManagerInspectorAnalyst`, gồm cả `Technician`). Manager chỉ tải được báo cáo trong phạm vi khu vực của mình; người dùng khác không tải được bản `draft` do người khác tạo.
 - **Query Params**: `format` = `pdf` (mặc định) hoặc `excel` / `xlsx`.
 - **Response `200 OK`**: nội dung tệp nhị phân (không bọc `ApiResponse`), `Content-Type` là `application/pdf` hoặc `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, kèm tên tệp trong `Content-Disposition`.
 
@@ -1122,4 +1098,4 @@ Tất cả các lỗi nghiệp vụ thuộc nhóm xung đột trạng thái/tài
 - `INVALID_MISSION_STATE`, `MISSION_CONCURRENCY_CONFLICT`, `CONCURRENCY_CONFLICT`, `ASSESSMENT_CONCURRENCY_CONFLICT`
 - `RESOURCE_BOOKING_CONFLICT`, `DRONE_IN_USE`, `DUPLICATE_RESOURCE`
 - `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `DUPLICATE_MEDIA`, `DUPLICATE_REQUEST`, `ALERT_ALREADY_ACTIVE`
-- `DUPLICATE_ASSIGNMENT`, `ASSIGNEE_ALREADY_ASSIGNED`, `DUPLICATE_CHECK_IN`, `DUPLICATE_HANDOVER`, `REQUIRED_ACCEPTANCE_PENDING`, `HANDOVER_REJECTED`
+- `DUPLICATE_ASSIGNMENT`, `ASSIGNEE_ALREADY_ASSIGNED`, `DUPLICATE_CHECK_IN`, `REQUIRED_ACCEPTANCE_PENDING`
