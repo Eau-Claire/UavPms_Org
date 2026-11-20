@@ -36,7 +36,7 @@ public class AIAnalysisRun : BaseEntity
     public string? ModelVersion { get; set; }
 
     /// <summary>Trạng thái xử lý (lưu dạng chuỗi)</summary>
-    public AIAnalysisStatus Status { get; set; } = AIAnalysisStatus.Pending;
+    public AIAnalysisStatus Status { get; set; } = AIAnalysisStatus.Queued;
 
     /// <summary>Integration event đã tạo ra run (idempotent consumer)</summary>
     public Guid? SourceEventId { get; set; }

@@ -75,7 +75,7 @@ public sealed class StartUploadedMediaAnalysisCommandHandler
             var activeDuplicate = (await _requestRepository.FindAsync(item =>
                 item.MediaId == media.Id && item.AnalysisType == analysisType &&
                 item.ModelName == model &&
-                (item.Status == AIAnalysisStatus.Pending || item.Status == AIAnalysisStatus.Processing), false)).FirstOrDefault();
+                (item.Status == AIAnalysisStatus.Queued || item.Status == AIAnalysisStatus.Processing), false)).FirstOrDefault();
             if (activeDuplicate != null)
                 return activeDuplicate.Id;
 
@@ -88,7 +88,7 @@ public sealed class StartUploadedMediaAnalysisCommandHandler
                 RequestedBy = upload.UploadedBy == Guid.Empty ? null : upload.UploadedBy,
                 AnalysisType = analysisType,
                 ModelName = model,
-                Status = AIAnalysisStatus.Pending,
+                Status = AIAnalysisStatus.Queued,
                 CreatedBy = upload.UploadedBy == Guid.Empty ? null : upload.UploadedBy
             };
             await _requestRepository.AddAsync(run);

@@ -150,7 +150,7 @@ public sealed class UploadStandaloneAnalysisCommandHandler
                 r.MediaId == media.Id &&
                 r.AnalysisType == parsedAnalysisType &&
                 r.ModelName == modelName &&
-                (r.Status == AIAnalysisStatus.Pending || r.Status == AIAnalysisStatus.Processing), false))?.FirstOrDefault();
+                (r.Status == AIAnalysisStatus.Queued || r.Status == AIAnalysisStatus.Processing), false))?.FirstOrDefault();
 
             var run = activeDuplicate;
             if (run == null)
@@ -164,7 +164,7 @@ public sealed class UploadStandaloneAnalysisCommandHandler
                     RequestedBy = currentUserId == Guid.Empty ? null : currentUserId,
                     AnalysisType = parsedAnalysisType,
                     ModelName = modelName,
-                    Status = AIAnalysisStatus.Pending,
+                    Status = AIAnalysisStatus.Queued,
                     CreatedAt = now,
                     CreatedBy = currentUserId == Guid.Empty ? null : currentUserId
                 };
@@ -231,7 +231,7 @@ public sealed class UploadStandaloneAnalysisCommandHandler
             BatchId = batchId,
             MissionId = mission.Id,
             TowerId = request.TowerId,
-            Status = AIAnalysisStatus.Pending.ToString(),
+            Status = AIAnalysisStatus.Queued.ToString(),
             AnalysisType = parsedAnalysisType.ToString(),
             ModelName = modelName,
             Notes = request.Notes ?? string.Empty,

@@ -101,7 +101,7 @@ public class AnalyzeExistingMediaCommandHandler
             RequestedBy = currentUserId == Guid.Empty ? null : currentUserId,
             ModelName = string.IsNullOrWhiteSpace(request.PreferredModel) ? "SERVER" : request.PreferredModel.Trim(),
             AnalysisType = request.AnalysisType,
-            Status = AIAnalysisStatus.Pending,
+            Status = AIAnalysisStatus.Queued,
             CreatedBy = currentUserId == Guid.Empty ? null : currentUserId
         };
         await _runRepository.AddAsync(run);

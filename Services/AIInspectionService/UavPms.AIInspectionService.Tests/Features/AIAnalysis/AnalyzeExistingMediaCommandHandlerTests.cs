@@ -176,7 +176,7 @@ public class AnalyzeExistingMediaCommandHandlerTests
         result.FileUrl.Should().Be("http://storage/existing.jpg");
         result.MediaType.Should().Be("Image");
         result.AnalysisType.Should().Be(AnalysisType.DefectDetection);
-        result.Status.Should().Be(AIAnalysisStatus.Pending);
+        result.Status.Should().Be(AIAnalysisStatus.Queued);
         result.TowerId.Should().Be(towerId);
 
         _aiRequestRepoMock.Verify(r => r.AddAsync(It.Is<AIAnalysisRun>(req =>
@@ -185,7 +185,7 @@ public class AnalyzeExistingMediaCommandHandlerTests
             req.ExecutionLocation == AIAnalysisRun.Cloud &&
             req.ModelName == "YOLO11" &&
             req.AnalysisType == AnalysisType.DefectDetection &&
-            req.Status == AIAnalysisStatus.Pending
+            req.Status == AIAnalysisStatus.Queued
         )), Times.Once);
 
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);

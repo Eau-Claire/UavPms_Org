@@ -191,7 +191,7 @@ public class AiInspectionPipelineTests
             Id = missionId,
             MissionCode = "MIS-EDGE-001",
             Title = "Edge inspection",
-            Status = "Executing",
+            Status = "InProgress",
             ManagerId = Guid.NewGuid(),
             UavId = uavId
         });
@@ -311,7 +311,7 @@ public class AiInspectionPipelineTests
             Id = missionId,
             MissionCode = "MIS-EMG-001",
             Title = "Emergency defect inspection",
-            Status = "Executing",
+            Status = "InProgress",
             ManagerId = Guid.NewGuid(),
             UavId = uavId
         });
@@ -454,7 +454,7 @@ public class AiInspectionPipelineTests
             Notes = "Upload thật lên MinIO"
         }, CancellationToken.None);
 
-        result.Status.Should().Be(AIAnalysisStatus.Pending.ToString());
+        result.Status.Should().Be(AIAnalysisStatus.Queued.ToString());
         result.FilesCount.Should().Be(1);
         result.Detections.Should().BeEmpty();
         result.Runs.Should().ContainSingle();
@@ -468,7 +468,7 @@ public class AiInspectionPipelineTests
 
         var savedRun = await context.AIAnalysisRuns.SingleAsync();
         savedRun.MediaId.Should().Be(savedMedia.Id);
-        savedRun.Status.Should().Be(AIAnalysisStatus.Pending);
+        savedRun.Status.Should().Be(AIAnalysisStatus.Queued);
         savedRun.ModelName.Should().Be("RF-DETR");
 
         var outboxMsg = await context.OutboxMessages.SingleAsync();

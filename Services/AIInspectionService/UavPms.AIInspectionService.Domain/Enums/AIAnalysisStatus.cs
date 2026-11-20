@@ -6,7 +6,7 @@ namespace UavPms.AIInspectionService.Domain.Enums;
 public enum AIAnalysisStatus
 {
     /// <summary>Đang chờ xử lý</summary>
-    Pending = 0,
+    Queued = 0,
 
     /// <summary>Đang được AI xử lý</summary>
     Processing = 1,

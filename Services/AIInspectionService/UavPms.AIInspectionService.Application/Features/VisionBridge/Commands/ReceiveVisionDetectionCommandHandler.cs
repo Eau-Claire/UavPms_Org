@@ -123,7 +123,7 @@ public class ReceiveVisionDetectionCommandHandler
         }
 
         var missions = await _missionRepository.FindAsync(
-            m => m.UavId == uav.Id && (m.Status == "InProgress" || m.Status == "Executing"));
+            m => m.UavId == uav.Id && m.Status == "InProgress");
         var activeMission = missions
             .OrderByDescending(m => m.Status == "InProgress")
             .FirstOrDefault();

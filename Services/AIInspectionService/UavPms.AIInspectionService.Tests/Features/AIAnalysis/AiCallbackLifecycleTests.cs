@@ -131,7 +131,7 @@ public sealed class AiCallbackLifecycleTests
             Request = new AIAnalysisRun
             {
                 Id = Guid.NewGuid(), MediaId = MediaId, RequestedBy = Guid.NewGuid(),
-                ExecutionLocation = AIAnalysisRun.Cloud, Status = AIAnalysisStatus.Pending
+                ExecutionLocation = AIAnalysisRun.Cloud, Status = AIAnalysisStatus.Queued
             };
             var requests = new Mock<IGenericRepository<AIAnalysisRun>>();
             requests.Setup(x => x.GetByIdAsync(Request.Id, true, It.IsAny<CancellationToken>())).ReturnsAsync(Request);

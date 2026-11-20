@@ -106,7 +106,7 @@ public class ProcessAiAnalysisResultCommandHandler
 
         if ("Processing".Equals(request.Status, StringComparison.OrdinalIgnoreCase))
         {
-            if (run.Status == AIAnalysisStatus.Pending)
+            if (run.Status == AIAnalysisStatus.Queued)
             {
                 run.Status = AIAnalysisStatus.Processing;
                 run.StartedAt ??= DateTime.UtcNow;
@@ -123,7 +123,7 @@ public class ProcessAiAnalysisResultCommandHandler
         }
 
         // The server bridge reports only terminal states, so Pending may complete directly.
-        if (run.Status is not (AIAnalysisStatus.Pending or AIAnalysisStatus.Processing))
+        if (run.Status is not (AIAnalysisStatus.Queued or AIAnalysisStatus.Processing))
             throw new BusinessRuleException("AI analysis must be Pending or Processing before reaching a terminal state.");
 
         var savedDetections = 0;
