@@ -42,7 +42,7 @@ Ký hiệu cột **Sửa ở đâu**: *Doc* = chỉ sửa tài liệu; *Code* = 
 
 ### 3.1 Đã sửa trực tiếp trong file v0.4 (ghi vào Record of Changes là v0.5)
 
-- **3.1.1 Screens Flow**: vẽ lại theo route và role guard thực tế của FE; file draw.io mới `report3_diagrams/Screen_Flow_Diagram_v0.5.drawio` (mở bằng draw.io, export SVG/PNG để chèn Word). Mermaid trong md cũng đã thay.
+- **3.1.1 Screens Flow**: vẽ lại theo route và role guard thực tế của FE; file draw.io mới `docs/diagrams/Screen_Flow_Diagram_v0.5.drawio` (mở bằng draw.io, export SVG/PNG để chèn Word). Mermaid trong md cũng đã thay.
 - **3.1.2 Screen Descriptions**: mô tả theo đúng tab/dialog thực tế (SCR-10 Workspace 5 tab: Tổng quan & bản đồ, Mặt bằng tuyến & khí tượng, Ứng viên nhân sự, Ứng viên UAV, Kiểm định BIST; SCR-11 có 2 tab; SCR-13 có 7 tab; SCR-18 và SCR-26 là một phần của SCR-13; SCR-23 chỉ còn dialog Reject).
 - **3.1.3 Screen Authorization**: ma trận theo 5 role, mỗi user 1 role.
 - **Bỏ công thức**: BR-17, BR-21, BR-23, BR-53, bước 6 UC-MF01-02, checklist UC-MF01-05; bỏ 2 dòng `Ai:EmergencyWeight`, `Ai:MaxConfidenceWeight` trong Table 57.

@@ -36,67 +36,67 @@
 
  
 
-Ho Chi Minh City, October 2026
-
 **Table of Contents**
 
-**[I. Record of Changes	4](#i.-record-of-changes)**
+**[I. Record of Changes	5](#i.-record-of-changes)**
 
-[**II. Project Management Plan	5**](#ii.-project-management-plan)
+[**II. Project Management Plan	6**](#ii.-project-management-plan)
 
-[1\. Overview	5](#1.-overview)
+[1\. Overview	6](#1.-overview)
 
-[1.1 Scope & Estimation	5](#1.1-scope-&-estimation)
+[1.1 Scope & Estimation	6](#1.1-scope-&-estimation)
 
-[1.2 Project Objectives	7](#1.2-project-objectives)
+[1.2 Project Objectives	8](#1.2-project-objectives)
 
-[1.3 Project Risks	9](#1.3-project-risks)
+[1.3 Project Risks	10](#1.3-project-risks)
 
-[2\. Management Approach	9](#2.-management-approach)
+[2\. Management Approach	10](#2.-management-approach)
 
-[2.1 Project Process	10](#2.1-project-process)
+[2.1 Project Process	11](#2.1-project-process)
 
-[2.2 Quality Management	10](#2.2-quality-management)
+[2.2 Quality Management	11](#2.2-quality-management)
 
-[2.3 Training Plan	11](#2.3-training-plan)
+[2.3 Training Plan	12](#2.3-training-plan)
 
-[3\. Project Deliverables	11](#3.-project-deliverables)
+[3\. Project Deliverables	12](#3.-project-deliverables)
 
-[4\. Responsibility Assignments	12](#4.-responsibility-assignments)
+[4\. Responsibility Assignments	13](#4.-responsibility-assignments)
 
-[5\. Project Communications	13](#5.-project-communications)
+[5\. Project Communications	14](#5.-project-communications)
 
-[6\. Configuration Management	14](#6.-configuration-management)
+[6\. Configuration Management	15](#6.-configuration-management)
 
-[6.1 Document Management	14](#6.1-document-management)
+[6.1 Document Management	15](#6.1-document-management)
 
-[6.2 Source Code Management	14](#6.2-source-code-management)
+[6.2 Source Code Management	15](#6.2-source-code-management)
 
-[6.3 Tools & Infrastructures	14](#6.3-tools-&-infrastructures)
+[6.3 Tools & Infrastructures	15](#6.3-tools-&-infrastructures)
 
-[**III. Research Direction and Conceptual Framework	15**](#iii.-research-direction-and-conceptual-framework)
+**Table of Figures**
 
-[1\. Research Direction and Conceptual Framework	15](#1.-research-direction-and-conceptual-framework)
+[Figure 1\. UAV-PMS iterative and incremental development process.	11](#heading=h.figure1)
 
-[1.1 Gap Positioning	15](#1.1-gap-positioning)
+**Table of Tables**
 
-[1.2 Proposed Research Concept & Solution Vision	15](#1.2-proposed-research-concept-&-solution-vision)
+[Table 1\. UAV-PMS Function-level Work Breakdown Structure Estimate.	6](#heading=h.table1)
 
-[1.3 Strategic Research Approach Selection	16](#1.3-strategic-research-approach-selection)
+[Table 2\. UAV-PMS objectives.	8](#heading=h.table2)
 
-[2\. Research Feasibility & Resource Assessment	16](#2.-research-feasibility-&-resource-assessment)
+[Table 3\. Overall Activity-based Project Effort Budget.	9](#heading=h.table3)
 
-[3\. Expected Research Outcomes	17](#3.-expected-research-outcomes)
+[Table 4\. UAV-PMS risk register.	10](#heading=h.table4)
 
-[4\. Responsibility Assignments	17](#4.-responsibility-assignments-1)
+[Table 5\. Quality-management approach and evidence.	11](#heading=h.table5)
 
-[5\. Research Roadmap & Milestone Planning	17](#5.-research-roadmap-&-milestone-planning)
+[Table 6\. UAV-PMS training plan.	12](#heading=h.table6)
 
-[6\. Configuration Management	18](#6.-configuration-management-1)
+[Table 7\. UAV-PMS master deliverable schedule.	12](#heading=h.table7)
 
-[6.1 Dataset Management	18](#6.1-dataset-management)
+[Table 8\. UAV-PMS responsibility assignment matrix.	13](#heading=h.table8)
 
-[6.2 Source Code Management	18](#6.2-source-code-management-1)
+[Table 9\. UAV-PMS project communication plan.	14](#heading=h.table9)
+
+[Table 10\. UAV-PMS tools and infrastructure.	15](#heading=h.table10)
 
 **ABBREVIATIONS**
 
@@ -104,20 +104,43 @@ A list of abbreviations and acronyms used in the thesis, with their full forms.
 
 | Acronym | Meaning |
 | ----- | ----- |
-| UAV | Unmanned Aerial Vehicle |
-| UAV-PMS | Project abbreviation for the Integrated UAV-AI Inspection and Maintenance Management System for Electrical Infrastructure |
-| SRS | Software Requirements Specification |
-| WBS | Work Breakdown Structure |
-| CF | Common Function |
-| MF | Main Flow |
-| GIS | Geographic Information System |
 | AI | Artificial Intelligence |
-| YOLO | You Only Look Once |
-| DETR | DEtection TRansformer |
-| mAP | mean Average Precision |
 | API | Application Programming Interface |
+| ASP.NET | Active Server Pages .NET |
+| CF | Common Function |
 | CI | Continuous Integration |
-| P0/P1 | Priority 0 / Priority 1 test cases |
+| CNN | Convolutional Neural Network |
+| CQRS | Command Query Responsibility Segregation |
+| CSS | Cascading Style Sheets |
+| DETR | Detection Transformer |
+| D | Do |
+| EF | Entity Framework |
+| F1 | F1 Score |
+| GIS | Geographic Information System |
+| GPS | Global Positioning System |
+| gRPC | gRPC Remote Procedure Calls |
+| I | Informed |
+| MF | Main Flow |
+| mAP | Mean Average Precision |
+| MQTT | Message Queuing Telemetry Transport |
+| OpenCV | Open Source Computer Vision Library |
+| P0/P1 | Priority 0 / Priority 1 Test Cases |
+| PDF | Portable Document Format |
+| R | Review |
+| RGB | Red, Green, Blue |
+| RT-DETR | Real-Time Detection Transformer |
+| S | Support |
+| SAM | Segment Anything Model |
+| SCI | Structural Consistency Index |
+| SDI | Structural Dependency Index |
+| SRS | Software Requirements Specification |
+| UI | User Interface |
+| UAV | Unmanned Aerial Vehicle |
+| UAV-PMS | Integrated UAV-AI Inspection and Maintenance Management System for Electrical Infrastructure |
+| UX | User Experience |
+| ViT | Vision Transformer |
+| WBS | Work Breakdown Structure |
+| YOLO | You Only Look Once |
 
 # **I. Record of Changes** {#i.-record-of-changes}
 
@@ -138,16 +161,18 @@ A list of abbreviations and acronyms used in the thesis, with their full forms.
 
 ## **1\. Overview** {#1.-overview}
 
-The team develops a prototype integrating UAV inspection coordination, edge-assisted alerts, server-side defect analysis, GIS-based visualization, human validation and maintenance follow-up. Publicly documented electricity-sector use cases provide domain context; they do not constitute confirmed requirements or formal sponsorship from EVN or any affiliated organization.
+The team develops a prototype integrating UAV inspection coordination, server-side AI defect analysis, GIS-based visualization, human validation and maintenance follow-up. Publicly documented electricity-sector use cases provide domain context; they do not constitute confirmed requirements or formal sponsorship from EVN or any affiliated organization.
 
 The working internal target remains 30 November 2026\. Development is planned to reach feature freeze by 15 November, followed by integration, regression, safety checks and defect fixing through 30 November. The December 2026–March 2027 period remains available for supervisor feedback, academic reporting and defense preparation. These are planning targets, not claims of completed work.
 
 ### **1.1 Scope & Estimation** {#1.1-scope-&-estimation}
 
-The scope is organized around common functions (CF) and four main flows (MF01–MF04). Table 1 provides a function-level Work Breakdown Structure estimate of 99 person-days for the defined product functions. Table 3 provides an overall activity-based project budget of 145 person-days, covering requirements analysis, design, implementation, AI research, UAV engineering, testing, and project management. These estimates serve different planning purposes and must not be added together. The overall project capacity and schedule are tracked against the 145 person-day activity budget.
+The defined scope operationalizes the 7 Major Features (FE-01 to FE-07) established in Report 1 into foundational Common Functions (CF) and four end-to-end operational main flows (MF01–MF04). Table 1 provides a function-level Work Breakdown Structure estimate of 99 person-days for the defined product functions. Table 3 provides an overall activity-based project budget of 145 person-days, covering requirements analysis, design, implementation, AI research, UAV engineering, testing, and project management. These estimates serve different planning purposes and must not be added together. The overall project capacity and schedule are tracked against the 145 person-day activity budget.
+
+***Table 1\.** UAV-PMS Function-level Work Breakdown Structure Estimate.*
 
 | \# | WBS Item | Complexity | Est. Effort (person-days) |
-| :---- | :---- | :---- | :---- |
+| :---- | ----- | ----- | ----- |
 | CF-01 | Authenticate users and enforce role-based access | Complex | 4 |
 | CF-02 | Manage users, roles | Simple | 1 |
 | CF-03 | Manage assets, towers, sites and GIS coordinates | Medium | 3 |
@@ -170,11 +195,8 @@ The scope is organized around common functions (CF) and four main flows (MF01–
 | MF02-09 | Cancel, suspend, resume, reassign or reschedule a mission | Simple | 1 |
 | MF03-01 | Perform field check-in for the assigned mission | Medium | 2 |
 | MF03-02 | Start and finish mission execution with state validation | Complex | 4 |
-| MF03-03 | Stream, display and store UAV telemetry | Complex | 5 |
-| MF03-04 | Capture camera evidence | Complex | 5 |
-| MF03-05 | Run the deployed YOLO11s edge model during inspection to detect suspected critical anomalies and send an alert with the captured image, timestamp and confidence score | Complex | 4 |
-| MF03-06 | Submit field incident report | Medium | 2 |
-| MF03-07 | Store flight logs and mission-completion evidence | Simple | 1 |
+| MF03-03 | Submit field incident report | Medium | 2 |
+| MF03-04 | Store flight logs and mission-completion evidence | Simple | 1 |
 | MF04-01 | Upload inspection media and telemetry | Simple | 1 |
 | MF04-02 | Validate inspection files and required metadata | Medium | 2 |
 | MF04-03 | Create, monitor and retry AI analysis jobs | Medium | 2 |
@@ -187,23 +209,22 @@ The scope is organized around common functions (CF) and four main flows (MF01–
 | MF04-10 | Provide dashboards, reports and result export | Medium | 4 |
 |   | Total software-function effort |   | 99 |
 
-***Table 1\.** UAV-PMS Function-level Work Breakdown Structure Estimate.*
-
 ### **1.2 Project Objectives** {#1.2-project-objectives}
 
 The objective is to complete a working UAV-assisted inspection system from mission planning to AI result review. The team plans 145 person-days (1,160 hours) from 5 September to 30 November 2026 (87 calendar days). This equals about 3.3 hours per member per calendar day for four students. The 145 person-day activity budget is used for overall capacity and schedule tracking. The 99 person-day estimate in Table 1 is a separate function-level estimate for the defined product scope; it is not added to the overall activity budget. 
 
-| Dimension | Objective | Metric / Acceptance Target | Due Date |
-| :---- | :---- | :---- | :---- |
-| Scope | MF01–MF04 demonstrate core role/state-controlled workflows; evidence links retained | 15–30 Nov 2026 | Scope |
-| Quality | P0/P1 integration and regression cases executed; critical defects resolved or explicitly documented | 30 Nov 2026 | Quality |
-| AI | Versioned raw/curated data; reproducible model comparisons; per-class error analysis | Research milestone / revised as needed | AI |
-| UAV | Bench verification and controlled flight evidence subject to site permission and safety readiness | By 30 Nov if feasible | UAV |
-| GIS | Demonstrate asset/route and defect workflow using clearly labeled sample spatial data; import interface if available | System testing | GIS |
-| Emergency | Device-originated alerts can reach a configured duty manager without requiring an approved mission | Integration testing | Emergency |
-| Cost | Track actual effort and expenses weekly | Weekly | Cost |
-
 ***Table 2\.** UAV-PMS objectives.*
+
+| Dimension | Objective | Due Date | Metric / Acceptance Target |
+| ----- | ----- | ----- | ----- |
+| Scope | Deliver core role-based workflows across MF01–MF04 and common administrative functions without dependency on legacy asset-health modules. | 15–30 Nov 2026 | 100% of prioritized P0/P1 functional use cases accepted and operational. |
+| Quality | Execute comprehensive unit, integration, and end-to-end regression test suites; verify zero open critical/high defects before sign-off. | 30 Nov 2026 | 100% test case pass rate (90/90 UT, 100/100 ST); zero Severity-1/Severity-2 defects remaining. |
+| AI Detection | Establish version-controlled datasets; benchmark YOLO and RT-DETR architectures; achieve operational mAP on verified defect taxonomy. | Milestone Schedule | mAP@0.5 \>= 0.82 across target 6 defect classes; automated inference latency \< 2.5s per frame. |
+| UAV & Hardware | Conduct bench diagnostics, flight log verification, and controlled flight validation subject to site safety clearance. | By 30 Nov 2026 | Periodic UAV flight telemetry ingestion with acceptable field network transmission latency (15–30s); flight logs and BIST sensor records verified. |
+| GIS Infrastructure | Provide interactive spatial visualization of electrical towers, flight routes, and defect locations using Leaflet and GeoJSON. | System Testing | Responsive map rendering (\< 350 ms query latency); accurate spatial coordinate binding (WGS84). |
+| Schedule & Cost | Maintain project progress within the 145 person-day budget (1,160 hours) across the 87-calendar-day timeline. | Weekly Tracking | Milestone variance \<= 5%; actual effort tracked within planned activity budget distributions. |
+
+***Table 3\.** Overall Activity-based Project Effort Budget.*
 
 | Activity | Planned Distribution | Person-days |
 | :---- | :---- | :---- |
@@ -216,148 +237,118 @@ The objective is to complete a working UAV-assisted inspection system from missi
 | Project Management and Documentation | 4% | 6 |
 | Total | 100% | 145 |
 
-***Table 3\.** Overall Activity-based Project Effort Budget.*
-
-### 
-
 ### **1.3 Project Risks** {#1.3-project-risks}
-
-| \# | Risk Description | Impact | Probability | Response Plan |
-| :---- | :---- | :---- | :---- | :---- |
-| 1 | AI data has too few samples or very small defects | High | High | Check labels and class counts; add suitable augmentation and report weak classes clearly. |
-| 2 | Dataset curation, six-model benchmarking or structural reasoning experiments exceed the planned effort | High | High | Prioritize a reproducible YOLO11/YOLO26/RT-DETR baseline and the raw-versus-curated comparison. Treat structural reasoning as an optional extension, subject to time and evaluation results. |
-| 3 | Raspberry Pi, camera or telemetry is unstable | High | Medium | Test each part on the bench before connecting the full system; lower resolution or rate if needed. |
-| 4 | Soldering, power or vibration causes UAV failure | Very High | Medium | Check wiring and balance, test without propellers first and prepare spare parts. |
-| 5 | Manual flight, failsafe or site conditions cause an unsafe test | Very High | Medium | Use a pre-flight checklist, geofence, observer and abort plan; stop the test when site or weather conditions are unsafe. |
-| 6 | Frontend, backend, AI and UAV use different data formats | High | Medium | Agree on request/result examples and test interfaces early. |
-| 7 | The team misses the 30 November deadline | Very High | High | Review progress weekly, finish all development by 15 November, use 16-26 November only for testing and defect fixing, and freeze the release on 27 November. |
-| 8 | A member is unavailable for a specialist task | Medium | Medium | Share setup notes and let one other member support each important task. |
 
 ***Table 4\.** UAV-PMS risk register.*
 
+| \# | Risk Description | Impact | Probability | Response Plan |
+| :---- | ----- | ----- | ----- | ----- |
+| 1 | AI data has too few samples or very small defects | High | High | Check labels and class counts; add suitable augmentation and report weak classes clearly. |
+| 2 | Dataset curation, six-model benchmarking or structural reasoning experiments exceed the planned effort | High | High | Prioritize a reproducible YOLO11/YOLO26/RT-DETR baseline and the raw-versus-curated comparison. Treat structural reasoning as an optional extension, subject to time and evaluation results. |
+| 3 | Soldering, power or vibration causes UAV failure | Very High | Medium | Check wiring and balance, test without propellers first and prepare spare parts. |
+| 4 | Manual flight, failsafe or site conditions cause an unsafe test | Very High | Medium | Use a pre-flight checklist, geofence, observer and abort plan; stop the test when site or weather conditions are unsafe. |
+| 5 | Frontend, backend, AI and UAV use different data formats | High | Medium | Agree on request/result examples and test interfaces early. |
+| 6 | The team misses the 30 November deadline | Very High | High | Review progress weekly, finish all development by 15 November, use 16-26 November only for testing and defect fixing, and freeze the release on 27 November. |
+| 7 | A member is unavailable for a specialist task | Medium | Medium | Share setup notes and let one other member support each important task. |
+
 ## **2\. Management Approach** {#2.-management-approach}
 
-The team uses Iterative and Incremental Development. The scope is mostly fixed, but AI and UAV work needs repeated testing. Therefore, the project is divided into short stages, and each stage ends with a working result that the team can review.
+The UAV-PMS project adopts the **Iterative and Incremental Development** model. Because the system involves complex multidisciplinary components—including web enterprise management, deep learning AI defect detection, and custom physical UAV hardware—a traditional linear waterfall model introduces high integration and safety risks. 
 
-• The leader updates the plan, assigns work and records important changes.
-
-• Members report progress and problems in the weekly meeting.
-
-• Changes to scope, interface, safety or deadline must be discussed before implementation.
-
-• The team freezes features on 15 November, uses 16-26 November for system testing, regression and defect fixing, freezes the release on 27 November, checks it on 28-29 November and completes it on 30 November 2026\. 
+By applying an iterative and incremental approach, the project is structured into manageable cycles. Each cycle delivers a working, testable increment of the system, allowing the team to progressively mitigate technical risks, incorporate continuous feedback, and refine both software and hardware iteratively.
 
 ### **2.1 Project Process** {#2.1-project-process}
 
-| Iteration 0 \- Plan and Baseline  \|  05 Sep-10 Oct Focus: Feature estimates, SRS draft, architecture, interfaces, dataset and hardware plans Exit gate: Requirements and interface baseline approved for implementation |
-| :---: |
+The software development life cycle (SDLC) is structured around the iterative and incremental workflow illustrated in **Figure 1**. Following an initial project-wide setup, the team repeatedly executes a core engineering cycle to build and refine system capabilities, deploying verified increments until project completion.
 
-↓  Review, evidence and controlled feedback  ↓
+***Figure 1\.** UAV-PMS iterative and incremental development process.*
 
-| Iteration 1 \- Core Foundations \| 11-25 Oct Focus: MF01-MF02, web/backend foundation, YOLO11s baseline and UAV bench assembly  Exit gate: MF01-MF02 integration candidate; reproducible AI baseline; powered UAV bench test  |
-| :---: |
+The process consists of the following key stages:
 
-↓  Review, evidence and controlled feedback  ↓
-
-| Iteration 2 \- Field and Research  \|  26 Oct-08 Nov  Focus: MF03, camera/telemetry, controlled manual flight, SDI/SCI experiments and per-class diagnosis  Exit gate: Field-data path demonstrated; controlled flight and SDI/SCI evidence reviewed  |
-| :---: |
-
-↓  Review, evidence and controlled feedback  ↓
-
-| Iteration 3 \- Advanced Integration \| 09-15 Nov  Focus: MF04, StructDETR candidate, analyst review, waypoint route and cross-system integration  Exit gate: Feature freeze on 15 November; all four flows integrated; waypoint-flight and AI candidate evidence available  |
-| :---: |
-
-↓  Review, evidence and controlled feedback  ↓
-
-| Iteration 4 \- Test, Fix and Accept \| 16-30 Nov  Focus: MF01-MF04 system and regression testing, defect fixing, field re-validation, final AI evaluation, SRS finalization and release Exit gate: Release frozen on 27 November; 30 November completion criteria accepted; no open Severity 1/2 defect  |
-| :---: |
-
-↓  Review, evidence and controlled feedback  ↓
-
-| Contingency and Defense  \|  01 Dec-Mar 2027 Focus: Supervisor-requested changes, extended validation, reports, demo and defense rehearsal Exit gate: Academic submission and defense package approved |
-| :---: |
-
-***Figure 1\. UAV-PMS iterative and incremental development process***
+1. **Initial Planning:** Establishes the overarching project vision, feasibility assessment, high-level scope, resource allocation, and general roadmap across the software, AI, and UAV domains.
+2. **Planning:** At the start of each iteration, the team defines specific iteration goals, selects and prioritizes backlog items (covering MF01–MF04), and schedules task allocations.
+3. **Requirements:** Gathers, refines, and formalizes detailed functional and non-functional requirements, user stories, safety constraints, and interface specifications for the planned increment.
+4. **Analysis and Design:** Formulates domain models, database schemas (PostgreSQL/PostGIS), REST/gRPC API contracts, UI/UX wireframes, AI inference data flows, and hardware avionics schematics.
+5. **Implementation:** Develops backend services (ASP.NET Core), frontend views (Angular), trains and tunes defect detection models (YOLO), and integrates UAV airframe components.
+6. **Testing:** Conducts rigorous verification at multiple levels—including unit tests, integration tests, end-to-end system test scenarios, AI performance benchmarks, and UAV pre-flight checks.
+7. **Evaluation:** Assesses the iteration outcomes against defined acceptance criteria, conducts code and artifact reviews, and gathers stakeholder/supervisor feedback. Lessons learned and identified defects feed directly back into the next **Planning** stage.
+8. **Deployment:** Packages, integrates, and releases stable, verified product increments to the staging/production environment, leading to the final operational release and capstone defense demonstration.
 
 ### **2.2 Quality Management** {#2.2-quality-management}
 
+***Table 5\.** Quality-management approach and evidence.*
+
 | Quality Approach | Application to UAV-PMS | Exit Evidence / Criterion |
-| :---- | :---- | :---- |
+| ----- | ----- | ----- |
 | Defect Prevention | Agree on acceptance criteria, API formats, coding rules and UAV safety checks before work starts. | Checklist or requirement is available before implementation. |
 | Reviewing | Another member reviews important SRS, code, test cases, AI results and flight evidence. | Review comments are fixed or explained. |
 | Unit Testing | Test backend rules, validators and important frontend services/components. | Required unit tests pass before merge. |
-| Integration Testing | Test frontend-backend, service-database, AI callback and UAV telemetry connections. | Data is sent and received in the expected format. |
+| Integration Testing | Test frontend-backend, service-database, AI callback. | Data is sent and received in the expected format. |
 | System Testing | Run the main MF01-MF04 scenarios using the correct roles and mission states. | P0/P1 cases pass and no Severity 1/2 defect remains. |
 | AI Evaluation | Compare YOLO11/YOLO26/RT-DETR, data curation and structural reasoning on the same split and check errors by class. | Metrics, error analysis and selected-model reason are recorded. |
 | UAV Verification | Check wiring, calibration, geofence and failsafe before controlled and waypoint flights. | Checklist, telemetry, camera and flight evidence are saved. |
 
-***Table 5\.** Quality-management approach and evidence.*
-
-### 
-
 ### **2.3 Training Plan** {#2.3-training-plan}
 
+***Table 6\.** UAV-PMS training plan.*
+
 | Training Area | Participants | When / Duration | Waiver Criteria |
-| :---- | :---- | :---- | :---- |
+| ----- | ----- | ----- | ----- |
 | SRS, traceability and Git | All members | 05 Sep-10 Oct; two 90-minute sessions | Waived after completing one reviewed requirement and pull request. |
 | Angular, GIS and API integration | Nguyễn Quốc Khánh; Nguyễn Nhật An | By 15 Oct; two 2-hour sessions  | Waived after completing one reviewed integrated screen. |
 | ASP.NET Core and messaging | Nguyễn Nhật An; Phạm Hoàng Minh Châu | By 15 Oct; two 2-hour sessions  | Waived after completing one reviewed service change. |
 | UAV assembly and flight safety | Trần Ánh Quốc | Before flight; one 3-hour bench session | No waiver for a member joining a live flight. |
-| Raspberry Pi, camera and waypoint flight | Trần Ánh Quốc; Nguyễn Nhật An | By 31 Oct; two 2-hour sessions  | Waived after a successful bench or simulated mission. |
-| YOLO11s, SDI/SCI, StructDETR and error analysis | Phạm Hoàng Minh Châu | 11 Oct-08 Nov; four 2-hour sessions  | Waived after reproducing one experiment and explaining its result. |
-
-***Table 6\.** UAV-PMS training plan.*
+| YOLO11, YOLO26, RT-DETR and error analysis | Phạm Hoàng Minh Châu | 11 Oct-08 Nov; four 2-hour sessions  | Waived after reproducing one experiment and explaining its result. |
 
 ## **3\. Project Deliverables** {#3.-project-deliverables}
 
+***Table 7\.** UAV-PMS master deliverable schedule.*
+
 | \# | Main Deliverable | Deliverable Type | Planned Period / Due Date |
-| :---- | :---- | :---- | :---- |
+| :---- | ----- | ----- | ----- |
 | 1 | Report 1 \- Project Introduction | External | Completed project baseline |
 | 2 | Report 2 \- Project Management Plan | External | 24/09/2026 |
 | 3 | SRS Working Baseline and Interface Contracts | Internal / Baseline | 05/09-10/10/2026 |
 | 4 | MF01-MF02 Integration and Test Report | Internal | 11/10-25/10/2026 |
 | 5 | Dataset Audit and YOLO11/YOLO26/RT-DETR Baseline Report | Internal / Research | 11/10-25/10/2026 |
 | 6 | UAV Bench Assembly and Safety Checklist | Internal / Engineering | 11/10-25/10/2026 |
-| 7 | MF03 and Camera/Telemetry Integration | Internal | 26/10-08/11/2026 |
-| 8 | Raw-versus-Curated Benchmark and Per-Class Error Report | Internal / Research | 26/10-08/11/2026 |
-| 9 | MF04 Integration and Structural Reasoning Feasibility Assessment | Internal / Research | 01/11-15/11/2026 |
-| 10 | Waypoint Flight Evidence | Internal / Validation | 09/11-15/11/2026 |
-| 11 | System Test, Regression and Defect-Fix Report | Internal / Validation | 16/11-30/11/2026 |
-| 12 | Final SRS, Integrated System and User Guide | External / Baseline | Due 30/11/2026 |
-| 13 | Final Report, Demo and Defense Package | External | By the official schedule |
-
-***Table 7\.** UAV-PMS master deliverable schedule.*
+| 7 | Raw-versus-Curated Benchmark and Per-Class Error Report | Internal / Research | 26/10-08/11/2026 |
+| 8 | MF04 Integration and Structural Reasoning Feasibility Assessment | Internal / Research | 01/11-15/11/2026 |
+| 9 | Waypoint Flight Evidence | Internal / Validation | 09/11-15/11/2026 |
+| 10 | System Test, Regression and Defect-Fix Report | Internal / Validation | 16/11-30/11/2026 |
+| 11 | Final SRS, Integrated System and User Guide | External / Baseline | Due 30/11/2026 |
+| 12 | Final Report, Demo and Defense Package | External | By the official schedule |
 
 ## **4\. Responsibility Assignments** {#4.-responsibility-assignments}
 
 D \- Do; R \- Review; S \- Support; I \- Informed; blank \- omitted
 
+***Table 8\.** UAV-PMS responsibility assignment matrix.*
+
 | Responsibility | Nguyễn Quốc Khánh (SE193464) | Nguyễn Nhật An (SE193338) | Trần Ánh Quốc (SE181995) | Phạm Hoàng Minh Châu (SE193418) |
-| :---- | :---- | :---- | :---- | :---- |
+| ----- | :---- | ----- | :---- | :---- |
 | Project leadership, schedule, risk and stakeholder coordination | D | S | S | S |
 | Business analysis, SRS and requirement traceability | D | S | S | R |
-| Frontend architecture, UX and MF01-MF04 screens | D | D | I | S |
-| Backend services, database and API contracts | R | D | S | S |
-| MF01-MF02 full-stack implementation | R | D | I | S |
-| MF03 field workflow and system integration | R | D | S | S |
+| Frontend architecture, UX and MF01-MF04 screens | I | D | I | S |
+| Backend services, database and API contracts | I | D | S | D |
+| MF01-MF02 full-stack implementation | I | D | I | S |
+| MF03 field workflow and system integration | I | D | S | S |
 | UAV hardware assembly, soldering and power integration | R | S | D | I |
-| Raspberry Pi, camera, telemetry and autonomous route | R | S | D | I |
-| AI dataset curation, six-model baseline and experiment protocol | R | I | S | D |
-| Raw-versus-curated benchmarking and per-class diagnosis | R | I | S | D |
-| Structural reasoning extension and ablation planning | R | I | S | D |
-| MF04 AI-service, analyst review and result integration | R | D | S | D |
+| AI dataset curation, six-model baseline and experiment protocol | I | I | I | D |
+| Raw-versus-curated benchmarking and per-class diagnosis | I | I | I | D |
+| MF04 AI-service, analyst review and result integration | I | D | I | D |
 | Unit, integration and system testing | R | D | S | D |
 | UAV safety and flight validation | R | I | D | S |
-| Release, documentation and demonstration package | D | S | S | S |
-
-***Table 8\.** UAV-PMS responsibility assignment matrix.*
+| Release, documentation and demonstration package | I | D | I | S |
 
 The Project Leader confirms task-level ownership and resolves conflicts. D identifies the member directly producing the output; R independently reviews or accepts it; S provides technical support; I receives status or decisions. Two D entries are used only where a deliverable genuinely requires joint ownership across disciplines.
 
 ## **5\. Project Communications** {#5.-project-communications}
 
+***Table 9\.** UAV-PMS project communication plan.*
+
 | Communication Item | Who / Target | Purpose | When / Frequency | Type, Tool and Method |
-| :---- | :---- | :---- | :---- | :---- |
+| ----- | ----- | ----- | ----- | ----- |
 | Internal Planning and Review | All members | Review progress, evidence, blockers, individual ownership and the next iteration. | Weekly; twice weekly from 26 October to 15 November; daily short check-in from 16 to 30 November 2026  | Meeting; task board; minutes; GitHub Issues |
 | Supervisor Meeting | Team; Đặng Ngọc Minh Đức; Phạm Minh Trí | Review scope, requirements, technical direction, risk and milestone readiness. | Weekly and before formal gates | Meeting; Word/Google Docs; slides; evidence links |
 | Requirement and Change Review | Leader, affected owners and reviewers | Approve requirement clarification and assess schedule/interface/test impact. | Before an affected baseline changes | Google sheet |
@@ -366,8 +357,6 @@ The Project Leader confirms task-level ownership and resolves conflicts. D ident
 | UAV Engineering and Flight Review | Trần Ánh Quốc; leader; flight participants | Review assembly, safety, configuration, weather/site, route and abort criteria. | Before every powered or flight test | Google sheet \+ Google Drive |
 | Defect and Test Triage | Relevant owner, tester and leader | Classify defects, assign action, decide release impact and verify closure. | After each integration/system-test session | Issue tracker; test report; retest evidence |
 | Milestone Demonstration | Team, supervisors and reviewers | Demonstrate accepted scope and record decisions or corrective actions. | At each integration gate and formal review | Live demo; report; slides; signed minutes |
-
-***Table 9\.** UAV-PMS project communication plan.*
 
 ## **6\. Configuration Management** {#6.-configuration-management}
 
@@ -380,165 +369,29 @@ Project documents are stored in a shared Drive folder with separate folders for 
 
 ### **6.2 Source Code Management** {#6.2-source-code-management}
 
-Source code is stored in GitHub repositories for backend, frontend, AI and UAV/Raspberry Pi work. The main branch contains the latest stable integrated version.  
+Source code is stored in GitHub repositories for backend, frontend and AI work. The main branch contains the latest stable integrated version.  
 • Each task uses a short feature or fix branch and is merged by pull request.  
 • At least one other member reviews the pull request and relevant tests must pass.  
-• API, telemetry and AI-result format changes are updated in both producer and consumer code.  
+• API and AI-result format changes are updated in both producer and consumer code.  
 • Large datasets and model files are stored outside normal Git history; secrets are never committed.  
 • A working release is tagged before a milestone demo or submission.
 
 ### **6.3 Tools & Infrastructures** {#6.3-tools-&-infrastructures}
 
+***Table 10\.** UAV-PMS tools and infrastructure.*
+
 | Category | Tools / Infrastructure |
-| :---- | :---- |
-| Frontend | Angular 21, TypeScript, Tailwind CSS, Leaflet/MapLibre and SignalR client |
+| ----- | ----- |
+| Frontend | Angular 19, TypeScript, Tailwind CSS, Leaflet/MapLibre and SignalR client |
 | Backend and Services | ASP.NET Core 9, Microservices \+ Clean architecture /CQRS, Ocelot API Gateway, gRPC, SignalR and background services |
-| Database and Geospatial | PostgreSQL/PostGIS and EF Core migrations |
-| Messaging and Cache | RabbitMQ, MQTT/Mosquitto and Redis |
+| Database and Geospatial | PostgreSQL/PostGIS and EF Core migrations, MinIO |
+| Messaging and Cache | RabbitMQ and Redis |
 | AI Research | Python, PyTorch/Ultralytics YOLO11/YOLO26/RT-DETR, structural reasoning, OpenCV and versioned experiment configurations |
-| UAV and Edge | UAV airframe/electronics, soldering and measurement tools, flight controller, Raspberry Pi, camera, GPS/telemetry and waypoint-planning software |
+| UAV Hardware | UAV airframe/electronics, soldering and measurement tools, flight controller, camera, GPS and waypoint-planning software |
 | Testing | xUnit/.NET test, API regression tests, Angular/Vitest, Playwright, manual system tests, AI evaluation scripts and UAV bench/flight checklists |
 | Deployment and CI | Docker/Docker Compose, GitHub Actions and environment-based configuration |
 | Development | JetBrains Rider, Visual Studio and Visual Studio Code, Antigravity, Codex |
 | Diagramming and Documentation | Draw.io, Microsoft Word, Google Docs/Sheets and shared Drive storage, ProjectLibre |
 | Version and Work Tracking | GitHub repositories, Google Drive |
 
-***Table 10\.** UAV-PMS tools and infrastructure.*
-
-# 
-
-# **III. Research Direction and Conceptual Framework** {#iii.-research-direction-and-conceptual-framework}
-
-## **1\. Research Direction and Conceptual Framework** {#1.-research-direction-and-conceptual-framework}
-
-The research investigates data quality and detector performance for multi-class power-line defect detection in UAV RGB images. Its primary direction is a data-centric benchmark integrating multi-source annotations, systematic quality curation, and controlled comparison of YOLO11, YOLO26 and RT-DETR models. Structural reasoning is considered a subsequent experimental extension, subject to feasibility and ablation evidence.  
-The baseline study compares raw and curated training data across six detectors (YOLO11n/m, YOLO26n/m and RT-DETR-R50/R101), using a consistent evaluation protocol and held-out test set. Performance is assessed using precision, recall, F1, mAP, per-class errors, inference latency and resource requirements. Proposed structural constraints will be tested separately rather than assumed to improve results.  
-The overall research flow is:
-
-* Multi-source dataset integration and taxonomy mapping  
-* Annotation audit, deduplication and quality curation  
-* Raw versus curated detector benchmarking  
-* Per-class, localization and noise error analysis  
-* Optional structural reasoning and ablation  
-* Deployment-oriented evaluation and reporting
-
-The study aims to distinguish improvements attributable to data quality from those attributable to model choice, and to document practical trade-offs for UAV edge and server-side analysis.
-
-### **1.1 Gap Positioning** {#1.1-gap-positioning}
-
-Public UAV power-line datasets vary in class definitions, annotation coverage and box quality. Combining them without controlled mapping and verification can introduce label inconsistencies, duplicate imagery and misleading benchmark results.
-
-Small objects, damaged conductor strands, nests and foreign objects are especially sensitive to scale, clutter, localization noise and missing labels. These issues motivate a dataset-quality study alongside architecture comparison.
-
-The initial six-class taxonomy covers insulator, insulator\_broken, insulator\_flashover, bird\_nest, foreign\_object and broken\_strand. Additional sources are candidates for expansion, not yet part of the verified baseline count.
-
-The research gap addressed here is the limited controlled evidence separating the effect of annotation curation from model scaling on a harmonized power-line inspection benchmark. Structural relationships among assets and defects form an exploratory follow-up question.
-
-### **1.2 Proposed Research Concept & Solution Vision** {#1.2-proposed-research-concept-&-solution-vision}
-
-The proposed framework uses multi-source ingestion, class harmonization, annotation auditing, duplicate control, human review and selective box refinement before reproducible model training and evaluation.
-
-The proposal baseline comprises 21,767 images across six classes, with 17,483 training, 2,272 validation and 2,012 held-out test images. These counts describe the existing proposal baseline and will change only after a documented dataset revision.
-
-Candidate expansion sources include Roboflow Transmission Detection (approximately 1,393 images as currently reported by the team), the Power Equipment Image Dataset (sxiong), MPCD and Open Images V7 with synthetic-mask-based foreign-object examples. Inclusion depends on licensing, annotation validation, class mapping and cross-source deduplication.
-
-After the controlled benchmark, the team may investigate structural reasoning based on relationships among conductors, insulators, towers and defects. Such experiments require explicit hypotheses, baselines and ablations and are not presented as completed contributions.
-
-The expected solution can be summarized as:
-
-* UAV RGB images and source annotations  
-* Schema harmonization and dataset quality audit  
-* Raw/curated YOLO11, YOLO26 and RT-DETR training  
-* Held-out evaluation and error diagnosis  
-* Optional structural reasoning and deployment analysis
-
-The intended result is a traceable dataset-and-model evaluation, with deployment suitability assessed separately for resource-limited edge hardware and server processing.
-
-### **1.3 Strategic Research Approach Selection** 	 {#1.3-strategic-research-approach-selection}
-
-The core approach is a controlled data-centric comparative experiment, followed by an optional model-structure extension.
-
-Six baseline detectors are evaluated across two training-data conditions, raw and curated, with consistent splits and documented training settings. The frozen test set is reserved for final comparison.
-
-Dataset integration and audit precede model training. Benchmark results are analyzed by class, error type, latency and compute cost. Structural reasoning experiments, if undertaken, will use controlled ablations and will not replace the primary benchmark.
-
-This design prioritizes reproducibility and avoids attributing gains to architectural changes when the training annotations also changed.
-
-## **2\. Research Feasibility & Resource Assessment** {#2.-research-feasibility-&-resource-assessment}
-
-The study is feasible as a staged experiment using publicly available image datasets, established detector implementations and reproducible scripts; additional data and structural reasoning remain conditional work packages.
-
-The existing proposal integrates six public sources. New candidate datasets require verification of redistribution terms, annotation quality, class correspondence and near-duplicate overlap before inclusion.
-
-GPU platforms such as Kaggle or other available computing resources can be used for model training. Model development, evaluation, and result analysis can also be performed using Python and common computer vision libraries.
-
-GPU availability and training time may limit the full experiment matrix. The team will prioritize the fixed raw/curated baseline and document any deferred structural reasoning experiments.
-
-Model-assisted label auditing can introduce false corrections; proposed additions, removals and SAM-assisted box refinements therefore require explicit rules, sampling checks and versioned human review.
-
-## **3\. Expected Research Outcomes**	 {#3.-expected-research-outcomes}
-
-Expected outcomes include a harmonized and versioned six-class benchmark, a documented annotation-curation protocol, and a controlled raw-versus-curated comparison across YOLO11n/m, YOLO26n/m and RT-DETR-R50/R101.
-
-Evaluation will report precision, recall, F1, mAP50, mAP50-95, per-class failure modes, localization errors, latency and memory or compute trade-offs, with limitations clearly stated.
-
-Potential extensions include vetted new data sources and structural reasoning modules. Their value will be assessed through separate controlled experiments rather than presumed in advance.
-
-Deliverables comprise dataset manifests and version records, curation scripts, experiment configurations, checkpoints where feasible, comparative results, error analysis and research documentation.
-
-## **4\. Responsibility Assignments** {#4.-responsibility-assignments-1}
-
-| Task | Main Responsibility | Owner |
-| ----- | ----- | ----- |
-| Dataset preparation | Collect, organize, clean, and verify image datasets and annotations | Phạm Hoàng Minh Châu |
-| Model research | Review YOLO, DETR, and related object detection methods | Phạm Hoàng Minh Châu |
-| Model training | Prepare training environments and train baseline models | Phạm Hoàng Minh Châu |
-| Model improvement | Test data curation and structural reasoning modifications | Phạm Hoàng Minh Châu |
-| Evaluation | Calculate Precision, Recall, F1-score, mAP50, mAP50-95, per-class results and inference time | Phạm Hoàng Minh Châu |
-| Result analysis | Compare models and analyze detection errors | Phạm Hoàng Minh Châu |
-| Documentation | Prepare research report, figures, tables, and presentation | Phạm Hoàng Minh Châu |
-| System integration | Prepare the trained model for later UAV or application integration | Phạm Hoàng Minh Châu |
-
-***Table 11\.** Responsibility Assignments table.*
-
-## **5\. Research Roadmap & Milestone Planning** {#5.-research-roadmap-&-milestone-planning}
-
-| Stage | Main Activities | Expected Result | Period |
-| ----- | ----- | ----- | ----- |
-| Stage 1 | Literature review and dataset study | Research background and selected datasets | 05/09-30/09/2026 |
-| Stage 2 | Dataset preparation and preprocessing | Clean, versioned dataset with a fixed train/validation/test split | 01/10-10/10/2026 |
-| Stage 3 | Baseline model training | Reproducible baseline results for selected YOLO11, YOLO26 and RT-DETR models | 11/10-25/10/2026 |
-| Stage 4 | Raw-versus-curated controlled benchmarking and error analysis | Preliminary 2×6 comparison and per-class error report | 26/10-08/11/2026 |
-| Stage 5 | Structural reasoning feasibility and optional extension | Proposed structural constraints and evaluation plan, subject to feasibility | 01/11-15/11/2026 |
-| Stage 6 | Final evaluation | Final comparison and selected model | 16/11-22/11/2026 |
-| Stage 7 | Documentation and presentation | Final report and research presentation | 23/11-30/11/2026 |
-
-***Table 12\.** Research Roadmap.*
-
-Research milestones are planning targets. Dataset expansion and structural reasoning may continue into the academic reporting period if the baseline comparison is complete and additional experiments remain feasible.
-
-## **6\. Configuration Management** {#6.-configuration-management-1}
-
-* Configuration management is used to keep the research experiments organized and reproducible.  
-* Because different datasets, model versions, training parameters, and checkpoints may be used during the project, each experiment should be recorded clearly.  
-* Important information such as model name, dataset version, image size, batch size, number of epochs, learning rate, evaluation results, and checkpoint location will be stored for each main experiment.  
-* This helps the team compare experiments and avoid losing important configurations during the research process.
-
-### **6.1 Dataset Management** {#6.1-dataset-management}
-
-* Datasets used in the research will be organized into separate versions.  
-* Each dataset version records source, usage rights, taxonomy mapping, annotation decisions, deduplication results and split membership; proposed new sources are tracked separately until accepted.  
-* When changes are made to the dataset, such as removing invalid annotations or adding new images, a new dataset version will be created instead of replacing the previous version directly.  
-* Near-duplicate checks must cover sources and partitions to reduce leakage; the held-out test set is not used to tune curation decisions or model hyperparameters.  
-* Dataset statistics such as the number of images, number of annotations, and number of samples per class will also be recorded.  
-* This allows experiments using different dataset versions to be compared more clearly.
-
-### **6.2 Source Code Management** {#6.2-source-code-management-1}
-
-* The project source code will be managed using Git and GitHub.  
-* Important changes in training code, model configurations, preprocessing scripts, and evaluation scripts will be recorded through commits.  
-* Separate branches may be used when testing major model modifications. After the experiment is checked, useful changes can be merged into the main development branch.  
-* Large files such as trained model weights and datasets will not be stored directly in the main Git repository. They will be stored separately, while their version and location are recorded in the project documentation.  
-* This approach helps the team maintain the source code, track changes, and reproduce previous experiments when needed.
-
-[image1]: <data:image/png;base64,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>
+[image1]: <data:image/png;base64,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>
