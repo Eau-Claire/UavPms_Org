@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace UavPms.OperationsService.Infrastructure.Migrations
 {
     /// <summary>
-    /// Aligns the shared database with ERD v2.2 (docs/reports/report3/report3_diagrams/ERD_Full_v2.mmd,
+    /// Aligns the shared database with ERD v2.2 (docs/diagrams/ERD_Full_v2.mmd,
     /// docs/database/ERD_v2_2_TARGET_SCHEMA.md).
     ///
     /// The scaffolded operations would have dropped and recreated renamed tables/columns, losing data,

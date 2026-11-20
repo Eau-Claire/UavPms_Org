@@ -1,6 +1,6 @@
 # Tài liệu Thiết kế Cơ sở Dữ liệu (Database Schema Documentation)
 **Hệ thống Quản lý và Giám sát Lưới điện bằng Thiết bị bay không người lái (UAV PMS)**
-*Phiên bản ERD v2.2 (42 bảng). Đồng bộ với `docs/reports/report3/report3_diagrams/ERD_Full_v2.mmd` và `ERD_Full_v2_CHANGES.md` cùng thư mục. Hợp đồng tên vật lý: `docs/database/ERD_v2_2_TARGET_SCHEMA.md`.*
+*Phiên bản ERD v2.2 (42 bảng). Đồng bộ với `docs/diagrams/ERD_Full_v2.mmd` và `ERD_Full_v2_CHANGES.md` cùng thư mục. Hợp đồng tên vật lý: `docs/database/ERD_v2_2_TARGET_SCHEMA.md`.*
 
 ---
 

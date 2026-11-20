@@ -1,0 +1,30 @@
+flowchart LR
+    classDef stepStyle fill:#1a365d,stroke:#0f2744,stroke-width:2px,color:#ffffff,font-weight:bold,rx:4px,ry:4px;
+    classDef loopBox fill:#ffffff,stroke:#94a3b8,stroke-width:2px,stroke-dasharray: 4 4,color:#0f172a;
+
+    INIT["INITIAL<br/>PLANNING"]:::stepStyle
+    DEPLOY["DEPLOYMENT"]:::stepStyle
+
+    subgraph Loop ["<b>Iterative and Incremental</b>"]
+        direction TB
+        PLAN["PLANNING"]:::stepStyle
+        REQ["REQUIREMENTS"]:::stepStyle
+        DESIGN["ANALYSIS AND<br/>DESIGN"]:::stepStyle
+        IMPL["IMPLEMENTATION"]:::stepStyle
+        TEST["TESTING"]:::stepStyle
+        EVAL["EVALUATION"]:::stepStyle
+
+        PLAN --> REQ
+        REQ --> DESIGN
+        DESIGN --> IMPL
+        IMPL --> TEST
+        TEST --> EVAL
+        EVAL --> PLAN
+    end
+    class Loop loopBox
+
+    INIT --> PLAN
+    IMPL --> DEPLOY
+
+    linkStyle default stroke:#e65100,stroke-width:3px;
+

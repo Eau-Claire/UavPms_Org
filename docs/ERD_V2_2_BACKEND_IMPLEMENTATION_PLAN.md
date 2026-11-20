@@ -3,7 +3,7 @@
 Trạng thái ngày 2026-10-28 (cập nhật 2026-10-30: xong giai đoạn 1–2, giai đoạn 3 trừ 3.7, 3.8): ERD v2.2 đã được áp dụng vào code (commit `a0bd1e8`, `b2bfc9d`, `74b3cb8` trên `main`). Migration `20261027181344_AlignSchemaWithErdV2_2` đã chạy trên CSDL production bằng workflow *Migrate Database (ERD v2.2)*. Bản backup trước migration nằm ở `$DEPLOY_PATH/backups/uavpms_before_erd_v2_2_20261027195127.dump`.
 
 Tài liệu nguồn:
-- Thiết kế: `docs/reports/report3/report3_diagrams/ERD_Full_v2.mmd`, `ERD_Full_v2_CHANGES.md`.
+- Thiết kế: `docs/diagrams/ERD_Full_v2.mmd`, `ERD_Full_v2_CHANGES.md`.
 - Hợp đồng code ↔ CSDL: `docs/database/ERD_v2_2_TARGET_SCHEMA.md`.
 - Từ điển dữ liệu: `docs/database_schema.md`. API: `docs/api_spec.md`.
 

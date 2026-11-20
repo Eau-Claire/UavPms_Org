@@ -1,6 +1,6 @@
 # ERD v2.2 – Target physical schema (code contract)
 
-Source design: `docs/reports/report3/report3_diagrams/ERD_Full_v2.mmd`.
+Source design: `docs/diagrams/ERD_Full_v2.mmd`.
 Migration: `Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations/*_AlignSchemaWithErdV2_2.cs`.
 
 Every service (Operations, AIInspection, Notification, Identity) maps the **same shared PostgreSQL database**.
