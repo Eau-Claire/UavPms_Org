@@ -132,7 +132,7 @@ public class DispatchMissionCommandHandler : IRequestHandler<DispatchMissionComm
         }
 
         // 5. Transition status to Assigned
-        mission.Status = MissionStatus.Assigned;
+        mission.Status = MissionStatus.Confirmed;
         mission.Version++;
         mission.UpdatedAt = DateTime.UtcNow;
 

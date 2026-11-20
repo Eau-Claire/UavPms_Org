@@ -26,7 +26,7 @@ public class AIAnalysisRun : BaseEntity
     public AnalysisType AnalysisType { get; set; } = AnalysisType.General;
     public string ModelName { get; set; } = "SERVER";
     public string? ModelVersion { get; set; }
-    public AIAnalysisStatus Status { get; set; } = AIAnalysisStatus.Pending;
+    public AIAnalysisStatus Status { get; set; } = AIAnalysisStatus.Queued;
     public Guid? SourceEventId { get; set; }
     public Guid? BatchId { get; set; }
     public string? ErrorMessage { get; set; }

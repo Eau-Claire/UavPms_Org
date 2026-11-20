@@ -11,17 +11,17 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
     {
         private static readonly MissionStatus[] PendingMissionStatuses =
         [
-            MissionStatus.Draft,             // also MissionStatus.Pending
-            MissionStatus.PendingAcceptance, // also MissionStatus.PendingConfirmation
-            MissionStatus.Assigned,          // also MissionStatus.Confirmed
-            MissionStatus.Preparing,
+            MissionStatus.Draft,             // also MissionStatus.Draft
+            MissionStatus.PendingAcceptance, // also MissionStatus.PendingAcceptance
+            MissionStatus.Confirmed,          // also MissionStatus.Confirmed
+            MissionStatus.Confirmed,
             MissionStatus.Ready,
             MissionStatus.Postponed
         ];
 
         private static readonly MissionStatus[] InProgressMissionStatuses =
         [
-            MissionStatus.InProgress,        // also MissionStatus.Executing
+            MissionStatus.InProgress,        // also MissionStatus.InProgress
             MissionStatus.Suspended
         ];
 

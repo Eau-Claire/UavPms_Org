@@ -275,7 +275,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
     private async Task EnsureCallerMayUseAssessmentAsync(PreMissionAssessment assessment, CancellationToken ct)
     {
         if (_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
-            _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase) ||
+            _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
             _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase))
             return;
 
@@ -312,7 +312,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 
         var isAllowed = _current.Roles.Any(r =>
             r.Equals(UserRoles.Manager, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals(UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase) ||
+            r.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
             r.Equals("Technician", StringComparison.OrdinalIgnoreCase) ||
             r.Equals(UserRoles.Inspector, StringComparison.OrdinalIgnoreCase) ||
             r.Equals("Pilot", StringComparison.OrdinalIgnoreCase));
@@ -360,7 +360,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 
         var isAllowed = _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
                         _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) ||
-                        _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase) ||
+                        _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
                         _current.Roles.Contains("Technician", StringComparer.OrdinalIgnoreCase);
 
         if (!isAllowed)

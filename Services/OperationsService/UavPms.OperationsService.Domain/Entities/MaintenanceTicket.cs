@@ -56,7 +56,7 @@ public class MaintenanceTicket : BaseEntity
     }
     public void Resolve()
     {
-        Status = TicketStatus.Resolved;
+        Status = TicketStatus.Closed;
         ResolvedAt = DateTime.UtcNow;
     }
     public void Close()

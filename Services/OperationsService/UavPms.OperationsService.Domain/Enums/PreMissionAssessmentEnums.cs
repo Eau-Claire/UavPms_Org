@@ -2,18 +2,12 @@ namespace UavPms.OperationsService.Domain.Enums;
 
 public enum PreMissionAssessmentStatus
 {
-    Draft,
     Evaluating,
     Ready,
     NotReady,
     Expired,
     Completed,
-    Cancelled,
-
-    [Obsolete("Use Completed instead.")]
-    Consumed = Completed,
-    [Obsolete("Use NotReady instead.")]
-    Incomplete = NotReady
+    Cancelled
 }
 public enum DroneOperationalStatus { Available, Reserved, InUse, Maintenance, Unavailable, Lost }
 public enum TechnicalHealth { Unknown, Healthy, Warning, Critical }

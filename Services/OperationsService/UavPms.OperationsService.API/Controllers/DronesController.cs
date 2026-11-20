@@ -83,7 +83,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = $"{UserRoles.Manager},{UserRoles.SystemAdmin},{UserRoles.MaintenanceTechnician},Technician")]
+    [Authorize(Roles = $"{UserRoles.Manager},{UserRoles.SystemAdmin},{UserRoles.Technician},Technician")]
     public async Task<ActionResult<UavDetailsDto>> CreateDrone(
         [FromBody] CreateUavRequest request,
         CancellationToken ct)
@@ -93,7 +93,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = $"{UserRoles.Manager},{UserRoles.SystemAdmin},{UserRoles.MaintenanceTechnician},Technician")]
+    [Authorize(Roles = $"{UserRoles.Manager},{UserRoles.SystemAdmin},{UserRoles.Technician},Technician")]
     public async Task<ActionResult<UavDetailsDto>> UpdateDrone(
         Guid id,
         [FromBody] UpdateUavRequest request,
@@ -123,7 +123,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpPost("{id:guid}/basic-technical-check")]
-    [Authorize(Roles = $"{UserRoles.MaintenanceTechnician},Technician,{UserRoles.Manager},{UserRoles.SystemAdmin}")]
+    [Authorize(Roles = $"{UserRoles.Technician},Technician,{UserRoles.Manager},{UserRoles.SystemAdmin}")]
     public async Task<ActionResult<DroneTechnicalInspectionSummaryDto>> SubmitBasicTechnicalCheck(
         Guid id,
         [FromBody] BasicTechnicalCheckRequest request,
@@ -171,7 +171,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpPost("{droneId:guid}/flight-controller")]
-    [Authorize(Roles = $"{UserRoles.MaintenanceTechnician},Technician,{UserRoles.Manager},{UserRoles.SystemAdmin}")]
+    [Authorize(Roles = $"{UserRoles.Technician},Technician,{UserRoles.Manager},{UserRoles.SystemAdmin}")]
     public async Task<ActionResult<FlightControllerBindingDto>> PairFlightController(
         Guid droneId,
         [FromBody] PairFlightControllerRequest request,
@@ -182,7 +182,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpDelete("{droneId:guid}/flight-controller")]
-    [Authorize(Roles = $"{UserRoles.MaintenanceTechnician},Technician,{UserRoles.Manager},{UserRoles.SystemAdmin}")]
+    [Authorize(Roles = $"{UserRoles.Technician},Technician,{UserRoles.Manager},{UserRoles.SystemAdmin}")]
     public async Task<IActionResult> UnpairFlightController(Guid droneId, CancellationToken ct)
     {
         var result = await _flightControllerService.UnpairFlightControllerAsync(droneId, ct);

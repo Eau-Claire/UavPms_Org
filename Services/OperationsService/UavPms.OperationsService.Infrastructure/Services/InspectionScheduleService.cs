@@ -265,7 +265,7 @@ public sealed class InspectionScheduleService : IInspectionScheduleService
             Id = Guid.NewGuid(),
             ManagerId = managerId,
             RegionId = schedule.RegionId,
-            Status = PreMissionAssessmentStatus.Draft,
+            Status = PreMissionAssessmentStatus.Evaluating,
             SiteFeasibilityStatus = ReadinessCheckStatus.Pending,
             OverallTechnicalHealth = TechnicalHealth.Unknown,
             PlannedStart = plannedStart,

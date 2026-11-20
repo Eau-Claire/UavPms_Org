@@ -574,7 +574,7 @@ public sealed class UavManagementService : IUavManagementService
         var isAuthorized = _current.Roles.Any(r =>
             r.Equals(UserRoles.SystemAdmin, StringComparison.OrdinalIgnoreCase) ||
             r.Equals(UserRoles.Manager, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals(UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase) ||
+            r.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
             r.Equals("Technician", StringComparison.OrdinalIgnoreCase));
 
         if (!isAuthorized)

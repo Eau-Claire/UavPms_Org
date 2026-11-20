@@ -14,7 +14,7 @@ public class PreMissionAssessment : BaseEntity
     public Geometry? ProposedBoundary { get; set; }
     public ReadinessCheckStatus SiteFeasibilityStatus { get; set; } = ReadinessCheckStatus.Pending;
 
-    public PreMissionAssessmentStatus Status { get; set; } = PreMissionAssessmentStatus.Draft;
+    public PreMissionAssessmentStatus Status { get; set; } = PreMissionAssessmentStatus.Evaluating;
     public TechnicalHealth OverallTechnicalHealth { get; set; } = TechnicalHealth.Unknown;
     public DateTime? ValidUntil { get; set; }
 

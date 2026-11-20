@@ -7,7 +7,6 @@ namespace UavPms.OperationsService.Application.Features.Missions;
 public record MissionAssignmentItemRequest(Guid UserId, string? Role = null, bool? IsRequired = true);
 
 public record Mf01Assignment(Guid UserId, string AssignmentRole, bool IsRequired = true);
-public record Mf01Handover(Guid DroneId, Guid ReceivedBy, string Condition, bool Accepted, string? InitialChecklistJson = null);
 
 public interface IMissionLifecycleService
 {
@@ -16,7 +15,6 @@ public interface IMissionLifecycleService
     Task<MissionAssignment> AssignAsync(Guid missionId, Mf01Assignment request, CancellationToken ct);
     Task RemoveAssignmentAsync(Guid missionId, Guid assignmentId, CancellationToken ct);
     Task AssignDroneAsync(Guid missionId, Guid droneId, CancellationToken ct);
-    Task<DroneHandover> ConfirmHandoverAsync(Guid missionId, Mf01Handover request, CancellationToken ct);
     Task<MissionCheckIn> CheckInAsync(Guid missionId, CancellationToken ct);
     Task<MissionCheckIn> CheckInAsync(Guid missionId, double? latitude, double? longitude, CancellationToken ct)
         => CheckInAsync(missionId, ct);
@@ -24,7 +22,6 @@ public interface IMissionLifecycleService
     Task<MissionAssignment> PostponeAssignmentAsync(Guid missionId, string reason, CancellationToken ct);
     Task StartAsync(Guid missionId, CancellationToken ct);
     Task CompleteAsync(Guid missionId, CancellationToken ct);
-    Task CancelAsync(Guid missionId, CancellationToken ct);
 
     // MF02 Realtime Lifecycle Methods
     Task<Mission> ConfirmMissionAsync(Guid missionId, string? reason, CancellationToken ct);
@@ -46,10 +43,7 @@ public interface IMissionLifecycleService
     Task<UavPms.OperationsService.Application.Features.Missions.DTOs.MissionActivityDto> AddActivityAsync(Guid missionId, UavPms.OperationsService.Application.Features.Missions.DTOs.CreateMissionActivityRequest request, CancellationToken ct);
     Task<UavPms.OperationsService.Application.Features.Missions.DTOs.MissionAssignmentsOverviewDto> GetAssignmentsOverviewAsync(Guid missionId, CancellationToken ct);
 
-    // MF03 Field Execution, Handover Return, Flight Logs & Incident Reports
-    Task<DroneHandover> ReturnDroneHandoverAsync(Guid missionId, Guid droneId, string condition, CancellationToken ct);
-    Task<DroneHandover> ReturnDroneHandoverAsync(Guid missionId, Guid droneId, string condition, string? returnChecklistJson, CancellationToken ct)
-        => ReturnDroneHandoverAsync(missionId, droneId, condition, ct);
+    // MF03 Field Execution, Flight Logs & Incident Reports
     Task<MissionFlightLog> UploadFlightLogAsync(Guid missionId, UavPms.OperationsService.Application.Features.Missions.DTOs.UploadFlightLogRequest request, CancellationToken ct);
     Task<IReadOnlyList<MissionFlightLog>> GetFlightLogsAsync(Guid missionId, CancellationToken ct);
     Task<IncidentReport> SubmitIncidentReportAsync(Guid missionId, UavPms.OperationsService.Application.Features.Missions.DTOs.SubmitIncidentReportRequest request, CancellationToken ct);

@@ -20,7 +20,7 @@ namespace UavPms.OperationsService.API.Controllers;
 [Authorize]
 public sealed class PreMissionAssessmentV2Controller : ControllerBase
 {
-    private const string AssessmentReaders = $"{UserRoles.AdminManagerInspector},{UserRoles.Technician},{UserRoles.MaintenanceTechnician}";
+    private const string AssessmentReaders = $"{UserRoles.AdminManagerInspector},{UserRoles.Technician},{UserRoles.Technician}";
 
     private readonly PreMissionAssessmentService _service;
     private readonly ISender? _mediator;

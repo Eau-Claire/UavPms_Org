@@ -17,7 +17,7 @@ public static class PersonnelEligibilityPolicy
         UserRoles.Inspector,
         UserRoles.Analyst,
         UserRoles.Technician,
-        UserRoles.MaintenanceTechnician,
+        UserRoles.Technician,
         "Pilot"
     };
 
@@ -56,7 +56,7 @@ public static class PersonnelEligibilityPolicy
                 primaryRole = UserRoles.Inspector;
             else if (primaryRole.Equals(UserRoles.Analyst, StringComparison.OrdinalIgnoreCase))
                 primaryRole = UserRoles.Analyst;
-            else if (primaryRole.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) || primaryRole.Equals(UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase))
+            else if (primaryRole.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) || primaryRole.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase))
                 primaryRole = UserRoles.Technician;
         }
 

@@ -15,7 +15,7 @@ public class Mission : BaseEntity
     public string DroneCode { get; set; } = string.Empty;
     public Guid ManagerId { get; set; }
     public Guid? UavId { get; set; }
-    public MissionStatus Status { get; set; } = MissionStatus.Pending;
+    public MissionStatus Status { get; set; } = MissionStatus.Draft;
     public MissionPriority Priority { get; set; } = MissionPriority.Normal;
     public InspectionObjective Objective { get; set; } = InspectionObjective.PeriodicInspection;
     public bool IsImmediate { get; set; } = false;
@@ -88,7 +88,7 @@ public class Mission : BaseEntity
 
     public void Start(DateTime? startTime = null)
     {
-        if (Status is not (MissionStatus.Ready or MissionStatus.Assigned or MissionStatus.Preparing))
+        if (Status is not (MissionStatus.Ready or MissionStatus.Confirmed or MissionStatus.Confirmed))
             throw new InvalidOperationException($"Cannot start mission with status {Status}. Mission must be Ready, Assigned, or Preparing.");
         if (!AllRequiredAccepted())
             throw new InvalidOperationException("Cannot start mission before every required member has accepted.");
@@ -112,7 +112,7 @@ public class Mission : BaseEntity
 
     public void Suspend(string reason)
     {
-        if (Status is not (MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready or MissionStatus.InProgress))
+        if (Status is not (MissionStatus.Confirmed or MissionStatus.Confirmed or MissionStatus.Ready or MissionStatus.InProgress))
             throw new InvalidOperationException($"Cannot suspend mission with status {Status}. Only active or preparing missions can be suspended.");
 
         Status = MissionStatus.Suspended;
@@ -135,7 +135,7 @@ public class Mission : BaseEntity
         }
         else
         {
-            Status = MissionStatus.Assigned;
+            Status = MissionStatus.Confirmed;
             RecalculateReadiness();
         }
         Version++;
@@ -144,7 +144,7 @@ public class Mission : BaseEntity
 
     public void Postpone(string reason)
     {
-        if (Status is not (MissionStatus.PendingAcceptance or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready))
+        if (Status is not (MissionStatus.PendingAcceptance or MissionStatus.Confirmed or MissionStatus.Confirmed or MissionStatus.Ready))
             throw new InvalidOperationException($"Cannot postpone mission with status {Status}.");
 
         Status = MissionStatus.Postponed;
@@ -156,7 +156,7 @@ public class Mission : BaseEntity
 
     public void Cancel()
     {
-        if (Status is not (MissionStatus.Draft or MissionStatus.PendingAcceptance or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready or MissionStatus.Postponed or MissionStatus.Suspended))
+        if (Status is not (MissionStatus.Draft or MissionStatus.PendingAcceptance or MissionStatus.Confirmed or MissionStatus.Confirmed or MissionStatus.Ready or MissionStatus.Postponed or MissionStatus.Suspended))
             throw new InvalidOperationException($"Cannot cancel mission with status {Status}.");
         
         Status = MissionStatus.Cancelled;
@@ -185,7 +185,7 @@ public class Mission : BaseEntity
         if (Status != MissionStatus.PendingAcceptance) return false;
         if (!AllRequiredAccepted()) return false;
 
-        Status = MissionStatus.Assigned;
+        Status = MissionStatus.Confirmed;
         AcceptedAt = DateTime.UtcNow;
         RecalculateReadiness();
         Version++;
@@ -224,22 +224,17 @@ public class Mission : BaseEntity
         if (!hasUav)
         {
             // Without a UAV the team can be complete but nothing can be prepared (no handover).
-            Status = MissionStatus.Assigned;
+            Status = MissionStatus.Confirmed;
             return false;
         }
 
         bool CheckedIn(Guid userId) => CheckIns.Any(c => !c.IsDeleted && c.UserId == userId && c.Status == MissionCheckInStatus.CheckedIn);
         var mustCheckIn = active.Where(a => a.IsRequired || a.ResponseStatus == MissionAssignmentResponse.Accepted).ToList();
-        var openHandover = DroneHandovers.Any(h => !h.IsDeleted && h.DroneId == UavId!.Value && h.Status == DroneHandoverStatus.Accepted && h.ReturnedAt == null);
 
         var ready = mustCheckIn.All(a => CheckedIn(a.UserId))
-            && MissionTargets.Count > 0
-            && openHandover;
+            && MissionTargets.Count > 0;
 
-        var anyProgress = openHandover || active.Any(a => CheckedIn(a.UserId));
-        Status = ready
-            ? MissionStatus.Ready
-            : anyProgress ? MissionStatus.Preparing : MissionStatus.Assigned;
+        Status = ready ? MissionStatus.Ready : MissionStatus.Confirmed;
         return ready;
     }
     #endregion

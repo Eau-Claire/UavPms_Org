@@ -96,7 +96,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             ManagerId = managerId,
             TechnicianId = request.TechnicianId,
             Technician = tech,
-            Status = TicketStatus.Open,
+            Status = request.TechnicianId != Guid.Empty ? TicketStatus.Assigned : TicketStatus.Open,
             Priority = parsedPriority,
             Description = request.Description,
             DueDate = request.DueDate,
@@ -150,9 +150,9 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             .FirstOrDefaultAsync(t => t.Id == ticketId && !t.IsDeleted, ct)
             ?? throw new NotFoundException("Maintenance ticket not found");
 
-        if (ticket.Status != TicketStatus.Open)
+        if (ticket.Status is not (TicketStatus.Open or TicketStatus.Assigned))
         {
-            throw new BusinessRuleException("TICKET_NOT_OPEN", $"Only open tickets can be (re)assigned; this ticket is '{ticket.Status}'.");
+            throw new BusinessRuleException("TICKET_NOT_OPEN", $"Only Open or Assigned tickets can be (re)assigned; this ticket is '{ticket.Status}'.");
         }
 
         if (request.DueDate.HasValue && request.DueDate.Value < DateTime.UtcNow.AddMinutes(-5))
@@ -161,11 +161,12 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         }
 
         var tech = await LoadTechnicianAsync(request.TechnicianId, ct);
-        var old = new { ticket.TechnicianId, ticket.DueDate };
+        var old = new { ticket.TechnicianId, ticket.DueDate, Status = ticket.Status.ToString() };
         var now = DateTime.UtcNow;
 
         ticket.TechnicianId = tech.Id;
         ticket.Technician = tech;
+        ticket.Status = TicketStatus.Assigned;
         ticket.DueDate = request.DueDate ?? ticket.DueDate;
         ticket.AssignedAt = now;
         ticket.UpdatedAt = now;
@@ -227,7 +228,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
     /// <summary>Kỹ thuật viên đang hoạt động kèm số phiếu chưa đóng, để chọn khi giao phiếu.</summary>
     public async Task<IReadOnlyList<TechnicianSummaryDto>> GetTechniciansAsync(CancellationToken ct = default)
     {
-        var technicianRoles = new[] { UserRoles.Technician.ToLower(), UserRoles.MaintenanceTechnician.ToLower() };
+        var technicianRoles = new[] { UserRoles.Technician.ToLower(), UserRoles.Technician.ToLower() };
         return await _db.Users.AsNoTracking()
             .Where(u => !u.IsDeleted && (u.Status == "Active" || u.Status == "Enabled") &&
                         u.UserRoles.Any(ur => technicianRoles.Contains(ur.Role!.RoleName.ToLower())))
@@ -238,7 +239,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
                 FullName = u.FullName,
                 Email = u.Email,
                 ActiveTicketCount = _db.MaintenanceTickets.Count(t => t.TechnicianId == u.Id && !t.IsDeleted &&
-                    t.Status != TicketStatus.Closed && t.Status != TicketStatus.Resolved)
+                    t.Status != TicketStatus.Closed && t.Status != TicketStatus.Cancelled)
             })
             .ToListAsync(ct);
     }
@@ -253,7 +254,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
 
         var isTechnician = tech.UserRoles.Any(ur =>
             string.Equals(ur.Role?.RoleName, UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(ur.Role?.RoleName, UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase));
+            string.Equals(ur.Role?.RoleName, UserRoles.Technician, StringComparison.OrdinalIgnoreCase));
 
         if (!isTechnician)
         {
@@ -278,24 +279,48 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         // IDOR Guard
         EnsureTechnicianOrAdminAccess(ticket);
 
-        // Terminal State Guard
-        if (ticket.Status == TicketStatus.Closed || ticket.Status == TicketStatus.Resolved)
+        // Terminal State Guard (Closed / Cancelled)
+        if (ticket.Status is TicketStatus.Closed or TicketStatus.Cancelled)
         {
-            throw new BusinessRuleException("Cannot modify status of an already closed ticket");
+            throw new BusinessRuleException($"Cannot modify status of a terminal ticket ('{ticket.Status}').");
         }
 
         if (string.Equals(newStatus, "InProgress", StringComparison.OrdinalIgnoreCase))
         {
-            if (ticket.Status != TicketStatus.Open)
+            if (ticket.Status == TicketStatus.PendingVerification)
             {
-                throw new BusinessRuleException($"Cannot start progress on ticket in status '{ticket.Status}'. Must be Open.");
+                // MF04 Activity Diagram: Manager rejects repair proofs -> rework required -> InProgress
+                if (!IsManagerOrAdmin())
+                {
+                    throw new ForbiddenException("TICKET_REJECT_REQUIRES_MANAGER: Only a Manager or SystemAdmin can reject repair proofs for rework.");
+                }
+                ticket.Status = TicketStatus.InProgress;
+                if (ticket.TechnicianId.HasValue)
+                {
+                    _db.Notifications.Add(new Notification
+                    {
+                        UserId = ticket.TechnicianId.Value,
+                        Title = "Yêu cầu sửa chữa lại",
+                        Body = $"Minh chứng cho phiếu bảo trì {ticket.TicketCode} bị từ chối. Vui lòng thực hiện và tải lại minh chứng.",
+                        Type = "MAINTENANCE_REWORK_REQUIRED",
+                        ReferenceType = "MaintenanceTicket",
+                        ReferenceId = ticket.Id,
+                    });
+                }
             }
-            if (ticket.TechnicianId == null)
+            else if (ticket.Status is TicketStatus.Assigned or TicketStatus.Open)
             {
-                throw new BusinessRuleException("Cannot start progress on a ticket that has no technician assigned.");
+                if (ticket.TechnicianId == null)
+                {
+                    throw new BusinessRuleException("Cannot start progress on a ticket that has no technician assigned.");
+                }
+                ticket.Status = TicketStatus.InProgress;
+                ticket.StartedAt = DateTime.UtcNow;
             }
-            ticket.Status = TicketStatus.InProgress;
-            ticket.StartedAt = DateTime.UtcNow;
+            else
+            {
+                throw new BusinessRuleException($"Cannot transition ticket from '{ticket.Status}' to InProgress.");
+            }
         }
         else if (string.Equals(newStatus, "PendingVerification", StringComparison.OrdinalIgnoreCase))
         {
@@ -310,7 +335,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             }
             ticket.Status = TicketStatus.PendingVerification;
         }
-        else if (string.Equals(newStatus, "Closed", StringComparison.OrdinalIgnoreCase) || string.Equals(newStatus, "Resolved", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(newStatus, "Closed", StringComparison.OrdinalIgnoreCase))
         {
             // Closing is the manager's acceptance step: same rules, audit and anomaly update as PUT /close.
             if (!IsManagerOrAdmin())
@@ -318,6 +343,18 @@ public class MaintenanceTicketService : IMaintenanceTicketService
                 throw new ForbiddenException("TICKET_CLOSE_REQUIRES_MANAGER: Only a Manager or SystemAdmin can accept and close a ticket.");
             }
             return await CloseTicketAsync(ticketId, ct);
+        }
+        else if (string.Equals(newStatus, "Cancelled", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!IsManagerOrAdmin())
+            {
+                throw new ForbiddenException("TICKET_CANCEL_REQUIRES_MANAGER: Only a Manager or SystemAdmin can cancel a ticket.");
+            }
+            if (ticket.Status is not (TicketStatus.Open or TicketStatus.Assigned))
+            {
+                throw new BusinessRuleException($"Only Open or Assigned tickets can be cancelled; current status is '{ticket.Status}'.");
+            }
+            ticket.Status = TicketStatus.Cancelled;
         }
         else
         {
@@ -696,7 +733,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
     /// <summary>Proofs and materials belong to the repair, so they are only accepted while the ticket is open for work.</summary>
     private static void EnsureTicketEditable(MaintenanceTicket ticket)
     {
-        if (ticket.Status is TicketStatus.Closed or TicketStatus.Resolved)
+        if (ticket.Status is TicketStatus.Closed or TicketStatus.Cancelled)
         {
             throw new BusinessRuleException("TICKET_CLOSED", "The ticket is already closed.");
         }

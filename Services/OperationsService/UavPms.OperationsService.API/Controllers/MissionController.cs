@@ -83,34 +83,6 @@ public class MissionController : ControllerBase
     [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> AssignDrone(Guid id, [FromBody] MissionDroneRequest request, CancellationToken ct) { await _lifecycle!.AssignDroneAsync(id, request.DroneId, ct); return Ok(new ApiResponse(true, "Mission drone assigned")); }
 
-    [HttpPost("{id:guid}/drone-handover")]
-    [HttpPost("{id:guid}/drone-handover/deliver")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
-    public async Task<IActionResult> Handover(Guid id, [FromBody] MissionHandoverRequest request, CancellationToken ct)
-    {
-        var receivedBy = request.ReceivedBy != Guid.Empty
-            ? request.ReceivedBy
-            : (request.ReceivedByUserId ?? Guid.Empty);
-        var checklistJson = SerializeChecklistJson(request.InitialChecklist);
-        var condition = string.IsNullOrWhiteSpace(request.Condition) ? "PreFlightCheck" : request.Condition;
-
-        var handover = await _lifecycle!.ConfirmHandoverAsync(
-            id,
-            new Mf01Handover(request.DroneId, receivedBy, condition, request.Accepted, checklistJson),
-            ct);
-        return Ok(new ApiResponse(true, "Drone handover confirmed", MapHandover(handover)));
-    }
-
-    [HttpPost("{id:guid}/drone-handover/return")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
-    public async Task<IActionResult> ReturnHandover(Guid id, [FromBody] ReturnDroneHandoverRequest request, CancellationToken ct)
-    {
-        if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
-        var returnChecklistJson = SerializeChecklistJson(request.ReturnChecklist);
-        var handover = await _lifecycle.ReturnDroneHandoverAsync(id, request.DroneId, request.Condition, returnChecklistJson, ct);
-        return Ok(new ApiResponse(true, "Drone return handover confirmed", MapHandover(handover)));
-    }
-
     [HttpPost("{id:guid}/check-in")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> CheckIn(Guid id, [FromBody] MissionCheckInRequest? request = null, CancellationToken ct = default)

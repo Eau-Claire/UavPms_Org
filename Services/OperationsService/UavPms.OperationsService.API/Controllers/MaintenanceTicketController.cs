@@ -72,7 +72,7 @@ public class MaintenanceTicketController : ControllerBase
     /// Upload ảnh minh chứng sau sửa chữa và ghi chú kỹ thuật viên
     /// </summary>
     [HttpPost("{id:guid}/proof")]
-    [Authorize(Roles = $"{UserRoles.Technician},{UserRoles.MaintenanceTechnician},{UserRoles.AdminAndManager}")]
+    [Authorize(Roles = $"{UserRoles.Technician},{UserRoles.Technician},{UserRoles.AdminAndManager}")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadProof(
         [FromRoute] Guid id,
@@ -89,7 +89,7 @@ public class MaintenanceTicketController : ControllerBase
     /// Khai báo nhật ký vật tư thiết bị đã thay thế
     /// </summary>
     [HttpPost("{id:guid}/materials")]
-    [Authorize(Roles = $"{UserRoles.Technician},{UserRoles.MaintenanceTechnician},{UserRoles.AdminAndManager}")]
+    [Authorize(Roles = $"{UserRoles.Technician},{UserRoles.Technician},{UserRoles.AdminAndManager}")]
     public async Task<IActionResult> LogMaterial([FromRoute] Guid id, [FromBody] LogMaterialRequest request, CancellationToken ct)
     {
         var result = await _ticketService.LogMaterialAsync(id, request, ct);
@@ -111,7 +111,7 @@ public class MaintenanceTicketController : ControllerBase
     /// Lấy danh sách phiếu bảo trì được phân công cho kỹ thuật viên đang đăng nhập
     /// </summary>
     [HttpGet("my")]
-    [Authorize(Roles = $"{UserRoles.Technician},{UserRoles.MaintenanceTechnician}")]
+    [Authorize(Roles = $"{UserRoles.Technician},{UserRoles.Technician}")]
     public async Task<IActionResult> GetMyTickets(CancellationToken ct)
     {
         var result = await _ticketService.GetMyTicketsAsync(ct);

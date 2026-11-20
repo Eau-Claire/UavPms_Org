@@ -7,7 +7,7 @@ public static class AssessmentExpiryPolicy
 {
     public static bool CheckAndApplyExpiry(PreMissionAssessment assessment)
     {
-        if (assessment.Status is PreMissionAssessmentStatus.Ready or PreMissionAssessmentStatus.Draft or PreMissionAssessmentStatus.Evaluating or PreMissionAssessmentStatus.NotReady)
+        if (assessment.Status is PreMissionAssessmentStatus.Ready or PreMissionAssessmentStatus.Evaluating or PreMissionAssessmentStatus.Evaluating or PreMissionAssessmentStatus.NotReady)
         {
             var isExpired = (assessment.ValidUntil.HasValue && assessment.ValidUntil.Value <= DateTime.UtcNow) ||
                             (assessment.PlannedEnd <= DateTime.UtcNow);

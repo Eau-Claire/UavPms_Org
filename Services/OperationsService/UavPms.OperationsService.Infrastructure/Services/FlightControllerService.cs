@@ -229,7 +229,7 @@ public sealed class FlightControllerService : IFlightControllerService
         var hasRole = _current.Roles.Any(r =>
             r.Equals(UserRoles.SystemAdmin, StringComparison.OrdinalIgnoreCase) ||
             r.Equals(UserRoles.Manager, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals(UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase) ||
+            r.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
             r.Equals("Technician", StringComparison.OrdinalIgnoreCase));
 
         if (!hasRole)
@@ -242,7 +242,7 @@ public sealed class FlightControllerService : IFlightControllerService
                 r.Role != null && (
                     r.Role.RoleName.Equals(UserRoles.SystemAdmin, StringComparison.OrdinalIgnoreCase) ||
                     r.Role.RoleName.Equals(UserRoles.Manager, StringComparison.OrdinalIgnoreCase) ||
-                    r.Role.RoleName.Equals(UserRoles.MaintenanceTechnician, StringComparison.OrdinalIgnoreCase) ||
+                    r.Role.RoleName.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
                     r.Role.RoleName.Equals("Technician", StringComparison.OrdinalIgnoreCase))) ?? false;
         }
 

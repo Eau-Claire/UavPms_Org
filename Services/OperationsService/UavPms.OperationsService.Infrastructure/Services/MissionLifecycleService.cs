@@ -263,40 +263,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         Audit(mission.Id, replaced ? "DRONE_REPLACED" : "DRONE_ASSIGNED"); await SaveConcurrency(ct);
     }
 
-    public async Task<DroneHandover> ConfirmHandoverAsync(Guid missionId, Mf01Handover request, CancellationToken ct)
-    {
-        var mission = await AccessibleMission(missionId, ct, true);
-        // BR-36: a member of the mission or a manager of its region records the handover.
-        EnsureAssignedInspectorOrManager(mission);
-        if (mission.Status is not (MissionStatus.Assigned or MissionStatus.Preparing)) throw new BusinessRuleException("HANDOVER_INVALID_STATE");
-        if (mission.UavId != request.DroneId) throw new BusinessRuleException("DRONE_NOT_ASSIGNED");
-        if (!mission.ActiveAssignments().Any(x => x.UserId == request.ReceivedBy)) throw new ForbiddenException("RECEIVER_NOT_ASSIGNED");
-        if (string.IsNullOrWhiteSpace(request.Condition)) throw new BusinessRuleException("DRONE_CONDITION_REQUIRED");
-
-        // One open (accepted, not returned) handover per UAV, across the missions that are still running.
-        if (mission.DroneHandovers.Any(x => !x.IsDeleted && x.DroneId == request.DroneId && x.ReturnedAt == null && x.Status == DroneHandoverStatus.Accepted)
-            || await OpenHandoverInOtherActiveMissionAsync(request.DroneId, mission.Id, ct))
-            throw new BusinessRuleException("DUPLICATE_HANDOVER", "The UAV already has an open handover.");
-
-        // Rejected handovers are closed at once (Table 60: Rejected → Returned); older rows may still be open.
-        var staleRejected = mission.DroneHandovers.Where(x => !x.IsDeleted && x.DroneId == request.DroneId && x.ReturnedAt == null && x.Status == DroneHandoverStatus.Rejected).ToList();
-        if (staleRejected.Count > 0)
-        {
-            foreach (var h in staleRejected) h.ReturnedAt = h.ReceivedAt;
-            await SaveConcurrency(ct);
-        }
-
-        var now = DateTime.UtcNow;
-        var handover = new DroneHandover { MissionId = missionId, DroneId = request.DroneId, HandedOverBy = _current.UserId,
-            ReceivedBy = request.ReceivedBy, ReceivedAt = now, Condition = request.Condition,
-            InitialChecklist = !string.IsNullOrWhiteSpace(request.InitialChecklistJson) ? request.InitialChecklistJson : "{}",
-            Status = request.Accepted ? DroneHandoverStatus.Accepted : DroneHandoverStatus.Rejected,
-            ReturnedAt = request.Accepted ? null : now };
-        _db.DroneHandovers.Add(handover); mission.DroneHandovers.Add(handover); mission.RecalculateReadiness(); TouchMission(mission);
-        Audit(mission.Id, request.Accepted ? "DRONE_HANDOVER_CONFIRMED" : "DRONE_HANDOVER_REJECTED");
-        await SaveConcurrency(ct); return handover;
-    }
-
     public Task<MissionCheckIn> CheckInAsync(Guid missionId, CancellationToken ct)
         => CheckInAsync(missionId, null, null, ct);
 
@@ -304,7 +270,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
-        if (mission.Status is not (MissionStatus.Assigned or MissionStatus.Preparing))
+        if (mission.Status is not (MissionStatus.Confirmed or MissionStatus.Confirmed))
             throw new BusinessRuleException("CHECK_IN_INVALID_STATE");
 
         var assignment = mission.Assignments.SingleOrDefault(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active);
@@ -455,7 +421,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         EnsureAssignedInspectorOrManager(m);
 
         // BR-05/BR-38: Ready, Assigned or Preparing, and only once every required member has accepted (BR-30).
-        if (m.Status is not (MissionStatus.Ready or MissionStatus.Assigned or MissionStatus.Preparing) || m.StartedAt != null)
+        if (m.Status is not (MissionStatus.Ready or MissionStatus.Confirmed or MissionStatus.Confirmed) || m.StartedAt != null)
             throw new BusinessRuleException("INVALID_MISSION_STATE", $"Cannot start mission with status {m.Status}.");
         if (!m.AllRequiredAccepted())
             throw new BusinessRuleException("REQUIRED_ACCEPTANCE_PENDING", "Every required member must accept before the start.");
@@ -482,16 +448,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             throw new BusinessRuleException("DRONE_IN_USE", $"UAV {drone.UavCode} is flying another mission.");
         if (drone.FlightStatus is not (DroneStatus.Idle or DroneStatus.Online))
             throw new BusinessRuleException("DRONE_IN_USE", $"UAV {drone.UavCode} flight status is {drone.FlightStatus}, not Idle.");
-        if (await OpenHandoverInOtherActiveMissionAsync(drone.Id, m.Id, ct))
-            throw new BusinessRuleException("DRONE_IN_USE", $"UAV {drone.UavCode} has an open handover in another mission.");
 
-        var missionHandovers = m.DroneHandovers.Where(h => !h.IsDeleted && h.DroneId == drone.Id).ToList();
-        var openHandover = missionHandovers.Any(h => h.Status == DroneHandoverStatus.Accepted && h.ReturnedAt == null);
-        var latest = missionHandovers.OrderByDescending(h => h.ReceivedAt).FirstOrDefault();
-        if (!openHandover && latest?.Status == DroneHandoverStatus.Rejected)
-            throw new BusinessRuleException("HANDOVER_REJECTED", "The UAV was rejected at handover; change the UAV or record a new handover.");
-
-        // A1 (UC-MF03-03): starting from Assigned/Preparing records the starter's check-in and an accepted handover.
+        // MF03: starting from Confirmed/Ready records the starter's check-in if not already checked in.
         var now = DateTime.UtcNow;
         var starterAssignment = m.ActiveAssignments().FirstOrDefault(a => a.UserId == _current.UserId && a.ResponseStatus == MissionAssignmentResponse.Accepted);
         if (starterAssignment != null)
@@ -508,32 +466,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 checkIn.Status = MissionCheckInStatus.CheckedIn;
                 checkIn.CheckedInAt = now;
             }
-        }
-
-        if (!openHandover)
-        {
-            // Close stale open Rejected rows first: the unique index allows one unreturned handover per mission and UAV.
-            var staleRejected = missionHandovers.Where(h => h.ReturnedAt == null).ToList();
-            if (staleRejected.Count > 0)
-            {
-                foreach (var h in staleRejected) h.ReturnedAt = h.ReceivedAt;
-                await SaveConcurrency(ct);
-            }
-
-            var receiverId = starterAssignment?.UserId ?? m.PrimaryInspectorId() ?? _current.UserId;
-            var handover = new DroneHandover
-            {
-                Id = Guid.NewGuid(),
-                MissionId = m.Id,
-                DroneId = drone.Id,
-                HandedOverBy = m.ManagerId != Guid.Empty ? m.ManagerId : _current.UserId,
-                ReceivedBy = receiverId,
-                ReceivedAt = now,
-                Condition = "Pre-flight automated handover verification",
-                Status = DroneHandoverStatus.Accepted
-            };
-            _db.DroneHandovers.Add(handover);
-            m.DroneHandovers.Add(handover);
         }
 
         try
@@ -558,7 +490,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             {
                 MissionId = m.Id.ToString(),
                 Type = "STARTED",
-                Status = "IN_PROGRESS",
+                Status = m.Status.ToString(),
                 ActorRole = "Inspector",
                 ActorId = _current.UserId.ToString(),
                 ActorName = _current.Username ?? "Phi công",
@@ -608,8 +540,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         }
     }
 
-    [Obsolete("Use CancelMissionAsync instead.")]
-    public Task CancelAsync(Guid missionId, CancellationToken ct) => CancelMissionAsync(missionId, null, ct);
 
     public async Task<Mission> ConfirmMissionAsync(Guid missionId, string? reason, CancellationToken ct)
     {
@@ -1690,7 +1620,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 TicketStatus.Open => "Pending",
                 TicketStatus.InProgress => "InProgress",
                 TicketStatus.PendingVerification => "PendingVerification",
-                TicketStatus.Resolved or TicketStatus.Closed => "Completed",
+                TicketStatus.Closed or TicketStatus.Closed => "Completed",
                 _ => "Pending"
             };
 
@@ -1796,7 +1726,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             actualRole = "ANALYST";
         }
         else if (_current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
-                 _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase))
+                 _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase))
         {
             actualRole = "TECHNICIAN";
         }
@@ -2222,7 +2152,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     /// <summary>Table 59: a member answers (accept/postpone) only while the mission waits for or holds its team.</summary>
     private static void RequireRespondableState(Mission m)
     {
-        if (m.Status is not (MissionStatus.PendingAcceptance or MissionStatus.Assigned or MissionStatus.Preparing or MissionStatus.Ready) || m.StartedAt != null)
+        if (m.Status is not (MissionStatus.PendingAcceptance or MissionStatus.Confirmed or MissionStatus.Confirmed or MissionStatus.Ready) || m.StartedAt != null)
             throw new BusinessRuleException("INVALID_MISSION_STATE", $"Cannot respond to an assignment while the mission is {m.Status}.");
     }
 

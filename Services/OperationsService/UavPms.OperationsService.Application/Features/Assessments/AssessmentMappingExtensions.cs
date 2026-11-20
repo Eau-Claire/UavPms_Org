@@ -8,17 +8,7 @@ public static class AssessmentMappingExtensions
 {
     public static PreMissionAssessmentDto ToDto(this PreMissionAssessment entity)
     {
-        var statusStr = entity.Status switch
-        {
-            PreMissionAssessmentStatus.Draft => "DRAFT",
-            PreMissionAssessmentStatus.Evaluating => "EVALUATING",
-            PreMissionAssessmentStatus.Ready => "READY",
-            PreMissionAssessmentStatus.NotReady => "NOT_READY",
-            PreMissionAssessmentStatus.Expired => "EXPIRED",
-            PreMissionAssessmentStatus.Completed => "COMPLETED",
-            PreMissionAssessmentStatus.Cancelled => "CANCELLED",
-            _ => entity.Status.ToString().ToUpperInvariant()
-        };
+        var statusStr = entity.Status.ToString();
 
         var towers = entity.Towers
             .OrderBy(a => a.Sequence)

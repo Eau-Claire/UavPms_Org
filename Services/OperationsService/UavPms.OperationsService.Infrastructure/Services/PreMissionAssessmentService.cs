@@ -216,7 +216,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
         await EnsureManagerHasAssessmentAccessAsync(existing, ct);
 
-        if (existing.Status is PreMissionAssessmentStatus.Draft or PreMissionAssessmentStatus.Evaluating)
+        if (existing.Status is PreMissionAssessmentStatus.Evaluating or PreMissionAssessmentStatus.Evaluating)
         {
             if (await ApplyExpiryAsync(existing, ct))
                 return existing;
@@ -318,7 +318,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         // that is expired by the time it is read.
         var now = DateTime.UtcNow;
         var due = await visible
-            .Where(x => (x.Status == PreMissionAssessmentStatus.Draft ||
+            .Where(x => (x.Status == PreMissionAssessmentStatus.Evaluating ||
                          x.Status == PreMissionAssessmentStatus.Evaluating ||
                          x.Status == PreMissionAssessmentStatus.Ready ||
                          x.Status == PreMissionAssessmentStatus.NotReady) &&
@@ -392,7 +392,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         var clean = status.Trim().Replace("-", "_").ToUpperInvariant();
         return clean switch
         {
-            "DRAFT" => PreMissionAssessmentStatus.Draft,
+            "DRAFT" => PreMissionAssessmentStatus.Evaluating,
             "EVALUATING" => PreMissionAssessmentStatus.Evaluating,
             "READY" => PreMissionAssessmentStatus.Ready,
             "NOT_READY" or "NOTREADY" or "INCOMPLETE" => PreMissionAssessmentStatus.NotReady,
@@ -1087,12 +1087,12 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
     private bool IsFieldReader() =>
         _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase) ||
         _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
-        _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase);
+        _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase);
 
     private async Task RequireAssessmentReader(CancellationToken ct)
     {
         if (_current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
-            _current.Roles.Contains(UserRoles.MaintenanceTechnician, StringComparer.OrdinalIgnoreCase))
+            _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase))
         {
             if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
                 throw new ForbiddenException("AUTHENTICATION_REQUIRED");
