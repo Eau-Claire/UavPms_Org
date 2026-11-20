@@ -29,8 +29,8 @@ public class GetMyMissionsQueryHandlerTests
 
         var mockMissions = new List<Mission>
         {
-            new() { Id = Guid.NewGuid(), Title = "Mission 1", AssignedToUserId = currentUserId, Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Pending },
-            new() { Id = Guid.NewGuid(), Title = "Mission 2", AssignedToUserId = currentUserId, Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Executing }
+            new() { Id = Guid.NewGuid(), Title = "Mission 1", AssignedToUserId = currentUserId, Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Draft },
+            new() { Id = Guid.NewGuid(), Title = "Mission 2", AssignedToUserId = currentUserId, Status = UavPms.OperationsService.Domain.Enums.MissionStatus.InProgress }
         };
 
         _missionRepoMock.Setup(x => x.GetMissionsByAssignedUserAsync(currentUserId))
@@ -104,7 +104,7 @@ public class GetMyMissionsQueryHandlerTests
             MissionCode = "MSN-FILTER",
             Title = "Mission With Assignments",
             ManagerId = Guid.NewGuid(),
-            Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Assigned
+            Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Confirmed
         };
 
         var activeAssignment = new MissionAssignment

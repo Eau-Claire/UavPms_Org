@@ -8,9 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Moq;
 using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Application.Common.Exceptions;
-using UavPms.OperationsService.Application.Features.FieldExecution.Commands.DeliverDroneHandover;
 using UavPms.OperationsService.Application.Features.FieldExecution.Commands.FieldCheckIn;
-using UavPms.OperationsService.Application.Features.FieldExecution.Commands.ReturnDroneHandover;
 using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Enums;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
@@ -61,7 +59,7 @@ public class Phase2FieldExecutionCqrsTests
         var mission = new Mission
         {
             Id = Guid.NewGuid(),
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Confirmed,
             Assignments = new List<MissionAssignment>
             {
                 new()
@@ -120,7 +118,7 @@ public class Phase2FieldExecutionCqrsTests
         var mission = new Mission
         {
             Id = Guid.NewGuid(),
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Confirmed,
             Assignments = new List<MissionAssignment>
             {
                 new()
@@ -157,115 +155,5 @@ public class Phase2FieldExecutionCqrsTests
 
         await act.Should().ThrowAsync<BusinessRuleException>()
             .WithMessage("*CHECKIN_OUTSIDE_GEOFENCE*");
-    }
-
-    [Fact]
-    public async Task DeliverDroneHandover_StoresChecklistAndUpdatesDroneStatus()
-    {
-        var managerId = Guid.NewGuid();
-        var pilotId = Guid.NewGuid();
-        var droneId = Guid.NewGuid();
-        var userMock = CreateUserMock(managerId);
-        await using var db = CreateContext(userMock.Object);
-
-        var drone = new Uav
-        {
-            Id = droneId,
-            UavCode = "UAV-101",
-            OperationalStatus = DroneOperationalStatus.Available
-        };
-        db.Uavs.Add(drone);
-
-        var mission = new Mission
-        {
-            Id = Guid.NewGuid(),
-            UavId = droneId
-        };
-        db.Missions.Add(mission);
-        await db.SaveChangesAsync();
-
-        var missionRepo = new MissionRepository(db);
-        var uavRepo = new UavRepository(db);
-        var handoverRepo = new GenericRepository<DroneHandover>(db);
-        var uow = new UnitOfWork(db);
-
-        var handler = new DeliverDroneHandoverCommandHandler(
-            missionRepo, uavRepo, handoverRepo, userMock.Object, uow);
-
-        var checklist = "{\"batteryCycles\": 12, \"propellersOk\": true, \"cameraCalibrated\": true}";
-        var command = new DeliverDroneHandoverCommand(mission.Id, droneId, pilotId, "Good", checklist, true);
-
-        var result = await handler.Handle(command, CancellationToken.None);
-
-        result.Should().NotBeNull();
-        result.DroneId.Should().Be(droneId);
-        result.Status.Should().Be("Accepted");
-
-        var savedHandover = await db.DroneHandovers.FirstOrDefaultAsync(h => h.Id == result.Id);
-        savedHandover.Should().NotBeNull();
-        savedHandover!.InitialChecklist.Should().Be(checklist);
-
-        var updatedDrone = await db.Uavs.FindAsync(droneId);
-        updatedDrone!.OperationalStatus.Should().Be(DroneOperationalStatus.InUse);
-    }
-
-    [Fact]
-    public async Task ReturnDroneHandover_SetsReturnChecklistAndReleasesDrone()
-    {
-        var managerId = Guid.NewGuid();
-        var pilotId = Guid.NewGuid();
-        var droneId = Guid.NewGuid();
-        var userMock = CreateUserMock(managerId);
-        await using var db = CreateContext(userMock.Object);
-
-        var drone = new Uav
-        {
-            Id = droneId,
-            UavCode = "UAV-101",
-            OperationalStatus = DroneOperationalStatus.InUse
-        };
-        db.Uavs.Add(drone);
-
-        var mission = new Mission
-        {
-            Id = Guid.NewGuid(),
-            UavId = droneId
-        };
-        db.Missions.Add(mission);
-
-        var handover = new DroneHandover
-        {
-            Id = Guid.NewGuid(),
-            MissionId = mission.Id,
-            DroneId = droneId,
-            HandedOverBy = managerId,
-            ReceivedBy = pilotId,
-            Status = DroneHandoverStatus.Accepted,
-            InitialChecklist = "{}"
-        };
-        db.DroneHandovers.Add(handover);
-        await db.SaveChangesAsync();
-
-        var missionRepo = new MissionRepository(db);
-        var uavRepo = new UavRepository(db);
-        var handoverRepo = new GenericRepository<DroneHandover>(db);
-        var uow = new UnitOfWork(db);
-
-        var handler = new ReturnDroneHandoverCommandHandler(
-            missionRepo, uavRepo, handoverRepo, uow);
-
-        var returnChecklist = "{\"batteryRemaining\": 45, \"damageReported\": false}";
-        var command = new ReturnDroneHandoverCommand(mission.Id, droneId, "Returned undamaged", returnChecklist);
-
-        var result = await handler.Handle(command, CancellationToken.None);
-
-        result.Should().NotBeNull();
-        result.ReturnedAt.Should().NotBeNull();
-
-        var updatedHandover = await db.DroneHandovers.FindAsync(handover.Id);
-        updatedHandover!.ReturnChecklist.Should().Be(returnChecklist);
-
-        var updatedDrone = await db.Uavs.FindAsync(droneId);
-        updatedDrone!.OperationalStatus.Should().Be(DroneOperationalStatus.Available);
     }
 }

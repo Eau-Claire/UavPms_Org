@@ -82,7 +82,7 @@ public class GeographicAccessTests
         var sibling = NewTower(region.Id, "T-SIBLING");
         context.Towers.AddRange(assigned, sibling, NewTower(otherRegion.Id, "T-OTHER"));
 
-        var mission = new Mission { Id = Guid.NewGuid(), Status = MissionStatus.Assigned };
+        var mission = new Mission { Id = Guid.NewGuid(), Status = MissionStatus.Confirmed };
         mission.Assignments.Add(new MissionAssignment { UserId = user.Object.UserId, AssignmentRole = assignmentRole, Status = MissionAssignmentStatus.Active });
         mission.MissionTargets.Add(new MissionTarget { TowerId = assigned.Id, Sequence = 1 });
         context.Missions.Add(mission);
@@ -109,7 +109,7 @@ public class GeographicAccessTests
         var completed = new Mission { Id = Guid.NewGuid(), Status = MissionStatus.Completed };
         completed.Assignments.Add(new MissionAssignment { UserId = user.Object.UserId, AssignmentRole = "INSPECTOR" });
         completed.MissionTargets.Add(new MissionTarget { TowerId = tower.Id });
-        var replaced = new Mission { Id = Guid.NewGuid(), Status = MissionStatus.Assigned };
+        var replaced = new Mission { Id = Guid.NewGuid(), Status = MissionStatus.Confirmed };
         replaced.Assignments.Add(new MissionAssignment { UserId = user.Object.UserId, AssignmentRole = "INSPECTOR", Status = MissionAssignmentStatus.Revoked });
         replaced.MissionTargets.Add(new MissionTarget { TowerId = tower2.Id });
         context.Missions.AddRange(completed, replaced);

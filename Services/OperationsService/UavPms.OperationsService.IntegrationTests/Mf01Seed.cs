@@ -70,7 +70,7 @@ internal static class Mf01Seed
         var managerId = await InsertUserAsync(db, tag, "Manager");
         var inspectorId = await InsertUserAsync(db, tag, "Inspector");
         var analystId = await InsertUserAsync(db, tag, "Analyst");
-        var technicianId = await InsertUserAsync(db, tag, "MaintenanceTechnician");
+        var technicianId = await InsertUserAsync(db, tag, "Technician");
         foreach (var id in new[] { managerId, inspectorId, analystId, technicianId })
             db.UserGeographicScopes.Add(new UserGeographicScope { UserId = id, RegionId = region.Id });
         await db.SaveChangesAsync();

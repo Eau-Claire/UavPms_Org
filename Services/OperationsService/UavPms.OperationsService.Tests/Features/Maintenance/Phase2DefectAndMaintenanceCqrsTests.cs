@@ -361,7 +361,7 @@ public class Phase2DefectAndMaintenanceCqrsTests
         var userMock = CreateUserMock(managerId);
         await using var db = CreateContext(userMock.Object);
 
-        var role = new Role { Id = 10, RoleName = UserRoles.MaintenanceTechnician };
+        var role = new Role { Id = 10, RoleName = UserRoles.Technician };
         var tech = new User { Id = techId, FullName = "Kỹ thuật viên A", Email = "tech@evn.vn", Status = "Active" };
         db.Roles.Add(role);
         db.Users.Add(tech);
@@ -430,8 +430,8 @@ public class Phase2DefectAndMaintenanceCqrsTests
         db.Missions.AddRange(
             new Mission { Id = Guid.NewGuid(), MissionCode = "M-1", Title = "Draft", ManagerId = managerId, Status = MissionStatus.Draft },
             new Mission { Id = Guid.NewGuid(), MissionCode = "M-2", Title = "PendingAcceptance", ManagerId = managerId, Status = MissionStatus.PendingAcceptance },
-            new Mission { Id = Guid.NewGuid(), MissionCode = "M-3", Title = "Assigned", ManagerId = managerId, Status = MissionStatus.Assigned },
-            new Mission { Id = Guid.NewGuid(), MissionCode = "M-4", Title = "Preparing", ManagerId = managerId, Status = MissionStatus.Preparing },
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-3", Title = "Assigned", ManagerId = managerId, Status = MissionStatus.Confirmed },
+            new Mission { Id = Guid.NewGuid(), MissionCode = "M-4", Title = "Preparing", ManagerId = managerId, Status = MissionStatus.Confirmed },
             new Mission { Id = Guid.NewGuid(), MissionCode = "M-5", Title = "Ready", ManagerId = managerId, Status = MissionStatus.Ready },
             new Mission { Id = Guid.NewGuid(), MissionCode = "M-6", Title = "Postponed", ManagerId = managerId, Status = MissionStatus.Postponed },
             new Mission { Id = Guid.NewGuid(), MissionCode = "M-7", Title = "InProgress", ManagerId = managerId, Status = MissionStatus.InProgress },

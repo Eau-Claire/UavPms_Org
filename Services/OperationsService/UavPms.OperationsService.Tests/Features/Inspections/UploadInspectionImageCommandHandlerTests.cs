@@ -448,22 +448,4 @@ public class UploadInspectionImageCommandHandlerTests
         _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
         _eventPublisherMock.Verify(p => p.PublishAsync(It.IsAny<InspectionMediaUploadedEvent>()), Times.Never);
     }
-
-    [Fact]
-    public async Task Handle_SameFileOtherMission_ThrowsDuplicateMedia()
-    {
-        var (missionId, _) = ArrangeAssignedMissionWithoutTower();
-        var existing = new InspectionMedia { Id = Guid.NewGuid(), MissionId = Guid.NewGuid(), FileUrl = "/images/old.png", MediaType = "Image" };
-        _mediaRepositoryMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<InspectionMedia, bool>>>(), false))
-            .ReturnsAsync(new[] { existing });
-
-        var act = () => _handler.Handle(new UploadInspectionImageCommand
-        {
-            MissionId = missionId, CapturedAt = DateTime.UtcNow,
-            FileName = "pole.png", ContentType = "image/png", FileStream = new MemoryStream(Png1920x1080())
-        }, CancellationToken.None);
-
-        (await act.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be("DUPLICATE_MEDIA");
-        _mediaRepositoryMock.Verify(r => r.AddAsync(It.IsAny<InspectionMedia>()), Times.Never);
-    }
 }

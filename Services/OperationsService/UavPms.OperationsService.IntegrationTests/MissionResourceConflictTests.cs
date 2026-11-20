@@ -269,7 +269,6 @@ public class MissionResourceConflictTests
         var cancelled = await w.LoadMissionAsync(mission.Id);
         cancelled.Status.Should().Be(MissionStatus.Cancelled);
         cancelled.PreMissionAssessmentId.Should().BeNull();
-        cancelled.DroneHandovers.Should().OnlyContain(h => h.ReturnedAt != null);
         (await w.BookingsAsync(mission.Id)).Should().OnlyContain(b => b.Status == ResourceBookingStatus.Cancelled);
         (await w.DroneAsync(drone)).FlightStatus.Should().Be(DroneStatus.Idle);
         var assessmentStatus = await w.Read(db => db.PreMissionAssessments.Where(a => a.Id == mission.PreMissionAssessmentId).Select(a => a.Status).SingleAsync());

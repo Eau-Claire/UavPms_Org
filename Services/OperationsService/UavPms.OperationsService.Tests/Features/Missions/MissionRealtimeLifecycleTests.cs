@@ -201,7 +201,7 @@ public class MissionRealtimeLifecycleTests
             Title = "Mission to Cancel",
             ManagerId = managerId,
             RegionId = regionId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Confirmed
         };
         mission.Assignments.Add(new MissionAssignment
         {
@@ -296,7 +296,7 @@ public class MissionRealtimeLifecycleTests
             MissionCode = "MS-COMM-01",
             Title = "Mission Communication Test",
             ManagerId = managerId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Confirmed
         };
         mission.Assignments.Add(new MissionAssignment
         {

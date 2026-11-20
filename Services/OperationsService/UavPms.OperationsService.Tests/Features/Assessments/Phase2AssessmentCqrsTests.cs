@@ -81,7 +81,7 @@ public class Phase2AssessmentCqrsTests
 
         result.Should().NotBeNull();
         result.RegionId.Should().Be(regionId);
-        result.Status.Should().Be("NOT_READY");
+        result.Status.Should().Be("NotReady");
     }
 
     [Fact]
@@ -168,6 +168,6 @@ public class Phase2AssessmentCqrsTests
 
         result.Should().NotBeNull();
         result.Id.Should().Be(assessmentId);
-        result.Status.Should().Be("READY");
+        result.Status.Should().Be("Ready");
     }
 }

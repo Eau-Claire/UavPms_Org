@@ -119,7 +119,7 @@ public class MissionDroneExecutionTests
         drone!.FlightStatus.Should().Be(DroneStatus.Flying);
 
         _notifierMock.Verify(n => n.NotifyAsync(
-            It.Is<MissionLifecycleEventDto>(e => e.MissionId == missionId.ToString() && e.Type == "STARTED" && e.Status == "IN_PROGRESS"),
+            It.Is<MissionLifecycleEventDto>(e => e.MissionId == missionId.ToString() && e.Type == "STARTED" && e.Status == "InProgress"),
             It.IsAny<CancellationToken>()), Times.Once);
 
         var audit = await _db.AuditLogs.FirstOrDefaultAsync(a => a.RecordId == missionId && a.ActionType == "MISSION_STARTED");
@@ -139,7 +139,7 @@ public class MissionDroneExecutionTests
             RegionId = _regionId,
             Assignments = { new MissionAssignment { UserId = _userId, AssignmentRole = "INSPECTOR" } },
             UavId = _droneId,
-            Status = MissionStatus.Pending // Pending cannot be started directly
+            Status = MissionStatus.Draft // Pending cannot be started directly
         };
         _db.Missions.Add(mission);
         await _db.SaveChangesAsync();
@@ -305,7 +305,7 @@ public class MissionDroneExecutionTests
             RegionId = _regionId,
             Assignments = { new MissionAssignment { UserId = anotherInspectorId, AssignmentRole = "INSPECTOR" } },
             UavId = _droneId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Confirmed
         };
         _db.Missions.Add(mission);
         await _db.SaveChangesAsync();

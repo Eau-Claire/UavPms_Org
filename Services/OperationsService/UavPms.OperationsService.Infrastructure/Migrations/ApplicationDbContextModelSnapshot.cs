@@ -1720,7 +1720,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_PreMissionAssessments_PlannedWindow", "\"PlannedEnd\" > \"PlannedStart\"");
 
-                            t.HasCheckConstraint("CK_PreMissionAssessments_Status", "\"Status\" IN ('DRAFT', 'EVALUATING', 'READY', 'NOT_READY', 'EXPIRED', 'COMPLETED', 'CANCELLED')");
+                            t.HasCheckConstraint("CK_PreMissionAssessments_Status", "\"Status\" IN ('Evaluating', 'Ready', 'NotReady', 'Expired', 'Completed', 'Cancelled')");
                         });
                 });
 

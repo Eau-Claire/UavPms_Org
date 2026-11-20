@@ -64,7 +64,7 @@ public class MissionRepositoryTests
             MissionCode = "MSN-ACTIVE",
             Title = "Active Mission",
             ManagerId = managerId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Confirmed
         };
         mission2.Assignments.Add(new MissionAssignment
         {

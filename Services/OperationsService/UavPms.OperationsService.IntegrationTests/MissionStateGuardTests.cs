@@ -82,7 +82,7 @@ public class MissionStateGuardTests
         await inspectorPostpone.Should().ThrowAsync<ForbiddenException>();
 
         await w.AsInspector(inspector, s => s.ConfirmMissionAsync(mission.Id, "Ready", default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Assigned);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Confirmed);
 
         await w.AsManager(s => s.PostponeMissionAsync(mission.Id, "Line maintenance", default));
         (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Postponed);
@@ -129,18 +129,18 @@ public class MissionStateGuardTests
         var mission = await w.CreateMissionAsync(Hour(0), Hour(2), inspector, await w.AddDroneAsync());
         await w.AcceptAllAsync(mission);
         await w.AsInspector(inspector, s => s.CheckInAsync(mission.Id, default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Preparing);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready);
 
         // An optional member does not block anything.
         await w.AsManager(s => s.AssignAsync(mission.Id, new Mf01Assignment(technician, "TECHNICIAN", IsRequired: false), default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Preparing);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready);
 
         // A required one does, and the mission cannot start until they accept.
         await w.AsManager(s => s.AssignAsync(mission.Id, new Mf01Assignment(analyst, "ANALYST"), default));
         (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.PendingAcceptance);
         await Expect("INVALID_MISSION_STATE", () => w.AsManager(s => s.StartAsync(mission.Id, default)));
         await w.As(analyst, UserRoles.Analyst, s => s.AcceptAssignmentAsync(mission.Id, default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Preparing, "the earlier check-in still counts");
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Confirmed, "the new required member has not checked in yet");
 
         // Suspended before the start, a reassignment is checked again on resume.
         await w.AsManager(s => s.SuspendMissionAsync(mission.Id, "Paperwork", default));
@@ -153,7 +153,7 @@ public class MissionStateGuardTests
         // Removing the pending required member completes the acceptance; the last required one cannot be removed.
         var pending = (await w.LoadMissionAsync(mission.Id)).Assignments.Single(a => a.UserId == analyst2 && a.Status == MissionAssignmentStatus.Active);
         await w.AsManager(s => s.RemoveAssignmentAsync(mission.Id, pending.Id, default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Preparing);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready);
         var last = (await w.LoadMissionAsync(mission.Id)).Assignments.Single(a => a.UserId == inspector && a.Status == MissionAssignmentStatus.Active);
         await Expect("REQUIRED_MEMBER_REQUIRED", () => w.AsManager(s => s.RemoveAssignmentAsync(mission.Id, last.Id, default)));
         (await w.BookingsAsync(mission.Id)).Single(b => b.UserId == analyst2).Status.Should().Be(ResourceBookingStatus.Cancelled);
@@ -223,47 +223,11 @@ public class MissionStateGuardTests
         await w.AsManager(s => s.SuspendMissionAsync(mission.Id, "Check", default));
         await w.AsManager(s => s.ResumeMissionAsync(mission.Id, null, default));
 
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Assigned);
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Confirmed);
         var types = await w.Read(db => db.Notifications.Where(n => n.ReferenceId == mission.Id && n.UserId == analyst).Select(n => n.Type).ToListAsync());
         types.Count(t => t == "MISSION_SUSPENDED").Should().Be(1);
         types.Count(t => t == "MISSION_RESUMED").Should().Be(1);
         (await w.Read(db => db.Notifications.AnyAsync(n => n.ReferenceId == mission.Id && n.UserId == Guid.Empty))).Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Handover_RejectedIsClosed_BlocksStartUntilANewHandover_AndIsOnePerUav()
-    {
-        if (!_pg.Available) return;
-        var w = await MissionWorld.CreateAsync(_pg);
-        var inspector = await w.AddUserAsync();
-        var analyst = await w.AddUserAsync(UserRoles.Analyst);
-        var outsider = await w.AddUserAsync();
-        var drone = await w.AddDroneAsync();
-        var mission = await w.CreateMissionAsync(Hour(0), Hour(2), inspector, drone, new MissionPersonnelAssignmentRequest(analyst, "ANALYST", false));
-        await w.AcceptAllAsync(mission);
-
-        var byOutsider = () => w.AsInspector(outsider, s => s.ConfirmHandoverAsync(mission.Id, new Mf01Handover(drone, inspector, "OK", true), default));
-        await byOutsider.Should().ThrowAsync<ForbiddenException>();
-
-        var rejected = await w.As(inspector, UserRoles.Inspector, s => s.ConfirmHandoverAsync(mission.Id, new Mf01Handover(drone, inspector, "Cracked propeller", false), default));
-        rejected.ReturnedAt.Should().NotBeNull();
-        await Expect("HANDOVER_REJECTED", () => w.AsInspector(inspector, s => s.StartAsync(mission.Id, default)));
-
-        await w.AsInspector(inspector, s => s.ConfirmHandoverAsync(mission.Id, new Mf01Handover(drone, inspector, "Propeller replaced", true), default));
-        await Expect("DUPLICATE_HANDOVER", () => w.AsInspector(inspector, s => s.ConfirmHandoverAsync(mission.Id, new Mf01Handover(drone, inspector, "Again", true), default)));
-
-        // A pending optional member does not keep the mission from Ready (BR-37).
-        await w.AsInspector(inspector, s => s.CheckInAsync(mission.Id, default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready);
-
-        // The same UAV booked later by another mission cannot be handed over while this handover is open.
-        var inspector2 = await w.AddUserAsync();
-        var next = await w.CreateMissionAsync(Hour(2), Hour(4), inspector2, drone);
-        await w.AcceptAllAsync(next);
-        await Expect("DUPLICATE_HANDOVER", () => w.AsInspector(inspector2, s => s.ConfirmHandoverAsync(next.Id, new Mf01Handover(drone, inspector2, "OK", true), default)));
-
-        await w.AsInspector(inspector, s => s.StartAsync(mission.Id, default));
-        (await w.LoadMissionAsync(mission.Id)).DroneHandovers.Count(h => h.ReturnedAt == null).Should().Be(1, "start reuses the open handover");
     }
 
     [Fact]

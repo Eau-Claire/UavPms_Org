@@ -24,14 +24,14 @@ public class DroneTechnicalInspectionRulesTests
     {
         await using var db = _pg.CreateContext();
         var tag = Tag();
-        var technicianId = await InsertUserAsync(db, tag, UserRoles.MaintenanceTechnician);
+        var technicianId = await InsertUserAsync(db, tag, UserRoles.Technician);
         var droneId = await AddDroneAsync(db, tag, "INSP");
         return (technicianId, droneId, tag);
     }
 
     private async Task<DroneTechnicalInspection> SubmitAsync(Guid technicianId, Guid droneId, params DroneMetricSubmitDto[] metrics)
     {
-        var current = Current(technicianId, UserRoles.MaintenanceTechnician);
+        var current = Current(technicianId, UserRoles.Technician);
         await using var db = _pg.CreateContext(current);
         return await new DroneTechnicalInspectionService(db, current)
             .SubmitInspectionAsync(new DroneInspectionSubmitRequest(droneId, "IT", metrics.ToList()), CancellationToken.None);
@@ -112,7 +112,7 @@ public class DroneTechnicalInspectionRulesTests
         var (tech, drone, _) = await SeedAsync();
 
         // #5: battery/GPS/RF items carry a numeric reading and a note; CK_DroneTechnicalMetrics_SingleValue allows one value.
-        var current = Current(tech, UserRoles.MaintenanceTechnician);
+        var current = Current(tech, UserRoles.Technician);
         await using (var db = _pg.CreateContext(current))
         {
             var service = new UavManagementService(db, current, new DroneTechnicalInspectionService(db, current));
@@ -172,7 +172,7 @@ public class DroneTechnicalInspectionRulesTests
                 validUntil: status == PreMissionAssessmentStatus.Ready ? DateTime.UtcNow.AddMinutes(-1) : DateTime.UtcNow.AddHours(1));
         }
 
-        var current = Current(site.TechnicianId, UserRoles.MaintenanceTechnician);
+        var current = Current(site.TechnicianId, UserRoles.Technician);
         await using var ctx = _pg.CreateContext(current);
         var submit = () => new DroneTechnicalInspectionService(ctx, current).SubmitInspectionAsync(
             new DroneInspectionSubmitRequest(droneId, "IT", new List<DroneMetricSubmitDto> { new("FRAME_BODY", "Airframe", null, BoolValue: true) }, PreMissionAssessmentId: assessmentId),

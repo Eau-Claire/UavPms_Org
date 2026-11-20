@@ -72,7 +72,7 @@ public class AssignmentAcceptPostponeTests
         result.RespondedAt.Should().NotBeNull();
 
         var updatedMission = await db.Missions.FindAsync(mission.Id);
-        updatedMission!.Status.Should().Be(MissionStatus.Assigned);
+        updatedMission!.Status.Should().Be(MissionStatus.Confirmed);
         updatedMission.AcceptedAt.Should().NotBeNull();
     }
 
@@ -141,7 +141,7 @@ public class AssignmentAcceptPostponeTests
             Id = Guid.NewGuid(),
             Title = "Mission CheckIn Test",
             ManagerId = managerId,
-            Status = MissionStatus.Assigned
+            Status = MissionStatus.Confirmed
         };
 
         var assignment = new MissionAssignment
@@ -209,7 +209,7 @@ public class AssignmentAcceptPostponeTests
 
         var service = new MissionLifecycleService(db, user.Object);
 
-        await service.CancelAsync(mission.Id, CancellationToken.None);
+        await service.CancelMissionAsync(mission.Id, null, CancellationToken.None);
 
         var updatedMission = await db.Missions.FindAsync(mission.Id);
         updatedMission!.Status.Should().Be(MissionStatus.Cancelled);
@@ -245,7 +245,7 @@ public class AssignmentAcceptPostponeTests
             Title = "Mission Reassign Conflict Test",
             ManagerId = managerId,
             RegionId = region.Id,
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Confirmed,
             PlannedStart = start,
             PlannedEnd = end
         };
@@ -270,7 +270,7 @@ public class AssignmentAcceptPostponeTests
             Title = "Conflicting Mission",
             ManagerId = managerId,
             RegionId = region.Id,
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Confirmed,
             PlannedStart = start.AddHours(-1),
             PlannedEnd = start.AddHours(2)
         };
@@ -326,7 +326,7 @@ public class AssignmentAcceptPostponeTests
             Title = "Mission Reassign Success Test",
             ManagerId = managerId,
             RegionId = region.Id,
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Confirmed,
             PlannedStart = start,
             PlannedEnd = end,
             AssignedToUserId = originalInspectorId

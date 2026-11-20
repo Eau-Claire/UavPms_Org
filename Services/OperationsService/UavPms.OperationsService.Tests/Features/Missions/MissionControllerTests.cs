@@ -65,7 +65,7 @@ public class MissionControllerTests
             Id = missionId,
             MissionCode = "MSN-CONFIRMED",
             Title = "Confirmed Mission",
-            Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Assigned,
+            Status = UavPms.OperationsService.Domain.Enums.MissionStatus.Confirmed,
             Priority = UavPms.OperationsService.Domain.Enums.MissionPriority.High,
             Version = 3
         };
@@ -85,7 +85,7 @@ public class MissionControllerTests
         var dto = (MissionOperationResultDto)apiResponse.Data!;
         dto.Id.Should().Be(missionId);
         dto.MissionCode.Should().Be("MSN-CONFIRMED");
-        dto.Status.Should().Be("Assigned");
+        dto.Status.Should().Be("Confirmed");
         dto.Priority.Should().Be("High");
         dto.Version.Should().Be(3);
     }
@@ -116,50 +116,5 @@ public class MissionControllerTests
         var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
         okResult.Value.Should().BeOfType<ApiResponse>();
         lifecycle.Verify(x => x.CheckInAsync(missionId, 21.0285, 105.8542, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task Handover_SerializesInitialChecklist_AndSupportsReceivedByUserId()
-    {
-        var mediator = new Mock<ISender>();
-        var lifecycle = new Mock<IMissionLifecycleService>();
-        var missionId = Guid.NewGuid();
-        var droneId = Guid.NewGuid();
-        var receiverId = Guid.NewGuid();
-
-        var handover = new UavPms.OperationsService.Domain.Entities.DroneHandover
-        {
-            Id = Guid.NewGuid(),
-            MissionId = missionId,
-            DroneId = droneId,
-            ReceivedBy = receiverId,
-            Condition = "Good",
-            Status = UavPms.OperationsService.Domain.Enums.DroneHandoverStatus.Accepted,
-            ReceivedAt = DateTime.UtcNow
-        };
-
-        lifecycle.Setup(x => x.ConfirmHandoverAsync(
-                missionId,
-                It.Is<Mf01Handover>(h =>
-                    h.DroneId == droneId &&
-                    h.ReceivedBy == receiverId &&
-                    h.InitialChecklistJson != null &&
-                    h.InitialChecklistJson.Contains("propellersSecure")),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(handover);
-
-        var controller = new MissionController(mediator.Object, lifecycle.Object);
-        var request = new MissionHandoverRequest(
-            droneId,
-            Guid.Empty,
-            "Good",
-            true,
-            receiverId,
-            new { propellersSecure = true });
-
-        var result = await controller.Handover(missionId, request, CancellationToken.None);
-
-        result.Should().BeOfType<OkObjectResult>();
-        lifecycle.VerifyAll();
     }
 }

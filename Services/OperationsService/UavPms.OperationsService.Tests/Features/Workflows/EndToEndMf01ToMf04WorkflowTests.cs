@@ -12,7 +12,6 @@ using Moq;
 using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Application.Common.Interfaces;
 using UavPms.OperationsService.Application.Features.Assessments;
-using UavPms.OperationsService.Application.Features.FieldExecution.Commands.DeliverDroneHandover;
 using UavPms.OperationsService.Application.Features.FieldExecution.Commands.FieldCheckIn;
 using UavPms.OperationsService.Application.Features.Maintenance.Commands.CompleteMaintenanceTicket;
 using UavPms.OperationsService.Application.Features.Maintenance.Commands.CreateMaintenanceTicket;
@@ -233,10 +232,10 @@ public class EndToEndMf01ToMf04WorkflowTests
 
         var dispatchResult = await dispatchHandler.Handle(
             new DispatchMissionCommand(mission.Id), CancellationToken.None);
-        dispatchResult.Status.Should().Be("Assigned");
+        dispatchResult.Status.Should().Be("Confirmed");
 
         var updatedMission = await db.Missions.FindAsync(mission.Id);
-        updatedMission!.Status.Should().Be(MissionStatus.Assigned);
+        updatedMission!.Status.Should().Be(MissionStatus.Confirmed);
 
         // =========================================================================
         // BƯỚC 3: MF03 - BÀN GIAO DRONE, CHECK-IN HIỆN TRƯỜNG & NẠP MEDIA
@@ -253,17 +252,6 @@ public class EndToEndMf01ToMf04WorkflowTests
         var checkInResult = await checkInHandler.Handle(
             new FieldCheckInCommand(mission.Id, 10.8234, 106.6299), CancellationToken.None);
         checkInResult.Status.Should().Be("CheckedIn");
-
-        // 3.2. Bàn giao Drone trước bay (Pre-flight handover checklist JSONB)
-        var handoverRepo = new GenericRepository<DroneHandover>(db);
-        var deliverHandoverHandler = new DeliverDroneHandoverCommandHandler(
-            missionRepo, uavRepo, handoverRepo, pilotUserMock.Object, uow);
-
-        var checklistJson = "{\"battery\": 98, \"propellers\": \"Intact\", \"camera\": \"Calibrated\", \"compass\": \"Calibrated\"}";
-        var handoverResult = await deliverHandoverHandler.Handle(
-            new DeliverDroneHandoverCommand(mission.Id, uav.Id, pilotId, "PreFlightCheck", checklistJson),
-            CancellationToken.None);
-        handoverResult.Status.Should().Be("Accepted");
 
         // Chuyển trạng thái mission sang InProgress
         updatedMission.Status = MissionStatus.InProgress;

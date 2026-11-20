@@ -35,7 +35,7 @@ public class DroneTechnicalInspectionTests
     public async Task SubmitInspection_CriticalMetricFailed_SetsCriticalHealthAndFailedStatus()
     {
         var techId = Guid.NewGuid();
-        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
@@ -69,7 +69,7 @@ public class DroneTechnicalInspectionTests
     public async Task SubmitInspection_AllPassed_SetsHealthyAndPassedStatus()
     {
         var techId = Guid.NewGuid();
-        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
@@ -103,7 +103,7 @@ public class DroneTechnicalInspectionTests
     public async Task GetLatestInspection_ReturnsMostRecentInspection()
     {
         var techId = Guid.NewGuid();
-        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
@@ -140,7 +140,7 @@ public class DroneTechnicalInspectionTests
     public async Task SubmitInspection_EmptyOrMissingMetrics_ThrowsMetricsRequired(bool emptyList)
     {
         var techId = Guid.NewGuid();
-        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
@@ -163,7 +163,7 @@ public class DroneTechnicalInspectionTests
     public async Task SubmitInspection_DuplicateMetricInSameSubsystem_ThrowsBusinessRuleException()
     {
         var techId = Guid.NewGuid();
-        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
@@ -190,7 +190,7 @@ public class DroneTechnicalInspectionTests
     public async Task SubmitInspection_LowBatteryLevel_SetsCriticalFailedEvenIfClientSaysPassed()
     {
         var techId = Guid.NewGuid();
-        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
@@ -266,7 +266,7 @@ public class DroneTechnicalInspectionTests
     public async Task SubmitInspection_IncrementsDroneVersion()
     {
         var techId = Guid.NewGuid();
-        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
@@ -294,7 +294,7 @@ public class DroneTechnicalInspectionTests
     public async Task SubmitInspection_ShouldTriggerRealtimeDroneInspectionCompleted()
     {
         var techId = Guid.NewGuid();
-        var user = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = techId, Status = "Active" });

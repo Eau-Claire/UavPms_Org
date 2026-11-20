@@ -33,7 +33,7 @@ public class MissionActivityRoleTests
         {
             managerId = await InsertUserAsync(db, $"m-{tag}@it.test", "Manager");
             analystId = await InsertUserAsync(db, $"a-{tag}@it.test", "Analyst");
-            technicianId = await InsertUserAsync(db, $"t-{tag}@it.test", "MaintenanceTechnician");
+            technicianId = await InsertUserAsync(db, $"t-{tag}@it.test", "Technician");
 
             var region = new Region { Id = Guid.NewGuid(), Code = $"R-{tag}", Name = "Region", Type = "Province" };
             var mission = new Mission { Id = Guid.NewGuid(), MissionCode = $"M-{tag}", Title = "Mission", ManagerId = managerId, Status = MissionStatus.InProgress, RegionId = region.Id };

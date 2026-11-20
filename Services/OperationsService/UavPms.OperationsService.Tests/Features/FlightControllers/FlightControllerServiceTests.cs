@@ -41,7 +41,7 @@ public class FlightControllerServiceTests
     public async Task ResolveByUidAsync_UnregisteredUid_ReturnsRegisteredFalse()
     {
         var technicianId = Guid.NewGuid();
-        var user = CreateUserMock(technicianId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         var service = new FlightControllerService(db, user.Object);
@@ -59,7 +59,7 @@ public class FlightControllerServiceTests
     public async Task ResolveByUidAsync_RegisteredUid_ReturnsRegisteredTrueAndUpdatesLastSeenAt()
     {
         var technicianId = Guid.NewGuid();
-        var user = CreateUserMock(technicianId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         var drone = new Uav
@@ -109,7 +109,7 @@ public class FlightControllerServiceTests
     public async Task PairFlightControllerAsync_PairsNewFlightController_Success()
     {
         var technicianId = Guid.NewGuid();
-        var user = CreateUserMock(technicianId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         var drone = new Uav
@@ -149,7 +149,7 @@ public class FlightControllerServiceTests
     {
         // BR-02 & BR-03
         var technicianId = Guid.NewGuid();
-        var user = CreateUserMock(technicianId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         var drone = new Uav
@@ -196,7 +196,7 @@ public class FlightControllerServiceTests
     {
         // BR-01
         var technicianId = Guid.NewGuid();
-        var user = CreateUserMock(technicianId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         var droneA = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-A" };
@@ -235,7 +235,7 @@ public class FlightControllerServiceTests
     public async Task UnpairFlightControllerAsync_DeactivatesActiveBinding_Success()
     {
         var technicianId = Guid.NewGuid();
-        var user = CreateUserMock(technicianId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
 
         var drone = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-004" };
@@ -265,7 +265,7 @@ public class FlightControllerServiceTests
     {
         // BR-05
         var technicianId = Guid.NewGuid();
-        var user = CreateUserMock(technicianId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
         db.Users.Add(new User { Id = technicianId, Status = "Active" });
 
@@ -307,7 +307,7 @@ public class FlightControllerServiceTests
     public async Task SubmitInspectionAsync_WithUnregisteredFlightController_ThrowsBusinessRuleException()
     {
         var technicianId = Guid.NewGuid();
-        var user = CreateUserMock(technicianId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
         db.Users.Add(new User { Id = technicianId, Status = "Active" });
 
@@ -337,7 +337,7 @@ public class FlightControllerServiceTests
     public async Task SubmitInspectionAsync_WithValidPairedFlightController_SucceedsAndUpdatesLastSeen()
     {
         var technicianId = Guid.NewGuid();
-        var user = CreateUserMock(technicianId, UserRoles.MaintenanceTechnician);
+        var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
         db.Users.Add(new User { Id = technicianId, Status = "Active" });
 

@@ -47,7 +47,7 @@ public class PreMissionAssessmentExpiryJobTests
         var overdueDraft = new PreMissionAssessment
         {
             Id = Guid.NewGuid(),
-            Status = PreMissionAssessmentStatus.Draft,
+            Status = PreMissionAssessmentStatus.Evaluating,
             ValidUntil = DateTime.UtcNow.AddMinutes(-5),
             PlannedStart = DateTime.UtcNow.AddHours(1),
             PlannedEnd = DateTime.UtcNow.AddHours(3)
@@ -98,7 +98,7 @@ public class PreMissionAssessmentExpiryJobTests
         unaffectedActive!.Status.Should().Be(PreMissionAssessmentStatus.Ready);
 
         var unaffectedDraft = await verifyDb.PreMissionAssessments.FindAsync(overdueDraft.Id);
-        unaffectedDraft!.Status.Should().Be(PreMissionAssessmentStatus.Draft);
+        unaffectedDraft!.Status.Should().Be(PreMissionAssessmentStatus.Evaluating);
 
         // Every expiry is audited (BR-06).
         verifyDb.AuditLogs.Where(a => a.ActionType == "ASSESSMENT_EXPIRED").Select(a => a.RecordId)

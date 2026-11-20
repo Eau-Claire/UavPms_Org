@@ -34,7 +34,7 @@ public class MaintenanceAssignmentTests
         await using (var db = _pg.CreateContext())
         {
             managerId = await InsertUserAsync(db, $"m-{tag}@it.test", "Manager");
-            technicianId = await InsertUserAsync(db, $"t-{tag}@it.test", "MaintenanceTechnician");
+            technicianId = await InsertUserAsync(db, $"t-{tag}@it.test", "Technician");
             inspectorId = await InsertUserAsync(db, $"i-{tag}@it.test", "Inspector");
             ticketId = await SeedUnassignedTicketAsync(db, tag, managerId);
         }
@@ -85,7 +85,7 @@ public class MaintenanceAssignmentTests
         await using (var db = _pg.CreateContext())
         {
             managerId = await InsertUserAsync(db, $"m-{tag}@it.test", "Manager");
-            technicianId = await InsertUserAsync(db, $"t-{tag}@it.test", "MaintenanceTechnician");
+            technicianId = await InsertUserAsync(db, $"t-{tag}@it.test", "Technician");
             ticketId = await SeedUnassignedTicketAsync(db, tag, managerId);
             var ticket = await db.MaintenanceTickets.SingleAsync(t => t.Id == ticketId);
             ticket.TechnicianId = technicianId;
@@ -100,9 +100,9 @@ public class MaintenanceAssignmentTests
             await close.Should().ThrowAsync<BusinessRuleException>().WithMessage("TICKET_NOT_PENDING_VERIFICATION*");
         }
 
-        await using (var db = _pg.CreateContext(Current(technicianId, UserRoles.MaintenanceTechnician)))
+        await using (var db = _pg.CreateContext(Current(technicianId, UserRoles.Technician)))
         {
-            var technician = new MaintenanceTicketService(db, Current(technicianId, UserRoles.MaintenanceTechnician));
+            var technician = new MaintenanceTicketService(db, Current(technicianId, UserRoles.Technician));
             (await technician.UpdateTicketStatusAsync(ticketId, "PendingVerification")).Status.Should().Be("PendingVerification");
 
             var selfClose = () => technician.UpdateTicketStatusAsync(ticketId, "Closed");

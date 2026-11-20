@@ -152,7 +152,7 @@ public class Phase3RabbitMqTopologyTests
         var command = new DispatchMissionCommand(mission.Id);
         var result = await handler.Handle(command, CancellationToken.None);
 
-        result.Status.Should().Be("Assigned");
+        result.Status.Should().Be("Confirmed");
 
         var outboxMessages = await db.OutboxMessages.ToListAsync();
         outboxMessages.Should().ContainSingle(m => m.MessageType == nameof(MissionDispatchedEvent));

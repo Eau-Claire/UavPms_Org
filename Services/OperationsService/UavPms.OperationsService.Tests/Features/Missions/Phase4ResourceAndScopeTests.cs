@@ -50,7 +50,7 @@ public class Phase4ResourceAndScopeTests
             MissionCode = "MS-DEL-01",
             Title = "Mission Assigned",
             RegionId = regionId,
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Confirmed,
             ManagerId = managerId
         };
         db.Missions.Add(mission);
@@ -222,7 +222,7 @@ public class Phase4ResourceAndScopeTests
             MissionCode = "MS-OTHER-01",
             Title = "Other Mission",
             RegionId = regionId,
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Confirmed,
             ManagerId = managerId
         };
         db.Missions.Add(otherMission);
@@ -244,7 +244,7 @@ public class Phase4ResourceAndScopeTests
             MissionCode = "MS-TGT-01",
             Title = "Target Mission",
             RegionId = regionId,
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Confirmed,
             PlannedStart = now,
             PlannedEnd = now.AddHours(2),
             ManagerId = managerId
@@ -283,7 +283,7 @@ public class Phase4ResourceAndScopeTests
             MissionCode = "MS-FREE-01",
             Title = "Target Mission Free",
             RegionId = regionId,
-            Status = MissionStatus.Assigned,
+            Status = MissionStatus.Confirmed,
             PlannedStart = now,
             PlannedEnd = now.AddHours(2),
             ManagerId = managerId

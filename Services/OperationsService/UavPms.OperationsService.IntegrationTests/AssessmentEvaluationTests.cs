@@ -476,7 +476,7 @@ public class AssessmentEvaluationTests
             (await service.GetAsync(assessmentId, CancellationToken.None)).Id.Should().Be(assessmentId);
         }
 
-        var technician = Current(site.TechnicianId, UserRoles.MaintenanceTechnician);
+        var technician = Current(site.TechnicianId, UserRoles.Technician);
         await using (var db = _pg.CreateContext(technician))
         {
             var service = new PreMissionAssessmentService(db, technician);

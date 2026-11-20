@@ -300,7 +300,7 @@ public class UavManagementServiceTests
     public async Task SubmitBasicTechnicalCheckAsync_InvokesInspectionServiceWithChecklist()
     {
         var techId = Guid.NewGuid();
-        var userMock = CreateUserMock(techId, UserRoles.MaintenanceTechnician);
+        var userMock = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(userMock.Object);
 
         var droneId = Guid.NewGuid();

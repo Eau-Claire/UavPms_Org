@@ -109,7 +109,7 @@ public class InspectionScheduleTests
         await using var provider = services.BuildServiceProvider();
 
         var regionId = Guid.NewGuid();
-        var utcNow = new DateTime(2026, 11, 12, 8, 5, 0, DateTimeKind.Utc);
+        var utcNow = DateTime.UtcNow.Date.AddDays(1).AddHours(8).AddMinutes(5);
 
         using (var seedScope = provider.CreateScope())
         {
