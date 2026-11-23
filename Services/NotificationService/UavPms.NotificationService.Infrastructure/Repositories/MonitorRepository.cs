@@ -15,7 +15,7 @@ namespace UavPms.NotificationService.Infrastructure.Repositories;
 public class MonitorRepository : IMonitorRepository
 {
     private static readonly string[] PendingMissionStatuses =
-        ["Draft", "PendingAcceptance", "Assigned", "Preparing", "Ready", "Postponed"];
+        ["Draft", "PendingAcceptance", "Confirmed", "Ready", "Postponed"];
 
     private static readonly string[] InProgressMissionStatuses =
         ["InProgress", "Suspended"];

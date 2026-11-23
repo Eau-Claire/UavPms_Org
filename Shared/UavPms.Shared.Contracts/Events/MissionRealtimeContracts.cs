@@ -10,7 +10,7 @@ public class MissionLifecycleEventDto
     // "DISPATCHED" | "CONFIRMED" | "POSTPONED" | "SUSPENDED" | "RESUMED" | "CANCELLED" | "REMINDER" | "COMMUNICATION" | "OVERDUE"
     public string Type { get; set; } = string.Empty;
 
-    // "PENDING_CONFIRMATION" | "CONFIRMED" | "POSTPONED" | "SUSPENDED" | "Cancelled"
+    // "Draft" | "PendingAcceptance" | "Postponed" | "Confirmed" | "Ready" | "InProgress" | "Suspended" | "Completed" | "Cancelled"
     public string? Status { get; set; }
 
     public string? ConfirmationDeadline { get; set; }

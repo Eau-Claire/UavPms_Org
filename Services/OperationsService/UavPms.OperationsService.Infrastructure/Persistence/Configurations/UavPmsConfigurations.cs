@@ -137,7 +137,10 @@ public class MissionConfiguration : IEntityTypeConfiguration<Mission>
 {
     public void Configure(EntityTypeBuilder<Mission> builder)
     {
-        builder.ToTable("Missions");
+        builder.ToTable("Missions", t =>
+        {
+            t.HasCheckConstraint("CK_Missions_Status", "\"Status\" IN ('Draft', 'PendingAcceptance', 'Postponed', 'Confirmed', 'Ready', 'InProgress', 'Suspended', 'Completed', 'Cancelled')");
+        });
         builder.HasKey(e => e.Id);
         builder.HasIndex(e => e.MissionCode).IsUnique();
         
@@ -501,9 +504,15 @@ public class DetectedAnomalyConfiguration : IEntityTypeConfiguration<DetectedAno
 {
     public void Configure(EntityTypeBuilder<DetectedAnomaly> builder)
     {
-        builder.ToTable("DetectedAnomalies", t => t.HasCheckConstraint(
-            "CK_DetectedAnomalies_ConfirmedRequiresTower",
-            "\"ValidationStatus\" <> 'Confirmed' OR \"TowerId\" IS NOT NULL"));
+        builder.ToTable("DetectedAnomalies", t =>
+        {
+            t.HasCheckConstraint(
+                "CK_DetectedAnomalies_ConfirmedRequiresTower",
+                "\"ValidationStatus\" <> 'Confirmed' OR \"TowerId\" IS NOT NULL");
+            t.HasCheckConstraint(
+                "CK_DetectedAnomalies_ValidationStatus",
+                "\"ValidationStatus\" IN ('Pending', 'InReview', 'Confirmed', 'Rejected', 'Resolved')");
+        });
         builder.HasKey(e => e.Id);
         builder.Property(e => e.BoundingBox).HasColumnType("jsonb");
         builder.Property(e => e.Location).HasColumnType("geometry(Point,4326)");
@@ -561,7 +570,12 @@ public class EmergencyAlertConfiguration : IEntityTypeConfiguration<EmergencyAle
 {
     public void Configure(EntityTypeBuilder<EmergencyAlert> builder)
     {
-        builder.ToTable("EmergencyAlerts");
+        builder.ToTable("EmergencyAlerts", t =>
+        {
+            t.HasCheckConstraint(
+                "CK_EmergencyAlerts_Status",
+                "\"Status\" IN ('Open', 'Acknowledged', 'Resolved')");
+        });
         builder.HasKey(e => e.Id);
         // Plain FK index kept for "all alerts of an anomaly"; the partial unique index below only covers Active rows.
         builder.HasIndex(e => e.AnomalyId, "IX_EmergencyAlerts_AnomalyId");
@@ -637,7 +651,12 @@ public class MaintenanceTicketConfiguration : IEntityTypeConfiguration<Maintenan
 {
     public void Configure(EntityTypeBuilder<MaintenanceTicket> builder)
     {
-        builder.ToTable("MaintenanceTickets");
+        builder.ToTable("MaintenanceTickets", t =>
+        {
+            t.HasCheckConstraint(
+                "CK_MaintenanceTickets_Status",
+                "\"Status\" IN ('Open', 'Assigned', 'InProgress', 'PendingVerification', 'Closed', 'Cancelled')");
+        });
         builder.HasKey(e => e.Id);
         builder.HasIndex(e => e.TicketCode).IsUnique();
         // GeographicAccessFilter: open tickets of the current technician (plan 3.5).
@@ -752,8 +771,11 @@ public class AIAnalysisRunConfiguration : IEntityTypeConfiguration<AIAnalysisRun
 {
     public void Configure(EntityTypeBuilder<AIAnalysisRun> builder)
     {
-        builder.ToTable("AIAnalysisRuns", t => t.HasCheckConstraint(
-            "CK_AIAnalysisRuns_ExecutionLocation", "\"ExecutionLocation\" IN ('Edge', 'Cloud')"));
+        builder.ToTable("AIAnalysisRuns", t =>
+        {
+            t.HasCheckConstraint("CK_AIAnalysisRuns_ExecutionLocation", "\"ExecutionLocation\" IN ('Edge', 'Cloud')");
+            t.HasCheckConstraint("CK_AIAnalysisRuns_Status", "\"Status\" IN ('Queued', 'Processing', 'Completed', 'Failed')");
+        });
         builder.HasKey(e => e.Id);
         // Target of DetectedAnomalies' composite FK (AnalysisRunId, MediaId).
         builder.HasAlternateKey(e => new { e.Id, e.MediaId }).HasName("AK_AIAnalysisRuns_Id_MediaId");
@@ -765,7 +787,7 @@ public class AIAnalysisRunConfiguration : IEntityTypeConfiguration<AIAnalysisRun
         builder.HasIndex(e => e.SourceEventId).IsUnique().HasFilter("\"SourceEventId\" IS NOT NULL");
         builder.HasIndex(e => new { e.MediaId, e.AnalysisType, e.ModelName })
             .IsUnique().HasDatabaseName("IX_AIAnalysisRuns_ActiveLogicalAnalysis")
-            .HasFilter("\"IsDeleted\" = false AND \"Status\" IN ('Pending', 'Processing')");
+            .HasFilter("\"IsDeleted\" = false AND \"Status\" IN ('Queued', 'Processing')");
 
         builder.HasOne(e => e.Media)
             .WithMany(m => m.AnalysisRuns)

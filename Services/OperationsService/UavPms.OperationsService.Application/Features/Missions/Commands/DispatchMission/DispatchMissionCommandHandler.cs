@@ -131,7 +131,7 @@ public class DispatchMissionCommandHandler : IRequestHandler<DispatchMissionComm
             }
         }
 
-        // 5. Transition status to Assigned
+        // 5. Transition status to Confirmed (all required assignments are already accepted)
         mission.Status = MissionStatus.Confirmed;
         mission.Version++;
         mission.UpdatedAt = DateTime.UtcNow;

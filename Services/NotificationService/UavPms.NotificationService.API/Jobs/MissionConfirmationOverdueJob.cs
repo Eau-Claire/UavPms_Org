@@ -46,7 +46,7 @@ public class MissionConfirmationOverdueJob
                     && m.OverdueNotifiedAt == null
                     && m.ConfirmationDeadline != null
                     && m.ConfirmationDeadline <= now
-                    && (m.Status == "PENDING_CONFIRMATION" || m.Status == "PendingAcceptance" || m.Status == "Pending"))
+                    && m.Status == "PendingAcceptance")
                 .ToListAsync();
 
             if (overdueMissions.Count == 0)

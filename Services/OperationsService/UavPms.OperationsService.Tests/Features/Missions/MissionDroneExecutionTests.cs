@@ -201,7 +201,7 @@ public class MissionDroneExecutionTests
         booking!.Status.Should().Be(ResourceBookingStatus.Released);
 
         _notifierMock.Verify(n => n.NotifyAsync(
-            It.Is<MissionLifecycleEventDto>(e => e.MissionId == missionId.ToString() && e.Type == "COMPLETED" && e.Status == "COMPLETED"),
+            It.Is<MissionLifecycleEventDto>(e => e.MissionId == missionId.ToString() && e.Type == "COMPLETED" && e.Status == "Completed"),
             It.IsAny<CancellationToken>()), Times.Once);
 
         var audit = await _db.AuditLogs.FirstOrDefaultAsync(a => a.RecordId == missionId && a.ActionType == "MISSION_COMPLETED");

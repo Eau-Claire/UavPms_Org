@@ -270,7 +270,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
-        if (mission.Status is not (MissionStatus.Confirmed or MissionStatus.Confirmed))
+        if (mission.Status != MissionStatus.Confirmed)
             throw new BusinessRuleException("CHECK_IN_INVALID_STATE");
 
         var assignment = mission.Assignments.SingleOrDefault(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active);
@@ -367,7 +367,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             {
                 MissionId = mission.Id.ToString(),
                 Type = "CONFIRMED",
-                Status = "CONFIRMED",
+                Status = mission.Status.ToString(),
                 ActorRole = assignment.AssignmentRole,
                 ActorId = _current.UserId.ToString(),
                 ActorName = _current.Username ?? "Thành viên",
@@ -420,8 +420,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var m = await AccessibleMission(missionId, ct, true);
         EnsureAssignedInspectorOrManager(m);
 
-        // BR-05/BR-38: Ready, Assigned or Preparing, and only once every required member has accepted (BR-30).
-        if (m.Status is not (MissionStatus.Ready or MissionStatus.Confirmed or MissionStatus.Confirmed) || m.StartedAt != null)
+        // BR-05/BR-38: Ready or Confirmed, and only once every required member has accepted (BR-30).
+        if (m.Status is not (MissionStatus.Ready or MissionStatus.Confirmed) || m.StartedAt != null)
             throw new BusinessRuleException("INVALID_MISSION_STATE", $"Cannot start mission with status {m.Status}.");
         if (!m.AllRequiredAccepted())
             throw new BusinessRuleException("REQUIRED_ACCEPTANCE_PENDING", "Every required member must accept before the start.");
@@ -528,7 +528,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             {
                 MissionId = m.Id.ToString(),
                 Type = "COMPLETED",
-                Status = "COMPLETED",
+                Status = m.Status.ToString(),
                 ActorRole = "Inspector",
                 ActorId = _current.UserId.ToString(),
                 ActorName = _current.Username ?? "Phi công",
@@ -577,7 +577,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             {
                 MissionId = mission.Id.ToString(),
                 Type = "CONFIRMED",
-                Status = "CONFIRMED",
+                Status = mission.Status.ToString(),
                 ActorId = _current.UserId.ToString(),
                 ActorName = actorName,
                 ActorRole = "INSPECTOR",
@@ -643,7 +643,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             {
                 MissionId = mission.Id.ToString(),
                 Type = "SUSPENDED",
-                Status = "SUSPENDED",
+                Status = mission.Status.ToString(),
                 ActorId = _current.UserId.ToString(),
                 ActorName = actorName,
                 ActorRole = "MANAGER",
@@ -709,12 +709,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             {
                 MissionId = mission.Id.ToString(),
                 Type = "RESUMED",
-                Status = mission.Status switch
-                {
-                    MissionStatus.InProgress => "IN_PROGRESS",
-                    MissionStatus.PendingAcceptance => "PENDING_ACCEPTANCE",
-                    _ => "CONFIRMED"
-                },
+                Status = mission.Status.ToString(),
                 ActorId = _current.UserId.ToString(),
                 ActorName = actorName,
                 ActorRole = "MANAGER",
@@ -900,7 +895,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             {
                 MissionId = mission.Id.ToString(),
                 Type = "POSTPONED",
-                Status = "POSTPONED",
+                Status = mission.Status.ToString(),
                 ActorId = _current.UserId.ToString(),
                 ActorName = actorName,
                 ActorRole = "MANAGER",
@@ -994,7 +989,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             {
                 MissionId = mission.Id.ToString(),
                 Type = "CANCELLED",
-                Status = "Cancelled",
+                Status = mission.Status.ToString(),
                 ActorId = _current.UserId.ToString(),
                 ActorName = actorName,
                 ActorRole = "MANAGER",
@@ -2152,7 +2147,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     /// <summary>Table 59: a member answers (accept/postpone) only while the mission waits for or holds its team.</summary>
     private static void RequireRespondableState(Mission m)
     {
-        if (m.Status is not (MissionStatus.PendingAcceptance or MissionStatus.Confirmed or MissionStatus.Confirmed or MissionStatus.Ready) || m.StartedAt != null)
+        if (m.Status is not (MissionStatus.PendingAcceptance or MissionStatus.Confirmed or MissionStatus.Ready) || m.StartedAt != null)
             throw new BusinessRuleException("INVALID_MISSION_STATE", $"Cannot respond to an assignment while the mission is {m.Status}.");
     }
 

@@ -227,7 +227,7 @@ public class RealtimeMissionNotificationTests
             Id = missionId,
             MissionCode = "MS-OVERDUE-01",
             Title = "Khảo sát đường dây quá hạn",
-            Status = "PENDING_CONFIRMATION",
+            Status = "PendingAcceptance",
             ManagerId = managerId,
             ConfirmationDeadline = DateTime.UtcNow.AddMinutes(-10),
             OverdueNotifiedAt = null

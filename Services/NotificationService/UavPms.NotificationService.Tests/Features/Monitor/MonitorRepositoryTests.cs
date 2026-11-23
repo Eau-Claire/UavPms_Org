@@ -22,7 +22,7 @@ public class MonitorRepositoryTests
         await using var context = CreateInMemoryContext();
         context.Missions.AddRange(
             new Mission { Id = Guid.NewGuid(), Title = "Draft", Status = "Draft", IsDeleted = false },
-            new Mission { Id = Guid.NewGuid(), Title = "Assigned", Status = "Assigned", IsDeleted = false },
+            new Mission { Id = Guid.NewGuid(), Title = "Confirmed", Status = "Confirmed", IsDeleted = false },
             new Mission { Id = Guid.NewGuid(), Title = "InProgress", Status = "InProgress", IsDeleted = false },
             new Mission { Id = Guid.NewGuid(), Title = "Suspended", Status = "Suspended", IsDeleted = false },
             new Mission { Id = Guid.NewGuid(), Title = "Completed 1", Status = "Completed", IsDeleted = false },
