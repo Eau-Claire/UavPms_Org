@@ -793,7 +793,7 @@ public class PreMissionAssessmentServiceTests
             It.Is<UavPms.Shared.Contracts.Events.AssessmentRealtimeEventDto>(e =>
                 e.AssessmentId == assessment.Id.ToString() &&
                 e.Type == "AssessmentStatusChanged" &&
-                e.Status == "NOTREADY"),
+                e.Status == "NotReady"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -836,7 +836,7 @@ public class PreMissionAssessmentServiceTests
             It.Is<UavPms.Shared.Contracts.Events.AssessmentRealtimeEventDto>(e =>
                 e.AssessmentId == assessment.Id.ToString() &&
                 e.Type == "AssessmentCancelled" &&
-                e.Status == "CANCELLED"),
+                e.Status == "Cancelled"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 }

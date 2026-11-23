@@ -216,7 +216,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
         await EnsureManagerHasAssessmentAccessAsync(existing, ct);
 
-        if (existing.Status is PreMissionAssessmentStatus.Evaluating or PreMissionAssessmentStatus.Evaluating)
+        if (existing.Status == PreMissionAssessmentStatus.Evaluating)
         {
             if (await ApplyExpiryAsync(existing, ct))
                 return existing;
@@ -319,7 +319,6 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         var now = DateTime.UtcNow;
         var due = await visible
             .Where(x => (x.Status == PreMissionAssessmentStatus.Evaluating ||
-                         x.Status == PreMissionAssessmentStatus.Evaluating ||
                          x.Status == PreMissionAssessmentStatus.Ready ||
                          x.Status == PreMissionAssessmentStatus.NotReady) &&
                         ((x.ValidUntil != null && x.ValidUntil <= now) || x.PlannedEnd <= now))
@@ -585,7 +584,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             {
                 AssessmentId = assessment.Id.ToString(),
                 Type = "AssessmentStatusChanged",
-                Status = assessment.Status.ToString().ToUpperInvariant(),
+                Status = assessment.Status.ToString(),
                 TechnicalHealth = assessment.OverallTechnicalHealth.ToString(),
                 ActorId = _current.UserId.ToString(),
                 ActorName = _current.Username ?? "Manager",
@@ -908,7 +907,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                 {
                     AssessmentId = assessment.Id.ToString(),
                     Type = "AssessmentCompleted",
-                    Status = "COMPLETED",
+                    Status = assessment.Status.ToString(),
                     ConsumedMissionId = mission.Id.ToString(),
                     ConsumedMissionCode = mission.MissionCode,
                     ActorId = _current.UserId.ToString(),
@@ -961,7 +960,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED");
 
         if (assessment.Status != PreMissionAssessmentStatus.Ready)
-            throw new BusinessRuleException("INVALID_ASSESSMENT_STATUS", "Chỉ bản đánh giá ở trạng thái READY mới có thể đánh dấu hoàn thành.");
+            throw new BusinessRuleException("INVALID_ASSESSMENT_STATUS", "Chỉ bản đánh giá ở trạng thái Ready mới có thể đánh dấu hoàn thành.");
 
         if (!missionId.HasValue || missionId.Value == Guid.Empty)
             throw new BusinessRuleException("MISSION_REQUIRED", "Cần cung cấp mã nhiệm vụ hợp lệ để hoàn tất bản đánh giá.");
@@ -986,7 +985,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             {
                 AssessmentId = assessment.Id.ToString(),
                 Type = "AssessmentCompleted",
-                Status = "COMPLETED",
+                Status = assessment.Status.ToString(),
                 ConsumedMissionId = mission.Id.ToString(),
                 ConsumedMissionCode = mission.MissionCode,
                 ActorId = _current.UserId.ToString(),
@@ -1039,7 +1038,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             {
                 AssessmentId = assessment.Id.ToString(),
                 Type = "AssessmentCancelled",
-                Status = "CANCELLED",
+                Status = assessment.Status.ToString(),
                 ActorId = _current.UserId.ToString(),
                 ActorName = _current.Username ?? "Manager",
                 ActorRole = "MANAGER",

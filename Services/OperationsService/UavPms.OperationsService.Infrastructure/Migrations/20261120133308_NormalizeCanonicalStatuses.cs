@@ -17,10 +17,10 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
             migrationBuilder.Sql("""
                 UPDATE "PreMissionAssessments" SET "Status" = 'Evaluating' WHERE "Status" IN ('DRAFT', 'EVALUATING', 'Draft');
                 UPDATE "PreMissionAssessments" SET "Status" = 'Ready' WHERE "Status" = 'READY';
-                UPDATE "PreMissionAssessments" SET "Status" = 'NotReady' WHERE "Status" IN ('NOT_READY', 'INCOMPLETE', 'Incomplete');
+                UPDATE "PreMissionAssessments" SET "Status" = 'NotReady' WHERE "Status" IN ('NOT_READY', 'NOTREADY', 'INCOMPLETE', 'Incomplete');
                 UPDATE "PreMissionAssessments" SET "Status" = 'Expired' WHERE "Status" = 'EXPIRED';
                 UPDATE "PreMissionAssessments" SET "Status" = 'Completed' WHERE "Status" IN ('COMPLETED', 'CONSUMED', 'Consumed');
-                UPDATE "PreMissionAssessments" SET "Status" = 'Cancelled' WHERE "Status" = 'CANCELLED';
+                UPDATE "PreMissionAssessments" SET "Status" = 'Cancelled' WHERE "Status" IN ('CANCELLED', 'CANCELED', 'Canceled');
                 UPDATE "Missions" SET "Status" = 'Draft' WHERE "Status" = 'Pending';
                 UPDATE "Missions" SET "Status" = 'Confirmed' WHERE "Status" IN ('Assigned', 'Preparing');
                 UPDATE "Missions" SET "Status" = 'InProgress' WHERE "Status" = 'Executing';
