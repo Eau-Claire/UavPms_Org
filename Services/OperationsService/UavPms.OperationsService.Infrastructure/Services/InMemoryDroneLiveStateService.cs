@@ -7,6 +7,12 @@ using UavPms.OperationsService.Domain.Interfaces.Services;
 
 namespace UavPms.OperationsService.Infrastructure.Services;
 
+/// <summary>
+/// Single-node in-memory live telemetry and online-connection cache for the current single-VPS Docker Compose deployment.
+/// Scaling note: when scaling OperationsService beyond 1 replica, replace this implementation with a Redis-backed
+/// <see cref="IDroneLiveStateService"/> (StackExchange.Redis) and attach SignalR Redis Backplane
+/// (<c>AddSignalR().AddStackExchangeRedis(...)</c>) in Program.cs so all replicas share live drone state and Hub groups.
+/// </summary>
 public sealed class InMemoryDroneLiveStateService : IDroneLiveStateService
 {
     private readonly ConcurrentDictionary<string, DroneLiveState> _states = new(StringComparer.OrdinalIgnoreCase);
