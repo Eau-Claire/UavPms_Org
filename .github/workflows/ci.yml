@@ -51,4 +51,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Docker images
+        env:
+          REDIS_PASSWORD: ci-build-placeholder
+          RABBITMQ_USER: ci-build-placeholder
+          RABBITMQ_PASSWORD: ci-build-placeholder
+          INTERNAL_SERVICES_SHARED_KEY: ci-build-placeholder
         run: docker compose build

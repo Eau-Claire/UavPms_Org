@@ -12,7 +12,8 @@ public static class UserRoles
     public const string AdminAndManager = "SystemAdmin,Manager";
     public const string AdminManagerAnalyst = "SystemAdmin,Manager,Analyst";
     public const string AdminManagerInspector = "SystemAdmin,Manager,Inspector";
-    public const string AdminManagerInspectorAnalyst = "SystemAdmin,Manager,Inspector,Analyst,Technician";
+    public const string AdminManagerTechnician = "SystemAdmin,Manager,Technician";
+    public const string AdminManagerInspectorAnalyst = "SystemAdmin,Manager,Inspector,Analyst";
     public const string InspectorOnly = Inspector;
     public const string ManagerAndInspector = "Manager,Inspector";
     public const string AllAuthenticatedRoles = "SystemAdmin,Manager,Inspector,Analyst,Technician";

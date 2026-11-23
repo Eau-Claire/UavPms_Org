@@ -12,6 +12,7 @@ DB_CONTAINER="${DB_CONTAINER:-uavpms-db}"
 DB_USER="${DB_USER:-uavpms}"
 DB_NAME="${DB_NAME:-uavpms}"
 AI_CONTAINER="${AI_CONTAINER:-uav-ai-inspection-service}"
+OPS_CONTAINER="${OPS_CONTAINER:-uav-operations-service}"
 RABBIT_CONTAINER="${RABBIT_CONTAINER:-uav-rabbitmq}"
 BRIDGE_CONTAINER="${BRIDGE_CONTAINER:-bridge-ai-bridge-1}"
 STUCK_MINUTES="${STUCK_MINUTES:-30}"
@@ -100,6 +101,28 @@ if ! [[ "$recent" =~ ^[0-9]+$ ]]; then bad "cannot count stuck runs: $stuck"
 elif [ "$recent" != "0" ]; then warn "$recent run(s) stuck in Pending/Processing over $STUCK_MINUTES min (last 24h)"
 elif [ "$total" != "0" ]; then info "$total old run(s) stuck for more than a day (close them with the STALE_PENDING update)"
 else ok "no runs stuck over $STUCK_MINUTES min"; fi
+
+# 7. Periodic MQTT Telemetry readiness (TR-03..TR-06) & internal secret hardening.
+mqtt_enabled="$(docker exec "$OPS_CONTAINER" printenv Mqtt__Enabled 2>/dev/null || echo unset)"
+if [ "$mqtt_enabled" = "true" ]; then
+  ok "MQTT telemetry subscriber enabled"
+else
+  warn "Mqtt__Enabled=$mqtt_enabled on $OPS_CONTAINER (set MQTT_ENABLED=true and HiveMQ credentials in .env to ingest live drone telemetry)"
+fi
+
+telemetry_table="$(sql "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'DroneTelemetry');" 2>&1)"
+if [ "$telemetry_table" = "t" ]; then
+  ok "DroneTelemetry table present"
+else
+  bad "DroneTelemetry table missing (apply AddDroneTelemetryTable migration)"
+fi
+
+shared_key="$(docker exec "$OPS_CONTAINER" printenv InternalServices__SharedKey 2>/dev/null || echo unset)"
+if [ "$shared_key" = "uavpms-internal-shared-key" ] || [ "$shared_key" = "unset" ] || [ -z "$shared_key" ]; then
+  bad "InternalServices__SharedKey is unset or using the insecure legacy default"
+else
+  ok "InternalServices__SharedKey is configured"
+fi
 
 echo "== $failures failure(s), $warnings warning(s)"
 [ "$failures" -eq 0 ]

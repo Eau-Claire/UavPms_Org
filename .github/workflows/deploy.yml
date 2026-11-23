@@ -71,6 +71,9 @@ jobs:
             docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'ALTER TABLE "AuditLogs" ALTER COLUMN "ActionType" TYPE character varying(100);' || true
             docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'ALTER TABLE "DetectedAnomalies" DROP CONSTRAINT IF EXISTS "CK_DetectedAnomalies_ValidationStatus"; ALTER TABLE "DetectedAnomalies" ADD CONSTRAINT "CK_DetectedAnomalies_ValidationStatus" CHECK (("ValidationStatus")::text = ANY (ARRAY['\''Pending'\''::character varying, '\''InReview'\''::character varying, '\''Confirmed'\''::character varying, '\''Rejected'\''::character varying, '\''Resolved'\''::character varying]::text[]));' || true
 
+            echo "Applying pending OperationsService EF Core migrations..."
+            RUN_MIGRATIONS=true MIGRATION_ONLY=true docker compose run --rm --no-deps operationsservice
+
             echo "Starting containers..."
             docker compose up -d --remove-orphans
 

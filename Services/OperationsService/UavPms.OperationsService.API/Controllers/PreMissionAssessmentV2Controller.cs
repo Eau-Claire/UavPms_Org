@@ -82,7 +82,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/evaluate")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Evaluate(Guid id, CancellationToken ct)
     {
         var assessment = await _service.EvaluateAsync(id, ct);
@@ -90,7 +90,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/re-evaluate")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> ReEvaluate(Guid id, CancellationToken ct)
     {
         var assessment = await _service.EvaluateAsync(id, ct);
@@ -98,7 +98,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/create-mission")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> CreateMission(Guid id, [FromBody] CreateMissionFromAssessmentRequest request, CancellationToken ct)
     {
         var finalRequest = request.AssessmentId == id
@@ -110,7 +110,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/mark-completed")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> MarkCompleted(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
     {
         var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
@@ -118,7 +118,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/consume")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Consume(Guid id, [FromBody] MarkAssessmentCompletedRequest? request, CancellationToken ct)
     {
         var assessment = await _service.MarkCompletedAsync(id, request?.MissionId, ct);
@@ -126,7 +126,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
     }
 
     [HttpPost("{id:guid}/cancel")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelAssessmentRequest? request, CancellationToken ct)
     {
         var assessment = await _service.CancelAsync(id, request?.Reason, ct);

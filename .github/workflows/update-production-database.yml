@@ -75,15 +75,15 @@ jobs:
               echo "Run 'Migrate Database (ERD v2.2)' first (it takes a backup and handles data conversion)."
               exit 1
             fi
-            # Migrations come from the deployment checkout, so it must already be at origin/main (run Deploy first).
+            # Sync the deployment checkout to origin/main so pending migrations from the latest commit can be applied directly.
             git fetch --quiet origin main
             DEPLOYED="$(git rev-parse HEAD)"
             LATEST="$(git rev-parse origin/main)"
             echo "Deployment checkout: $(git log -1 --format='%h %s' "$DEPLOYED")"
             if [ "$DEPLOYED" != "$LATEST" ]; then
-              echo "ERROR: deployment checkout is not at origin/main ($(git log -1 --format='%h %s' "$LATEST"))."
-              echo "Run the Deploy workflow for the latest commit first, then re-run this workflow."
-              exit 1
+              echo "Syncing deployment checkout to origin/main ($(git log -1 --format='%h %s' "$LATEST"))..."
+              git reset --hard origin/main
+              echo "Synced deployment checkout to: $(git log -1 --format='%h %s' HEAD)"
             fi
             MIGRATIONS_DIR="Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations"
             CODE_MIGRATIONS="$(ls "$MIGRATIONS_DIR" | grep -E '^[0-9]{14}_.*\.cs$' | grep -v '\.Designer\.cs$' | sed 's/\.cs$//' | LC_ALL=C sort)"
