@@ -336,9 +336,9 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         var query = visible
             .Include(a => a.Manager)
             .Include(a => a.Mission)
-            .Include(x => x.Towers)
-            .Include(x => x.PersonnelCandidates)
-            .Include(x => x.DroneCandidates)
+            .Include(x => x.Towers).ThenInclude(t => t.Tower)
+            .Include(x => x.PersonnelCandidates).ThenInclude(p => p.User)
+            .Include(x => x.DroneCandidates).ThenInclude(d => d.Drone)
             .Include(x => x.Region)
             .AsQueryable();
 
