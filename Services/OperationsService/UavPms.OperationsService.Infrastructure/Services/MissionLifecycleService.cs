@@ -512,6 +512,9 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         await MissionResourceGuard.ReleaseUavAsync(_db, m.UavId, m.Id, ct);
         await MissionResourceGuard.EndActiveBookingsAsync(_db, m.Id, ResourceBookingStatus.Released, ct);
 
+        // Auto-aggregate MissionFlightLog from periodic DroneTelemetry if no flight log was manually uploaded yet.
+        await TryAggregateFlightLogFromTelemetryAsync(m, ct);
+
         Audit(m.Id, "MISSION_COMPLETED");
         await SaveConcurrency(ct);
 
@@ -531,6 +534,71 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             };
             await _notifier.NotifyAsync(eventDto, ct);
         }
+    }
+
+    private async Task TryAggregateFlightLogFromTelemetryAsync(Mission mission, CancellationToken ct)
+    {
+        var hasExistingLog = await _db.MissionFlightLogs
+            .AsNoTracking()
+            .AnyAsync(l => l.MissionId == mission.Id && !l.IsDeleted, ct);
+        if (hasExistingLog)
+            return;
+
+        var telemetryRows = await _db.DroneTelemetry
+            .AsNoTracking()
+            .Where(t => t.MissionId == mission.Id && !t.IsDeleted)
+            .OrderBy(t => t.SourceTimestamp)
+            .ToListAsync(ct);
+
+        if (telemetryRows.Count == 0)
+            return;
+
+        var trackPoints = telemetryRows
+            .Where(t => t.Location != null)
+            .Select(t => new
+            {
+                lat = t.Location!.Y,
+                lon = t.Location.X,
+                alt = t.AltRelativeM ?? t.AltMslM ?? 0.0,
+                ts = t.SourceTimestamp
+            })
+            .ToList();
+
+        var batteryValues = telemetryRows
+            .Where(t => t.BatteryRemainingPct.HasValue)
+            .Select(t => (double)t.BatteryRemainingPct!.Value)
+            .ToList();
+        var minBattery = batteryValues.Count > 0 ? batteryValues.Min() : 100.0;
+
+        var altitudeValues = telemetryRows
+            .Select(t => t.AltRelativeM ?? t.AltMslM)
+            .Where(a => a.HasValue && a.Value >= 0)
+            .Select(a => a!.Value)
+            .ToList();
+        var maxAltitude = altitudeValues.Count > 0 ? Math.Round(altitudeValues.Max(), 2) : 0.0;
+
+        var firstTs = telemetryRows.First().SourceTimestamp;
+        var lastTs = telemetryRows.Last().SourceTimestamp;
+        var durationSeconds = (int)Math.Max(0, Math.Round((lastTs - firstTs).TotalSeconds));
+        if (durationSeconds == 0 && mission.StartedAt.HasValue && mission.EndedAt.HasValue)
+        {
+            durationSeconds = (int)Math.Max(0, Math.Round((mission.EndedAt.Value - mission.StartedAt.Value).TotalSeconds));
+        }
+
+        var flightLog = new MissionFlightLog
+        {
+            Id = Guid.NewGuid(),
+            MissionId = mission.Id,
+            GpsTrack = JsonSerializer.Serialize(trackPoints),
+            MinBatteryRecorded = Math.Clamp(minBattery, 0.0, 100.0),
+            MaxAltitudeM = maxAltitude,
+            FlightDurationSeconds = durationSeconds,
+            ConnectionStatus = "Normal",
+            RecordedAt = DateTime.UtcNow,
+            CreatedBy = _current.UserId
+        };
+
+        _db.MissionFlightLogs.Add(flightLog);
     }
 
 

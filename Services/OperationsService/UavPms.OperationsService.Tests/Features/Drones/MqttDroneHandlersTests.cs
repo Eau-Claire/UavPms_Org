@@ -380,6 +380,86 @@ public class MqttDroneHandlersTests
     }
 
     [Fact]
+    public async Task CompleteMission_WithPeriodicDroneTelemetry_ShouldAutoAggregateMissionFlightLog()
+    {
+        var managerId = Guid.NewGuid();
+        var currentUser = MockUser(managerId, UserRoles.Manager);
+        await using var db = CreateDbContext(currentUser);
+
+        var region = new Region { Id = Guid.NewGuid(), Code = "REG-HCM", Name = "HCM Region" };
+        var uav = new Uav
+        {
+            Id = Guid.NewGuid(),
+            UavCode = "UAV-HCM-01",
+            Model = "DJI M300",
+            FlightStatus = DroneStatus.Flying,
+            OperationalStatus = DroneOperationalStatus.Available,
+            TechnicalHealth = TechnicalHealth.Healthy,
+            BatteryLevel = 95
+        };
+        var mission = new Mission
+        {
+            Id = Guid.NewGuid(),
+            MissionCode = "MS-FLIGHTLOG-01",
+            Title = "Telemetry Aggregation Mission",
+            ManagerId = managerId,
+            RegionId = region.Id,
+            UavId = uav.Id,
+            Status = MissionStatus.InProgress,
+            StartedAt = new DateTime(2026, 11, 23, 4, 25, 0, DateTimeKind.Utc)
+        };
+
+        db.Users.Add(new User { Id = managerId, FullName = "Manager", Email = "mgr@uavpms.local", Status = "Active", IsEmailVerified = true });
+        db.Regions.Add(region);
+        db.Uavs.Add(uav);
+        db.Missions.Add(mission);
+        await db.SaveChangesAsync();
+
+        var liveState = new InMemoryDroneLiveStateService();
+        var telemetryService = new DroneTelemetryService(
+            db,
+            currentUser,
+            liveState,
+            Options.Create(new MqttOptions()),
+            NullLogger<DroneTelemetryService>.Instance);
+
+        const string frame1 = """
+        {
+          "drone_id": "UAV-HCM-01",
+          "timestamp": "2026-11-23T04:26:00.000Z",
+          "lat": 10.777000,
+          "lon": 106.705500,
+          "alt_relative_m": 35.5,
+          "battery_remaining_pct": 95
+        }
+        """;
+        const string frame2 = """
+        {
+          "drone_id": "UAV-HCM-01",
+          "timestamp": "2026-11-23T04:28:30.000Z",
+          "lat": 10.778000,
+          "lon": 106.706500,
+          "alt_relative_m": 62.4,
+          "battery_remaining_pct": 78
+        }
+        """;
+
+        await telemetryService.IngestAsync("drone/UAV-HCM-01/telemetry", frame1);
+        await telemetryService.IngestAsync("drone/UAV-HCM-01/telemetry", frame2);
+
+        var lifecycleService = new MissionLifecycleService(db, currentUser);
+        await lifecycleService.CompleteAsync(mission.Id, CancellationToken.None);
+
+        var flightLog = await db.MissionFlightLogs.SingleOrDefaultAsync(l => l.MissionId == mission.Id);
+        flightLog.Should().NotBeNull();
+        flightLog!.MinBatteryRecorded.Should().Be(78);
+        flightLog.MaxAltitudeM.Should().Be(62.4);
+        flightLog.FlightDurationSeconds.Should().Be(150);
+        flightLog.ConnectionStatus.Should().Be("Normal");
+        flightLog.GpsTrack.Should().Contain("10.777").And.Contain("10.778");
+    }
+
+    [Fact]
     public async Task LiveHiveMqCloud_ShouldConnectTls_Subscribe_AndIngestPublishedTelemetry()
     {
         var mqttPassword = Environment.GetEnvironmentVariable("LIVE_MQTT_TEST_PASSWORD");
