@@ -19,6 +19,7 @@ using UavPms.OperationsService.Application.Features.Alerts;
 using UavPms.OperationsService.Application.Features.FlightControllers;
 using UavPms.OperationsService.Application.Features.Drones;
 using UavPms.OperationsService.Application.Features.Schedules;
+using UavPms.OperationsService.Application.Features.Telemetry.DTOs;
 using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.OperationsService.Infrastructure;
@@ -124,7 +125,11 @@ public static class DependencyInjection
 
         // Đăng ký Inspection Media Repository
         services.AddScoped<IInspectionMediaRepository, InspectionMediaRepository>();
-        services.AddScoped<IDroneLiveStateService, NoOpDroneLiveStateService>();
+        services.AddSingleton<InMemoryDroneLiveStateService>();
+        services.AddSingleton<IDroneLiveStateService>(sp => sp.GetRequiredService<InMemoryDroneLiveStateService>());
+        services.AddScoped<IDroneTelemetryService, DroneTelemetryService>();
+        services.AddHostedService<MqttDroneConsumer>();
+        services.AddHostedService<DroneTelemetryMaintenanceJob>();
 
         services.AddHostedService<PreMissionAssessmentExpiryJob>();
         services.AddScoped<InspectionScheduleService>();

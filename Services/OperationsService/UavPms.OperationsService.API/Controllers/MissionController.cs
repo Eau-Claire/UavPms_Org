@@ -14,6 +14,7 @@ using UavPms.Shared.Contracts.Constants;
 
 using UavPms.OperationsService.Application.Features.Assessments.DTOs;
 using UavPms.OperationsService.Application.Features.Missions.DTOs;
+using UavPms.OperationsService.Application.Features.Telemetry.DTOs;
 using UavPms.OperationsService.Domain.Entities;
 
 namespace UavPms.OperationsService.API.Controllers;
@@ -26,11 +27,16 @@ public class MissionController : ControllerBase
 {
     private readonly ISender _mediator;
     private readonly IMissionLifecycleService? _lifecycle;
+    private readonly IDroneTelemetryService? _telemetryService;
 
-    public MissionController(ISender mediator, IMissionLifecycleService? lifecycle = null)
+    public MissionController(
+        ISender mediator,
+        IMissionLifecycleService? lifecycle = null,
+        IDroneTelemetryService? telemetryService = null)
     {
         _mediator = mediator;
         _lifecycle = lifecycle;
+        _telemetryService = telemetryService;
     }
 
     [HttpPost("{id:guid}/scope/resolve")]
@@ -139,6 +145,23 @@ public class MissionController : ControllerBase
         if (_lifecycle == null) return BadRequest(new ApiResponse(false, "Lifecycle service unavailable"));
         var logs = await _lifecycle.GetFlightLogsAsync(id, ct);
         return Ok(new ApiResponse(true, "Flight logs retrieved successfully", logs.Select(MapFlightLog)));
+    }
+
+    [HttpGet("{id:guid}/telemetry")]
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    public async Task<IActionResult> GetMissionTelemetry(
+        Guid id,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 100,
+        CancellationToken ct = default)
+    {
+        if (_telemetryService == null)
+            return BadRequest(new ApiResponse(false, "Telemetry service unavailable"));
+
+        var result = await _telemetryService.GetMissionTelemetryAsync(id, from, to, page, pageSize, ct);
+        return Ok(result);
     }
 
     [HttpPost("{id:guid}/incidents")]

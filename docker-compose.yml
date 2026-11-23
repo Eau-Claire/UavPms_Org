@@ -66,6 +66,18 @@ x-service-environment: &service-environment
   AIAnalysisResultMessaging__RetryLimit: ${AI_RESULT_RETRY_LIMIT:-3}
   AIAnalysisResultMessaging__RetryDelayMs: ${AI_RESULT_RETRY_DELAY_MS:-15000}
 
+  # HiveMQ Cloud MQTT Telemetry Subscriber (TR-03..TR-06). Credentials live in server .env only.
+  Mqtt__Enabled: ${MQTT_ENABLED:-false}
+  Mqtt__Host: ${MQTT_HOST:-d130275373b6451bac4640918d94bb1c.s1.eu.hivemq.cloud}
+  Mqtt__Port: ${MQTT_PORT:-8883}
+  Mqtt__UseTls: ${MQTT_USE_TLS:-true}
+  Mqtt__Username: ${MQTT_USERNAME:-}
+  Mqtt__Password: ${MQTT_PASSWORD:-}
+  Mqtt__ClientId: ${MQTT_CLIENT_ID:-uav-pms-operations-service}
+  Mqtt__TelemetryTopic: ${MQTT_TELEMETRY_TOPIC:-drone/+/telemetry}
+  Mqtt__OfflineTimeoutSeconds: ${MQTT_OFFLINE_TIMEOUT_SECONDS:-30}
+  Mqtt__RetentionDays: ${MQTT_RETENTION_DAYS:-30}
+
 
 services:
 

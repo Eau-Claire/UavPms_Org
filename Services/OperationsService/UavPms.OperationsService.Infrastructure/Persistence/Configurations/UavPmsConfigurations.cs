@@ -894,4 +894,35 @@ public class DroneFlightControllerConfiguration : IEntityTypeConfiguration<Drone
     }
 }
 
+public class DroneTelemetryConfiguration : IEntityTypeConfiguration<DroneTelemetry>
+{
+    public void Configure(EntityTypeBuilder<DroneTelemetry> builder)
+    {
+        builder.ToTable("DroneTelemetry");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.FlightMode).HasMaxLength(50);
+        builder.Property(x => x.Location).HasColumnType("geometry(Point,4326)");
+
+        builder.HasIndex(x => new { x.UavId, x.SourceTimestamp })
+            .IsUnique()
+            .HasDatabaseName("UX_DroneTelemetry_UavId_SourceTimestamp");
+
+        builder.HasIndex(x => new { x.MissionId, x.SourceTimestamp })
+            .HasDatabaseName("IX_DroneTelemetry_MissionId_SourceTimestamp");
+
+        builder.HasIndex(x => x.ReceivedAt)
+            .HasDatabaseName("IX_DroneTelemetry_ReceivedAt");
+
+        builder.HasOne(x => x.Uav)
+            .WithMany(u => u.TelemetryLogs)
+            .HasForeignKey(x => x.UavId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.Mission)
+            .WithMany()
+            .HasForeignKey(x => x.MissionId)
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
 

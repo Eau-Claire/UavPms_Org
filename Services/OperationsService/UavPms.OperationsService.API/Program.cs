@@ -12,9 +12,11 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using UavPms.OperationsService.Application;
 using UavPms.OperationsService.Infrastructure;
 using UavPms.OperationsService.Infrastructure.Persistence;
+using UavPms.OperationsService.API.Hubs;
 using UavPms.OperationsService.API.Middlewares;
 using UavPms.OperationsService.API.Swagger;
 using UavPms.OperationsService.Application.Common.Options;
+using UavPms.OperationsService.Application.Features.Telemetry.DTOs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,6 +47,8 @@ builder.Services.AddControllers(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<ITelemetryRealtimeNotifier, TelemetryRealtimeNotifier>();
 builder.Services.AddApiVersioning(options =>
     {
         options.DefaultApiVersion = new ApiVersion(1, 0);
@@ -78,6 +82,22 @@ builder.Services.AddAuthentication(options =>
             ValidAudience = jwtSettings.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
             ClockSkew = TimeSpan.Zero
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/hubs/telemetry"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -162,4 +182,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { service = "operations", status = "healthy" }));
 app.MapControllers();
+app.MapHub<TelemetryHub>("/hubs/telemetry");
 app.Run();

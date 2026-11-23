@@ -53,6 +53,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<DroneTechnicalInspection> DroneTechnicalInspections => Set<DroneTechnicalInspection>();
     public DbSet<DroneTechnicalMetric> DroneTechnicalMetrics => Set<DroneTechnicalMetric>();
     public DbSet<DroneFlightController> DroneFlightControllers => Set<DroneFlightController>();
+    public DbSet<DroneTelemetry> DroneTelemetry => Set<DroneTelemetry>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<ReportMission> ReportMissions => Set<ReportMission>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
@@ -134,7 +135,7 @@ public class ApplicationDbContext : DbContext
         var auditEntries = new List<AuditEntry>();
         foreach (var entry in ChangeTracker.Entries())
         {
-            if (entry.Entity is AuditLog || entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)
+            if (entry.Entity is AuditLog || entry.Entity is DroneTelemetry || entry.State == EntityState.Detached || entry.State == EntityState.Unchanged)
                 continue;
             // Chỉ lưu log các lớp kế thừa từ BaseEntity (có primary key Guid Id)
             if (entry.Entity is not BaseEntity baseEntity)

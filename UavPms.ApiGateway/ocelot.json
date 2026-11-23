@@ -123,6 +123,20 @@
       "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
     },
     {
+      "DownstreamPathTemplate": "/hubs/telemetry/{everything}",
+      "DownstreamScheme": "ws",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/hubs/telemetry/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/hubs/telemetry",
+      "DownstreamScheme": "ws",
+      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/hubs/telemetry",
+      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
+    },
+    {
       "DownstreamPathTemplate": "/hangfire/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],

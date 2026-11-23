@@ -591,6 +591,115 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.DroneTelemetry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double?>("AirSpeedMs")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("AltMslM")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("AltRelativeM")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool?>("Armed")
+                        .HasColumnType("boolean");
+
+                    b.Property<double?>("BatteryCurrentA")
+                        .HasColumnType("double precision");
+
+                    b.Property<int?>("BatteryRemainingPct")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("BatteryVoltageV")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("ClimbRateMs")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FlightMode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int?>("GpsFixType")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("GroundSpeedMs")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("Hdop")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("HeadingDeg")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Point>("Location")
+                        .HasColumnType("geometry(Point,4326)");
+
+                    b.Property<Guid?>("MissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double?>("PitchDeg")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("RollDeg")
+                        .HasColumnType("double precision");
+
+                    b.Property<int?>("Satellites")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("SourceTimestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("ThrottlePct")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("UavId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<double?>("YawDeg")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAt")
+                        .HasDatabaseName("IX_DroneTelemetry_ReceivedAt");
+
+                    b.HasIndex("MissionId", "SourceTimestamp")
+                        .HasDatabaseName("IX_DroneTelemetry_MissionId_SourceTimestamp");
+
+                    b.HasIndex("UavId", "SourceTimestamp")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DroneTelemetry_UavId_SourceTimestamp");
+
+                    b.ToTable("DroneTelemetry", (string)null);
+                });
+
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.EmergencyAlert", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2354,6 +2463,9 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Property<Guid?>("LastTechnicalInspectionId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("LastTelemetryAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Model")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -2716,6 +2828,24 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Inspection");
+                });
+
+            modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.DroneTelemetry", b =>
+                {
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Mission", "Mission")
+                        .WithMany()
+                        .HasForeignKey("MissionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("UavPms.OperationsService.Domain.Entities.Uav", "Uav")
+                        .WithMany("TelemetryLogs")
+                        .HasForeignKey("UavId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Mission");
+
+                    b.Navigation("Uav");
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.EmergencyAlert", b =>
@@ -3381,6 +3511,8 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                     b.Navigation("Missions");
 
                     b.Navigation("TechnicalInspections");
+
+                    b.Navigation("TelemetryLogs");
                 });
 
             modelBuilder.Entity("UavPms.OperationsService.Domain.Entities.User", b =>

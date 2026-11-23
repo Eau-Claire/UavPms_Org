@@ -11,6 +11,7 @@ using UavPms.OperationsService.Application.Features.Drones.Queries.GetDrones;
 using UavPms.OperationsService.Application.Features.Drones.Queries.GetDroneStatus;
 using UavPms.OperationsService.Application.Features.FlightControllers;
 using UavPms.OperationsService.Application.Features.FlightControllers.DTOs;
+using UavPms.OperationsService.Application.Features.Telemetry.DTOs;
 using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.OperationsService.API.Controllers;
@@ -24,15 +25,18 @@ public class DronesController : ControllerBase
     private readonly ISender _mediator;
     private readonly IFlightControllerService _flightControllerService;
     private readonly IUavManagementService _uavManagementService;
+    private readonly IDroneTelemetryService? _telemetryService;
 
     public DronesController(
         ISender mediator,
         IFlightControllerService flightControllerService,
-        IUavManagementService uavManagementService)
+        IUavManagementService uavManagementService,
+        IDroneTelemetryService? telemetryService = null)
     {
         _mediator = mediator;
         _flightControllerService = flightControllerService;
         _uavManagementService = uavManagementService;
+        _telemetryService = telemetryService;
     }
 
     [HttpGet]
@@ -80,6 +84,18 @@ public class DronesController : ControllerBase
     public async Task<IActionResult> GetDroneStatus(Guid id, CancellationToken ct = default)
     {
         return Ok(await _mediator.Send(new GetDroneStatusQuery(id), ct));
+    }
+
+    [HttpGet("{droneCode}/telemetry/latest")]
+    public async Task<ActionResult<DroneTelemetryDto>> GetLatestTelemetry(
+        [FromRoute] string droneCode,
+        CancellationToken ct = default)
+    {
+        if (_telemetryService == null)
+            return BadRequest(new { message = "Telemetry service unavailable." });
+
+        var latest = await _telemetryService.GetLatestByDroneCodeAsync(droneCode, ct);
+        return Ok(latest);
     }
 
     [HttpPost]

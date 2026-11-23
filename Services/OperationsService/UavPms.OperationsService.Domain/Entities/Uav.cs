@@ -23,6 +23,7 @@ public class Uav : BaseEntity
     public Guid? LastTechnicalInspectionId { get; set; }
     public double BatteryLevel { get; set; }
     public Point? CurrentLocation { get; set; }
+    public DateTime? LastTelemetryAt { get; set; }
     public DateTime? LastMaintenanceAt { get; set; }
     public uint Version { get; set; } = 1;
 
@@ -31,6 +32,7 @@ public class Uav : BaseEntity
     public virtual ICollection<Mission> Missions { get; set; } = new List<Mission>();
     public virtual ICollection<DroneTechnicalInspection> TechnicalInspections { get; set; } = new List<DroneTechnicalInspection>();
     public virtual ICollection<DroneFlightController> FlightControllers { get; set; } = new List<DroneFlightController>();
+    public virtual ICollection<DroneTelemetry> TelemetryLogs { get; set; } = new List<DroneTelemetry>();
     
     #region Rich Domain Methods
 
