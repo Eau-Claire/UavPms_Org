@@ -136,9 +136,9 @@ public class SchemaAndQueryTests
 
         await using (var db = _pg.CreateContext())
         {
-            db.EmergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid(), AnomalyId = seed.PendingAnomalyId, Status = "Active", Priority = "High" });
+            db.EmergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid(), AnomalyId = seed.PendingAnomalyId, Status = "Open", Priority = "High" });
             await db.SaveChangesAsync();
-            db.EmergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid(), AnomalyId = seed.PendingAnomalyId, Status = "Active", Priority = "High" });
+            db.EmergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid(), AnomalyId = seed.PendingAnomalyId, Status = "Open", Priority = "High" });
             var duplicate = () => db.SaveChangesAsync();
             (await duplicate.Should().ThrowAsync<DbUpdateException>()).Which.InnerException!.Message.Should().Contain("UX_EmergencyAlerts_ActivePerAnomaly");
         }

@@ -94,6 +94,10 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 name: "IX_AIAnalysisRuns_ActiveLogicalAnalysis",
                 table: "AIAnalysisRuns");
 
+            migrationBuilder.DropIndex(
+                name: "UX_EmergencyAlerts_ActivePerAnomaly",
+                table: "EmergencyAlerts");
+
             migrationBuilder.AddCheckConstraint(
                 name: "CK_Missions_Status",
                 table: "Missions",
@@ -103,6 +107,13 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 name: "CK_MaintenanceTickets_Status",
                 table: "MaintenanceTickets",
                 sql: "\"Status\" IN ('Open', 'Assigned', 'InProgress', 'PendingVerification', 'Closed', 'Cancelled')");
+
+            migrationBuilder.CreateIndex(
+                name: "UX_EmergencyAlerts_ActivePerAnomaly",
+                table: "EmergencyAlerts",
+                column: "AnomalyId",
+                unique: true,
+                filter: "\"Status\" = 'Open' AND NOT \"IsDeleted\" AND \"AnomalyId\" IS NOT NULL");
 
             migrationBuilder.AddCheckConstraint(
                 name: "CK_EmergencyAlerts_Status",
@@ -138,9 +149,20 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
                 name: "CK_MaintenanceTickets_Status",
                 table: "MaintenanceTickets");
 
+            migrationBuilder.DropIndex(
+                name: "UX_EmergencyAlerts_ActivePerAnomaly",
+                table: "EmergencyAlerts");
+
             migrationBuilder.DropCheckConstraint(
                 name: "CK_EmergencyAlerts_Status",
                 table: "EmergencyAlerts");
+
+            migrationBuilder.CreateIndex(
+                name: "UX_EmergencyAlerts_ActivePerAnomaly",
+                table: "EmergencyAlerts",
+                column: "AnomalyId",
+                unique: true,
+                filter: "\"Status\" = 'Active' AND NOT \"IsDeleted\" AND \"AnomalyId\" IS NOT NULL");
 
             migrationBuilder.DropCheckConstraint(
                 name: "CK_DetectedAnomalies_ValidationStatus",

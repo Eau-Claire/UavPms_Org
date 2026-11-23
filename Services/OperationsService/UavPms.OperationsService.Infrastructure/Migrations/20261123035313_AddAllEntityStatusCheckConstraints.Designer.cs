@@ -727,7 +727,7 @@ namespace UavPms.OperationsService.Infrastructure.Migrations
 
                     b.HasIndex(new[] { "AnomalyId" }, "UX_EmergencyAlerts_ActivePerAnomaly")
                         .IsUnique()
-                        .HasFilter("\"Status\" = 'Active' AND NOT \"IsDeleted\" AND \"AnomalyId\" IS NOT NULL");
+                        .HasFilter("\"Status\" = 'Open' AND NOT \"IsDeleted\" AND \"AnomalyId\" IS NOT NULL");
 
                     b.ToTable("EmergencyAlerts", null, t =>
                         {

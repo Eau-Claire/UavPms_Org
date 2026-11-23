@@ -579,10 +579,10 @@ public class EmergencyAlertConfiguration : IEntityTypeConfiguration<EmergencyAle
         builder.HasKey(e => e.Id);
         // Plain FK index kept for "all alerts of an anomaly"; the partial unique index below only covers Active rows.
         builder.HasIndex(e => e.AnomalyId, "IX_EmergencyAlerts_AnomalyId");
-        // At most one Active alert per anomaly (ERD v2.2); escalated/resolved history is unrestricted.
+        // At most one Open alert per anomaly (ERD v2.2); acknowledged/resolved history is unrestricted.
         builder.HasIndex(e => e.AnomalyId, "UX_EmergencyAlerts_ActivePerAnomaly")
             .IsUnique()
-            .HasFilter("\"Status\" = 'Active' AND NOT \"IsDeleted\" AND \"AnomalyId\" IS NOT NULL");
+            .HasFilter("\"Status\" = 'Open' AND NOT \"IsDeleted\" AND \"AnomalyId\" IS NOT NULL");
 
         builder.HasOne(e => e.Anomaly)
             .WithMany(a => a.EmergencyAlerts)
