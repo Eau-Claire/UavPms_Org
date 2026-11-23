@@ -44,14 +44,14 @@ public class EmergencyAlertServiceTests
         var activeAlert = new EmergencyAlert
         {
             Id = Guid.NewGuid(),
-            Status = "Active",
+            Status = "Open",
             Priority = "Critical",
             TriggeredAt = DateTime.UtcNow
         };
         var confirmedAlert = new EmergencyAlert
         {
             Id = Guid.NewGuid(),
-            Status = "Confirmed",
+            Status = "Resolved",
             Priority = "Critical",
             TriggeredAt = DateTime.UtcNow.AddMinutes(-10)
         };
@@ -64,7 +64,7 @@ public class EmergencyAlertServiceTests
         // Assert
         result.Should().HaveCount(1);
         result[0].Id.Should().Be(activeAlert.Id);
-        result[0].Status.Should().Be("Active");
+        result[0].Status.Should().Be("Open");
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class EmergencyAlertServiceTests
         db.EmergencyAlerts.Add(new EmergencyAlert
         {
             Id = alertId,
-            Status = "Active",
+            Status = "Open",
             Priority = "Critical",
             TriggeredAt = DateTime.UtcNow
         });
@@ -126,7 +126,7 @@ public class EmergencyAlertServiceTests
 
         var request = new ReviewEmergencyAlertRequest
         {
-            Status = "Confirmed",
+            Status = "Resolved",
             Notes = "Wildfire confirmed near tower base"
         };
 
@@ -137,7 +137,7 @@ public class EmergencyAlertServiceTests
         success.Should().BeTrue();
         var updated = await db.EmergencyAlerts.FindAsync(alertId);
         updated.Should().NotBeNull();
-        updated!.Status.Should().Be("Confirmed");
+        updated!.Status.Should().Be("Resolved");
         updated.ReviewedById.Should().Be(reviewerId);
         updated.Notes.Should().Be("Wildfire confirmed near tower base");
         updated.ResolvedAt.Should().NotBeNull();
@@ -163,7 +163,7 @@ public class EmergencyAlertServiceTests
         db.EmergencyAlerts.Add(new EmergencyAlert
         {
             Id = alertId,
-            Status = "Active",
+            Status = "Open",
             Priority = "Critical",
             TriggeredAt = DateTime.UtcNow
         });
@@ -185,7 +185,7 @@ public class EmergencyAlertServiceTests
         result.Reason.Should().Be("Power outage danger");
 
         var updatedAlert = await db.EmergencyAlerts.FindAsync(alertId);
-        updatedAlert!.Status.Should().Be("Escalated");
+        updatedAlert!.Status.Should().Be("Acknowledged");
 
         mockPublisher.Verify(p => p.PublishAsync(It.Is<NotificationPushEvent>(e =>
             e.UserId == managerId &&
@@ -228,7 +228,7 @@ public class EmergencyAlertServiceTests
 
         // Assert
         result.Should().NotBeNull();
-        result.Status.Should().Be("Active");
+        result.Status.Should().Be("Open");
         result.DeliveryLatencySeconds.Should().Be(4);
 
         var alert = await db.EmergencyAlerts.Include(a => a.Anomaly!).ThenInclude(a => a.Media).SingleAsync();
@@ -251,13 +251,13 @@ public class EmergencyAlertServiceTests
         var service = new EmergencyAlertService(db, Mock.Of<IEventPublisher>(), NullLogger<EmergencyAlertService>.Instance);
         var alertId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        db.EmergencyAlerts.Add(new EmergencyAlert { Id = alertId, Status = "Active", Priority = "Critical", TriggeredAt = DateTime.UtcNow });
+        db.EmergencyAlerts.Add(new EmergencyAlert { Id = alertId, Status = "Open", Priority = "Critical", TriggeredAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
 
         var act = () => service.EscalateAlertAsync(alertId, userId, new EscalateEmergencyAlertRequest { EscalatedToUserId = userId, Reason = "x" });
 
         (await act.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be("INVALID_ESCALATION_TARGET");
-        (await db.EmergencyAlerts.FindAsync(alertId))!.Status.Should().Be("Active");
+        (await db.EmergencyAlerts.FindAsync(alertId))!.Status.Should().Be("Open");
         (await db.AlertEscalations.CountAsync()).Should().Be(0);
     }
 
@@ -267,7 +267,7 @@ public class EmergencyAlertServiceTests
         await using var db = CreateContext();
         var service = new EmergencyAlertService(db, Mock.Of<IEventPublisher>(), NullLogger<EmergencyAlertService>.Instance);
         var anomalyId = Guid.NewGuid();
-        db.EmergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid(), AnomalyId = anomalyId, Status = "Active", Priority = "Critical", TriggeredAt = DateTime.UtcNow });
+        db.EmergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid(), AnomalyId = anomalyId, Status = "Open", Priority = "Critical", TriggeredAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
 
         var act = () => service.TriggerAlertAsync(new TriggerEmergencyAlertRequest { AnomalyId = anomalyId, MissionId = Guid.NewGuid() });
@@ -315,11 +315,11 @@ public class EmergencyAlertServiceTests
         await consumer.ProcessDefectRecordAsync(db, detectionEvent, CancellationToken.None);
 
         var alert = await db.EmergencyAlerts.SingleAsync(a => a.AnomalyId == anomalyId);
-        alert.Status.Should().Be("Active");
+        alert.Status.Should().Be("Open");
         alert.Priority.Should().Be("Critical");
 
-        // Second delivery of the same event must not create a duplicate Active alert
+        // Second delivery of the same event must not create a duplicate Open alert
         await consumer.ProcessDefectRecordAsync(db, detectionEvent, CancellationToken.None);
-        (await db.EmergencyAlerts.CountAsync(a => a.AnomalyId == anomalyId && a.Status == "Active")).Should().Be(1);
+        (await db.EmergencyAlerts.CountAsync(a => a.AnomalyId == anomalyId && a.Status == "Open")).Should().Be(1);
     }
 }

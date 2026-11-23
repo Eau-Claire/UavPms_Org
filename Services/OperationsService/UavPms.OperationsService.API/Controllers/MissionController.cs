@@ -473,20 +473,6 @@ public class MissionController : ControllerBase
         UpdatedAt = a.UpdatedAt
     };
 
-    private static DroneHandoverResponseDto MapHandover(DroneHandover h) => new()
-    {
-        Id = h.Id,
-        MissionId = h.MissionId,
-        DroneId = h.DroneId,
-        HandedOverBy = h.HandedOverBy,
-        ReceivedBy = h.ReceivedBy,
-        Condition = h.Condition,
-        Status = h.Status.ToString(),
-        ReceivedAt = h.ReceivedAt,
-        ReturnedAt = h.ReturnedAt,
-        CreatedAt = h.CreatedAt
-    };
-
     private static MissionCheckInResponseDto MapCheckIn(MissionCheckIn c) => new()
     {
         Id = c.Id,

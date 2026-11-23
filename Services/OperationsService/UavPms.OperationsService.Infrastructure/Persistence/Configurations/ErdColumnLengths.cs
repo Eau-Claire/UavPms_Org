@@ -46,7 +46,6 @@ public static class ErdColumnLengths
         ("MissionAssignments", "ResponseStatus", 20),
         ("ResourceBookings", "Status", 20),
         ("MissionCheckIns", "Status", 20),
-        ("DroneHandovers", "Status", 20),
         ("MissionFlightLogs", "ConnectionStatus", 20),
         ("IncidentReports", "Status", 20),
         ("InspectionMedia", "MediaType", 10),

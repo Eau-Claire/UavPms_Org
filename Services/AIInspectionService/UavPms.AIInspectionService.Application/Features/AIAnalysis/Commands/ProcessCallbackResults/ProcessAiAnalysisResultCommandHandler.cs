@@ -122,9 +122,9 @@ public class ProcessAiAnalysisResultCommandHandler
             };
         }
 
-        // The server bridge reports only terminal states, so Pending may complete directly.
+        // The server bridge reports only terminal states, so Queued may complete directly.
         if (run.Status is not (AIAnalysisStatus.Queued or AIAnalysisStatus.Processing))
-            throw new BusinessRuleException("AI analysis must be Pending or Processing before reaching a terminal state.");
+            throw new BusinessRuleException("AI analysis must be Queued or Processing before reaching a terminal state.");
 
         var savedDetections = 0;
         var createdAlerts = 0;
@@ -255,7 +255,7 @@ public class ProcessAiAnalysisResultCommandHandler
                         if (_alertRepo != null)
                         {
                             var existingAlerts = await _alertRepo.FindAsync(
-                                a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted);
+                                a => a.AnomalyId == anomaly.Id && a.Status == "Open" && !a.IsDeleted);
                             if (existingAlerts == null || !existingAlerts.Any())
                             {
                                 var now = DateTime.UtcNow;
@@ -263,7 +263,7 @@ public class ProcessAiAnalysisResultCommandHandler
                                 {
                                     Id = Guid.NewGuid(),
                                     AnomalyId = anomaly.Id,
-                                    Status = "Active",
+                                    Status = "Open",
                                     Priority = "Critical",
                                     TriggeredAt = anomaly.CreatedAt,
                                     ReceivedAt = now,

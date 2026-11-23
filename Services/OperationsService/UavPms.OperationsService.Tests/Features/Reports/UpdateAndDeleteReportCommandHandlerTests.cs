@@ -245,7 +245,7 @@ public class UpdateAndDeleteReportCommandHandlerTests
         Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
 
         // Assert
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Bản nháp (Draft)*");
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*Bản nháp (Draft)*");
     }
 
     [Fact]
@@ -387,7 +387,7 @@ public class UpdateAndDeleteReportCommandHandlerTests
         Func<Task> act = async () => await handler.Handle(new DeleteReportCommand(reportId), CancellationToken.None);
 
         // Assert
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Bản nháp (Draft)*");
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*Bản nháp (Draft)*");
     }
 
     [Fact]

@@ -42,7 +42,7 @@ public class EmergencyAlertService : IEmergencyAlertService
                 .ThenInclude(an => an.Media)
             .Include(a => a.Anomaly)
                 .ThenInclude(an => an!.Category)
-            .Where(a => a.Status == "Active")
+            .Where(a => a.Status == "Open")
             .OrderByDescending(a => a.TriggeredAt)
             .ToListAsync(ct);
 
@@ -128,12 +128,28 @@ public class EmergencyAlertService : IEmergencyAlertService
         var alert = await _db.EmergencyAlerts.FirstOrDefaultAsync(a => a.Id == id, ct);
         if (alert == null) return false;
 
-        var normalizedStatus = string.Equals(request.Status, "Dismissed", StringComparison.OrdinalIgnoreCase)
-            ? "Dismissed"
-            : "Confirmed";
+        if (string.Equals(alert.Status, "Resolved", StringComparison.OrdinalIgnoreCase))
+            throw new BusinessRuleException("ALERT_ALREADY_RESOLVED", "Emergency alert has already been resolved.");
+
+        string normalizedStatus;
+        if (string.Equals(request.Status, "Acknowledged", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedStatus = "Acknowledged";
+        }
+        else if (string.Equals(request.Status, "Resolved", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedStatus = "Resolved";
+        }
+        else
+        {
+            throw new BusinessRuleException("INVALID_ALERT_STATUS", $"Invalid alert status '{request.Status}'. Allowed values: Acknowledged, Resolved.");
+        }
 
         alert.Status = normalizedStatus;
-        alert.ResolvedAt = DateTime.UtcNow;
+        if (normalizedStatus == "Resolved")
+        {
+            alert.ResolvedAt = DateTime.UtcNow;
+        }
         alert.ReviewedById = reviewerId;
         alert.Notes = request.Notes;
         alert.UpdatedAt = DateTime.UtcNow;
@@ -145,6 +161,12 @@ public class EmergencyAlertService : IEmergencyAlertService
 
     public async Task<AlertEscalationDto> EscalateAlertAsync(Guid id, Guid currentUserId, EscalateEmergencyAlertRequest request, CancellationToken ct = default)
     {
+        if (request.EscalatedToUserId == Guid.Empty)
+            throw new BusinessRuleException("INVALID_ESCALATION_TARGET", "Escalation target user ID is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            throw new BusinessRuleException("ESCALATION_REASON_REQUIRED", "Escalation reason is required.");
+
         var alert = await _db.EmergencyAlerts
             .Include(a => a.Anomaly!)
                 .ThenInclude(an => an.Tower)
@@ -155,13 +177,23 @@ public class EmergencyAlertService : IEmergencyAlertService
             .FirstOrDefaultAsync(a => a.Id == id, ct);
 
         if (alert == null)
-            throw new KeyNotFoundException($"Emergency alert with ID {id} was not found.");
+            throw new NotFoundException("EmergencyAlert", id);
+
+        if (string.Equals(alert.Status, "Resolved", StringComparison.OrdinalIgnoreCase))
+            throw new BusinessRuleException("ALERT_ALREADY_RESOLVED", "Cannot escalate an emergency alert that has already been resolved.");
 
         // CK_AlertEscalations_DifferentUsers
         if (request.EscalatedToUserId == currentUserId)
             throw new BusinessRuleException("INVALID_ESCALATION_TARGET", "An alert cannot be escalated to the user escalating it.");
 
-        alert.Status = "Escalated";
+        var manager = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.EscalatedToUserId && !u.IsDeleted, ct);
+        if (manager == null)
+            throw new NotFoundException("User", request.EscalatedToUserId);
+        if (!string.Equals(manager.Status, "Active", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(manager.Status, "Enabled", StringComparison.OrdinalIgnoreCase))
+            throw new BusinessRuleException("ESCALATION_TARGET_INACTIVE", "Escalation target user is not active.");
+
+        alert.Status = "Acknowledged";
         alert.UpdatedAt = DateTime.UtcNow;
 
         var escalation = new AlertEscalation
@@ -180,7 +212,6 @@ public class EmergencyAlertService : IEmergencyAlertService
         await _db.SaveChangesAsync(ct);
 
         var escalater = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId, ct);
-        var manager = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.EscalatedToUserId, ct);
 
         var alertTypeName = alert.Anomaly?.Category?.CategoryName ?? "Sự cố khẩn cấp";
         var towerCode = alert.Anomaly?.Tower?.TowerCode ?? "vị trí kiểm tra";
@@ -290,20 +321,20 @@ public class EmergencyAlertService : IEmergencyAlertService
             anomalyId = newAnomaly.Id;
         }
 
-        // UX_EmergencyAlerts_ActivePerAnomaly: at most one Active alert per anomaly.
+        // UX_EmergencyAlerts_ActivePerAnomaly: at most one Open alert per anomaly.
         var activeAlertId = await _db.EmergencyAlerts
-            .Where(a => a.AnomalyId == anomalyId && a.Status == "Active")
+            .Where(a => a.AnomalyId == anomalyId && a.Status == "Open")
             .Select(a => (Guid?)a.Id)
             .FirstOrDefaultAsync(ct);
         if (activeAlertId.HasValue)
             throw new BusinessRuleException("ALERT_ALREADY_ACTIVE",
-                $"Anomaly {anomalyId} already has an active emergency alert ({activeAlertId}).");
+                $"Anomaly {anomalyId} already has an open emergency alert ({activeAlertId}).");
 
         var alert = new EmergencyAlert
         {
             Id = Guid.NewGuid(),
             AnomalyId = anomalyId,
-            Status = "Active",
+            Status = "Open",
             Priority = string.IsNullOrWhiteSpace(request.Priority) ? "Critical" : request.Priority,
             TriggeredAt = DateTime.UtcNow,
             ReceivedAt = request.DeliveryLatencySeconds > 0 ? DateTime.UtcNow.AddSeconds(request.DeliveryLatencySeconds) : null

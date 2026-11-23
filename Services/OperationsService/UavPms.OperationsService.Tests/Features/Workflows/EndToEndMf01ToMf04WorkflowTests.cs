@@ -354,8 +354,13 @@ public class EndToEndMf01ToMf04WorkflowTests
         proofResult.Should().NotBeNull();
         proofResult.ProofType.Should().Be("After");
 
+        // Chuyển ticket sang PendingVerification sau khi nộp minh chứng
+        var ticketEntity = await db.MaintenanceTickets.FirstAsync(t => t.Id == ticketResult.Id);
+        ticketEntity.Status = TicketStatus.PendingVerification;
+        await db.SaveChangesAsync();
+
         // 4.5. Đóng phiếu bảo trì
-        var completeTicketHandler = new CompleteMaintenanceTicketCommandHandler(ticketRepo, proofRepo, uow);
+        var completeTicketHandler = new CompleteMaintenanceTicketCommandHandler(ticketRepo, proofRepo, uow, new GenericRepository<DetectedAnomaly>(db));
 
         var completedTicket = await completeTicketHandler.Handle(
             new CompleteMaintenanceTicketCommand(ticketResult.Id, "Nghiệm thu hoàn tất đạt tiêu chuẩn an toàn."),

@@ -104,11 +104,11 @@ public class ReviewMissionAiDetectionCommandHandler
             var isEmergency = anomaly.IsEmergencySeverity(request.OverrideSeverity);
             var now = DateTime.UtcNow;
 
-            // 1. Ensure Active EmergencyAlert exists when emergency
+            // 1. Ensure Open EmergencyAlert exists when emergency
             if (isEmergency && _alertRepository != null)
             {
                 var existingAlerts = await _alertRepository.FindAsync(
-                    a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted);
+                    a => a.AnomalyId == anomaly.Id && a.Status == "Open" && !a.IsDeleted);
                 var existingAlert = existingAlerts?.FirstOrDefault();
                 if (existingAlert == null)
                 {
@@ -116,7 +116,7 @@ public class ReviewMissionAiDetectionCommandHandler
                     {
                         Id = Guid.NewGuid(),
                         AnomalyId = anomaly.Id,
-                        Status = "Active",
+                        Status = "Open",
                         Priority = "Emergency",
                         TriggeredAt = now,
                         ReceivedAt = now,
@@ -193,17 +193,17 @@ public class ReviewMissionAiDetectionCommandHandler
         {
             anomaly.Reject(_currentUser.UserId, request.Notes, request.AnalystFeedbackJson);
 
-            // Dismiss any Active EmergencyAlert for a rejected false-positive anomaly
+            // Resolve any Open EmergencyAlert for a rejected false-positive anomaly
             if (_alertRepository != null)
             {
                 var activeAlerts = await _alertRepository.FindAsync(
-                    a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted, track: true);
+                    a => a.AnomalyId == anomaly.Id && a.Status == "Open" && !a.IsDeleted, track: true);
                 if (activeAlerts != null)
                 {
                     var now = DateTime.UtcNow;
                     foreach (var activeAlert in activeAlerts)
                     {
-                        activeAlert.Status = "Dismissed";
+                        activeAlert.Status = "Resolved";
                         activeAlert.ResolvedAt = now;
                         activeAlert.ReviewedById = _currentUser.UserId;
                         if (!string.IsNullOrWhiteSpace(request.Notes))

@@ -30,14 +30,19 @@ public class MaintenanceTicket : BaseEntity
     #region Rich Domain Methods
     public void AssignToTechnician(Guid technicianId)
     {
+        if (Status is not (TicketStatus.Open or TicketStatus.Assigned))
+        {
+            throw new InvalidOperationException($"Cannot assign technician on ticket in status '{Status}'. Must be Open or Assigned.");
+        }
         TechnicianId = technicianId;
         AssignedAt = DateTime.UtcNow;
+        Status = TicketStatus.Assigned;
     }
     public void StartProgress()
     {
-        if (Status != TicketStatus.Open)
+        if (Status is not (TicketStatus.Open or TicketStatus.Assigned))
         {
-            throw new InvalidOperationException($"Cannot start progress on ticket in status '{Status}'. Must be Open.");
+            throw new InvalidOperationException($"Cannot start progress on ticket in status '{Status}'. Must be Open or Assigned.");
         }
         if (TechnicianId == null)
         {

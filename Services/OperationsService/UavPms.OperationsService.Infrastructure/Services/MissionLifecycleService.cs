@@ -247,15 +247,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
 
         var previousUavId = mission.UavId;
         var replaced = previousUavId.HasValue && previousUavId.Value != Guid.Empty && previousUavId != droneId;
-        if (replaced)
-        {
-            // The old UAV goes back to the manager: close its open handovers in this mission (BR-36).
-            foreach (var h in mission.DroneHandovers.Where(h => !h.IsDeleted && h.DroneId == previousUavId!.Value && h.ReturnedAt == null))
-            {
-                h.ReturnedAt = DateTime.UtcNow;
-                if (h.Status == DroneHandoverStatus.Accepted) h.Status = DroneHandoverStatus.Returned;
-            }
-        }
         mission.UavId = droneId;
         mission.DroneCode = drone.UavCode;
         mission.RecalculateReadiness();
@@ -932,15 +923,8 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             throw new BusinessRuleException("INVALID_MISSION_STATE", ex.Message);
         }
 
-        // BR-33: bookings are cancelled. A suspended mission that had started also gives its UAV back: open
-        // handovers are closed and a Flying UAV becomes Idle unless another In Progress mission flies it.
+        // BR-33: bookings are cancelled. A suspended mission that had started also gives its UAV back.
         await MissionResourceGuard.EndActiveBookingsAsync(_db, missionId, ResourceBookingStatus.Cancelled, ct);
-        var now = DateTime.UtcNow;
-        foreach (var h in mission.DroneHandovers.Where(h => !h.IsDeleted && h.ReturnedAt == null))
-        {
-            h.ReturnedAt = h.Status == DroneHandoverStatus.Rejected ? h.ReceivedAt : now;
-            if (h.Status == DroneHandoverStatus.Accepted) h.Status = DroneHandoverStatus.Returned;
-        }
         await MissionResourceGuard.ReleaseUavAsync(_db, mission.UavId, mission.Id, ct);
 
         if (mission.PreMissionAssessmentId.HasValue)
@@ -1428,18 +1412,18 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             var isEmergency = anomaly.IsEmergencySeverity(request.OverrideSeverity);
             var now = DateTime.UtcNow;
 
-            // 1. Đảm bảo có EmergencyAlert đang Active khi xác nhận khuyết tật khẩn cấp
+            // 1. Đảm bảo có EmergencyAlert đang Open khi xác nhận khuyết tật khẩn cấp
             if (isEmergency)
             {
                 var existingAlert = await _db.EmergencyAlerts
-                    .FirstOrDefaultAsync(a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted, ct);
+                    .FirstOrDefaultAsync(a => a.AnomalyId == anomaly.Id && a.Status == "Open" && !a.IsDeleted, ct);
                 if (existingAlert == null)
                 {
                     var alert = new EmergencyAlert
                     {
                         Id = Guid.NewGuid(),
                         AnomalyId = anomaly.Id,
-                        Status = "Active",
+                        Status = "Open",
                         Priority = "Emergency",
                         TriggeredAt = now,
                         ReceivedAt = now,
@@ -1494,14 +1478,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         {
             anomaly.Reject(_current.UserId, request.ReviewNotes, request.AnalystFeedbackJson);
 
-            // Tự động Dismiss các EmergencyAlert đang Active của bất thường bị từ chối (false positive)
+            // Tự động Resolve các EmergencyAlert đang Open của bất thường bị từ chối (false positive)
             var activeAlerts = await _db.EmergencyAlerts
-                .Where(a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted)
+                .Where(a => a.AnomalyId == anomaly.Id && a.Status == "Open" && !a.IsDeleted)
                 .ToListAsync(ct);
             var now = DateTime.UtcNow;
             foreach (var activeAlert in activeAlerts)
             {
-                activeAlert.Status = "Dismissed";
+                activeAlert.Status = "Resolved";
                 activeAlert.ResolvedAt = now;
                 activeAlert.ReviewedById = _current.UserId;
                 if (!string.IsNullOrWhiteSpace(request.ReviewNotes))
@@ -1610,14 +1594,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                 _ => "Low"
             };
 
-            var statusStr = t.Status switch
-            {
-                TicketStatus.Open => "Pending",
-                TicketStatus.InProgress => "InProgress",
-                TicketStatus.PendingVerification => "PendingVerification",
-                TicketStatus.Closed or TicketStatus.Closed => "Completed",
-                _ => "Pending"
-            };
+            var statusStr = t.Status.ToString();
 
             var catName = t.Anomaly?.Category?.CategoryName ?? string.Empty;
             var towerCode = t.Anomaly?.Tower?.TowerCode ?? string.Empty;
@@ -1838,45 +1815,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             ConfirmationDeadline = mission.ConfirmationDeadline,
             Assignments = items
         };
-    }
-
-    public Task<DroneHandover> ReturnDroneHandoverAsync(Guid missionId, Guid droneId, string condition, CancellationToken ct)
-        => ReturnDroneHandoverAsync(missionId, droneId, condition, null, ct);
-
-    public async Task<DroneHandover> ReturnDroneHandoverAsync(Guid missionId, Guid droneId, string condition, string? returnChecklistJson, CancellationToken ct)
-    {
-        await RequireActiveCaller(ct);
-        var mission = await AccessibleMission(missionId, ct, true);
-        EnsureAssignedInspectorOrManager(mission);
-        if (mission.Status is not (MissionStatus.Completed or MissionStatus.Cancelled or MissionStatus.InProgress))
-            throw new BusinessRuleException("RETURN_HANDOVER_INVALID_STATE", "Drone can only be returned for completed, in-progress or cancelled missions.");
-
-        var handover = mission.DroneHandovers.FirstOrDefault(x => x.DroneId == droneId && x.ReturnedAt == null && x.Status == DroneHandoverStatus.Accepted);
-        if (handover == null)
-            throw new NotFoundException("Active drone handover not found for this mission.");
-
-        handover.ReturnedAt = DateTime.UtcNow;
-        if (!string.IsNullOrWhiteSpace(returnChecklistJson))
-        {
-            handover.ReturnChecklist = returnChecklistJson;
-        }
-        if (!string.IsNullOrWhiteSpace(condition))
-        {
-            handover.Condition = string.IsNullOrWhiteSpace(handover.Condition)
-                ? $"Return: {condition}"
-                : $"{handover.Condition} | Return: {condition}";
-        }
-
-        var drone = await _db.Uavs.FirstOrDefaultAsync(d => d.Id == droneId, ct);
-        if (drone != null && !await MissionResourceGuard.UavFlyingInOtherMissionAsync(_db, droneId, mission.Id, ct))
-        {
-            drone.FlightStatus = DroneStatus.Idle;
-            drone.UpdatedAt = DateTime.UtcNow;
-        }
-
-        Audit(mission.Id, "DRONE_HANDOVER_RETURNED");
-        await _db.SaveChangesAsync(ct);
-        return handover;
     }
 
     public async Task<MissionFlightLog> UploadFlightLogAsync(Guid missionId, UploadFlightLogRequest request, CancellationToken ct)
@@ -2134,7 +2072,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     private IQueryable<Mission> MissionQuery(bool graph)
     {
         var q = _db.Missions.Include(x => x.Assignments).ThenInclude(a => a.User).AsQueryable();
-        return graph ? q.Include(x => x.CheckIns).Include(x => x.DroneHandovers).Include(x => x.MissionTargets) : q;
+        return graph ? q.Include(x => x.CheckIns).Include(x => x.MissionTargets) : q;
     }
     private async Task RequireManageMission(Guid id, CancellationToken ct) { var region = await _db.Missions.Where(x => x.Id == id).Select(x => x.RegionId).SingleOrDefaultAsync(ct) ?? throw new BusinessRuleException("MISSION_REGION_REQUIRED"); await RequireManageRegion(region, ct); }
     private async Task RequireManageRegion(Guid region, CancellationToken ct) { if (IsGlobal) return; if (!_current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) || !await _db.UserGeographicScopes.AnyAsync(x => x.UserId == _current.UserId && x.RegionId == region, ct)) throw new ForbiddenException("REGION_MANAGEMENT_SCOPE_REQUIRED"); }
@@ -2161,22 +2099,16 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     private static Guid RequireRegion(Mission m) => m.RegionId ?? throw new BusinessRuleException("MISSION_REGION_REQUIRED");
 
     private static bool IsInspectorRole(string? role) =>
-        string.Equals(role, "INSPECTOR", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "PILOT", StringComparison.OrdinalIgnoreCase);
+        string.Equals(role, "INSPECTOR", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Bumps the mission version so concurrent changes to the same mission conflict (BR-07).</summary>
     private static void TouchMission(Mission m) { m.Version++; m.UpdatedAt = DateTime.UtcNow; }
 
-    /// <summary>A member leaving the mission loses their check-in and hands back the UAV they hold.</summary>
+    /// <summary>A member leaving the mission loses their check-in.</summary>
     private static void CloseMemberFieldRecords(Mission m, Guid userId)
     {
-        var now = DateTime.UtcNow;
         foreach (var c in m.CheckIns.Where(c => !c.IsDeleted && c.UserId == userId && c.Status == MissionCheckInStatus.CheckedIn))
             c.Status = MissionCheckInStatus.Revoked;
-        foreach (var h in m.DroneHandovers.Where(h => !h.IsDeleted && h.ReceivedBy == userId && h.ReturnedAt == null))
-        {
-            h.ReturnedAt = h.Status == DroneHandoverStatus.Rejected ? h.ReceivedAt : now;
-            if (h.Status == DroneHandoverStatus.Accepted) h.Status = DroneHandoverStatus.Returned;
-        }
     }
 
     /// <summary>
@@ -2224,11 +2156,6 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             Notify(userId, m, type, role);
     }
 
-    /// <summary>BR-36: an accepted, unreturned handover of the UAV in another mission that is still running.</summary>
-    private Task<bool> OpenHandoverInOtherActiveMissionAsync(Guid droneId, Guid missionId, CancellationToken ct) =>
-        _db.DroneHandovers.AnyAsync(h => h.DroneId == droneId && h.MissionId != missionId
-            && h.Status == DroneHandoverStatus.Accepted && h.ReturnedAt == null
-            && _db.Missions.Any(m => m.Id == h.MissionId && m.Status != MissionStatus.Completed && m.Status != MissionStatus.Cancelled), ct);
     private void EnsureAssignedInspectorOrManager(Mission m)
     {
         if (IsGlobal || _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))

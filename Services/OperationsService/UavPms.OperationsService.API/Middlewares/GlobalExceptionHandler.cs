@@ -85,7 +85,11 @@ public class GlobalExceptionHandler : IExceptionHandler
                 Message: keyNotFoundException.Message,
                 Data: null,
                 Errors: null
-                , ErrorCode: keyNotFoundException.Message.StartsWith("Mission", StringComparison.OrdinalIgnoreCase) ? "MISSION_NOT_FOUND" : "TOWER_NOT_FOUND"
+                , ErrorCode: keyNotFoundException.Message.StartsWith("Mission", StringComparison.OrdinalIgnoreCase)
+                    ? "MISSION_NOT_FOUND"
+                    : (keyNotFoundException.Message.StartsWith("Tower", StringComparison.OrdinalIgnoreCase)
+                        ? "TOWER_NOT_FOUND"
+                        : "NOT_FOUND")
             );
         }
         else if (exception is DbUpdateConcurrencyException concurrencyException)

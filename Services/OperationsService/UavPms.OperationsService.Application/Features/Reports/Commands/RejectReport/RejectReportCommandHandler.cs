@@ -61,7 +61,7 @@ public class RejectReportCommandHandler : IRequestHandler<RejectReportCommand, R
 
         if (report.Status != ReportStatus.Pending)
         {
-            throw new InvalidOperationException($"Chỉ có thể từ chối báo cáo ở trạng thái Chờ duyệt (Pending). Trạng thái hiện tại: {report.Status}.");
+            throw new UavPms.OperationsService.Application.Common.Exceptions.BusinessRuleException("INVALID_REPORT_STATUS", $"Chỉ có thể từ chối báo cáo ở trạng thái Chờ duyệt (Pending). Trạng thái hiện tại: {report.Status}.");
         }
 
         report.Status = ReportStatus.Draft;

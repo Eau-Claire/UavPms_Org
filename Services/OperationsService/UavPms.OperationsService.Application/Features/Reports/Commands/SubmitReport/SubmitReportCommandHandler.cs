@@ -57,7 +57,7 @@ public class SubmitReportCommandHandler : IRequestHandler<SubmitReportCommand, R
 
         if (report.Status != ReportStatus.Draft)
         {
-            throw new InvalidOperationException($"Chỉ có thể gửi duyệt báo cáo ở trạng thái Bản nháp (Draft). Trạng thái hiện tại: {report.Status}.");
+            throw new UavPms.OperationsService.Application.Common.Exceptions.BusinessRuleException("INVALID_REPORT_STATUS", $"Chỉ có thể gửi duyệt báo cáo ở trạng thái Bản nháp (Draft). Trạng thái hiện tại: {report.Status}.");
         }
 
         report.Status = ReportStatus.Pending;

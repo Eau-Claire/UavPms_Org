@@ -11,12 +11,11 @@ public class MissionAssignment : BaseEntity
 {
     public const string ActiveStatus = "Active";
     public const string InspectorRole = "INSPECTOR";
-    public const string PilotRole = "PILOT";
 
     public Guid MissionId { get; set; }
     public Guid UserId { get; set; }
 
-    /// <summary>PILOT/INSPECTOR/OBSERVER/ANALYST/TECHNICIAN</summary>
+    /// <summary>INSPECTOR/ANALYST/TECHNICIAN</summary>
     public string AssignmentRole { get; set; } = string.Empty;
 
     /// <summary>Active/Unavailable/Revoked</summary>

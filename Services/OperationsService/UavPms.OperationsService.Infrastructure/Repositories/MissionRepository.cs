@@ -118,7 +118,6 @@ public class MissionRepository : GenericRepository<Mission>, IMissionRepository
             .Include(m => m.Schedule)
             .Include(m => m.Assignments).ThenInclude(a => a.User)
             .Include(m => m.CheckIns)
-            .Include(m => m.DroneHandovers)
             .Include(m => m.MissionTargets)
                 .ThenInclude(t => t.Tower)
             .FirstOrDefaultAsync(m => m.Id == id);

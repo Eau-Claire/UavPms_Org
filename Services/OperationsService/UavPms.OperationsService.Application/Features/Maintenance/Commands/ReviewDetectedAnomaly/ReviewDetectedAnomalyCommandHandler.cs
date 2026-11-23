@@ -101,14 +101,14 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
             if (isEmergency)
             {
                 var existingAlerts = await _alertRepository.FindAsync(
-                    a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted, track: false);
+                    a => a.AnomalyId == anomaly.Id && a.Status == "Open" && !a.IsDeleted, track: false);
                 if (existingAlerts.Count == 0)
                 {
                     var alert = new EmergencyAlert
                     {
                         Id = Guid.NewGuid(),
                         AnomalyId = anomaly.Id,
-                        Status = "Active",
+                        Status = "Open",
                         Priority = "Emergency",
                         TriggeredAt = now,
                         ReceivedAt = now,
@@ -169,13 +169,13 @@ public class ReviewDetectedAnomalyCommandHandler : IRequestHandler<ReviewDetecte
         {
             anomaly.Reject(_currentUser.UserId, request.ReviewNotes, request.AnalystFeedbackJson);
 
-            // Dismiss any Active EmergencyAlert for a rejected false-positive anomaly
+            // Resolve any Open EmergencyAlert for a rejected false-positive anomaly
             var activeAlerts = await _alertRepository.FindAsync(
-                a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted, track: true);
+                a => a.AnomalyId == anomaly.Id && a.Status == "Open" && !a.IsDeleted, track: true);
             var now = DateTime.UtcNow;
             foreach (var activeAlert in activeAlerts)
             {
-                activeAlert.Status = "Dismissed";
+                activeAlert.Status = "Resolved";
                 activeAlert.ResolvedAt = now;
                 activeAlert.ReviewedById = _currentUser.UserId;
                 if (!string.IsNullOrWhiteSpace(request.ReviewNotes))

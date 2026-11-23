@@ -399,23 +399,6 @@ public class MissionCheckInConfiguration : IEntityTypeConfiguration<MissionCheck
     }
 }
 
-public class DroneHandoverConfiguration : IEntityTypeConfiguration<DroneHandover>
-{
-    public void Configure(EntityTypeBuilder<DroneHandover> builder)
-    {
-        builder.ToTable("DroneHandovers"); builder.HasKey(x => x.Id);
-        builder.Property(x => x.Condition).HasMaxLength(500);
-        builder.Property(x => x.InitialChecklist).HasColumnType("jsonb");
-        builder.Property(x => x.ReturnChecklist).HasColumnType("jsonb");
-        builder.Property(x => x.Status).HasConversion<string>();
-        builder.HasIndex(x => new { x.MissionId, x.DroneId }).IsUnique().HasFilter("\"ReturnedAt\" IS NULL AND NOT \"IsDeleted\"");
-        builder.HasOne(x => x.Mission).WithMany(x => x.DroneHandovers).HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(x => x.Drone).WithMany().HasForeignKey(x => x.DroneId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(x => x.HandedOverByUser).WithMany().HasForeignKey(x => x.HandedOverBy).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(x => x.ReceivedByUser).WithMany().HasForeignKey(x => x.ReceivedBy).OnDelete(DeleteBehavior.Restrict);
-    }
-}
-
 public class MissionTargetConfiguration : IEntityTypeConfiguration<MissionTarget>
 {
     public void Configure(EntityTypeBuilder<MissionTarget> builder)

@@ -40,7 +40,7 @@ public sealed class GeographicAccessFilter
                 && a.Status == MissionAssignmentStatus.Active
                 && a.Mission!.Status != MissionStatus.Completed && a.Mission.Status != MissionStatus.Cancelled)
             || _context.MaintenanceTickets.Any(t => t.TechnicianId == userId
-                && t.Status != TicketStatus.Closed && t.Status != TicketStatus.Closed);
+                && t.Status != TicketStatus.Closed && t.Status != TicketStatus.Cancelled);
 
         return !hasFieldAssignment;
     }
@@ -68,7 +68,7 @@ public sealed class GeographicAccessFilter
             .Select(t => t.TowerId);
         var ticketTowerIds = _context.MaintenanceTickets.AsNoTracking()
             .Where(t => (t.TechnicianId == userId || t.ManagerId == userId)
-                && t.Status != TicketStatus.Closed && t.Status != TicketStatus.Closed
+                && t.Status != TicketStatus.Closed && t.Status != TicketStatus.Cancelled
                 && t.Anomaly!.TowerId != null)
             .Select(t => t.Anomaly!.TowerId!.Value);
         return missionTowerIds.Union(ticketTowerIds);

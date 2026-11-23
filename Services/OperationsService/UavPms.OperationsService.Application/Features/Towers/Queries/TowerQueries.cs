@@ -132,7 +132,7 @@ public class GetTowerHistoryQueryHandler : IRequestHandler<GetTowerHistoryQuery,
         int TicketCount(TicketStatus status) => ticketCounts.TryGetValue(status, out var n) ? n : 0;
         var pending = AnomalyCount("Pending");
         var confirmed = AnomalyCount("Confirmed");
-        var openTickets = TicketCount(TicketStatus.Open);
+        var openTickets = TicketCount(TicketStatus.Open) + TicketCount(TicketStatus.Assigned);
         var inProgressTickets = TicketCount(TicketStatus.InProgress) + TicketCount(TicketStatus.PendingVerification);
         var stats = new TowerHistoryStatsDto(
             anomalyCounts.Values.Sum(),

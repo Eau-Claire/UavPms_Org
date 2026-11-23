@@ -83,7 +83,7 @@ public class SystemSettingService : ISystemSettingService
         var expiryMinutes = await GetIntAsync(SettingKeys.OtpExpiryMinutes, 15, ct);
         var cooldownSeconds = await GetIntAsync(SettingKeys.OtpCooldownSeconds, 30, ct);
         var maxAttempts = await GetIntAsync(SettingKeys.OtpMaxAttempts, 5, ct);
-        var bypassCode = await GetStringAsync(SettingKeys.OtpBypassCode, "123456", ct);
+        var bypassCode = await GetStringAsync(SettingKeys.OtpBypassCode, string.Empty, ct);
 
         return new OtpSettingsDto(expiryMinutes, cooldownSeconds, maxAttempts, bypassCode);
     }

@@ -16,9 +16,7 @@ public static class PersonnelEligibilityPolicy
     {
         UserRoles.Inspector,
         UserRoles.Analyst,
-        UserRoles.Technician,
-        UserRoles.Technician,
-        "Pilot"
+        UserRoles.Technician
     };
 
     private static readonly string[] NonOperationalRoles = new[]
@@ -52,11 +50,11 @@ public static class PersonnelEligibilityPolicy
         var primaryRole = roleNames.FirstOrDefault(r => AllowedOperationalRoles.Contains(r, StringComparer.OrdinalIgnoreCase));
         if (primaryRole != null)
         {
-            if (primaryRole.Equals(UserRoles.Inspector, StringComparison.OrdinalIgnoreCase) || primaryRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
+            if (primaryRole.Equals(UserRoles.Inspector, StringComparison.OrdinalIgnoreCase))
                 primaryRole = UserRoles.Inspector;
             else if (primaryRole.Equals(UserRoles.Analyst, StringComparison.OrdinalIgnoreCase))
                 primaryRole = UserRoles.Analyst;
-            else if (primaryRole.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) || primaryRole.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase))
+            else if (primaryRole.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase))
                 primaryRole = UserRoles.Technician;
         }
 

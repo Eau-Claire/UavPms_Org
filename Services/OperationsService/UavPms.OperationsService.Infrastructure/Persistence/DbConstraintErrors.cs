@@ -61,8 +61,6 @@ public static class DbConstraintErrors
             return new BusinessRuleException("DUPLICATE_ASSIGNMENT", "The user already has an active assignment in this mission.", exception);
         if (Is("MissionCheckIns"))
             return new BusinessRuleException("DUPLICATE_CHECK_IN", "The user has already checked in.", exception);
-        if (Is("DroneHandovers"))
-            return new BusinessRuleException("DUPLICATE_HANDOVER", "The UAV already has an open handover.", exception);
 
         return new BusinessRuleException("DUPLICATE_RESOURCE", "The record already exists.", exception);
     }

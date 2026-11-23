@@ -200,8 +200,8 @@ public class LoginCommandHandlerTests
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
         
         // assert
-        await act.Should().ThrowAsync<Exception>()
-            .WithMessage("Rate limit exceeded");
+        await act.Should().ThrowAsync<UavPms.IdentityService.Application.Common.Exceptions.BusinessRuleException>()
+            .WithMessage("*Rate limit exceeded*");
     }
 
     [Theory]

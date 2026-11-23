@@ -90,9 +90,9 @@ public static class AssessmentMappingExtensions
         }
 
         var hasReqPersonnel = isReadyOrCompleted || (
-            entity.PersonnelCandidates.Count(p => p.IsEligible && (p.Role == "Inspector" || p.Role.Contains("Inspector", StringComparison.OrdinalIgnoreCase) || p.Role.Contains("Pilot", StringComparison.OrdinalIgnoreCase))) >= reqInsp &&
-            entity.PersonnelCandidates.Count(p => p.IsEligible && (p.Role == "Analyst" || p.Role.Contains("Analyst", StringComparison.OrdinalIgnoreCase))) >= reqAna &&
-            entity.PersonnelCandidates.Count(p => p.IsEligible && (p.Role == "Technician" || p.Role == "MaintenanceTechnician" || p.Role.Contains("Tech", StringComparison.OrdinalIgnoreCase))) >= reqTech
+            entity.PersonnelCandidates.Count(p => p.IsEligible && string.Equals(p.Role, "Inspector", StringComparison.OrdinalIgnoreCase)) >= reqInsp &&
+            entity.PersonnelCandidates.Count(p => p.IsEligible && string.Equals(p.Role, "Analyst", StringComparison.OrdinalIgnoreCase)) >= reqAna &&
+            entity.PersonnelCandidates.Count(p => p.IsEligible && string.Equals(p.Role, "Technician", StringComparison.OrdinalIgnoreCase)) >= reqTech
         );
 
         var personnelCheck = new AssessmentCheckResultDto(

@@ -370,7 +370,7 @@ public class AiInspectionPipelineTests
 
         var cloudAnomaly = await context.DetectedAnomalies.SingleAsync(a => a.AnalysisRunId == runId);
         var cloudAlert = await context.EmergencyAlerts.SingleAsync(a => a.AnomalyId == cloudAnomaly.Id);
-        cloudAlert.Status.Should().Be("Active");
+        cloudAlert.Status.Should().Be("Open");
         cloudAlert.Priority.Should().Be("Critical");
 
         // Edge emergency detection should also auto-create an active EmergencyAlert
@@ -407,7 +407,7 @@ public class AiInspectionPipelineTests
 
         edgeResult.Success.Should().BeTrue();
         var edgeAlert = await context.EmergencyAlerts.SingleAsync(a => a.AnomalyId == edgeResult.RecordId);
-        edgeAlert.Status.Should().Be("Active");
+        edgeAlert.Status.Should().Be("Open");
         edgeAlert.Priority.Should().Be("Critical");
     }
 
@@ -592,7 +592,7 @@ public class AiInspectionPipelineTests
         anomaly.AnalystNotes.Should().Contain("Severe crack");
 
         var alert = await context.EmergencyAlerts.SingleAsync();
-        alert.Status.Should().Be("Active");
+        alert.Status.Should().Be("Open");
 
         var outbox = await context.OutboxMessages.ToListAsync();
         outbox.Should().Contain(m => m.MessageType == nameof(AiDetectionCompletedEvent));

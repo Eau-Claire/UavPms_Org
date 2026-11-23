@@ -555,9 +555,9 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
         // Step 5: Overall Status Calculation
         var isSiteFeasible = siteResult.Status == ReadinessCheckStatus.Passed;
-        var hasEligibleInspector = assessment.PersonnelCandidates.Count(x => x.IsEligible && (x.Role.Contains("Inspector", StringComparison.OrdinalIgnoreCase) || x.Role.Contains("Pilot", StringComparison.OrdinalIgnoreCase))) >= reqInspectors;
-        var hasEligibleAnalyst = assessment.PersonnelCandidates.Count(x => x.IsEligible && x.Role.Contains("Analyst", StringComparison.OrdinalIgnoreCase)) >= reqAnalysts;
-        var hasEligibleTechnician = assessment.PersonnelCandidates.Count(x => x.IsEligible && (x.Role.Contains("Tech", StringComparison.OrdinalIgnoreCase) || x.Role.Contains("Maintenance", StringComparison.OrdinalIgnoreCase))) >= reqTechnicians;
+        var hasEligibleInspector = assessment.PersonnelCandidates.Count(x => x.IsEligible && string.Equals(x.Role, "Inspector", StringComparison.OrdinalIgnoreCase)) >= reqInspectors;
+        var hasEligibleAnalyst = assessment.PersonnelCandidates.Count(x => x.IsEligible && string.Equals(x.Role, "Analyst", StringComparison.OrdinalIgnoreCase)) >= reqAnalysts;
+        var hasEligibleTechnician = assessment.PersonnelCandidates.Count(x => x.IsEligible && string.Equals(x.Role, "Technician", StringComparison.OrdinalIgnoreCase)) >= reqTechnicians;
         var hasEligiblePersonnel = hasEligibleInspector && hasEligibleAnalyst && hasEligibleTechnician;
         var hasEligibleDrone = assessment.DroneCandidates.Any(x => x.IsEligible);
 
@@ -771,7 +771,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                 throw new BusinessRuleException("MANAGER_INSTRUCTIONS_TOO_LONG", "Manager instructions are limited to 2,000 characters.");
 
             var primaryInspectorId = request.Personnel
-                .Where(p => string.Equals(p.Role, "INSPECTOR", StringComparison.OrdinalIgnoreCase) || string.Equals(p.Role, "PILOT", StringComparison.OrdinalIgnoreCase))
+                .Where(p => string.Equals(p.Role, "INSPECTOR", StringComparison.OrdinalIgnoreCase))
                 .Select(p => p.UserId)
                 .FirstOrDefault(request.Personnel[0].UserId);
 

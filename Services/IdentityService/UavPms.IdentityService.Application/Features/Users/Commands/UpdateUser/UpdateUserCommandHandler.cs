@@ -37,7 +37,7 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, bool>
         var existingEmail = await _userRepository.GetByEmailWithRolesAsync(normalizedEmail);
         if (existingEmail != null && existingEmail.Id != user.Id)
         {
-            throw new ArgumentException("Email is already in use");
+            throw new UavPms.IdentityService.Application.Common.Exceptions.BusinessRuleException("EMAIL_ALREADY_EXISTS", "Email is already in use");
         }
         
         user.Email = normalizedEmail;

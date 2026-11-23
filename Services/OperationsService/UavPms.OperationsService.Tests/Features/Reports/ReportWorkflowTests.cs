@@ -142,7 +142,7 @@ public class ReportWorkflowTests
         Func<Task> act = async () => await handler.Handle(new SubmitReportCommand(reportId), CancellationToken.None);
 
         // Assert
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Bản nháp (Draft)*");
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*Bản nháp (Draft)*");
     }
 
     [Fact]
@@ -368,7 +368,7 @@ public class ReportWorkflowTests
         Func<Task> act = async () => await handler.Handle(new ApproveReportCommand(reportId), CancellationToken.None);
 
         // Assert
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Chờ duyệt (Pending)*");
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*Chờ duyệt (Pending)*");
     }
 
     #endregion
@@ -454,7 +454,7 @@ public class ReportWorkflowTests
         Func<Task> act = async () => await handler.Handle(new RejectReportCommand(reportId, "Lý do hợp lệ"), CancellationToken.None);
 
         // Assert
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Chờ duyệt (Pending)*");
+        await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*Chờ duyệt (Pending)*");
     }
 
     #endregion

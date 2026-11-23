@@ -48,7 +48,6 @@ public class Mission : BaseEntity
     public virtual PreMissionAssessment? PreMissionAssessment { get; set; }
     public virtual ICollection<MissionAssignment> Assignments { get; set; } = new List<MissionAssignment>();
     public virtual ICollection<MissionCheckIn> CheckIns { get; set; } = new List<MissionCheckIn>();
-    public virtual ICollection<DroneHandover> DroneHandovers { get; set; } = new List<DroneHandover>();
     public virtual ICollection<ResourceBooking> ResourceBookings { get; set; } = new List<ResourceBooking>();
     public virtual ICollection<MissionCommunicationLog> CommunicationLogs { get; set; } = new List<MissionCommunicationLog>();
 
@@ -59,17 +58,14 @@ public class Mission : BaseEntity
     public virtual ICollection<IncidentReport> IncidentReports { get; set; } = new List<IncidentReport>();
     
     #region Derived Data
-    private static readonly string[] InspectorRoles = { "INSPECTOR", "PILOT" };
-
     /// <summary>
-    /// Thanh tra viên chính của nhiệm vụ, suy ra từ MissionAssignments (vai trò INSPECTOR, sau đó PILOT).
+    /// Thanh tra viên chính của nhiệm vụ, suy ra từ MissionAssignments (vai trò INSPECTOR).
     /// Cần nạp Assignments (và Assignments.User nếu dùng PrimaryInspector).
     /// </summary>
     public MissionAssignment? PrimaryInspectorAssignment() => Assignments
         .Where(a => !a.IsDeleted && a.Status == MissionAssignmentStatus.Active
-            && InspectorRoles.Contains((a.AssignmentRole ?? string.Empty).ToUpperInvariant()))
-        .OrderBy(a => string.Equals(a.AssignmentRole, "INSPECTOR", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-        .ThenBy(a => a.AssignedAt)
+            && string.Equals(a.AssignmentRole, "INSPECTOR", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(a => a.AssignedAt)
         .FirstOrDefault();
 
     public Guid? PrimaryInspectorId() => PrimaryInspectorAssignment()?.UserId;

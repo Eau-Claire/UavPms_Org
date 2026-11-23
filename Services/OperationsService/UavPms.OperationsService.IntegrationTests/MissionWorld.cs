@@ -177,7 +177,7 @@ internal sealed class MissionWorld
     }
 
     public Task<Mission> LoadMissionAsync(Guid missionId) => Read(db => db.Missions
-        .Include(m => m.Assignments).Include(m => m.CheckIns).Include(m => m.DroneHandovers)
+        .Include(m => m.Assignments).Include(m => m.CheckIns)
         .AsNoTracking().SingleAsync(m => m.Id == missionId));
 
     public Task<List<ResourceBooking>> BookingsAsync(Guid missionId) => Read(db => db.ResourceBookings.AsNoTracking()

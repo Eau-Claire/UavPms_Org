@@ -313,9 +313,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         var isAllowed = _current.Roles.Any(r =>
             r.Equals(UserRoles.Manager, StringComparison.OrdinalIgnoreCase) ||
             r.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals("Technician", StringComparison.OrdinalIgnoreCase) ||
-            r.Equals(UserRoles.Inspector, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals("Pilot", StringComparison.OrdinalIgnoreCase));
+            r.Equals(UserRoles.Inspector, StringComparison.OrdinalIgnoreCase));
 
         if (!isAllowed)
             throw new ForbiddenException("DRONE_ACCESS_DENIED");

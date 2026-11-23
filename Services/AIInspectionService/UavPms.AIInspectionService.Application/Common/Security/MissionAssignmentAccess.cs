@@ -17,8 +17,7 @@ public static class MissionAssignmentAccess
             a.MissionId == missionId &&
             a.UserId == userId &&
             a.Status == MissionAssignment.ActiveStatus &&
-            (a.AssignmentRole.ToUpper() == MissionAssignment.InspectorRole ||
-             a.AssignmentRole.ToUpper() == MissionAssignment.PilotRole));
+            a.AssignmentRole.ToUpper() == MissionAssignment.InspectorRole);
         return rows.Count > 0;
     }
 
@@ -29,8 +28,7 @@ public static class MissionAssignmentAccess
         var rows = await assignments.FindAsync(a =>
             a.MissionId == missionId &&
             a.Status == MissionAssignment.ActiveStatus &&
-            (a.AssignmentRole.ToUpper() == MissionAssignment.InspectorRole ||
-             a.AssignmentRole.ToUpper() == MissionAssignment.PilotRole));
+            a.AssignmentRole.ToUpper() == MissionAssignment.InspectorRole);
         return rows.Select(a => a.UserId).Distinct().ToList();
     }
 }

@@ -28,7 +28,6 @@ public class ApplicationDbContext : DbContext
     public DbSet<InspectionSchedule> InspectionSchedules => Set<InspectionSchedule>();
     public DbSet<MissionAssignment> MissionAssignments => Set<MissionAssignment>();
     public DbSet<MissionCheckIn> MissionCheckIns => Set<MissionCheckIn>();
-    public DbSet<DroneHandover> DroneHandovers => Set<DroneHandover>();
     public DbSet<ResourceBooking> ResourceBookings => Set<ResourceBooking>();
     public DbSet<MissionPriorityDefect> MissionPriorityDefects => Set<MissionPriorityDefect>();
     public DbSet<MissionTarget> MissionTargets => Set<MissionTarget>();

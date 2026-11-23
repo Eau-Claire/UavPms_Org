@@ -20,14 +20,14 @@ public static class ConflictErrorCodes
         "DUPLICATE_MEDIA",
         "DUPLICATE_REQUEST",
         "ALERT_ALREADY_ACTIVE",
+        "ALERT_ALREADY_RESOLVED",
+        "EMAIL_ALREADY_EXISTS",
         "DUPLICATE_ASSIGNMENT",
         "ASSIGNEE_ALREADY_ASSIGNED",
         "DUPLICATE_CHECK_IN",
-        "DUPLICATE_HANDOVER",
         "DUPLICATE_RESOURCE",
         "DRONE_IN_USE",
-        "REQUIRED_ACCEPTANCE_PENDING",
-        "HANDOVER_REJECTED"
+        "REQUIRED_ACCEPTANCE_PENDING"
     };
 
     public static bool IsConflict(string? code)

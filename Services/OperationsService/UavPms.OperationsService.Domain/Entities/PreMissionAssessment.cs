@@ -67,19 +67,17 @@ public sealed class PreMissionAssessmentPersonnel : BaseEntity
                 .Select(ur => ur.Role?.RoleName)
                 .FirstOrDefault(name => name != null && (
                     name.Equals("Inspector", StringComparison.OrdinalIgnoreCase) ||
-                    name.Equals("Pilot", StringComparison.OrdinalIgnoreCase) ||
                     name.Equals("Analyst", StringComparison.OrdinalIgnoreCase) ||
-                    name.Equals("Technician", StringComparison.OrdinalIgnoreCase) ||
-                    name.Equals("MaintenanceTechnician", StringComparison.OrdinalIgnoreCase)
+                    name.Equals("Technician", StringComparison.OrdinalIgnoreCase)
                 ));
 
             if (!string.IsNullOrEmpty(opRole))
             {
-                if (opRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase) || opRole.Equals("Pilot", StringComparison.OrdinalIgnoreCase))
+                if (opRole.Equals("Inspector", StringComparison.OrdinalIgnoreCase))
                     return "Inspector";
                 if (opRole.Equals("Analyst", StringComparison.OrdinalIgnoreCase))
                     return "Analyst";
-                if (opRole.Equals("Technician", StringComparison.OrdinalIgnoreCase) || opRole.Equals("MaintenanceTechnician", StringComparison.OrdinalIgnoreCase))
+                if (opRole.Equals("Technician", StringComparison.OrdinalIgnoreCase))
                     return "Technician";
                 return opRole;
             }

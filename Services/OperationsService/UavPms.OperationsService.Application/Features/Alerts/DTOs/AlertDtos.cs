@@ -89,7 +89,7 @@ public class EmergencyAlertDetailDto
 
 public class ReviewEmergencyAlertRequest
 {
-    public string Status { get; set; } = "Confirmed";
+    public string Status { get; set; } = "Resolved";
     public string? Notes { get; set; }
 }
 

@@ -15,16 +15,19 @@ public class CompleteMaintenanceTicketCommandHandler : IRequestHandler<CompleteM
 {
     private readonly IGenericRepository<MaintenanceTicket> _ticketRepository;
     private readonly IGenericRepository<MaintenanceProof> _proofRepository;
+    private readonly IGenericRepository<DetectedAnomaly>? _anomalyRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     public CompleteMaintenanceTicketCommandHandler(
         IGenericRepository<MaintenanceTicket> ticketRepository,
         IGenericRepository<MaintenanceProof> proofRepository,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IGenericRepository<DetectedAnomaly>? anomalyRepository = null)
     {
         _ticketRepository = ticketRepository;
         _proofRepository = proofRepository;
         _unitOfWork = unitOfWork;
+        _anomalyRepository = anomalyRepository;
     }
 
     public async Task<MaintenanceTicketDto> Handle(CompleteMaintenanceTicketCommand request, CancellationToken cancellationToken)
@@ -36,6 +39,9 @@ public class CompleteMaintenanceTicketCommandHandler : IRequestHandler<CompleteM
         if (ticket.Status == TicketStatus.Closed)
             throw new BusinessRuleException("TICKET_ALREADY_CLOSED", "Maintenance ticket is already closed.");
 
+        if (ticket.Status != TicketStatus.PendingVerification)
+            throw new BusinessRuleException("TICKET_NOT_PENDING_VERIFICATION", $"Cannot close maintenance ticket from status '{ticket.Status}'. Must be in PendingVerification.");
+
         // Verification check: ensure repair proof photo exists
         var proofs = await _proofRepository.FindAsync(p => p.TicketId == request.TicketId, track: false);
         if (proofs.Count == 0)
@@ -43,11 +49,24 @@ public class CompleteMaintenanceTicketCommandHandler : IRequestHandler<CompleteM
             throw new BusinessRuleException("PROOF_REQUIRED", "Cannot complete maintenance ticket without repair proof photo.");
         }
 
+        var now = DateTime.UtcNow;
         ticket.Status = TicketStatus.Closed;
-        ticket.ResolvedAt = DateTime.UtcNow;
-        ticket.UpdatedAt = DateTime.UtcNow;
+        ticket.ResolvedAt = now;
+        ticket.UpdatedAt = now;
 
         await _ticketRepository.UpdateAsync(ticket);
+
+        if (_anomalyRepository != null && ticket.AnomalyId != Guid.Empty)
+        {
+            var anomaly = await _anomalyRepository.GetByIdAsync(ticket.AnomalyId);
+            if (anomaly != null && !string.Equals(anomaly.ValidationStatus, "Resolved", StringComparison.OrdinalIgnoreCase))
+            {
+                anomaly.ValidationStatus = "Resolved";
+                anomaly.UpdatedAt = now;
+                await _anomalyRepository.UpdateAsync(anomaly);
+            }
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new MaintenanceTicketDto

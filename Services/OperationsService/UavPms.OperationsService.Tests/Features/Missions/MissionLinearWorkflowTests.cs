@@ -305,7 +305,7 @@ public class MissionLinearWorkflowTests
         // Kiểm tra EmergencyAlert và MaintenanceTicket được tự động sinh đồng nhất
         var alert = await db.EmergencyAlerts.FirstOrDefaultAsync(a => a.AnomalyId == anomaly.Id);
         alert.Should().NotBeNull();
-        alert!.Status.Should().Be("Active");
+        alert!.Status.Should().Be("Open");
         alert.Priority.Should().Be("Emergency");
         result.EmergencyAlertId.Should().Be(alert.Id.ToString());
 
@@ -484,7 +484,7 @@ public class MissionLinearWorkflowTests
         result.Should().HaveCount(1);
         result[0].DetectionId.Should().Be(anomaly.Id.ToString());
         result[0].Priority.Should().Be("Urgent");
-        result[0].Status.Should().Be("Pending");
+        result[0].Status.Should().Be("Open");
         result[0].TowerCode.Should().Be("Cột 042");
         result[0].Title.Should().Be("Bát sứ nứt vỡ");
         result[0].SuggestedAction.Should().Be("Bát sứ số 4 chuỗi néo bị nứt vỡ");

@@ -319,7 +319,7 @@ public class Phase2DefectAndMaintenanceCqrsTests
         {
             Id = Guid.NewGuid(),
             AnomalyId = Guid.NewGuid(),
-            Status = TicketStatus.InProgress
+            Status = TicketStatus.PendingVerification
         };
         db.MaintenanceTickets.Add(ticket);
         await db.SaveChangesAsync();

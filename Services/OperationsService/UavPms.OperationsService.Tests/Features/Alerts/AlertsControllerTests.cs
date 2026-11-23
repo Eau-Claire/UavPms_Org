@@ -187,19 +187,19 @@ public class AlertsControllerTests
     }
 
     [Fact]
-    public async Task EscalateAlert_WhenAlertNotFound_ShouldReturnNotFound()
+    public async Task EscalateAlert_WhenAlertNotFound_ShouldPropagateNotFoundException()
     {
         // Arrange
         var alertId = Guid.NewGuid();
         var request = new EscalateEmergencyAlertRequest { EscalatedToUserId = Guid.NewGuid(), Reason = "Reason" };
         _alertServiceMock.Setup(s => s.EscalateAlertAsync(alertId, _currentUserId, request, It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new KeyNotFoundException("Alert not found"));
+            .ThrowsAsync(new UavPms.OperationsService.Application.Common.Exceptions.NotFoundException("EmergencyAlert", alertId));
 
         // Act
-        var result = await _controller.EscalateAlert(alertId, request, CancellationToken.None);
+        Func<Task> act = async () => await _controller.EscalateAlert(alertId, request, CancellationToken.None);
 
         // Assert
-        result.Should().BeOfType<NotFoundObjectResult>();
+        await act.Should().ThrowAsync<UavPms.OperationsService.Application.Common.Exceptions.NotFoundException>();
     }
 
     [Fact]

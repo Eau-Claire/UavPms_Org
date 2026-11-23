@@ -211,7 +211,7 @@ public class AiDetectionCompletedConsumer : BackgroundService
         if (detection.IsEmergencyClass || string.Equals(detection.Severity, "Critical", StringComparison.OrdinalIgnoreCase))
         {
             var activeAlertExists = await db.EmergencyAlerts
-                .AnyAsync(a => a.AnomalyId == targetAnomalyId && a.Status == "Active" && !a.IsDeleted, ct);
+                .AnyAsync(a => a.AnomalyId == targetAnomalyId && a.Status == "Open" && !a.IsDeleted, ct);
 
             if (!activeAlertExists)
             {
@@ -220,7 +220,7 @@ public class AiDetectionCompletedConsumer : BackgroundService
                 {
                     Id = Guid.NewGuid(),
                     AnomalyId = targetAnomalyId,
-                    Status = "Active",
+                    Status = "Open",
                     Priority = "Critical",
                     TriggeredAt = detection.DetectedAt != default ? detection.DetectedAt : now,
                     ReceivedAt = now,

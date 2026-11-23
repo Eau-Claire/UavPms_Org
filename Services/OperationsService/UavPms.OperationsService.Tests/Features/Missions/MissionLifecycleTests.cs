@@ -50,7 +50,6 @@ public class MissionLifecycleTests
         mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), IsRequired = false, ResponseStatus = MissionAssignmentResponse.Pending });
         mission.MissionTargets.Add(new MissionTarget { TowerId = Guid.NewGuid() });
         mission.CheckIns.Add(new MissionCheckIn { UserId = inspector });
-        mission.DroneHandovers.Add(new DroneHandover { DroneId = drone, Status = DroneHandoverStatus.Accepted });
         mission.RecalculateReadiness().Should().BeTrue();
         mission.Status.Should().Be(MissionStatus.Ready);
     }

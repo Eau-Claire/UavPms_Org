@@ -39,8 +39,8 @@ public class CreateUserCommandHandlerTests
         
         Func<Task> act = async () => await _handler.Handle(command, CancellationToken.None);
         
-        await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("Email already exists.");
+        await act.Should().ThrowAsync<UavPms.IdentityService.Application.Common.Exceptions.BusinessRuleException>()
+            .WithMessage("*Email already exists.*");
     }
 
     [Fact]

@@ -276,14 +276,14 @@ public class ReceiveVisionDetectionCommandHandler
         if (isCritical && _alertRepository != null)
         {
             var existingAlerts = await _alertRepository.FindAsync(
-                a => a.AnomalyId == anomaly.Id && a.Status == "Active" && !a.IsDeleted);
+                a => a.AnomalyId == anomaly.Id && a.Status == "Open" && !a.IsDeleted);
             if (existingAlerts == null || !existingAlerts.Any())
             {
                 await _alertRepository.AddAsync(new EmergencyAlert
                 {
                     Id = Guid.NewGuid(),
                     AnomalyId = anomaly.Id,
-                    Status = "Active",
+                    Status = "Open",
                     Priority = "Critical",
                     TriggeredAt = receivedAt,
                     ReceivedAt = receivedAt,

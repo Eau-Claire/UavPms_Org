@@ -302,7 +302,7 @@ public class MissionAiDetectionsTests
         confirmResult.EmergencyAlertId.Should().NotBeNullOrEmpty();
         confirmResult.MaintenanceTaskId.Should().NotBeNullOrEmpty();
 
-        alerts.Should().ContainSingle(a => a.AnomalyId == anomalyToConfirm.Id && a.Status == "Active" && a.Priority == "Emergency");
+        alerts.Should().ContainSingle(a => a.AnomalyId == anomalyToConfirm.Id && a.Status == "Open" && a.Priority == "Emergency");
         tickets.Should().ContainSingle(t =>
             t.AnomalyId == anomalyToConfirm.Id &&
             t.ManagerId == managerId &&
@@ -322,7 +322,7 @@ public class MissionAiDetectionsTests
         {
             Id = Guid.NewGuid(),
             AnomalyId = anomalyToReject.Id,
-            Status = "Active",
+            Status = "Open",
             Priority = "Critical"
         };
         alerts.Add(activeAlert);
@@ -336,7 +336,7 @@ public class MissionAiDetectionsTests
             Notes = "False positive glare"
         }, CancellationToken.None);
 
-        activeAlert.Status.Should().Be("Dismissed");
+        activeAlert.Status.Should().Be("Resolved");
         activeAlert.ReviewedById.Should().Be(analystId);
         activeAlert.ResolvedAt.Should().NotBeNull();
     }

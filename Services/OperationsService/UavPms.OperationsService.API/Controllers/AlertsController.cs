@@ -110,16 +110,9 @@ public class AlertsController : ControllerBase
         [FromBody] EscalateEmergencyAlertRequest request,
         CancellationToken ct)
     {
-        try
-        {
-            var currentUserId = _currentUserServices.UserId;
-            var escalation = await _alertService.EscalateAlertAsync(id, currentUserId, request, ct);
-            return StatusCode(StatusCodes.Status201Created, escalation);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var currentUserId = _currentUserServices.UserId;
+        var escalation = await _alertService.EscalateAlertAsync(id, currentUserId, request, ct);
+        return StatusCode(StatusCodes.Status201Created, escalation);
     }
 
     /// <summary>

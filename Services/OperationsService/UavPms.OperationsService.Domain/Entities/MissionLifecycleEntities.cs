@@ -56,21 +56,3 @@ public class MissionCheckIn : BaseEntity
     public virtual Mission? Mission { get; set; }
     public virtual User? User { get; set; }
 }
-
-public class DroneHandover : BaseEntity
-{
-    public Guid MissionId { get; set; }
-    public Guid DroneId { get; set; }
-    public Guid HandedOverBy { get; set; }
-    public Guid ReceivedBy { get; set; }
-    public DateTime ReceivedAt { get; set; }
-    public string Condition { get; set; } = string.Empty;
-    public string InitialChecklist { get; set; } = "{}";
-    public string? ReturnChecklist { get; set; }
-    public DroneHandoverStatus Status { get; set; }
-    public DateTime? ReturnedAt { get; set; }
-    public virtual Mission? Mission { get; set; }
-    public virtual Uav? Drone { get; set; }
-    public virtual User? HandedOverByUser { get; set; }
-    public virtual User? ReceivedByUser { get; set; }
-}

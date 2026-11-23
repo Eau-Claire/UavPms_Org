@@ -36,7 +36,7 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Guid>
         var existingEmail = await _userRepository.GetByEmailWithRolesAsync(normalizedEmail);
         if (existingEmail != null)
         {
-            throw new ArgumentException("Email already exists.");
+            throw new UavPms.IdentityService.Application.Common.Exceptions.BusinessRuleException("EMAIL_ALREADY_EXISTS", "Email already exists.");
         }
 
         var requestedRoles = (request.Roles ?? new List<string>())

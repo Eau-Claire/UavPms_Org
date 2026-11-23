@@ -82,7 +82,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
         var otp = await _otpService.GenerateAndSendOtpAsync(user.Email, OtpPurpose.Login);
         if (!otp.Success)
         {
-            throw new Exception(otp.Message);
+            throw new UavPms.IdentityService.Application.Common.Exceptions.BusinessRuleException("OTP_SEND_FAILED", otp.Message);
         }
 
         return AuthResultDto.OtpRequiredResult(user.Email);

@@ -58,22 +58,21 @@ public class MissionConfirmationOverdueJob
             _logger.LogWarning("Found {Count} overdue missions requiring notification.", overdueMissions.Count);
 
             // Missions no longer store InspectorId: derive the inspector from the active
-            // INSPECTOR/PILOT assignment (INSPECTOR preferred, earliest assignment first).
+            // INSPECTOR assignment (earliest assignment first).
             var missionIds = overdueMissions.Select(m => m.Id).ToList();
             var inspectorAssignments = await db.MissionAssignments
                 .AsNoTracking()
                 .Where(a => missionIds.Contains(a.MissionId)
                     && !a.IsDeleted
                     && a.Status == ActiveAssignmentStatus
-                    && (a.AssignmentRole.ToUpper() == "INSPECTOR" || a.AssignmentRole.ToUpper() == "PILOT"))
+                    && a.AssignmentRole.ToUpper() == "INSPECTOR")
                 .Select(a => new { a.MissionId, a.UserId, a.AssignmentRole, a.AssignedAt })
                 .ToListAsync();
             var inspectorIds = inspectorAssignments
                 .GroupBy(a => a.MissionId)
                 .ToDictionary(
                     g => g.Key,
-                    g => g.OrderBy(a => string.Equals(a.AssignmentRole, "INSPECTOR", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-                          .ThenBy(a => a.AssignedAt)
+                    g => g.OrderBy(a => a.AssignedAt)
                           .First().UserId);
 
             var eventsToBroadcast =new System.Collections.Generic.List<(string MissionGroup, Guid ManagerId, MissionLifecycleEventDto EventDto)>();

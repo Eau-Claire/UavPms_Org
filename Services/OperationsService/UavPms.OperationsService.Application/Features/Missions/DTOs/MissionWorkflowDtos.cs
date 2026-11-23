@@ -154,20 +154,6 @@ public class MissionAssignmentResponseDto
     public DateTime? UpdatedAt { get; set; }
 }
 
-public class DroneHandoverResponseDto
-{
-    public Guid Id { get; set; }
-    public Guid MissionId { get; set; }
-    public Guid DroneId { get; set; }
-    public Guid HandedOverBy { get; set; }
-    public Guid ReceivedBy { get; set; }
-    public string Condition { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
-    public DateTime ReceivedAt { get; set; }
-    public DateTime? ReturnedAt { get; set; }
-    public DateTime CreatedAt { get; set; }
-}
-
 public class MissionCheckInResponseDto
 {
     public Guid Id { get; set; }
@@ -225,11 +211,6 @@ public record SubmitIncidentReportRequest(
     string Severity,
     string Description,
     Guid? TowerId = null);
-
-public record ReturnDroneHandoverRequest(
-    Guid DroneId,
-    string Condition,
-    object? ReturnChecklist = null);
 
 public record MissionCheckInRequest(
     double? Latitude = null,

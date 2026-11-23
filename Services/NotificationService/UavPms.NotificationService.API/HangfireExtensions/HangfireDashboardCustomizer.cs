@@ -275,9 +275,9 @@ public class HangfireBasicAuthorizationFilter : IDashboardAuthorizationFilter
 
                 var config = httpContext.RequestServices.GetRequiredService<IConfiguration>();
                 var hangfireUser = config["Hangfire:Username"] ?? "admin";
-                var hangfirePassword = config["Hangfire:Password"] ?? "123456";
+                var hangfirePassword = config["Hangfire:Password"];
 
-                if (username == hangfireUser && password == hangfirePassword)
+                if (!string.IsNullOrWhiteSpace(hangfirePassword) && username == hangfireUser && password == hangfirePassword)
                 {
                     return true;
                 }
