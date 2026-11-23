@@ -32,6 +32,8 @@ public static class SettingKeys
     public const string DroneInspectionValidityDays = "Drone:InspectionValidityDays";
     /// <summary>Default validity window for a pre-mission assessment after evaluation, in hours (default 168h = 7 days).</summary>
     public const string AssessmentValidityHours = "Assessment:ValidityHours";
+    /// <summary>Default planned duration in hours when an inspection schedule auto-creates an assessment (default 4h).</summary>
+    public const string ScheduleDefaultPlannedDurationHours = "Schedule:DefaultPlannedDurationHours";
 
     // Missions (MF02/MF03)
     /// <summary>Default confirmation deadline after dispatch, in hours (BR-31); capped at the planned start.</summary>

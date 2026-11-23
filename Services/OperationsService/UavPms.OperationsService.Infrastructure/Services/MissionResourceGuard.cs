@@ -20,6 +20,7 @@ internal static class MissionResourceGuard
     public const int DefaultConfirmationDeadlineHours = 24;
     public const int DefaultStartToleranceMinutes = 120;
     public const int DefaultAssessmentValidityHours = 168; // 7 days
+    public const int DefaultSchedulePlannedDurationHours = 4;
     public const double DefaultCheckInGeofenceRadiusMeters = 200.0;
     public const int DefaultEmergencySlaDays = 1;
     public const int DefaultStandardSlaDays = 7;

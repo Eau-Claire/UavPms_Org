@@ -255,12 +255,14 @@ public sealed class InspectionScheduleService : IInspectionScheduleService
 
         var validityHours = await MissionResourceGuard.GetPositiveIntSettingAsync(
             _db, SettingKeys.AssessmentValidityHours, MissionResourceGuard.DefaultAssessmentValidityHours, ct);
+        var plannedDurationHours = await MissionResourceGuard.GetPositiveIntSettingAsync(
+            _db, SettingKeys.ScheduleDefaultPlannedDurationHours, MissionResourceGuard.DefaultSchedulePlannedDurationHours, ct);
         var plannedStart = utcNow.Date.Add(schedule.PlannedTime.ToTimeSpan());
         if (plannedStart <= utcNow)
         {
             plannedStart = utcNow.AddMinutes(30);
         }
-        var plannedEnd = plannedStart.AddHours(4);
+        var plannedEnd = plannedStart.AddHours(plannedDurationHours);
 
         var assessment = new PreMissionAssessment
         {
