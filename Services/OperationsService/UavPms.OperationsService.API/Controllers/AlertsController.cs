@@ -77,10 +77,10 @@ public class AlertsController : ControllerBase
     }
 
     /// <summary>
-    /// Thẩm định cảnh báo khẩn cấp (Chỉ Analyst) - Xác nhận hoặc Bác bỏ cảnh báo
+    /// Thẩm định cảnh báo khẩn cấp (Analyst, Manager, SystemAdmin) - Xác nhận (Acknowledged) hoặc Đóng (Resolved) cảnh báo
     /// </summary>
     [HttpPut("{id:guid}/review")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReviewAlert(
@@ -119,7 +119,7 @@ public class AlertsController : ControllerBase
     /// Kích hoạt cảnh báo khẩn cấp từ hệ thống AI / Drone / Simulator
     /// </summary>
     [HttpPost("trigger")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     [ProducesResponseType(typeof(EmergencyAlertDetailDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> TriggerAlert(
         [FromBody] TriggerEmergencyAlertRequest request,

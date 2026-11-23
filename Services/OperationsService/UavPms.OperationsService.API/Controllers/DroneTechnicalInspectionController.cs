@@ -22,7 +22,7 @@ public sealed class DroneTechnicalInspectionController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = $"{UserRoles.Technician},Technician,{UserRoles.Manager},{UserRoles.SystemAdmin}")]
+    [Authorize(Roles = UserRoles.AdminManagerTechnician)]
     public async Task<IActionResult> SubmitInspection([FromBody] DroneInspectionSubmitRequest request, CancellationToken ct)
     {
         var inspection = await _inspectionService.SubmitInspectionAsync(request, ct);
@@ -42,7 +42,7 @@ public sealed class DroneTechnicalInspectionController : ControllerBase
     }
 
     [HttpPost("/api/v{version:apiVersion}/uavs/{droneId:guid}/inspections")]
-    [Authorize(Roles = $"{UserRoles.Technician},Technician,{UserRoles.Manager},{UserRoles.SystemAdmin}")]
+    [Authorize(Roles = UserRoles.AdminManagerTechnician)]
     public async Task<IActionResult> SubmitUavInspection(Guid droneId, [FromBody] DroneInspectionSubmitRequest request, CancellationToken ct)
     {
         if (request.DroneId == Guid.Empty)

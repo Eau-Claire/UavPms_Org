@@ -32,7 +32,7 @@ public class AIAnalysisController : ControllerBase
     /// Lấy kết quả phân tích AI theo ID.
     /// </summary>
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = UserRoles.ManagerAndInspector + "," + UserRoles.Analyst)]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetAIAnalysisByIdQuery(id), cancellationToken);
@@ -43,7 +43,7 @@ public class AIAnalysisController : ControllerBase
     /// List mission media that have AI detections, including bounding boxes for FE overlays.
     /// </summary>
     [HttpGet("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/detections")]
-    [Authorize(Roles = UserRoles.ManagerAndInspector + "," + UserRoles.Analyst)]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     public async Task<IActionResult> GetMissionAiDetections(Guid missionId, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetMissionAiDetectionsQuery(missionId), cancellationToken);
@@ -80,7 +80,7 @@ public class AIAnalysisController : ControllerBase
     /// Phân tích AI sử dụng file InspectionMedia đã tồn tại trong mission.
     /// </summary>
     [HttpPost("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/from-media/{mediaId:guid}")]
-    [Authorize(Roles = UserRoles.Manager + "," + UserRoles.Analyst)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     public async Task<IActionResult> AnalyzeExistingMedia(
         Guid missionId,
         Guid mediaId,
@@ -107,7 +107,7 @@ public class AIAnalysisController : ControllerBase
     /// Tải lên ảnh/video trực tiếp lên MinIO và đưa vào hàng đợi phân tích AI (AI Studio Standalone Upload).
     /// </summary>
     [HttpPost("upload")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadStandaloneAnalysis(
         List<IFormFile>? files,
