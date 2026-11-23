@@ -260,7 +260,7 @@ public sealed class InspectionScheduleService : IInspectionScheduleService
         {
             plannedStart = utcNow.AddMinutes(30);
         }
-        var plannedEnd = plannedStart.AddHours(validityHours);
+        var plannedEnd = plannedStart.AddHours(4);
 
         var assessment = new PreMissionAssessment
         {
@@ -272,7 +272,7 @@ public sealed class InspectionScheduleService : IInspectionScheduleService
             OverallTechnicalHealth = TechnicalHealth.Unknown,
             PlannedStart = plannedStart,
             PlannedEnd = plannedEnd,
-            ValidUntil = plannedEnd,
+            ValidUntil = utcNow.AddHours(validityHours),
             EvaluationPolicyVersion = "v2.2",
             Findings = $"{{\"scheduleId\":\"{schedule.Id}\",\"scheduleName\":\"{schedule.Name.Replace("\"", "\\\"")}\"}}",
             CreatedBy = managerId,

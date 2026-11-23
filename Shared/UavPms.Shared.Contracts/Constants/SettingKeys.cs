@@ -30,7 +30,7 @@ public static class SettingKeys
     public const string DroneWarningBatteryThreshold = "Drone:WarningBatteryThreshold";
     public const string DroneMinRfLinkThreshold = "Drone:MinRfLinkThreshold";
     public const string DroneInspectionValidityDays = "Drone:InspectionValidityDays";
-    /// <summary>Default validity window for a pre-mission assessment after evaluation, in hours (capped at PlannedEnd).</summary>
+    /// <summary>Default validity window for a pre-mission assessment after evaluation, in hours (default 168h = 7 days).</summary>
     public const string AssessmentValidityHours = "Assessment:ValidityHours";
 
     // Missions (MF02/MF03)

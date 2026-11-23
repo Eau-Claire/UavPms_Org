@@ -565,8 +565,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         assessment.Status = isReady ? PreMissionAssessmentStatus.Ready : PreMissionAssessmentStatus.NotReady;
         var validityHours = await MissionResourceGuard.GetPositiveIntSettingAsync(
             _db, SettingKeys.AssessmentValidityHours, MissionResourceGuard.DefaultAssessmentValidityHours, ct);
-        var expiryCandidate = DateTime.UtcNow.AddHours(validityHours);
-        assessment.ValidUntil = expiryCandidate < assessment.PlannedEnd ? expiryCandidate : assessment.PlannedEnd;
+        assessment.ValidUntil = DateTime.UtcNow.AddHours(validityHours);
         assessment.Version++;
         assessment.EvaluationPolicyVersion = "v2.0";
 
