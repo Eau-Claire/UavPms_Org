@@ -197,13 +197,13 @@ public class TowerHandlersTests
         var cloudRun = new AIAnalysisRun { Id = Guid.NewGuid(), MediaId = media.Id, ExecutionLocation = AIAnalysisRun.Cloud, ModelName = "YOLOv8-cloud", Status = AIAnalysisStatus.Completed };
         db.AIAnalysisRuns.Add(cloudRun);
 
-        // Edge detection later superseded by the cloud result -> must be hidden.
+        // Earlier cloud detection later superseded by the newer cloud result -> must be hidden.
         var cloudAnomaly = new DetectedAnomaly
         {
             Id = Guid.NewGuid(), MediaId = media.Id, AnalysisRunId = cloudRun.Id, TowerId = tower.Id,
             CategoryId = category.Id, ConfidenceScore = 0.91, ValidationStatus = "Confirmed"
         };
-        var supersededEdge = new DetectedAnomaly
+        var supersededPrior = new DetectedAnomaly
         {
             Id = Guid.NewGuid(), MediaId = media.Id, TowerId = tower.Id, SupersededById = cloudAnomaly.Id,
             CategoryId = category.Id, ConfidenceScore = 0.7, ValidationStatus = "Pending"
@@ -218,7 +218,7 @@ public class TowerHandlersTests
             Id = Guid.NewGuid(), MediaId = media.Id, TowerId = otherTower.Id,
             CategoryId = category.Id, ConfidenceScore = 0.8, ValidationStatus = "Confirmed"
         };
-        db.DetectedAnomalies.AddRange(cloudAnomaly, supersededEdge, manualAnomaly, otherTowerAnomaly);
+        db.DetectedAnomalies.AddRange(cloudAnomaly, supersededPrior, manualAnomaly, otherTowerAnomaly);
 
         var ticket = new MaintenanceTicket
         {

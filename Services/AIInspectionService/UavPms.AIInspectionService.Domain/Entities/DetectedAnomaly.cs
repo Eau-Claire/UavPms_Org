@@ -22,7 +22,7 @@ public class DetectedAnomaly : BaseEntity
     /// <summary>AI run that produced this anomaly; NULL = manual.</summary>
     public Guid? AnalysisRunId { get; set; }
 
-    /// <summary>Anomaly (Cloud result) that replaced this one (Edge result).</summary>
+    /// <summary>Anomaly from a newer Cloud analysis run that replaced this one.</summary>
     public Guid? SupersededById { get; set; }
 
     /// <summary>Tower the defect is on; required before the anomaly can be Confirmed.</summary>
@@ -31,7 +31,7 @@ public class DetectedAnomaly : BaseEntity
     public Guid? AnalystId { get; set; }
     public string BoundingBox { get; set; } = string.Empty; // Will be mapped to jsonb
 
-    /// <summary>Detection id from the AI worker; Edge = TrackId.</summary>
+    /// <summary>Detection id from the AI worker.</summary>
     public string? AiDetectionId { get; set; }
     public int? FrameIndex { get; set; }
     public double? FrameTimeSeconds { get; set; }

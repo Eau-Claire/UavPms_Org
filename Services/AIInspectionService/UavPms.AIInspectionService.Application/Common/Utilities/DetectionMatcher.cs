@@ -16,8 +16,8 @@ public readonly record struct DetectionBox(double X, double Y, double Width, dou
 }
 
 /// <summary>
-/// Decides whether a cloud detection is the same defect as an earlier edge detection on the same media,
-/// so the edge row can be marked <see cref="DetectedAnomaly.SupersededById"/>.
+/// Decides whether a new cloud detection is the same defect as an earlier detection on the same media,
+/// so the earlier row can be marked <see cref="DetectedAnomaly.SupersededById"/>.
 /// </summary>
 public static class DetectionMatcher
 {
@@ -28,38 +28,38 @@ public static class DetectionMatcher
     /// Same category (checked by the caller) and, when both are known:
     /// frame times at most <see cref="MaxFrameGapSeconds"/> apart and IoU of the boxes at least <see cref="MinIoU"/>.
     /// A missing box, or boxes in different units that the media size cannot reconcile, falls back to the
-    /// category-only rule so an edge result is never kept beside its cloud replacement for lack of geometry.
+    /// category-only rule so an earlier result is never kept beside its replacement for lack of geometry.
     /// </summary>
-    public static bool IsSameDefect(DetectedAnomaly edge, DetectedAnomaly cloud, int? mediaWidthPx, int? mediaHeightPx)
+    public static bool IsSameDefect(DetectedAnomaly prior, DetectedAnomaly current, int? mediaWidthPx, int? mediaHeightPx)
     {
-        if (edge.FrameTimeSeconds.HasValue && cloud.FrameTimeSeconds.HasValue &&
-            Math.Abs(edge.FrameTimeSeconds.Value - cloud.FrameTimeSeconds.Value) > MaxFrameGapSeconds)
+        if (prior.FrameTimeSeconds.HasValue && current.FrameTimeSeconds.HasValue &&
+            Math.Abs(prior.FrameTimeSeconds.Value - current.FrameTimeSeconds.Value) > MaxFrameGapSeconds)
         {
             return false;
         }
 
-        if (!TryParse(edge.BoundingBox, out var edgeBox) || !TryParse(cloud.BoundingBox, out var cloudBox))
+        if (!TryParse(prior.BoundingBox, out var priorBox) || !TryParse(current.BoundingBox, out var currentBox))
         {
             return true;
         }
 
-        if (edgeBox.IsNormalized != cloudBox.IsNormalized)
+        if (priorBox.IsNormalized != currentBox.IsNormalized)
         {
             if (mediaWidthPx is not > 0 || mediaHeightPx is not > 0)
             {
                 return true;
             }
-            if (edgeBox.IsNormalized) edgeBox = edgeBox.Scale(mediaWidthPx.Value, mediaHeightPx.Value);
-            else cloudBox = cloudBox.Scale(mediaWidthPx.Value, mediaHeightPx.Value);
+            if (priorBox.IsNormalized) priorBox = priorBox.Scale(mediaWidthPx.Value, mediaHeightPx.Value);
+            else currentBox = currentBox.Scale(mediaWidthPx.Value, mediaHeightPx.Value);
         }
 
-        return IoU(edgeBox, cloudBox) >= MinIoU;
+        return IoU(priorBox, currentBox) >= MinIoU;
     }
 
     public static double IoU(DetectionBox a, DetectionBox b)
         => BoundingBoxCalculations.CalculateIoU(a.X, a.Y, a.Right, a.Bottom, b.X, b.Y, b.Right, b.Bottom);
 
-    /// <summary>Parses the stored JSON: {x, y, width, height} (cloud) or {x1, y1, x2, y2} (edge), case-insensitive.</summary>
+    /// <summary>Parses the stored JSON: {x, y, width, height} or {x1, y1, x2, y2}, case-insensitive.</summary>
     public static bool TryParse(string? json, out DetectionBox box)
     {
         box = default;

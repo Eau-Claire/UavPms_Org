@@ -267,7 +267,7 @@ public class EmergencyAlertService : IEmergencyAlertService
         else
         {
             if (missionId == Guid.Empty)
-                throw new InvalidOperationException("An edge alert without an existing anomaly requires a mission to attach its media to.");
+                throw new InvalidOperationException("An emergency alert without an existing anomaly requires a mission to attach its media to.");
 
             var defaultCategory = await _db.DefectCategories.FirstOrDefaultAsync(c => c.IsEmergencyClass, ct)
                 ?? await _db.DefectCategories.FirstOrDefaultAsync(ct);
@@ -294,10 +294,10 @@ public class EmergencyAlertService : IEmergencyAlertService
             {
                 Id = Guid.NewGuid(),
                 MediaId = media.Id,
-                ExecutionLocation = AIAnalysisRun.Edge,
+                ExecutionLocation = AIAnalysisRun.Cloud,
                 UavId = mission?.UavId,
                 AnalysisType = AnalysisType.DefectDetection,
-                ModelName = "EdgeAI",
+                ModelName = "SERVER",
                 Status = AIAnalysisStatus.Completed,
                 StartedAt = now,
                 CompletedAt = now
@@ -343,7 +343,7 @@ public class EmergencyAlertService : IEmergencyAlertService
         _db.EmergencyAlerts.Add(alert);
         await _db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("EmergencyAlert {AlertId} triggered successfully by Edge AI / Drone", alert.Id);
+        _logger.LogInformation("EmergencyAlert {AlertId} triggered successfully by Cloud AI / Drone", alert.Id);
 
         // Fail-Safe: Record safety warning communication log on the active flight mission
         if (missionId != Guid.Empty)
@@ -376,7 +376,7 @@ public class EmergencyAlertService : IEmergencyAlertService
                 .ToListAsync(ct);
 
             var title = $"🚨 CẢNH BÁO KHẨN CẤP: {request.AlertType ?? "Sự cố nghiêm trọng"}";
-            var body = $"Edge AI phát hiện sự cố khẩn cấp tại {request.TowerCode ?? "khu vực bay"}. Độ trễ truyền tin {request.DeliveryLatencySeconds}s. Yêu cầu kiểm tra ngay!";
+            var body = $"Hệ thống AI phát hiện sự cố khẩn cấp tại {request.TowerCode ?? "khu vực bay"}. Độ trễ truyền tin {request.DeliveryLatencySeconds}s. Yêu cầu kiểm tra ngay!";
 
             foreach (var userId in targetUsers)
             {

@@ -136,7 +136,7 @@ public class ProcessAiAnalysisResultCommandHandler
             {
                 var detections = request.Detections ?? [];
 
-                // Earlier active results on the same media (from Edge or an earlier Cloud run) that this run may match.
+                // Earlier active results on the same media from a previous Cloud run that this run may match.
                 var priorCandidates = detections.Count == 0
                     ? new List<DetectedAnomaly>()
                     : (await _anomalyRepo.FindAsync(a =>
@@ -232,7 +232,7 @@ public class ProcessAiAnalysisResultCommandHandler
                     await _anomalyRepo.AddAsync(anomaly);
                     savedDetections++;
 
-                    // Cloud result replaces awaiting-review results (Edge or earlier Cloud run) of the same defect:
+                    // Cloud result replaces awaiting-review results from earlier runs of the same defect:
                     // same media and category, nearby frame and overlapping box (IoU >= 0.5), see DetectionMatcher.
                     var inheritedOpenAlert = false;
                     foreach (var prior in matchingPriors)

@@ -116,7 +116,7 @@ public class AlertsController : ControllerBase
     }
 
     /// <summary>
-    /// Kích hoạt cảnh báo khẩn cấp từ Edge AI / Drone / Simulator
+    /// Kích hoạt cảnh báo khẩn cấp từ hệ thống AI / Drone / Simulator
     /// </summary>
     [HttpPost("trigger")]
     [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]

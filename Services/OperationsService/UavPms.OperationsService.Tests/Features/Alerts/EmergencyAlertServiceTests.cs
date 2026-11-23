@@ -207,8 +207,8 @@ public class EmergencyAlertServiceTests
         db.Roles.Add(role);
         db.Users.Add(new User { Id = analystId, FullName = "Analyst Bob", Email = "bob@example.com", Status = "Active" });
         db.UserRoles.Add(new UserRole { UserId = analystId, RoleId = 1, Role = role });
-        // Edge alerts without an anomaly create media + Edge AI run + anomaly; media needs a mission.
-        var mission = new Mission { Id = Guid.NewGuid(), MissionCode = "MS-EDGE-01", Status = MissionStatus.InProgress };
+        // Alerts without an anomaly create media + Cloud AI run + anomaly; media needs a mission.
+        var mission = new Mission { Id = Guid.NewGuid(), MissionCode = "MS-CLOUD-01", Status = MissionStatus.InProgress };
         db.Missions.Add(mission);
         var tower = new Tower { Id = Guid.NewGuid(), RegionId = Guid.NewGuid(), TowerCode = "TOW-N1-05" };
         db.Towers.Add(tower);
@@ -235,7 +235,7 @@ public class EmergencyAlertServiceTests
         alert.Anomaly!.TowerId.Should().Be(tower.Id);
         alert.Anomaly.Media!.MissionId.Should().Be(mission.Id);
         var run = await db.AIAnalysisRuns.SingleAsync(r => r.Id == alert.Anomaly.AnalysisRunId);
-        run.ExecutionLocation.Should().Be(AIAnalysisRun.Edge);
+        run.ExecutionLocation.Should().Be(AIAnalysisRun.Cloud);
         run.Status.Should().Be(AIAnalysisStatus.Completed);
 
         mockPublisher.Verify(p => p.PublishAsync(It.Is<NotificationPushEvent>(e =>

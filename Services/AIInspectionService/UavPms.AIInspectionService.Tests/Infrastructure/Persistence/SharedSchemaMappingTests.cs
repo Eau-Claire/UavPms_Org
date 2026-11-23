@@ -59,7 +59,7 @@ public sealed class SharedSchemaMappingTests
         new DetectedAnomaly
         {
             AnalysisRunId = Guid.NewGuid(),
-            AnalysisRun = new AIAnalysisRun { ExecutionLocation = AIAnalysisRun.Edge, ModelName = "VisionEdge" }
-        }.GetAiSource().Should().Be("VisionEdge");
+            AnalysisRun = new AIAnalysisRun { ExecutionLocation = AIAnalysisRun.Cloud, ModelName = "RF-DETR" }
+        }.GetAiSource().Should().Be("RF-DETR");
     }
 }

@@ -9,37 +9,24 @@ public static class AIAnalysisRequestTopology
     public const string ServerQueueName = "ai.analysis.server.requested";
     public const string ServerImageQueueName = "ai.analysis.server.image.requested";
     public const string ServerVideoQueueName = "ai.analysis.server.video.requested";
-    public const string EdgeQueueName = "ai.analysis.edge.requested";
-    public const string EdgeImageQueueName = "ai.analysis.edge.image.requested";
-    public const string EdgeVideoQueueName = "ai.analysis.edge.video.requested";
     public const string ServerRoutingKey = "identity.event.aianalysisrequestedevent.server";
     public const string ServerImageRoutingKey = "identity.event.aianalysisrequestedevent.server.image";
     public const string ServerVideoRoutingKey = "identity.event.aianalysisrequestedevent.server.video";
-    public const string EdgeRoutingKey = "identity.event.aianalysisrequestedevent.edge";
-    public const string EdgeImageRoutingKey = "identity.event.aianalysisrequestedevent.edge.image";
-    public const string EdgeVideoRoutingKey = "identity.event.aianalysisrequestedevent.edge.video";
 
     public static readonly IReadOnlyList<AIAnalysisRequestRoute> Routes =
     [
         new(ServerQueueName, ServerRoutingKey),
         new(ServerImageQueueName, ServerImageRoutingKey),
-        new(ServerVideoQueueName, ServerVideoRoutingKey),
-        new(EdgeQueueName, EdgeRoutingKey),
-        new(EdgeImageQueueName, EdgeImageRoutingKey),
-        new(EdgeVideoQueueName, EdgeVideoRoutingKey)
+        new(ServerVideoQueueName, ServerVideoRoutingKey)
     ];
 
     public static string GetRoutingKey(string? preferredModel, string? mediaType)
     {
-        var runtime = string.Equals(preferredModel, "YOLO11", StringComparison.OrdinalIgnoreCase) ||
-                      string.Equals(preferredModel, "EDGE", StringComparison.OrdinalIgnoreCase)
-            ? "edge"
-            : "server";
         var media = string.Equals(mediaType, "Video", StringComparison.OrdinalIgnoreCase)
             ? "video"
             : "image";
 
-        return $"identity.event.aianalysisrequestedevent.{runtime}.{media}";
+        return $"identity.event.aianalysisrequestedevent.server.{media}";
     }
 
     public static async Task DeclareAsync(IChannel channel, CancellationToken cancellationToken)

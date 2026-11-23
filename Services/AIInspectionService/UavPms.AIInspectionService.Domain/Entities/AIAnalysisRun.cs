@@ -6,25 +6,23 @@ using UavPms.AIInspectionService.Domain.Enums;
 namespace UavPms.AIInspectionService.Domain.Entities;
 
 /// <summary>
-/// Một lần chạy model AI trên một media (bảng AIAnalysisRuns), ở thiết bị edge hoặc trên cloud.
-/// Nhánh Edge ghi run Completed ngay khi nhận kết quả; nhánh Cloud tạo run Pending rồi cập nhật theo callback.
+/// Một lần chạy model AI trên một media (bảng AIAnalysisRuns) trên Cloud.
 /// File URL / media type / mission lấy qua <see cref="Media"/>.
 /// </summary>
 public class AIAnalysisRun : BaseEntity
 {
-    public const string Edge = "Edge";
     public const string Cloud = "Cloud";
 
     /// <summary>Media được phân tích (bắt buộc)</summary>
     public Guid MediaId { get; set; }
 
-    /// <summary>"Edge" hoặc "Cloud"</summary>
+    /// <summary>Vị trí thực thi AI ("Cloud")</summary>
     public string ExecutionLocation { get; set; } = Cloud;
 
-    /// <summary>Thiết bị edge đã chạy model (chỉ nhánh Edge)</summary>
+    /// <summary>UAV liên kết với nhiệm vụ/lần chạy (nếu có)</summary>
     public Guid? UavId { get; set; }
 
-    /// <summary>Người yêu cầu phân tích (chỉ nhánh Cloud); NULL = tự động</summary>
+    /// <summary>Người yêu cầu phân tích; NULL = tự động</summary>
     public Guid? RequestedBy { get; set; }
 
     /// <summary>Loại phân tích AI (lưu dạng chuỗi)</summary>
