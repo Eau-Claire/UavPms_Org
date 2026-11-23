@@ -159,16 +159,18 @@ public class BottomUpModularIntegrationTests
         await scope.SeedUserAsync(tag, UserRoles.Analyst, regionId);
         var technicianId = await scope.SeedUserAsync(tag, UserRoles.Technician, regionId);
 
-        // 1. Configure SystemSettings: Assessment:ValidityHours = 168 (7 days) & Drone:InspectionValidityDays = 7
+        // 1. Configure SystemSettings: Assessment:ValidityHours = 168 (7 days) & Drone:InspectionValidityDays = 45
+        // We schedule the assessment 30 days in the future so any 7-day drone inspections created by earlier tests in the
+        // shared PostGIS container are already expired at plannedStart, isolating this test's UAV completely.
         await using (var db = scope.CreateContext(UserContext(managerId, UserRoles.Manager)))
         {
             var settingService = new SystemSettingService(db, NullLogger<SystemSettingService>.Instance);
             await settingService.UpdateAsync(SettingKeys.AssessmentValidityHours, "168");
-            await settingService.UpdateAsync(SettingKeys.DroneInspectionValidityDays, "7");
+            await settingService.UpdateAsync(SettingKeys.DroneInspectionValidityDays, "45");
         }
 
         // 2. Manager creates PreMissionAssessment before drone is inspected -> Status must be NotReady
-        var plannedStart = DateTime.UtcNow.AddHours(2);
+        var plannedStart = DateTime.UtcNow.AddDays(30);
         var plannedEnd = plannedStart.AddHours(4);
         Guid assessmentId;
         await using (var db = scope.CreateContext(UserContext(managerId, UserRoles.Manager)))
@@ -182,7 +184,7 @@ public class BottomUpModularIntegrationTests
             assessment.ValidUntil.Should().BeCloseTo(DateTime.UtcNow.AddHours(168), TimeSpan.FromMinutes(2));
         }
 
-        // 3. Technician submits passing BIST technical inspection -> UAV health becomes Healthy (valid for 7 days)
+        // 3. Technician submits passing BIST technical inspection -> UAV health becomes Healthy (valid for 45 days > 30 days)
         await using (var db = scope.CreateContext(UserContext(technicianId, UserRoles.Technician)))
         {
             var settingService = new SystemSettingService(db, NullLogger<SystemSettingService>.Instance);
@@ -201,7 +203,8 @@ public class BottomUpModularIntegrationTests
 
             inspection.Status.Should().Be(DroneTechnicalInspectionStatus.Passed);
             inspection.Health.Should().Be(TechnicalHealth.Healthy);
-            inspection.ValidUntil.Should().BeCloseTo(DateTime.UtcNow.AddDays(7), TimeSpan.FromMinutes(2));
+            inspection.ValidUntil.Should().BeCloseTo(DateTime.UtcNow.AddDays(45), TimeSpan.FromMinutes(2));
+            await settingService.UpdateAsync(SettingKeys.DroneInspectionValidityDays, "7");
         }
 
         // 4. Manager re-evaluates PreMissionAssessment -> Status transitions NotReady -> Ready
@@ -405,6 +408,7 @@ public class BottomUpModularIntegrationTests
                 Id = Guid.NewGuid(),
                 MissionId = mission.Id,
                 UserId = inspectorId,
+                AssignedById = managerId,
                 AssignmentRole = "INSPECTOR",
                 IsRequired = true,
                 Status = MissionAssignmentStatus.Active,
@@ -566,6 +570,7 @@ public class BottomUpModularIntegrationTests
                 Id = Guid.NewGuid(),
                 MissionId = mission.Id,
                 UserId = analystId,
+                AssignedById = managerId,
                 AssignmentRole = "ANALYST",
                 Status = MissionAssignmentStatus.Active,
                 ResponseStatus = MissionAssignmentResponse.Accepted
@@ -623,8 +628,8 @@ public class BottomUpModularIntegrationTests
                     OverrideSeverity: "Critical"),
                 CancellationToken.None);
 
-            reviewResult.Status.Should().Be("Approved");
-            Guid.TryParse(reviewResult.CreatedTaskId, out ticketId).Should().BeTrue();
+            reviewResult.Status.Should().Be("Confirmed");
+            Guid.TryParse(reviewResult.MaintenanceTaskId, out ticketId).Should().BeTrue();
             Guid.TryParse(reviewResult.EmergencyAlertId, out alertId).Should().BeTrue();
         }
 
