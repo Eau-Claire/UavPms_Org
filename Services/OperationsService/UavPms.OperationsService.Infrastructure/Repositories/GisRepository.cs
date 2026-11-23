@@ -38,7 +38,7 @@ public class GisRepository : IGisRepository
                 a.Category!.CategoryName, a.Category.SeverityWeight * 5, a.Tower.Geom!.Coordinate.Y, a.Tower.Geom.Coordinate.X,
                 a.ValidationStatus, a.ConfidenceScore, a.ImageUrl, a.CreatedAt)).ToListAsync(ct);
         var alerts = await _context.EmergencyAlerts.AsNoTracking()
-            .Where(a => a.Status == "Active" && a.Anomaly!.TowerId != null && towerIds.Contains(a.Anomaly.TowerId.Value))
+            .Where(a => (a.Status == "Open" || a.Status == "Acknowledged") && a.Anomaly!.TowerId != null && towerIds.Contains(a.Anomaly.TowerId.Value))
             .Select(a => new GisAlertDto(a.Id, a.AnomalyId, a.Anomaly!.TowerId, a.Anomaly.Tower!.TowerCode,
                 a.Anomaly.Tower.Geom!.Coordinate.Y, a.Anomaly.Tower.Geom.Coordinate.X, a.Status, a.Priority,
                 a.Anomaly.Category!.CategoryName, a.TriggeredAt)).ToListAsync(ct);

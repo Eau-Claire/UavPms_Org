@@ -18,7 +18,11 @@ public class CleanupJob(ILogger<CleanupJob> logger, IConfiguration configuration
 
     public async Task Execute()
     {
-        _logger.LogInformation("Auto-Cleanup job started: Purging stored files older than 30 days and expired/revoked tokens...");
+        var retentionDays = int.TryParse(_configuration["Notification:RetentionDays"], out var configuredDays) && configuredDays > 0
+            ? configuredDays
+            : 30;
+
+        _logger.LogInformation("Auto-Cleanup job started: Purging stored files older than {RetentionDays} days and expired/revoked tokens...", retentionDays);
 
         var imagePath = _configuration["FileStorage:AlertImagesPath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uav_storage", "images");
         
@@ -41,7 +45,7 @@ public class CleanupJob(ILogger<CleanupJob> logger, IConfiguration configuration
             if (Directory.Exists(imagePath))
             {
                 var directoryInfo = new DirectoryInfo(imagePath);
-                var thresholdDate = DateTime.UtcNow.AddDays(-30);
+                var thresholdDate = DateTime.UtcNow.AddDays(-retentionDays);
                 int deletedCount = 0;
 
                 foreach (var file in directoryInfo.GetFiles())
@@ -53,7 +57,7 @@ public class CleanupJob(ILogger<CleanupJob> logger, IConfiguration configuration
                     }
                 }
 
-                _logger.LogInformation("Auto-Cleanup: Purged {Count} files older than 30 days.", deletedCount);
+                _logger.LogInformation("Auto-Cleanup: Purged {Count} files older than {RetentionDays} days.", deletedCount, retentionDays);
             }
             else
             {
@@ -70,7 +74,7 @@ public class CleanupJob(ILogger<CleanupJob> logger, IConfiguration configuration
         {
             using var scope = _scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var thresholdDate = DateTime.UtcNow.AddDays(-30);
+            var thresholdDate = DateTime.UtcNow.AddDays(-retentionDays);
 
             // Xóa RefreshTokens hết hạn hoặc đã bị thu hồi quá 30 ngày
             var oldTokens = await dbContext.RefreshTokens

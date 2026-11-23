@@ -30,10 +30,20 @@ public static class SettingKeys
     public const string DroneWarningBatteryThreshold = "Drone:WarningBatteryThreshold";
     public const string DroneMinRfLinkThreshold = "Drone:MinRfLinkThreshold";
     public const string DroneInspectionValidityDays = "Drone:InspectionValidityDays";
+    /// <summary>Default validity window for a pre-mission assessment after evaluation, in hours (capped at PlannedEnd).</summary>
+    public const string AssessmentValidityHours = "Assessment:ValidityHours";
 
     // Missions (MF02/MF03)
     /// <summary>Default confirmation deadline after dispatch, in hours (BR-31); capped at the planned start.</summary>
     public const string MissionConfirmationDeadlineHours = "Mission:ConfirmationDeadlineHours";
     /// <summary>How long before the planned start a mission may be started, in minutes (BR-38).</summary>
     public const string MissionStartToleranceMinutes = "Mission:StartToleranceMinutes";
+    /// <summary>Maximum allowed distance in meters from the target tower when checking in on site.</summary>
+    public const string MissionCheckInGeofenceRadiusMeters = "Mission:CheckInGeofenceRadiusMeters";
+
+    // Maintenance Tickets (MF04)
+    /// <summary>Default due-date SLA in days for emergency maintenance tickets auto-created from AI review.</summary>
+    public const string MaintenanceEmergencySlaDays = "Maintenance:EmergencySlaDays";
+    /// <summary>Default due-date SLA in days for standard/high maintenance tickets auto-created from AI review.</summary>
+    public const string MaintenanceStandardSlaDays = "Maintenance:StandardSlaDays";
 }

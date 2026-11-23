@@ -12,7 +12,9 @@ using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMiss
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
+using UavPms.Shared.Contracts.Constants;
 using UavPms.Shared.Contracts.Events;
+using UavPms.Shared.Contracts.Interfaces;
 
 namespace UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
 
@@ -27,6 +29,7 @@ public class ReviewMissionAiDetectionCommandHandler
     private readonly IGenericRepository<EmergencyAlert>? _alertRepository;
     private readonly IGenericRepository<MaintenanceTicket>? _ticketRepository;
     private readonly IGenericRepository<Mission>? _missionRepository;
+    private readonly ISystemSettingService? _systemSettingService;
 
     [ActivatorUtilitiesConstructor]
     public ReviewMissionAiDetectionCommandHandler(
@@ -37,7 +40,8 @@ public class ReviewMissionAiDetectionCommandHandler
         IEventPublisher eventPublisher,
         IGenericRepository<EmergencyAlert>? alertRepository = null,
         IGenericRepository<MaintenanceTicket>? ticketRepository = null,
-        IGenericRepository<Mission>? missionRepository = null)
+        IGenericRepository<Mission>? missionRepository = null,
+        ISystemSettingService? systemSettingService = null)
     {
         _anomalyRepository = anomalyRepository;
         _unitOfWork = unitOfWork;
@@ -47,6 +51,7 @@ public class ReviewMissionAiDetectionCommandHandler
         _alertRepository = alertRepository;
         _ticketRepository = ticketRepository;
         _missionRepository = missionRepository;
+        _systemSettingService = systemSettingService;
     }
 
     public ReviewMissionAiDetectionCommandHandler(
@@ -154,6 +159,15 @@ public class ReviewMissionAiDetectionCommandHandler
                             ? MaintenanceTicket.PriorityLow
                             : MaintenanceTicket.PriorityHigh);
 
+                    var defaultSlaDays = isEmergency ? 1 : 7;
+                    var slaSettingKey = isEmergency
+                        ? SettingKeys.MaintenanceEmergencySlaDays
+                        : SettingKeys.MaintenanceStandardSlaDays;
+                    var configuredSlaDays = _systemSettingService != null
+                        ? await _systemSettingService.GetIntAsync(slaSettingKey, defaultSlaDays, cancellationToken)
+                        : defaultSlaDays;
+                    var slaDays = configuredSlaDays > 0 ? configuredSlaDays : defaultSlaDays;
+
                     var ticket = new MaintenanceTicket
                     {
                         Id = Guid.NewGuid(),
@@ -165,7 +179,7 @@ public class ReviewMissionAiDetectionCommandHandler
                         Status = MaintenanceTicket.StatusOpen,
                         Priority = priority,
                         Description = $"[AI Review] {anomaly.Category?.CategoryName ?? "Defect"}: {request.Notes ?? anomaly.AnalystNotes}",
-                        DueDate = now.AddDays(isEmergency ? 1 : 7),
+                        DueDate = now.AddDays(slaDays),
                         CreatedAt = now
                     };
                     await _ticketRepository.AddAsync(ticket);

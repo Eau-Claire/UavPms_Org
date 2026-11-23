@@ -253,12 +253,14 @@ public sealed class InspectionScheduleService : IInspectionScheduleService
             throw new BusinessRuleException("MANAGER_REQUIRED", "A valid manager user is required to trigger an inspection schedule.");
         }
 
+        var validityHours = await MissionResourceGuard.GetPositiveIntSettingAsync(
+            _db, SettingKeys.AssessmentValidityHours, MissionResourceGuard.DefaultAssessmentValidityHours, ct);
         var plannedStart = utcNow.Date.Add(schedule.PlannedTime.ToTimeSpan());
         if (plannedStart <= utcNow)
         {
             plannedStart = utcNow.AddMinutes(30);
         }
-        var plannedEnd = plannedStart.AddHours(4);
+        var plannedEnd = plannedStart.AddHours(validityHours);
 
         var assessment = new PreMissionAssessment
         {
@@ -270,7 +272,7 @@ public sealed class InspectionScheduleService : IInspectionScheduleService
             OverallTechnicalHealth = TechnicalHealth.Unknown,
             PlannedStart = plannedStart,
             PlannedEnd = plannedEnd,
-            ValidUntil = plannedStart.AddDays(1),
+            ValidUntil = plannedEnd,
             EvaluationPolicyVersion = "v2.2",
             Findings = $"{{\"scheduleId\":\"{schedule.Id}\",\"scheduleName\":\"{schedule.Name.Replace("\"", "\\\"")}\"}}",
             CreatedBy = managerId,

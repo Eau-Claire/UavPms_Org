@@ -61,10 +61,10 @@ Gửi Bearer JWT Token qua HTTP Request Header:
 Authorization: Bearer <access_token>
 ```
 
-Hệ thống định nghĩa 6 vai trò tiêu chuẩn (`UserRoles`):
+Hệ thống định nghĩa 5 vai trò tiêu chuẩn (`UserRoles`):
 1. **`SystemAdmin`**: Toàn quyền cấu hình hệ thống, quản lý tài khoản, gán quyền, xem toàn bộ Audit Logs.
 2. **`Manager`**: Quản lý vận hành khu vực; lập đánh giá tiền khả thi (MF01), tạo & phân công nhiệm vụ (MF02), phát lệnh bảo trì, duyệt cảnh báo sự cố.
-3. **`Pilot` / `Inspector`**: Phi công / Thanh tra viên hiện trường; check-in, nhận/trả drone (MF03), tải ảnh kiểm tra, nạp log bay, báo cáo sự cố.
+3. **`Inspector`**: Thanh tra viên hiện trường; check-in (MF03), tải ảnh kiểm tra, nạp log bay, báo cáo sự cố.
 4. **`Analyst`**: Chuyên viên phân tích AI; duyệt/bác bỏ kết quả phát hiện khiếm khuyết của YOLOv8, gắn phản hồi chuyên môn (MF04).
 5. **`Technician`**: Kỹ thuật viên kiểm định drone (MF02) và thợ bảo trì sửa chữa cột điện hiện trường (MF04).
 
@@ -93,7 +93,7 @@ graph TD
 ### MODULE 1: XÁC THỰC & NGƯỜI DÙNG (IDENTITYSERVICE)
 
 > [!TIP]
-> **MÃ OTP MÔI TRƯỜNG DEV/TEST**: Mặc định là **`123456`**.
+> **MÃ OTP BYPASS (DEV/TEST)**: Cấu hình tùy chọn qua `SystemSettings` (`Otp:BypassCode`); mặc định trên Production để trống (bắt buộc OTP ngẫu nhiên).
 
 #### 1.1. [POST] `/api/v1/auth/login`
 - **Mô tả**: Đăng nhập tài khoản bằng email và mật khẩu. Tự động kiểm tra thiết bị tin cậy (`device_trust_token`).
@@ -151,7 +151,7 @@ graph TD
 #### 1.4. [GET] `/api/v1/users`
 - **Mô tả**: Lấy danh sách nhân sự trong hệ thống có phân trang và lọc theo vai trò.
 - **Phân quyền**: `SystemAdmin`, `Manager`
-- **Query Params**: `role` (Pilot, Technician, Analyst...), `search`, `page`, `pageSize`
+- **Query Params**: `role` (Inspector, Technician, Analyst...), `search`, `page`, `pageSize`
 
 #### 1.5. [GET] `/api/v1/users/{id}`
 - **Mô tả**: Xem thông tin chi tiết một người dùng, quyền hạn và khu vực địa lý được phân quyền.
@@ -391,7 +391,7 @@ graph TD
 - **Response `200 OK`** (`data`):
   - `towers[]`: `id`, `code`, `regionId`, `poleType`, `address`, `latitude`, `longitude`.
   - `anomalies[]`: bất thường của các cột trên, chưa bị thay thế (`supersededById IS NULL`). Trường: `id`, `anomalyId`, `towerId`, `towerCode`, `category`, `severity`, `latitude`, `longitude`, `status`, `confidenceScore`, `imageUrl`, `detectedAt`.
-  - `alerts[]`: cảnh báo khẩn cấp `status = "Active"` có bất thường thuộc các cột trên. Trường: `id`, `anomalyId`, `towerId`, `towerCode`, `latitude`, `longitude`, `status`, `priority`, `title`, `triggeredAt`.
+  - `alerts[]`: cảnh báo khẩn cấp đang mở (`status` ∈ `Open`, `Acknowledged`) có bất thường thuộc các cột trên. Trường: `id`, `anomalyId`, `towerId`, `towerCode`, `latitude`, `longitude`, `status`, `priority`, `title`, `triggeredAt`.
 
 ---
 
@@ -494,7 +494,7 @@ graph TD
 
 > Route gốc là `/api/v1/pre-mission-assessments` (cũng nhận `/api/v2/...`). Controller v0.9 cũ đã deprecated.
 > Phân quyền mặc định: `SystemAdmin`, `Manager`, `Inspector`. Endpoint trả DTO trực tiếp (không bọc `ApiResponse`).
-> Trạng thái hồ sơ: `Draft` → `Evaluating` → `Ready` / `NotReady` → `Completed`; ngoài ra `Expired`, `Cancelled`.
+> Trạng thái hồ sơ: `Evaluating` → `Ready` / `NotReady` → `Completed`; ngoài ra `Expired`, `Cancelled`.
 
 #### 4.1. [POST] `/api/v1/pre-mission-assessments`
 - **Mô tả**: Tạo hồ sơ đánh giá tiền khả thi cho một chiến dịch bay dự kiến.
@@ -584,7 +584,7 @@ graph TD
 
 > Route gốc là `/api/v1/missions`. Nhiệm vụ được tạo qua `POST /api/v1/pre-mission-assessments/{id}/create-mission` (mục 4.4).
 > Endpoint trong module này bọc `ApiResponse`.
-> Trạng thái nhiệm vụ: `Draft`, `PendingAcceptance`, `Assigned`, `Preparing`, `Ready`, `InProgress`, `Suspended`, `Postponed`, `Completed`, `Cancelled`.
+> Trạng thái nhiệm vụ: `Draft`, `PendingAcceptance`, `Postponed`, `Confirmed`, `Ready`, `InProgress`, `Suspended`, `Completed`, `Cancelled`.
 
 #### 5.1. [GET] `/api/v1/missions`
 - **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`.
@@ -602,35 +602,35 @@ graph TD
 > Mọi thay đổi nhân sự, UAV, cột và mức ưu tiên bị từ chối sau khi nhiệm vụ đã bắt đầu (`StartedAt` có giá trị, kể cả khi đang `Suspended`) → `400 MISSION_IMMUTABLE_AFTER_START` (BR-32).
 > Người mới được kiểm tra như lúc tạo nhiệm vụ (mục 4.4): `ASSIGNEE_INACTIVE`, `ASSIGNEE_ROLE_NOT_ELIGIBLE`, `ASSIGNEE_OUT_OF_SCOPE`, `409 RESOURCE_BOOKING_CONFLICT`.
 - `GET /{id}/assignments`: danh sách phân công.
-- `POST /{id}/assignments` (`Manager`, `SystemAdmin`), body `{ "userId": "...", "assignmentRole": "PILOT", "isRequired": true }` (`isRequired` mặc định `true`). Vai trò: `PILOT`, `CO_PILOT`, `INSPECTOR`, `OBSERVER`, `ANALYST`, `TECHNICIAN`. Thành viên nhận thông báo `MISSION_ASSIGNED`. Thêm người **bắt buộc** khi nhiệm vụ đang `Assigned`/`Preparing`/`Ready` đưa nhiệm vụ về `PendingAcceptance`. Người đã là thành viên: chỉ cập nhật vai trò.
-- `DELETE /{id}/assignments/{assignmentId}`: gỡ phân công (phản hồi `Cancelled`, booking `Cancelled`, check-in bị thu hồi, thông báo `MISSION_ASSIGNMENT_REMOVED`). Không gỡ được thành viên bắt buộc cuối cùng → `400 REQUIRED_MEMBER_REQUIRED`. Gỡ người bắt buộc còn chờ có thể hoàn tất xác nhận (`PendingAcceptance` → `Assigned`).
+- `POST /{id}/assignments` (`Manager`, `SystemAdmin`), body `{ "userId": "...", "assignmentRole": "INSPECTOR", "isRequired": true }` (`isRequired` mặc định `true`). Vai trò: `INSPECTOR`, `ANALYST`, `TECHNICIAN`. Thành viên nhận thông báo `MISSION_ASSIGNED`. Thêm người **bắt buộc** khi nhiệm vụ đang `Confirmed`/`Ready` đưa nhiệm vụ về `PendingAcceptance`. Người đã là thành viên: chỉ cập nhật vai trò.
+- `DELETE /{id}/assignments/{assignmentId}`: gỡ phân công (phản hồi `Cancelled`, booking `Cancelled`, check-in bị thu hồi, thông báo `MISSION_ASSIGNMENT_REMOVED`). Không gỡ được thành viên bắt buộc cuối cùng → `400 REQUIRED_MEMBER_REQUIRED`. Gỡ người bắt buộc còn chờ có thể hoàn tất xác nhận (`PendingAcceptance` → `Confirmed`).
 - `POST /{id}/assignments/{assignmentId}/reassign` (hoặc `/{id}/assignments/reassign` với `assignmentId` hoặc `role` trong body), body `{ "newUserId": "...", "role": null, "reason": "..." }`: đổi người.
-  - Phân công cũ chuyển `Revoked` / phản hồi `Replaced`, booking cũ `Released`, check-in và bàn giao UAV đang mở của người cũ được đóng; tạo **phân công mới** (id mới) ở `Pending` với cùng vai trò và cờ bắt buộc. Người mới nhận `MISSION_ASSIGNED`, người cũ nhận `MISSION_ASSIGNMENT_REMOVED`.
+  - Phân công cũ chuyển `Revoked` / phản hồi `Replaced`, booking cũ `Released`, check-in của người cũ bị thu hồi; tạo **phân công mới** (id mới) ở `Pending` với cùng vai trò và cờ bắt buộc. Người mới nhận `MISSION_ASSIGNED`, người cũ nhận `MISSION_ASSIGNMENT_REMOVED`.
   - Nhiệm vụ đã dispatch quay về `PendingAcceptance` nếu người mới là bắt buộc (khi `Suspended` trước lúc bắt đầu, việc này xét lại lúc `resume`).
   - Lỗi: `404` khi `assignmentId` không tồn tại (không còn tự tạo phân công mới); `400 ASSIGNMENT_ID_REQUIRED` khi thiếu cả `assignmentId` và `role`; `409 ASSIGNEE_ALREADY_ASSIGNED` khi người mới đã là thành viên.
-- `POST /{id}/assignments/accept`: thành viên nhận nhiệm vụ. Chỉ khi nhiệm vụ `PendingAcceptance`/`Assigned`/`Preparing`/`Ready`, ngược lại `409 INVALID_MISSION_STATE` (nhận lại khi đã `Accepted` trả kết quả cũ). Khi mọi người bắt buộc đã nhận, nhiệm vụ thành `Assigned` và quản lý nhận `MISSION_CONFIRMED`.
+- `POST /{id}/assignments/accept`: thành viên nhận nhiệm vụ. Chỉ khi nhiệm vụ `PendingAcceptance`/`Confirmed`/`Ready`, ngược lại `409 INVALID_MISSION_STATE` (nhận lại khi đã `Accepted` trả kết quả cũ). Khi mọi người bắt buộc đã nhận, nhiệm vụ thành `Confirmed` và quản lý nhận `MISSION_CONFIRMED`.
 - `POST /{id}/assignments/postpone`, body `{ "reason": "..." }`: thành viên xin hoãn, cùng điều kiện trạng thái như `accept`. Người bắt buộc hoãn → nhiệm vụ `Postponed` (ghi `postponeReason`); người không bắt buộc hoãn chỉ đổi phản hồi của chính họ.
 
 #### 5.5. [PUT] `/api/v1/missions/{id}/drone`
-- **Mô tả**: Đổi UAV của nhiệm vụ trước khi bắt đầu (cũng nhận `POST`). UAV mới phải `Available`, sức khỏe `Healthy`/`Warning`, flight status `Idle`, không `Unsuitable` với phạm vi hồ sơ, không trùng lịch. **Mọi** booking UAV `Active` khác của nhiệm vụ bị `Cancelled`; bàn giao đang mở của UAV cũ được đóng.
+- **Mô tả**: Đổi UAV của nhiệm vụ trước khi bắt đầu (cũng nhận `POST`). UAV mới phải `Available`, sức khỏe `Healthy`/`Warning`, flight status `Idle`, không `Unsuitable` với phạm vi hồ sơ, không trùng lịch. **Mọi** booking UAV `Active` khác của nhiệm vụ bị `Cancelled`.
 - **Request Body**: `{ "droneId": "88888888-8888-8888-8888-888888888888" }`
 - **Lỗi**: `400 DRONE_NOT_AVAILABLE`, `DRONE_CRITICAL_HEALTH`, `DRONE_HEALTH_UNKNOWN`, `DRONE_UNSUITABLE`, `DRONE_UNAVAILABLE`, `MISSION_IMMUTABLE_AFTER_START`; `409 RESOURCE_BOOKING_CONFLICT`.
 
 #### 5.6. Điều phối vòng đời
-- `POST /{id}/confirm`: tương đương `assignments/accept` của **chính người gọi** (kèm nhật ký liên lạc). Không còn nhảy trạng thái: nhiệm vụ chỉ thành `Assigned` khi mọi người bắt buộc đã nhận. Người gọi không phải thành viên → `403 USER_NOT_ASSIGNED`; sai trạng thái → `409 INVALID_MISSION_STATE`.
+- `POST /{id}/confirm`: tương đương `assignments/accept` của **chính người gọi** (kèm nhật ký liên lạc). Không còn nhảy trạng thái: nhiệm vụ chỉ thành `Confirmed` khi mọi người bắt buộc đã nhận. Người gọi không phải thành viên → `403 USER_NOT_ASSIGNED`; sai trạng thái → `409 INVALID_MISSION_STATE`.
 - `POST /{id}/remind`: nhắc thành viên chưa phản hồi.
-- `POST /{id}/suspend` (body `reason` bắt buộc), `POST /{id}/resume`: `resume` trả về `InProgress` nếu đã bắt đầu; nếu chưa, về `PendingAcceptance` khi còn người bắt buộc chưa nhận, ngược lại `Assigned`/`Preparing`/`Ready`. Mỗi thành viên nhận một thông báo.
-- `POST /{id}/postpone` (**chỉ `Manager`, `SystemAdmin` của vùng**; trước đây cả `Inspector`): từ `PendingAcceptance`/`Assigned`/`Preparing`/`Ready` → `Postponed`, thành viên nhận `MISSION_POSTPONED`. Thành viên tự hoãn dùng `assignments/postpone`.
-- `POST /{id}/cancel`, body `{ "reason": "..." }`: hủy nhiệm vụ, ghi Audit Log, `Cancelled` mọi booking `Active`, trả hồ sơ MF01 về `Ready` (hoặc `Expired`). Nhiệm vụ đã bắt đầu rồi tạm dừng: bàn giao đang mở được đóng và UAV `Flying` về `Idle` (trừ khi nhiệm vụ `InProgress` khác đang dùng UAV đó).
+- `POST /{id}/suspend` (body `reason` bắt buộc), `POST /{id}/resume`: `resume` trả về `InProgress` nếu đã bắt đầu; nếu chưa, về `PendingAcceptance` khi còn người bắt buộc chưa nhận, ngược lại `Confirmed`/`Ready`. Mỗi thành viên nhận một thông báo.
+- `POST /{id}/postpone` (**chỉ `Manager`, `SystemAdmin` của vùng**): từ `PendingAcceptance`/`Confirmed`/`Ready` → `Postponed`, thành viên nhận `MISSION_POSTPONED`. Thành viên tự hoãn dùng `assignments/postpone`.
+- `POST /{id}/cancel`, body `{ "reason": "..." }`: hủy nhiệm vụ, ghi Audit Log, `Cancelled` mọi booking `Active`, trả hồ sơ MF01 về `Ready` (hoặc `Expired`). Nhiệm vụ đã bắt đầu rồi tạm dừng: UAV `Flying` về `Idle` (trừ khi nhiệm vụ `InProgress` khác đang dùng UAV đó).
 - Xóa nhiệm vụ `Draft` (endpoint cũ) cũng `Cancelled` các booking của nó.
 - Quản lý có tài khoản bị khóa nhận `403 ACTIVE_USER_REQUIRED` dù JWT còn hạn.
 
 #### 5.7. Bắt đầu và hoàn thành (MF03, BR-38, BR-45)
 - `POST /{id}/start` chỉ khi:
-  - nhiệm vụ `Ready`/`Assigned`/`Preparing` và mọi người bắt buộc đã nhận (`409 REQUIRED_ACCEPTANCE_PENDING`, `409 INVALID_MISSION_STATE`);
+  - nhiệm vụ `Ready`/`Confirmed` và mọi người bắt buộc đã nhận (`409 REQUIRED_ACCEPTANCE_PENDING`, `409 INVALID_MISSION_STATE`);
   - không sớm hơn `plannedStart - Mission:StartToleranceMinutes` (mặc định 120 phút) → `400 MISSION_START_TOO_EARLY`;
-  - UAV còn dùng được: `400 DRONE_ASSIGNMENT_REQUIRED`, `DRONE_NOT_AVAILABLE` (Maintenance/Unavailable/Lost/InUse), `DRONE_CRITICAL_HEALTH`; `409 DRONE_IN_USE` khi UAV đang bay nhiệm vụ khác, flight status không phải `Idle`/`Online`, hoặc đang được bàn giao ở nhiệm vụ khác;
-  - Khi bắt đầu từ `Assigned`/`Preparing`, hệ thống ghi check-in cho người gọi (nếu là thành viên đã nhận) và một bàn giao `Accepted` nếu chưa có.
+  - UAV còn dùng được: `400 DRONE_ASSIGNMENT_REQUIRED`, `DRONE_NOT_AVAILABLE` (Maintenance/Unavailable/Lost/InUse), `DRONE_CRITICAL_HEALTH`; `409 DRONE_IN_USE` khi UAV đang bay nhiệm vụ khác hoặc flight status không phải `Idle`/`Online`;
+  - Khi bắt đầu từ `Confirmed`, hệ thống ghi check-in cho người gọi (nếu là thành viên đã nhận).
 - `POST /{id}/complete`: UAV về `Idle` chỉ khi không nhiệm vụ `InProgress` nào khác dùng UAV; mọi booking `Active` → `Released`.
 
 #### 5.8. Mã lỗi xung đột (HTTP 409)
@@ -642,7 +642,7 @@ Vi phạm ràng buộc CSDL không còn trả `500`: ràng buộc chống trùng
 
 #### 6.1. [POST] `/api/v1/missions/{id}/check-in`
 - **Mô tả**: Thành viên đội bay check-in hiện trường bằng GPS khi có mặt tại điểm tập kết.
-- **Phân quyền**: `Pilot`, `Inspector`
+- **Phân quyền**: `Inspector`, `Technician`, `Analyst`
 - **Request Body**:
   ```json
   {
@@ -855,7 +855,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 - **Quy tắc cột điện**: Khi xác nhận mà bất thường và media đều không có `towerId`, trả `400` với `errorCode: "TOWER_REQUIRED"`, message `TOWER_REQUIRED: The anomaly must be linked to a tower before it can be confirmed.`
 
 #### 7.7. [POST] `/api/v1/missions/{missionId}/ai-analysis/from-media/{mediaId}` (AIInspectionService)
-- **Mô tả**: Yêu cầu phân tích cloud cho một media đã có trong nhiệm vụ. Tạo một `ai_analysis_runs` `Pending` với `executionLocation = "Cloud"`, `requestedBy` = người gọi.
+- **Mô tả**: Yêu cầu phân tích cloud cho một media đã có trong nhiệm vụ. Tạo một `ai_analysis_runs` `Queued` với `executionLocation = "Cloud"`, `requestedBy` = người gọi.
 - **Phân quyền**: `Manager`, `Analyst`
 - **Query Params**: `analysisType` (mặc định `General`), `preferredModel` (mặc định `SERVER`), `notes`
 
@@ -891,28 +891,28 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 
 ### MODULE 8: MF04 - CẢNH BÁO KHẨN CẤP & BẢO TRÌ SỬA CHỮA (OPERATIONSSERVICE)
 
-> Cảnh báo khẩn cấp nằm ở `AlertsController`, route gốc **`/api/v1/alerts`**. Vòng đời trạng thái: `Active` (vừa kích hoạt) → `Confirmed` hoặc `Dismissed` (sau khi thẩm định) hoặc `Escalated` (đã chuyển cấp). Mỗi bất thường có tối đa một cảnh báo `Active` (index `UX_EmergencyAlerts_ActivePerAnomaly`).
+> Cảnh báo khẩn cấp nằm ở `AlertsController`, route gốc **`/api/v1/alerts`**. Vòng đời trạng thái theo State Machine Diagram: `Open` (vừa kích hoạt) → `Acknowledged` (đã tiếp nhận / chuyển cấp) → `Resolved` (đã xử lý / đóng). Mỗi bất thường có tối đa một cảnh báo `Open` (index `UX_EmergencyAlerts_ActivePerAnomaly`).
 
 #### 8.1. [GET] `/api/v1/alerts/active` và [GET] `/api/v1/alerts?status&page&pageSize`
-- **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`
-- `/active`: các cảnh báo `Status = Active`. Response là **mảng trực tiếp** (không bọc `ApiResponse`), mỗi phần tử: `id`, `anomalyId`, `towerId`, `towerCode`, `alertType`, `categoryName`, `priority`, `status`, `deliveryLatencySeconds`, `triggeredAt`, `location` (`towerCode`, …), `evidence` (`mediaUrl`, `confidenceScore`).
+- **Phân quyền**: Toàn bộ người dùng đã xác thực (`AllAuthenticatedRoles`)
+- `/active`: các cảnh báo `Status = Open`. Response là **mảng trực tiếp** (không bọc `ApiResponse`), mỗi phần tử: `id`, `anomalyId`, `towerId`, `towerCode`, `alertType`, `categoryName`, `priority`, `status`, `deliveryLatencySeconds`, `triggeredAt`, `location` (`towerCode`, …), `evidence` (`mediaUrl`, `confidenceScore`).
 - Danh sách có lọc: `status` (không phân biệt hoa thường), `page` (mặc định `1`), `pageSize` (mặc định `10`). Response trực tiếp: `{ totalCount, page, pageSize, items[] }`, mỗi item: `id`, `towerCode`, `alertType`, `priority`, `status`, `triggeredAt`, `resolvedAt`, `reviewedBy`, `notes`.
 - [GET] `/api/v1/alerts/{id}`: chi tiết (thêm `missionId`, `receivedAt`, lịch sử chuyển cấp); `404` khi không tồn tại.
 
 #### 8.2. [PUT] `/api/v1/alerts/{id}/review`
-- **Mô tả**: Thẩm định cảnh báo. Body `{ "status": "Confirmed" | "Dismissed", "notes": "..." }`; giá trị khác `Dismissed` được coi là `Confirmed`. Ghi `reviewedById`, `resolvedAt`, `notes`.
-- **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`
+- **Mô tả**: Thẩm định cảnh báo. Body `{ "status": "Acknowledged" | "Resolved", "notes": "..." }`. Ghi `reviewedById`, `resolvedAt` (khi `Resolved`), `notes`. Cảnh báo đã `Resolved` không thể thẩm định lại (`409 ALERT_ALREADY_RESOLVED`); trạng thái không hợp lệ trả `400 INVALID_ALERT_STATUS`.
+- **Phân quyền**: `Analyst`
 - **Response**: `204 No Content`; `404` khi không tồn tại.
 
 #### 8.3. [POST] `/api/v1/alerts/{id}/escalate`
-- **Mô tả**: Chuyển cấp cảnh báo cho một người dùng khác (thường là Manager). Body: `escalatedToUserId`, `reason`. Cảnh báo chuyển sang `Escalated`, người nhận được thông báo. **Response `201 Created`** (không bọc `ApiResponse`): `id`, `escalatedBy`, `escalatedByName`, `escalatedTo`, `escalatedToName`, `reason`, `escalatedAt`.
+- **Mô tả**: Chuyển cấp cảnh báo cho một người dùng khác (thường là Manager). Body: `escalatedToUserId`, `reason` (bắt buộc). Cảnh báo chuyển sang `Acknowledged`, người nhận được thông báo. **Response `201 Created`** (không bọc `ApiResponse`): `id`, `escalatedBy`, `escalatedByName`, `escalatedTo`, `escalatedToName`, `reason`, `escalatedAt`.
 - **Phân quyền**: `SystemAdmin`, `Manager`, `Analyst`
-- **Lỗi**: `400 INVALID_ESCALATION_TARGET` khi `escalatedToUserId` là chính người gọi (CHECK `CK_AlertEscalations_DifferentUsers`).
+- **Lỗi**: `400 INVALID_ESCALATION_TARGET` (thiếu ID hoặc tự chuyển cho chính mình, CHECK `CK_AlertEscalations_DifferentUsers`), `400 ESCALATION_REASON_REQUIRED`, `400 ESCALATION_TARGET_INACTIVE`, `409 ALERT_ALREADY_RESOLVED`.
 
 #### 8.3a. [POST] `/api/v1/alerts/trigger`
-- **Mô tả**: Kích hoạt cảnh báo khẩn cấp cho một bất thường (hoặc tạo bất thường edge mới nếu không gửi `anomalyId`). Body: `anomalyId?`, `missionId?`, `towerId?`/`towerCode?`, `priority` (mặc định `Critical`), `latitude?`, `longitude?`. Cảnh báo mới ở trạng thái `Active`.
+- **Mô tả**: Kích hoạt cảnh báo khẩn cấp cho một bất thường (hoặc tạo bất thường edge mới nếu không gửi `anomalyId`). Body: `anomalyId?`, `missionId?`, `towerId?`/`towerCode?`, `priority` (mặc định `Critical`), `latitude?`, `longitude?`. Cảnh báo mới ở trạng thái `Open`.
 - **Phân quyền**: mọi người dùng đã xác thực
-- **Lỗi**: `409 ALERT_ALREADY_ACTIVE` khi bất thường đã có một cảnh báo `Active` (mỗi bất thường tối đa một cảnh báo `Active`, index `UX_EmergencyAlerts_ActivePerAnomaly`). Cảnh báo đã `Escalated`, `Confirmed` hoặc `Dismissed` không chặn việc kích hoạt mới.
+- **Lỗi**: `409 ALERT_ALREADY_ACTIVE` khi bất thường đã có một cảnh báo `Open` (mỗi bất thường tối đa một cảnh báo `Open`, index `UX_EmergencyAlerts_ActivePerAnomaly`). Cảnh báo đã `Acknowledged` hoặc `Resolved` không chặn việc kích hoạt mới.
 
 #### 8.4. [POST] `/api/v1/maintenance/tickets`
 - **Mô tả**: Quản lý tạo phiếu sửa chữa / bảo trì từ một bất thường. Request **không có `towerId`**: cột điện của phiếu luôn là cột của bất thường (`detected_anomalies.tower_id`), không lưu riêng trên phiếu. Mã phiếu sinh tự động dạng `TCK-yyyyMMdd-NNN`.
@@ -931,7 +931,7 @@ Hai endpoint cùng gọi `UploadInspectionImageCommand`: lưu tệp, tạo `insp
 - **Response `201 Created`** (`data`): phiếu bảo trì, gồm `id`, `ticketCode`, `anomalyId`, `towerId` (suy ra từ bất thường), `managerId`, `technicianId`, `status`, `priority`, `description`, `dueDate`, `assignedAt`, `startedAt`, `resolvedAt`, `createdAt`, `tower`, `anomaly`, `manager`, `technician`, `maintenanceProofs`.
 
 #### 8.5. [GET] `/api/v1/maintenance/tickets`
-- **Mô tả**: Lấy danh sách phiếu bảo trì có phân trang, lọc theo trạng thái (`Open`, `InProgress`, `PendingVerification`, `Resolved`, `Closed`) và mức ưu tiên.
+- **Mô tả**: Lấy danh sách phiếu bảo trì có phân trang, lọc theo trạng thái (`Open`, `Assigned`, `InProgress`, `PendingVerification`, `Closed`, `Cancelled`) và mức ưu tiên.
 - **Query Params**: `pageIndex` (mặc định `0`), `pageSize` (mặc định `10`), `status`, `priority`
 
 #### 8.5a. [GET] `/api/v1/maintenance/tickets/technicians`

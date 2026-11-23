@@ -563,7 +563,9 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
         var isReady = isSiteFeasible && hasEligiblePersonnel && hasEligibleDrone;
         assessment.Status = isReady ? PreMissionAssessmentStatus.Ready : PreMissionAssessmentStatus.NotReady;
-        var expiryCandidate = DateTime.UtcNow.AddHours(4);
+        var validityHours = await MissionResourceGuard.GetPositiveIntSettingAsync(
+            _db, SettingKeys.AssessmentValidityHours, MissionResourceGuard.DefaultAssessmentValidityHours, ct);
+        var expiryCandidate = DateTime.UtcNow.AddHours(validityHours);
         assessment.ValidUntil = expiryCandidate < assessment.PlannedEnd ? expiryCandidate : assessment.PlannedEnd;
         assessment.Version++;
         assessment.EvaluationPolicyVersion = "v2.0";

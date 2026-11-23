@@ -291,12 +291,14 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
 
                 if (towerGeom != null)
                 {
+                    var geofenceRadiusMeters = await MissionResourceGuard.GetPositiveDoubleSettingAsync(
+                        _db, SettingKeys.MissionCheckInGeofenceRadiusMeters, MissionResourceGuard.DefaultCheckInGeofenceRadiusMeters, ct);
                     var distanceMeters = CalculateGeodesicDistanceMeters(
                         latitude.Value, longitude.Value, towerGeom.Coordinate.Y, towerGeom.Coordinate.X);
-                    if (distanceMeters > 200.0)
+                    if (distanceMeters > geofenceRadiusMeters)
                     {
                         throw new BusinessRuleException("CHECKIN_OUTSIDE_GEOFENCE",
-                            $"Vị trí hiện trường ({latitude.Value:F5}, {longitude.Value:F5}) cách cột mục tiêu {distanceMeters:F1}m, vượt quá bán kính cho phép 200m.");
+                            $"Vị trí hiện trường ({latitude.Value:F5}, {longitude.Value:F5}) cách cột mục tiêu {distanceMeters:F1}m, vượt quá bán kính cho phép {geofenceRadiusMeters:F0}m.");
                     }
                 }
             }
@@ -1451,6 +1453,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                         ? TicketPriority.Low
                         : TicketPriority.High);
 
+                var slaDays = isEmergency
+                    ? await MissionResourceGuard.GetPositiveIntSettingAsync(_db, SettingKeys.MaintenanceEmergencySlaDays, MissionResourceGuard.DefaultEmergencySlaDays, ct)
+                    : await MissionResourceGuard.GetPositiveIntSettingAsync(_db, SettingKeys.MaintenanceStandardSlaDays, MissionResourceGuard.DefaultStandardSlaDays, ct);
+
                 var ticket = new MaintenanceTicket
                 {
                     Id = Guid.NewGuid(),
@@ -1462,7 +1468,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
                     Status = TicketStatus.Open,
                     Priority = priority,
                     Description = $"[AI Review] {anomaly.Category?.CategoryName ?? "Khuyết tật đường dây"}: {request.ReviewNotes ?? anomaly.AnalystNotes}",
-                    DueDate = now.AddDays(isEmergency ? 1 : 7),
+                    DueDate = now.AddDays(slaDays),
                     CreatedAt = now
                 };
 

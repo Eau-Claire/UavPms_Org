@@ -13,7 +13,6 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
         [
             MissionStatus.Draft,             // also MissionStatus.Draft
             MissionStatus.PendingAcceptance, // also MissionStatus.PendingAcceptance
-            MissionStatus.Confirmed,          // also MissionStatus.Confirmed
             MissionStatus.Confirmed,
             MissionStatus.Ready,
             MissionStatus.Postponed

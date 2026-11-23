@@ -19,6 +19,10 @@ internal static class MissionResourceGuard
 {
     public const int DefaultConfirmationDeadlineHours = 24;
     public const int DefaultStartToleranceMinutes = 120;
+    public const int DefaultAssessmentValidityHours = 4;
+    public const double DefaultCheckInGeofenceRadiusMeters = 200.0;
+    public const int DefaultEmergencySlaDays = 1;
+    public const int DefaultStandardSlaDays = 7;
 
     private static readonly string[] NonFieldRoles = { UserRoles.SystemAdmin, UserRoles.Manager };
 
@@ -164,10 +168,30 @@ internal static class MissionResourceGuard
     public static async Task<int> GetIntSettingAsync(ApplicationDbContext db, string key, int defaultValue, CancellationToken ct)
     {
         var raw = await db.SystemSettings.AsNoTracking()
-            .Where(s => s.Key == key)
+            .Where(s => s.Key == key && !s.IsDeleted)
             .Select(s => s.Value)
             .FirstOrDefaultAsync(ct);
         return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value >= 0 ? value : defaultValue;
+    }
+
+    /// <summary>BR-09: positive integer system setting (> 0) read without the settings service.</summary>
+    public static async Task<int> GetPositiveIntSettingAsync(ApplicationDbContext db, string key, int defaultValue, CancellationToken ct)
+    {
+        var raw = await db.SystemSettings.AsNoTracking()
+            .Where(s => s.Key == key && !s.IsDeleted)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync(ct);
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0 ? value : defaultValue;
+    }
+
+    /// <summary>BR-09: positive double system setting (> 0) read without the settings service.</summary>
+    public static async Task<double> GetPositiveDoubleSettingAsync(ApplicationDbContext db, string key, double defaultValue, CancellationToken ct)
+    {
+        var raw = await db.SystemSettings.AsNoTracking()
+            .Where(s => s.Key == key && !s.IsDeleted)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync(ct);
+        return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0 ? value : defaultValue;
     }
 
     public static bool IsActive(string? status) =>

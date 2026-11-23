@@ -340,20 +340,6 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/devices/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/devices/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/api/v{version}/devices",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/devices",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
       "DownstreamPathTemplate": "/api/v{version}/monitor/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
