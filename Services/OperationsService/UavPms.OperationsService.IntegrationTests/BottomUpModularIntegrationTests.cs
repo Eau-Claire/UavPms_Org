@@ -617,12 +617,10 @@ public class BottomUpModularIntegrationTests
             var reviewResult = await lifecycle.ReviewDetectionAsync(
                 missionId,
                 anomalyId,
-                new ReviewDetectionRequest
-                {
-                    Status = "Confirmed",
-                    OverrideSeverity = "Critical",
-                    ReviewNotes = "Confirmed severe flashover risk on insulator"
-                },
+                new ReviewDetectionRequest(
+                    Status: "Confirmed",
+                    ReviewNotes: "Confirmed severe flashover risk on insulator",
+                    OverrideSeverity: "Critical"),
                 CancellationToken.None);
 
             reviewResult.Status.Should().Be("Approved");
