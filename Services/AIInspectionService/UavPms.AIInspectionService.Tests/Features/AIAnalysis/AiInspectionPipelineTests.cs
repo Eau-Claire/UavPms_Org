@@ -597,4 +597,181 @@ public class AiInspectionPipelineTests
         var outbox = await context.OutboxMessages.ToListAsync();
         outbox.Should().Contain(m => m.MessageType == nameof(AiDetectionCompletedEvent));
     }
+
+    [Fact]
+    public async Task CloudReanalysis_ShouldSupersedeEarlierCloudDetections_PreserveReviewedOnes_AndAvoidDuplicateAlerts()
+    {
+        await using var context = CreateContext();
+        var missionId = Guid.NewGuid();
+        var mediaId = Guid.NewGuid();
+        var towerId = Guid.NewGuid();
+        var run1Id = Guid.NewGuid();
+        var run2Id = Guid.NewGuid();
+
+        context.Missions.Add(new Mission
+        {
+            Id = missionId,
+            MissionCode = "MIS-RE-001",
+            Title = "Cloud reanalysis mission",
+            Status = "InProgress",
+            ManagerId = Guid.NewGuid()
+        });
+
+        context.InspectionMedia.Add(new InspectionMedia
+        {
+            Id = mediaId,
+            MissionId = missionId,
+            TowerId = towerId,
+            MediaType = "Image",
+            FileUrl = "https://storage.local/missions/mis-re-001/image.jpg",
+            CapturedAt = DateTime.UtcNow
+        });
+
+        context.DefectCategories.AddRange(
+            new DefectCategory
+            {
+                Id = 4001,
+                CategoryCode = "WF",
+                CategoryName = "Wildfire / Flashover",
+                Description = "Emergency defect",
+                SeverityWeight = 5.0,
+                IsEmergencyClass = true
+            },
+            new DefectCategory
+            {
+                Id = 4002,
+                CategoryCode = "CI",
+                CategoryName = "Broken Insulator",
+                Description = "Standard defect",
+                SeverityWeight = 0.9,
+                IsEmergencyClass = false
+            });
+
+        context.AIAnalysisRuns.Add(new AIAnalysisRun
+        {
+            Id = run1Id,
+            RequestedBy = Guid.NewGuid(),
+            MediaId = mediaId,
+            ExecutionLocation = AIAnalysisRun.Cloud,
+            AnalysisType = AnalysisType.DefectDetection,
+            Status = AIAnalysisStatus.Processing,
+            StartedAt = DateTime.UtcNow.AddMinutes(-10)
+        });
+        await context.SaveChangesAsync();
+
+        var callbackHandler = CreateCallbackHandler(context);
+
+        // First cloud run completes with 2 detections: 1 emergency (WF) and 1 normal (CI)
+        var firstResult = await callbackHandler.Handle(new ProcessAiAnalysisResultCommand
+        {
+            RequestId = run1Id,
+            MediaId = mediaId,
+            MissionId = missionId,
+            Status = "Completed",
+            ModelName = "RF-DETR",
+            Detections = new List<DetectionDto>
+            {
+                new()
+                {
+                    Id = "run1-wf",
+                    CategoryCode = "WF",
+                    Confidence = 0.92,
+                    BoundingBox = new BoundingBoxDto { X = 0.1, Y = 0.1, Width = 0.2, Height = 0.2 }
+                },
+                new()
+                {
+                    Id = "run1-ci",
+                    CategoryCode = "CI",
+                    Confidence = 0.85,
+                    BoundingBox = new BoundingBoxDto { X = 0.5, Y = 0.5, Width = 0.2, Height = 0.2 }
+                }
+            },
+            CompletedAt = DateTime.UtcNow.AddMinutes(-9)
+        }, CancellationToken.None);
+
+        firstResult.SavedDetections.Should().Be(2);
+        firstResult.CreatedAlerts.Should().Be(1);
+
+        var run1Anomalies = await context.DetectedAnomalies.Where(a => a.AnalysisRunId == run1Id).ToListAsync();
+        var run1Wf = run1Anomalies.Single(a => a.CategoryId == 4001);
+        var run1Ci = run1Anomalies.Single(a => a.CategoryId == 4002);
+
+        // Analyst confirms the CI detection before reanalysis runs
+        run1Ci.Confirm(Guid.NewGuid(), "Confirmed by analyst before reanalysis");
+        await context.SaveChangesAsync();
+
+        // Second cloud run (reanalysis) produces the same 2 boxes
+        context.AIAnalysisRuns.Add(new AIAnalysisRun
+        {
+            Id = run2Id,
+            RequestedBy = Guid.NewGuid(),
+            MediaId = mediaId,
+            ExecutionLocation = AIAnalysisRun.Cloud,
+            AnalysisType = AnalysisType.DefectDetection,
+            Status = AIAnalysisStatus.Processing,
+            StartedAt = DateTime.UtcNow.AddMinutes(-1)
+        });
+        await context.SaveChangesAsync();
+
+        var secondResult = await callbackHandler.Handle(new ProcessAiAnalysisResultCommand
+        {
+            RequestId = run2Id,
+            MediaId = mediaId,
+            MissionId = missionId,
+            Status = "Completed",
+            ModelName = "RF-DETR",
+            Detections = new List<DetectionDto>
+            {
+                new()
+                {
+                    Id = "run2-wf",
+                    CategoryCode = "WF",
+                    Confidence = 0.95,
+                    BoundingBox = new BoundingBoxDto { X = 0.1, Y = 0.1, Width = 0.2, Height = 0.2 }
+                },
+                new()
+                {
+                    Id = "run2-ci",
+                    CategoryCode = "CI",
+                    Confidence = 0.89,
+                    BoundingBox = new BoundingBoxDto { X = 0.5, Y = 0.5, Width = 0.2, Height = 0.2 }
+                }
+            },
+            CompletedAt = DateTime.UtcNow
+        }, CancellationToken.None);
+
+        // Only the awaiting-review WF detection is replaced; the already-Confirmed CI detection is preserved and not duplicated.
+        secondResult.SavedDetections.Should().Be(1);
+        secondResult.CreatedAlerts.Should().Be(0);
+
+        var allAnomalies = await context.DetectedAnomalies.ToListAsync();
+        allAnomalies.Should().HaveCount(3);
+
+        var reloadedRun1Wf = allAnomalies.Single(a => a.Id == run1Wf.Id);
+        var reloadedRun1Ci = allAnomalies.Single(a => a.Id == run1Ci.Id);
+        var run2Wf = allAnomalies.Single(a => a.AnalysisRunId == run2Id);
+
+        reloadedRun1Wf.SupersededById.Should().Be(run2Wf.Id);
+        run2Wf.SupersededById.Should().BeNull();
+        reloadedRun1Ci.SupersededById.Should().BeNull();
+        reloadedRun1Ci.ValidationStatus.Should().Be(DetectedAnomaly.StatusConfirmed);
+
+        // The existing Open EmergencyAlert is moved to the new WF detection instead of creating a duplicate alert.
+        var alerts = await context.EmergencyAlerts.ToListAsync();
+        alerts.Should().ContainSingle();
+        alerts[0].AnomalyId.Should().Be(run2Wf.Id);
+        alerts[0].Status.Should().Be("Open");
+
+        // GET /api/v1/missions/{missionId}/ai-analysis/detections returns only the 2 active detections (SupersededById == null).
+        var queryHandler = new GetMissionAiDetectionsQueryHandler(
+            new InspectionMediaRepository(context),
+            new GenericRepository<Mission>(context),
+            new GenericRepository<MissionAssignment>(context),
+            Mock.Of<ICurrentUserServices>());
+        var mediaDetections = await queryHandler.Handle(new GetMissionAiDetectionsQuery(missionId), CancellationToken.None);
+
+        mediaDetections.Should().ContainSingle();
+        mediaDetections[0].DetectionCount.Should().Be(2);
+        mediaDetections[0].Detections.Select(d => d.Id).Should().BeEquivalentTo(new[] { run2Wf.Id, reloadedRun1Ci.Id });
+    }
 }

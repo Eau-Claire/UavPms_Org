@@ -1206,7 +1206,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
             .Include(a => a.Category)
             .Include(a => a.Tower)
             .Include(a => a.EmergencyAlerts)
-            .Where(a => mediaIds.Contains(a.MediaId) && !a.IsDeleted);
+            .Where(a => mediaIds.Contains(a.MediaId) && a.SupersededById == null && !a.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(status))
         {

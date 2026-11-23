@@ -32,6 +32,7 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
             .Include(a => a.Analyst)
             .Include(a => a.AnalysisRun)
             .Include(a => a.Tower)
+            .Where(a => a.SupersededById == null)
             .ToListAsync();
     }
 
@@ -45,7 +46,8 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
             .Include(a => a.Analyst)
             .Include(a => a.AnalysisRun)
             .Include(a => a.Tower)
-            .Where(a => a.ValidationStatus == DetectedAnomaly.StatusInReview || a.ValidationStatus == DetectedAnomaly.StatusPending)
+            .Where(a => a.SupersededById == null &&
+                        (a.ValidationStatus == DetectedAnomaly.StatusInReview || a.ValidationStatus == DetectedAnomaly.StatusPending))
             .ToListAsync();
     }
 
@@ -58,7 +60,7 @@ public class AnomalyRepository : GenericRepository<DetectedAnomaly>, IAnomalyRep
             .Include(a => a.Analyst)
             .Include(a => a.AnalysisRun)
             .Include(a => a.Tower)
-            .Where(a => a.TowerId == towerId)
+            .Where(a => a.TowerId == towerId && a.SupersededById == null)
             .ToListAsync();
     }
 }

@@ -136,15 +136,14 @@ public class ProcessAiAnalysisResultCommandHandler
             {
                 var detections = request.Detections ?? [];
 
-                // Edge results on the same media that a cloud result may supersede.
-                var edgeCandidates = detections.Count == 0
+                // Earlier active results on the same media (from Edge or an earlier Cloud run) that this run may match.
+                var priorCandidates = detections.Count == 0
                     ? new List<DetectedAnomaly>()
                     : (await _anomalyRepo.FindAsync(a =>
                           a.MediaId == media.Id &&
                           a.SupersededById == null &&
                           a.AnalysisRunId != null &&
-                          a.AnalysisRunId != run.Id &&
-                          a.AnalysisRun!.ExecutionLocation == AIAnalysisRun.Edge, track: true)
+                          a.AnalysisRunId != run.Id, track: true)
                        ?? Array.Empty<DetectedAnomaly>()).ToList();
 
                 var labelMap = detections.Count == 0
@@ -213,20 +212,62 @@ public class ProcessAiAnalysisResultCommandHandler
                         CreatedAt = DateTime.UtcNow
                     };
 
+                    var matchingPriors = priorCandidates
+                        .Where(p => p.CategoryId == category.Id &&
+                                    DetectionMatcher.IsSameDefect(p, anomaly, media.WidthPx, media.HeightPx))
+                        .ToList();
+
+                    // If an analyst already reviewed (Confirmed/Rejected/Resolved) this defect on an earlier run,
+                    // keep the reviewed record intact and do not create a duplicate detection or second alert.
+                    var alreadyReviewed = matchingPriors.FirstOrDefault(p => !p.IsAwaitingReview);
+                    if (alreadyReviewed != null)
+                    {
+                        priorCandidates.Remove(alreadyReviewed);
+                        _logger.LogInformation(
+                            "Skipping re-detected anomaly for MediaId={MediaId}, Category={CategoryCode} because matching anomaly {ExistingAnomalyId} is already {Status}.",
+                            media.Id, category.CategoryCode, alreadyReviewed.Id, alreadyReviewed.ValidationStatus);
+                        continue;
+                    }
+
                     await _anomalyRepo.AddAsync(anomaly);
                     savedDetections++;
 
-                    // Cloud result replaces the edge results of the same defect: same media and category,
-                    // nearby frame and overlapping box (IoU >= 0.5), see DetectionMatcher.
-                    foreach (var edge in edgeCandidates
-                                 .Where(e => e.CategoryId == category.Id &&
-                                             DetectionMatcher.IsSameDefect(e, anomaly, media.WidthPx, media.HeightPx))
-                                 .ToList())
+                    // Cloud result replaces awaiting-review results (Edge or earlier Cloud run) of the same defect:
+                    // same media and category, nearby frame and overlapping box (IoU >= 0.5), see DetectionMatcher.
+                    var inheritedOpenAlert = false;
+                    foreach (var prior in matchingPriors)
                     {
-                        edge.SupersededById = anomaly.Id;
-                        edge.UpdatedAt = DateTime.UtcNow;
-                        await _anomalyRepo.UpdateAsync(edge);
-                        edgeCandidates.Remove(edge);
+                        prior.SupersededById = anomaly.Id;
+                        prior.UpdatedAt = DateTime.UtcNow;
+                        if (!anomaly.TowerId.HasValue && prior.TowerId.HasValue)
+                        {
+                            anomaly.TowerId = prior.TowerId;
+                        }
+                        await _anomalyRepo.UpdateAsync(prior);
+                        priorCandidates.Remove(prior);
+
+                        if (_alertRepo != null)
+                        {
+                            var priorAlerts = await _alertRepo.FindAsync(
+                                a => a.AnomalyId == prior.Id && !a.IsDeleted, track: true);
+                            if (priorAlerts != null)
+                            {
+                                foreach (var priorAlert in priorAlerts)
+                                {
+                                    if (!inheritedOpenAlert && priorAlert.Status == "Open")
+                                    {
+                                        priorAlert.AnomalyId = anomaly.Id;
+                                        priorAlert.UpdatedAt = DateTime.UtcNow;
+                                        await _alertRepo.UpdateAsync(priorAlert);
+                                        inheritedOpenAlert = true;
+                                    }
+                                    else if (priorAlert.Status is "Acknowledged" or "Resolved")
+                                    {
+                                        inheritedOpenAlert = true;
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     var evaluation = await _inspectionEvaluationClient.EvaluateAsync(
@@ -250,7 +291,7 @@ public class ProcessAiAnalysisResultCommandHandler
 
                     var resolvedSeverity = evaluation?.Severity ?? (isEmergency ? "Critical" : "Medium");
 
-                    if (isEmergency)
+                    if (isEmergency && !inheritedOpenAlert)
                     {
                         if (_alertRepo != null)
                         {

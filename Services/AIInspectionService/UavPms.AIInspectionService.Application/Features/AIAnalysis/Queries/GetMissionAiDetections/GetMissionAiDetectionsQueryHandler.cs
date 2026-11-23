@@ -48,15 +48,21 @@ public class GetMissionAiDetectionsQueryHandler
         var mediaList = await _inspectionMediaRepository.GetByMissionIdWithDetailsAsync(request.MissionId);
 
         return mediaList
-            .Where(media => media.DetectedAnomalies.Count > 0)
             .Select(media =>
             {
-                var orderedDetections = media.DetectedAnomalies
+                var activeAnomalies = media.DetectedAnomalies
+                    .Where(anomaly => anomaly.SupersededById == null)
                     .OrderBy(anomaly => anomaly.FrameTimeSeconds ?? double.MaxValue)
                     .ThenBy(anomaly => anomaly.FrameIndex ?? int.MaxValue)
                     .ThenByDescending(anomaly => anomaly.ConfidenceScore)
                     .ToList();
 
+                return (media, activeAnomalies);
+            })
+            .Where(item => item.activeAnomalies.Count > 0)
+            .Select(item =>
+            {
+                var (media, orderedDetections) = item;
                 return new MissionAiDetectionMediaDto
                 {
                     MediaId = media.Id,
@@ -68,7 +74,7 @@ public class GetMissionAiDetectionsQueryHandler
                     ValidationStatus = media.ValidationStatus,
                     CapturedAt = media.CapturedAt,
                     CreatedAt = media.CreatedAt,
-                    DetectionCount = media.DetectedAnomalies.Count,
+                    DetectionCount = orderedDetections.Count,
                     VideoMetadata = MissionAiDetectionMapper.MapVideoMetadata(media),
                     Detections = orderedDetections
                         .Select(MissionAiDetectionMapper.MapDetection)
