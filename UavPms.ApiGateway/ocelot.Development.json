@@ -453,6 +453,22 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
+      "DownstreamPathTemplate": "/api/v{version}/anomalies/{id}/labels",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5106 }],
+      "UpstreamPathTemplate": "/api/v{version}/anomalies/{id}/labels",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "OPTIONS"],
+      "Priority": 100
+    },
+    {
+      "DownstreamPathTemplate": "/api/v{version}/anomalies/{id}/labels/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5106 }],
+      "UpstreamPathTemplate": "/api/v{version}/anomalies/{id}/labels/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "OPTIONS"],
+      "Priority": 100
+    },
+    {
       "DownstreamPathTemplate": "/api/v{version}/anomalies/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5103 }],
