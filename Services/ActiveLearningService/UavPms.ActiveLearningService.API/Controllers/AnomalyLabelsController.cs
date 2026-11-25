@@ -21,7 +21,7 @@ public class AnomalyLabelsController(LabelService labels) : ControllerBase
     [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     public Task<IActionResult> Get(Guid id, CancellationToken ct) => Run(async () =>
     {
-        var result = await labels.GetAsync(id, UserId, checkAssignment: User.IsInRole(UserRoles.Analyst), ct);
+        var result = await labels.GetAsync(id, UserId, NeedsAssignment, ct);
         return result == null
             ? NotFound(new ApiResponse(false, "No labels saved for this image yet.", ErrorCode: "LABELS_NOT_FOUND"))
             : Ok(new ApiResponse(true, "Labels retrieved.", result));
@@ -29,18 +29,23 @@ public class AnomalyLabelsController(LabelService labels) : ControllerBase
 
     /// <summary>Save (upsert) the whole-image label set; isFullyReviewed=false keeps it as a draft.</summary>
     [HttpPut]
-    [Authorize(Roles = UserRoles.Analyst)]
+    [Authorize(Roles = AdminOrAnalyst)]
     public Task<IActionResult> Save(Guid id, [FromBody] SaveLabelsRequest request, CancellationToken ct) => Run(async () =>
-        Ok(new ApiResponse(true, "Labels saved.", await labels.SaveAsync(id, request, UserId, ct))));
+        Ok(new ApiResponse(true, "Labels saved.", await labels.SaveAsync(id, request, UserId, NeedsAssignment, ct))));
 
     /// <summary>Queue a fully reviewed label set for the next training batch.</summary>
     [HttpPost("submit-training")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    [Authorize(Roles = AdminOrAnalyst)]
     public Task<IActionResult> Submit(Guid id, [FromBody] SubmitTrainingRequest request, CancellationToken ct) => Run(async () =>
     {
-        var result = await labels.SubmitAsync(id, request, UserId, ct);
+        var result = await labels.SubmitAsync(id, request, UserId, NeedsAssignment, ct);
         return Ok(new ApiResponse(result.Accepted, result.Message, result));
     });
+
+    private const string AdminOrAnalyst = UserRoles.SystemAdmin + "," + UserRoles.Analyst;
+
+    /// <summary>SystemAdmin has full access; an analyst must be assigned to the mission; a manager only reads.</summary>
+    private bool NeedsAssignment => !User.IsInRole(UserRoles.SystemAdmin) && User.IsInRole(UserRoles.Analyst);
 
     private Guid UserId =>
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id) ? id : Guid.Empty;

@@ -78,13 +78,13 @@ public class LabelService(ActiveLearningDbContext db)
             boxes, set.UpdatedAt, set.SubmittedAt);
     }
 
-    public async Task<SaveLabelsResult> SaveAsync(Guid anomalyId, SaveLabelsRequest request, Guid userId, CancellationToken ct)
+    public async Task<SaveLabelsResult> SaveAsync(Guid anomalyId, SaveLabelsRequest request, Guid userId, bool checkAssignment, CancellationToken ct)
     {
         var errors = Validate(request);
         if (errors.Count > 0)
             throw new LabelException(StatusCodes.Status400BadRequest, "VALIDATION_ERROR", string.Join(" ", errors));
 
-        var anomaly = await LoadAccessibleAnomalyAsync(anomalyId, userId, checkAssignment: true, ct);
+        var anomaly = await LoadAccessibleAnomalyAsync(anomalyId, userId, checkAssignment, ct);
         EnsureSameFrame(anomaly, request.FrameIndex);
 
         var set = await FindSetAsync(anomaly.MediaId, anomaly.FrameIndex, ct);
@@ -117,9 +117,9 @@ public class LabelService(ActiveLearningDbContext db)
         return new SaveLabelsResult(set.LabelStatus, set.UpdatedAt);
     }
 
-    public async Task<SubmitTrainingResult> SubmitAsync(Guid anomalyId, SubmitTrainingRequest request, Guid userId, CancellationToken ct)
+    public async Task<SubmitTrainingResult> SubmitAsync(Guid anomalyId, SubmitTrainingRequest request, Guid userId, bool checkAssignment, CancellationToken ct)
     {
-        var anomaly = await LoadAccessibleAnomalyAsync(anomalyId, userId, checkAssignment: true, ct);
+        var anomaly = await LoadAccessibleAnomalyAsync(anomalyId, userId, checkAssignment, ct);
         EnsureSameFrame(anomaly, request.FrameIndex);
 
         var set = await FindSetAsync(anomaly.MediaId, anomaly.FrameIndex, ct);

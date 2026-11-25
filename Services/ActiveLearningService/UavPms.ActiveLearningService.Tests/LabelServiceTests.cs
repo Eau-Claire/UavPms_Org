@@ -75,11 +75,11 @@ public class LabelServiceTests
     [Fact]
     public async Task Save_creates_draft_then_updates_the_same_image_row()
     {
-        var draft = await _service.SaveAsync(_imageAnomaly, Request(false, Box()), _analyst, default);
+        var draft = await _service.SaveAsync(_imageAnomaly, Request(false, Box()), _analyst, true, default);
         draft.LabelStatus.Should().Be("Draft");
 
         // A second anomaly on the same image edits the same label set (labels are per image, not per anomaly).
-        var full = await _service.SaveAsync(_secondImageAnomaly, Request(true), _analyst, default);
+        var full = await _service.SaveAsync(_secondImageAnomaly, Request(true), _analyst, true, default);
         full.LabelStatus.Should().Be("FullyReviewed");
 
         var rows = await _db.ImageLabelSets.ToListAsync();
@@ -92,7 +92,7 @@ public class LabelServiceTests
     public async Task Get_returns_saved_boxes_or_null()
     {
         (await _service.GetAsync(_imageAnomaly, _analyst, true, default)).Should().BeNull();
-        await _service.SaveAsync(_imageAnomaly, Request(true, Box(), Box("insulator", "manual", null)), _analyst, default);
+        await _service.SaveAsync(_imageAnomaly, Request(true, Box(), Box("insulator", "manual", null)), _analyst, true, default);
 
         var got = await _service.GetAsync(_imageAnomaly, _analyst, true, default);
         got!.LabelStatus.Should().Be("FullyReviewed");
@@ -104,10 +104,10 @@ public class LabelServiceTests
     [Fact]
     public async Task Video_frame_uses_the_anomaly_frame_and_rejects_a_mismatch()
     {
-        await _service.SaveAsync(_frameAnomaly, new SaveLabelsRequest(true, 12, [Box()]), _analyst, default);
+        await _service.SaveAsync(_frameAnomaly, new SaveLabelsRequest(true, 12, [Box()]), _analyst, true, default);
         (await _db.ImageLabelSets.SingleAsync()).FrameIndex.Should().Be(12);
 
-        var ex = await Fails(() => _service.SaveAsync(_frameAnomaly, new SaveLabelsRequest(true, 3, [Box()]), _analyst, default));
+        var ex = await Fails(() => _service.SaveAsync(_frameAnomaly, new SaveLabelsRequest(true, 3, [Box()]), _analyst, true, default));
         ex.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
         ex.ErrorCode.Should().Be("FRAME_MISMATCH");
     }
@@ -115,11 +115,11 @@ public class LabelServiceTests
     [Fact]
     public async Task Save_rejects_invalid_payload_unknown_anomaly_and_unassigned_analyst()
     {
-        (await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true, Box("cat")), _analyst, default)))
+        (await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true, Box("cat")), _analyst, true, default)))
             .StatusCode.Should().Be(StatusCodes.Status400BadRequest);
-        (await Fails(() => _service.SaveAsync(Guid.NewGuid(), Request(true), _analyst, default)))
+        (await Fails(() => _service.SaveAsync(Guid.NewGuid(), Request(true), _analyst, true, default)))
             .StatusCode.Should().Be(StatusCodes.Status404NotFound);
-        (await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true), Guid.NewGuid(), default)))
+        (await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true), Guid.NewGuid(), true, default)))
             .StatusCode.Should().Be(StatusCodes.Status403Forbidden);
         _db.ImageLabelSets.Should().BeEmpty();
     }
@@ -134,18 +134,18 @@ public class LabelServiceTests
             new MissionAssignmentRef { Id = Guid.NewGuid(), MissionId = _mission, UserId = removed, AssignmentRole = "ANALYST", Status = "Removed" });
         await _db.SaveChangesAsync();
 
-        (await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true), inspector, default))).ErrorCode.Should().Be("FORBIDDEN");
-        (await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true), removed, default))).ErrorCode.Should().Be("FORBIDDEN");
+        (await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true), inspector, true, default))).ErrorCode.Should().Be("FORBIDDEN");
+        (await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true), removed, true, default))).ErrorCode.Should().Be("FORBIDDEN");
     }
 
     [Fact]
     public async Task Submit_requires_saved_fully_reviewed_labels()
     {
-        var none = await _service.SubmitAsync(_imageAnomaly, new SubmitTrainingRequest("anomaly:x", null), _analyst, default);
+        var none = await _service.SubmitAsync(_imageAnomaly, new SubmitTrainingRequest("anomaly:x", null), _analyst, true, default);
         none.Should().Be(new SubmitTrainingResult(false, "NotLabelled", none.Message));
 
-        await _service.SaveAsync(_imageAnomaly, Request(false, Box()), _analyst, default);
-        var draft = await _service.SubmitAsync(_imageAnomaly, new SubmitTrainingRequest(null, null), _analyst, default);
+        await _service.SaveAsync(_imageAnomaly, Request(false, Box()), _analyst, true, default);
+        var draft = await _service.SubmitAsync(_imageAnomaly, new SubmitTrainingRequest(null, null), _analyst, true, default);
         draft.Accepted.Should().BeFalse();
         draft.Status.Should().Be("NotFullyReviewed");
         (await _db.ImageLabelSets.SingleAsync()).TrainingStatus.Should().BeNull();
@@ -154,27 +154,38 @@ public class LabelServiceTests
     [Fact]
     public async Task Submit_queues_once_and_then_locks_the_labels()
     {
-        await _service.SaveAsync(_imageAnomaly, Request(true, Box()), _analyst, default);
+        await _service.SaveAsync(_imageAnomaly, Request(true, Box()), _analyst, true, default);
 
-        var first = await _service.SubmitAsync(_imageAnomaly, new SubmitTrainingRequest($"media:{_media}", null), _analyst, default);
+        var first = await _service.SubmitAsync(_imageAnomaly, new SubmitTrainingRequest($"media:{_media}", null), _analyst, true, default);
         first.Should().Be(new SubmitTrainingResult(true, "Accepted", "AI đã tiếp nhận ảnh vào tập dữ liệu huấn luyện."));
         var set = await _db.ImageLabelSets.SingleAsync();
         set.TrainingStatus.Should().Be("Queued");
         set.SubmittedAt.Should().NotBeNull();
 
-        var again = await _service.SubmitAsync(_imageAnomaly, new SubmitTrainingRequest(null, null), _analyst, default);
+        var again = await _service.SubmitAsync(_imageAnomaly, new SubmitTrainingRequest(null, null), _analyst, true, default);
         again.Accepted.Should().BeTrue();
         again.Status.Should().Be("Accepted");
 
-        var locked = await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true), _analyst, default));
+        var locked = await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true), _analyst, true, default));
         locked.StatusCode.Should().Be(StatusCodes.Status409Conflict);
         locked.ErrorCode.Should().Be("LABELS_LOCKED");
     }
 
     [Fact]
+    public async Task Admin_can_save_and_submit_without_assignment()
+    {
+        var admin = Guid.NewGuid();
+        (await _service.SaveAsync(_imageAnomaly, Request(true, Box()), admin, checkAssignment: false, default))
+            .LabelStatus.Should().Be("FullyReviewed");
+        (await _service.SubmitAsync(_imageAnomaly, new SubmitTrainingRequest(null, null), admin, checkAssignment: false, default))
+            .Accepted.Should().BeTrue();
+        (await _db.ImageLabelSets.SingleAsync()).AnalystId.Should().Be(admin);
+    }
+
+    [Fact]
     public async Task Admin_or_manager_can_read_without_assignment()
     {
-        await _service.SaveAsync(_imageAnomaly, Request(true, Box()), _analyst, default);
+        await _service.SaveAsync(_imageAnomaly, Request(true, Box()), _analyst, true, default);
         (await _service.GetAsync(_imageAnomaly, Guid.NewGuid(), checkAssignment: false, default)).Should().NotBeNull();
     }
 }
