@@ -78,6 +78,9 @@ namespace UavPms.ActiveLearningService.API.Migrations
                     b.Property<DateTime?>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("TrainingBatchId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("TrainingStatus")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -92,6 +95,8 @@ namespace UavPms.ActiveLearningService.API.Migrations
                         .HasDatabaseName("UX_ImageLabelSets_Media_Image")
                         .HasFilter("\"FrameIndex\" IS NULL");
 
+                    b.HasIndex("TrainingBatchId");
+
                     b.HasIndex("TrainingStatus");
 
                     b.HasIndex("MediaId", "FrameIndex")
@@ -103,7 +108,7 @@ namespace UavPms.ActiveLearningService.API.Migrations
                         {
                             t.HasCheckConstraint("CK_ImageLabelSets_LabelStatus", "\"LabelStatus\" IN ('Draft', 'FullyReviewed')");
 
-                            t.HasCheckConstraint("CK_ImageLabelSets_TrainingStatus", "\"TrainingStatus\" IS NULL OR \"TrainingStatus\" IN ('Queued')");
+                            t.HasCheckConstraint("CK_ImageLabelSets_TrainingStatus", "\"TrainingStatus\" IS NULL OR \"TrainingStatus\" IN ('Queued', 'Batched', 'Trained')");
                         });
                 });
 
@@ -154,6 +159,57 @@ namespace UavPms.ActiveLearningService.API.Migrations
                     b.ToTable("MissionAssignments", null, t =>
                         {
                             t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("UavPms.ActiveLearningService.API.Data.TrainingBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CycleId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ImageCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ModelName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ModelSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Result")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Status")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TrainingBatches_Running")
+                        .HasFilter("\"Status\" = 'Running'");
+
+                    b.ToTable("TrainingBatches", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TrainingBatches_Status", "\"Status\" IN ('Running', 'deployed', 'gate_passed_not_deployed', 'gate_failed', 'rolled_back', 'rollback_failed', 'error')");
                         });
                 });
 #pragma warning restore 612, 618

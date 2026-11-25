@@ -127,6 +127,8 @@ public class LabelService(ActiveLearningDbContext db)
             return new SubmitTrainingResult(false, "NotLabelled", "Ảnh chưa được lưu nhãn.");
         if (set.TrainingStatus == ImageLabelSet.Queued)
             return new SubmitTrainingResult(true, "Accepted", "Ảnh đã nằm trong hàng chờ huấn luyện.");
+        if (set.TrainingStatus != null)   // Batched or Trained: already in (or used by) a training batch
+            return new SubmitTrainingResult(true, "Accepted", "Ảnh đã được đưa vào đợt huấn luyện.");
         if (set.LabelStatus != ImageLabelSet.FullyReviewed)
             return new SubmitTrainingResult(false, "NotFullyReviewed",
                 "Chỉ ảnh đã được kiểm tra toàn bộ (FullyReviewed) mới được gửi cho AI học.");

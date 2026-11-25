@@ -171,6 +171,22 @@ public class LabelServiceTests
         locked.ErrorCode.Should().Be("LABELS_LOCKED");
     }
 
+    [Theory]
+    [InlineData("Batched")]
+    [InlineData("Trained")]
+    public async Task Submit_does_not_requeue_a_batched_or_trained_image(string status)
+    {
+        await _service.SaveAsync(_imageAnomaly, Request(true, Box()), _analyst, true, default);
+        var set = await _db.ImageLabelSets.SingleAsync();
+        set.TrainingStatus = status;
+        await _db.SaveChangesAsync();
+
+        var result = await _service.SubmitAsync(_imageAnomaly, new SubmitTrainingRequest(null, null), _analyst, true, default);
+        result.Accepted.Should().BeTrue();
+        (await _db.ImageLabelSets.SingleAsync()).TrainingStatus.Should().Be(status);
+        (await Fails(() => _service.SaveAsync(_imageAnomaly, Request(true), _analyst, true, default))).ErrorCode.Should().Be("LABELS_LOCKED");
+    }
+
     [Fact]
     public async Task Admin_can_save_and_submit_without_assignment()
     {
