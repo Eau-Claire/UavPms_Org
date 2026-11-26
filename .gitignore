@@ -15,6 +15,19 @@ api-test/scripts/seed_test_users.local.sql
 
 # Local agent metadata
 .agents/
+!.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/readable-code-defense/
+!.agents/skills/dotnet-feature/
+!.agents/skills/pr-review-judge/
+.agents/skills/readable-code-defense/*
+.agents/skills/dotnet-feature/*
+.agents/skills/pr-review-judge/*
+!.agents/skills/readable-code-defense/SKILL.md
+!.agents/skills/dotnet-feature/SKILL.md
+!.agents/skills/pr-review-judge/SKILL.md
 .codex/
 
 # Runtime storage/uploads
