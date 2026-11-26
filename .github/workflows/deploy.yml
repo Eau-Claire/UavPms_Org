@@ -10,7 +10,7 @@ on:
       - completed
 
 concurrency:
-  group: production-deploy
+  group: production-operations-database-update
   cancel-in-progress: false
 
 jobs:
@@ -42,21 +42,189 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
-          debug: true
           timeout: 30s
           command_timeout: 30m
 
           envs: DEPLOY_PATH,DEPLOY_COMMIT,GATEWAY_HEALTH_URL
 
-          script_stop: true
-
+          # Bash xử lý lỗi; giữ nguyên nội dung heredoc khi SSH truyền script.
           script: |
-            set -e
+            bash -s <<'DEPLOY_SCRIPT'
+            set +x
+            set -euo pipefail
 
+            if [ -z "${DEPLOY_PATH:-}" ] || [ -z "${DEPLOY_COMMIT:-}" ]; then
+              echo "ERROR: Deployment path or release SHA is missing."
+              exit 1
+            fi
             cd "$DEPLOY_PATH"
 
             echo "Fetching latest repository state..."
             git fetch origin main
+
+            # Kiểm tra theo đúng SHA sẽ chạy, trước khi đổi checkout hoặc container.
+            migrations_dir=Services/OperationsService/UavPms.OperationsService.Infrastructure/Migrations
+            if ! required_migrations="$(
+              git ls-tree -r --name-only "$DEPLOY_COMMIT" -- "$migrations_dir" |
+                sed -nE 's@^.*/([0-9]{14}_[A-Za-z0-9_]+)\.cs$@\1@p' |
+                LC_ALL=C sort -u
+            )" || [ -z "$required_migrations" ]; then
+              echo "ERROR: Could not determine required EF migrations for the release."
+              exit 1
+            fi
+
+            # Render đúng file Compose của SHA đích với thư mục và môi trường của deploy.
+            export RUN_MIGRATIONS=false MIGRATION_ONLY=false
+            compose=(docker compose --project-directory "$PWD")
+            release_compose="$(mktemp "$PWD/.compose-preflight.XXXXXX")"
+            trap 'rm -f -- "$release_compose"' EXIT
+            if ! git show "$DEPLOY_COMMIT:docker-compose.yml" > "$release_compose" 2>/dev/null ||
+              ! release_runtime="$("${compose[@]}" -f "$release_compose" config --format json operationsservice 2>/dev/null)"; then
+              echo "ERROR: Could not resolve Compose for the release. Deployment stopped."
+              exit 1
+            fi
+            rm -f -- "$release_compose"
+            trap - EXIT
+
+            db_read() {
+              RELEASE_COMPOSE="$release_runtime" timeout 30s python3 -c '
+            import json
+            import os
+            import re
+            import subprocess as sp
+            import sys
+
+            def connection_options(value):
+                # Chỉ nhận dạng chuỗi đơn giản đã biết; không suy đoán khi cú pháp hoặc đích mơ hồ.
+                supported = {"host", "port", "database", "username", "user id", "password", "ssl mode",
+                             "trust server certificate", "pooling", "minimum pool size", "maximum pool size",
+                             "timeout", "command timeout", "application name", "keepalive", "include error detail"}
+                options = {}
+                for item in value.strip().rstrip(";").split(";"):
+                    key, sep, val = item.partition("=")
+                    key = key.strip().lower()
+                    if key == "user id":
+                        key = "username"
+                    if not sep or key in options or key not in supported:
+                        raise ValueError
+                    if any(char in val for char in ("\r", "\n", chr(34), chr(39))):
+                        raise ValueError
+                    options[key] = val.strip()
+                return options
+
+            def networks(name):
+                template = "{{json .Name}} {{json .NetworkSettings.Networks}}"
+                raw = sp.check_output(["docker", "inspect", "--type", "container", "--format", template, name], text=True)
+                container, attached = raw.split(" ", 1)
+                if json.loads(container) != "/" + name:
+                    raise ValueError
+                return json.loads(attached)
+
+            def database_endpoint(model, host):
+                service = model["services"]["operationsservice"]
+                if any(service.get(key) for key in ("dns", "dns_search", "dns_opt", "network_mode")):
+                    raise ValueError
+                extra_hosts = service.get("extra_hosts") or {}
+                if any(entry.split("=")[0].split(":")[0].lower() == host.lower() for entry in extra_hosts):
+                    raise ValueError
+                operations = service["container_name"]
+                planned = {model["networks"][key]["name"] for key in service["networks"]}
+                if not planned or set(networks(operations)) != planned:
+                    raise ValueError
+                targets = networks(host)
+                addresses = {targets[key]["IPAddress"] for key in planned & targets.keys()} - {""}
+                dns = sp.check_output(["docker", "exec", operations, "getent", "ahostsv4", host], text=True)
+                resolved = {line.split()[0] for line in dns.splitlines() if line}
+                if len(resolved) != 1 or not resolved <= addresses:
+                    raise ValueError
+                return resolved.pop()
+
+            try:
+                model = json.loads(os.environ.pop("RELEASE_COMPOSE"))
+                value = model["services"]["operationsservice"]["environment"]["ConnectionStrings__DefaultConnection"]
+                options = connection_options(value)
+                host, database = options["host"], options["database"]
+                user = options["username"]
+                port = int(options.get("port", "5432"))
+                if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", host) or not 0 < port <= 65535:
+                    raise ValueError
+                # psql -d cũng chấp nhận URI/conninfo; chỉ cho phép tên DB literal.
+                if not re.fullmatch(r"[a-zA-Z0-9_-]+", database) or not user or not options["password"]:
+                    raise ValueError
+                address = database_endpoint(model, host)
+                ssl = options.get("ssl mode", "prefer").lower()
+                ssl = {"verifyca": "verify-ca", "verifyfull": "verify-full"}.get(ssl, ssl)
+                if ssl not in {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}:
+                    raise ValueError
+            except (KeyError, TypeError, ValueError, OSError, sp.CalledProcessError):
+                raise SystemExit(2) from None
+
+            env = dict(os.environ, PGPASSWORD=options["password"])
+            command = ["docker", "exec", "-i", "-e", "PGPASSWORD", "-e", "PGHOSTADDR=" + address,
+                       "-e", "PGSSLMODE=" + ssl, "-e", "PGOPTIONS=-c default_transaction_read_only=on -c statement_timeout=5000",
+                       host, "env", "-u", "PGSERVICE", "-u", "PGSERVICEFILE",
+                       "psql", "-X", "-w", "-v", "ON_ERROR_STOP=1", "-qAt",
+                       "-h", host, "-p", str(port), "-U", user, "-d", database]
+            arguments = sys.argv[1:]
+            if arguments == ["--verify-target"]:
+                # Bỏ hậu tố netmask của inet::text để so chính xác địa chỉ IPv4 đã xác minh.
+                query = ("SELECT split_part(inet_server_addr()::text, $$/$$, 1), inet_server_port(), "
+                         "current_database(), current_setting($$default_transaction_read_only$$) = $$on$$;")
+                result = sp.run(command + ["-F", "\t", "-c", query], env=env,
+                                stdout=sp.PIPE, text=True, check=False)
+                expected = f"{address}\t{port}\t{database}\tt"
+                if result.returncode or result.stdout.splitlines() != [expected]:
+                    raise SystemExit(2)
+                raise SystemExit(0)
+            raise SystemExit(sp.run(command + arguments, env=env, check=False).returncode)
+            ' "$@" 2>/dev/null
+            }
+
+            if ! db_read --verify-target </dev/null; then
+              echo "ERROR: Could not verify the OperationsService database target from Compose. Deployment stopped."
+              exit 1
+            fi
+
+            if ! applied_migrations="$(db_read -c 'SELECT "MigrationId" FROM public."__EFMigrationsHistory";' </dev/null | LC_ALL=C sort -u)"; then
+              echo "ERROR: Could not read EF migration history. Deployment stopped."
+              exit 1
+            fi
+            missing_migrations="$(LC_ALL=C comm -23 <(printf '%s\n' "$required_migrations") <(printf '%s\n' "$applied_migrations"))"
+            if [ -n "$missing_migrations" ]; then
+              printf 'ERROR: Required EF migrations are missing:\n%s\n' "$missing_migrations"
+              echo "Use the approved EF Core migration workflow after C3. Deployment stopped."
+              exit 1
+            fi
+            if [ "$applied_migrations" != "$required_migrations" ]; then
+              echo "ERROR: EF migration history contains IDs outside this release. Deployment stopped."
+              exit 1
+            fi
+
+            # Lịch sử EF không bắt được lệch schema do hai chỉnh sửa thủ công cũ.
+            if ! schema_ok="$(db_read <<'SQL'
+            SELECT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'AuditLogs' AND column_name = 'ActionType'
+                AND data_type = 'character varying' AND character_maximum_length = 100 AND is_nullable = 'NO'
+            ) AND EXISTS (
+              SELECT 1 FROM pg_catalog.pg_constraint AS c
+              JOIN pg_catalog.pg_attribute AS a ON a.attrelid = c.conrelid AND a.attname = 'ValidationStatus'
+              WHERE c.conrelid = to_regclass('public."DetectedAnomalies"')
+                AND c.conname = 'CK_DetectedAnomalies_ValidationStatus'
+                AND c.contype = 'c' AND c.convalidated AND c.conkey = ARRAY[a.attnum]
+                AND (
+                  SELECT string_agg(token.parts[1], '' ORDER BY token.position)
+                  FROM regexp_matches(pg_get_constraintdef(c.oid),
+                    $$('(?:[^']|'')*'|"(?:""|[^"])*"|[^[:space:]()'"]+)$$, 'g')
+                    WITH ORDINALITY AS token(parts, position)
+                ) = $$CHECK"ValidationStatus"::text=ANYARRAY['Pending'::charactervarying,'InReview'::charactervarying,'Confirmed'::charactervarying,'Rejected'::charactervarying,'Resolved'::charactervarying]::text[]$$
+            );
+            SQL
+            )" || [ "$schema_ok" != t ]; then
+              echo "ERROR: AuditLogs or DetectedAnomalies schema is incompatible. Deployment stopped."
+              exit 1
+            fi
+            echo "Read-only database preflight passed."
 
             echo "Checking out main..."
             git checkout main
@@ -64,23 +232,24 @@ jobs:
             echo "Deploying commit: $DEPLOY_COMMIT"
             git reset --hard "$DEPLOY_COMMIT"
 
+            # Dừng trước khi start nếu môi trường Compose đổi sau lần xác minh DB.
+            if ! deployed_runtime="$("${compose[@]}" -f docker-compose.yml config --format json operationsservice 2>/dev/null)" ||
+              [ "$deployed_runtime" != "$release_runtime" ]; then
+              echo "ERROR: Effective Compose configuration changed after preflight. Deployment stopped."
+              exit 1
+            fi
+            unset release_runtime deployed_runtime
+
             echo "Building containers..."
-            docker compose build
-
-            echo "Applying database schema adjustments..."
-            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'ALTER TABLE "AuditLogs" ALTER COLUMN "ActionType" TYPE character varying(100);' || true
-            docker exec uavpms-db psql -v ON_ERROR_STOP=1 -U uavpms -d uavpms -c 'ALTER TABLE "DetectedAnomalies" DROP CONSTRAINT IF EXISTS "CK_DetectedAnomalies_ValidationStatus"; ALTER TABLE "DetectedAnomalies" ADD CONSTRAINT "CK_DetectedAnomalies_ValidationStatus" CHECK (("ValidationStatus")::text = ANY (ARRAY['\''Pending'\''::character varying, '\''InReview'\''::character varying, '\''Confirmed'\''::character varying, '\''Rejected'\''::character varying, '\''Resolved'\''::character varying]::text[]));' || true
-
-            echo "Applying pending OperationsService EF Core migrations..."
-            RUN_MIGRATIONS=true MIGRATION_ONLY=true docker compose run --rm --no-deps operationsservice
+            "${compose[@]}" -f docker-compose.yml build
 
             echo "Starting containers..."
-            docker compose up -d --remove-orphans
+            "${compose[@]}" -f docker-compose.yml up -d --remove-orphans
 
             echo "Cleaning unused Docker images..."
             docker image prune -f
 
-            if [ -n "$GATEWAY_HEALTH_URL" ]; then
+            if [ -n "${GATEWAY_HEALTH_URL:-}" ]; then
               echo "Running health check..."
               curl \
                 --fail \
@@ -99,3 +268,4 @@ jobs:
             echo "Cleaning Docker build cache..."
             docker builder prune -af
             docker system df
+            DEPLOY_SCRIPT
