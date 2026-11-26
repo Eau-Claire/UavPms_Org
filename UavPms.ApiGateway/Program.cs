@@ -273,3 +273,5 @@ static async Task<HttpResponseMessage> FetchSwaggerAsync(
     var fallbackUrl = targetUrl.Replace("/swagger/v1.0/", "/swagger/v1/", StringComparison.OrdinalIgnoreCase);
     return await client.GetAsync(fallbackUrl, cancellationToken);
 }
+
+public partial class Program;

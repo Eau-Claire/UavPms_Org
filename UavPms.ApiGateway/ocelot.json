@@ -137,20 +137,6 @@
       "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
     },
     {
-      "DownstreamPathTemplate": "/hangfire/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/hangfire/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/hangfire",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/hangfire",
-      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
-    },
-    {
       "DownstreamPathTemplate": "/api/v{version}/regions/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
@@ -465,13 +451,6 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/api/v{version}/anomalies",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "fastapi-ai", "Port": 8000 }],
-      "UpstreamPathTemplate": "/ai-service/{everything}",
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     }
   ],

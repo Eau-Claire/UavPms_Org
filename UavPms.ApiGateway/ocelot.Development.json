@@ -137,20 +137,6 @@
       "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
     },
     {
-      "DownstreamPathTemplate": "/hangfire/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
-      "UpstreamPathTemplate": "/hangfire/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/hangfire",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
-      "UpstreamPathTemplate": "/hangfire",
-      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
-    },
-    {
       "DownstreamPathTemplate": "/api/v{version}/regions/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5102 }],
@@ -465,13 +451,6 @@
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5103 }],
       "UpstreamPathTemplate": "/api/v{version}/anomalies",
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 8000 }],
-      "UpstreamPathTemplate": "/ai-service/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
     }
   ],
   "GlobalConfiguration": {
