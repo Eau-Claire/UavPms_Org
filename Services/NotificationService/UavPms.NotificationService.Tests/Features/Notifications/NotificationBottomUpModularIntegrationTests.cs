@@ -69,6 +69,8 @@ public class NotificationBottomUpModularIntegrationTests
             }
             return proxyMock.Object;
         });
+        var connectionTarget = new Mock<IClientProxy>();
+        hubClientsMock.Setup(c => c.Clients(It.IsAny<IReadOnlyList<string>>())).Returns(connectionTarget.Object);
 
         var connectionRegistry = new Mock<INotificationConnectionRegistry>();
         connectionRegistry.Setup(r => r.GetConnections(It.IsAny<string>())).Returns(new[] { "conn-1" });
@@ -112,14 +114,10 @@ public class NotificationBottomUpModularIntegrationTests
 
         var missionGroup = NotificationHub.MissionGroupName(missionId.ToString());
         var inspectorGroup = NotificationHub.UserGroupName(inspectorId);
-        groupTargets.Should().ContainKey(missionGroup);
-        groupTargets.Should().ContainKey(inspectorGroup);
-
-        groupTargets[missionGroup].Verify(
-            p => p.SendCoreAsync("MissionDispatched", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()),
-            Times.Once);
-        groupTargets[inspectorGroup].Verify(
-            p => p.SendCoreAsync("MissionDispatched", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()),
+        connectionRegistry.Verify(r => r.GetConnections(missionGroup), Times.Once);
+        connectionRegistry.Verify(r => r.GetConnections(inspectorGroup), Times.Once);
+        connectionTarget.Verify(
+            p => p.SendCoreAsync("MissionLifecycleEvent", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()),
             Times.Once);
 
         // 4. Seed historical RefreshTokens and run CleanupJob with custom Notification:RetentionDays = 14
