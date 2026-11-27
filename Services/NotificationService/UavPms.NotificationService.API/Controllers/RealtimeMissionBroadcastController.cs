@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Asp.Versioning;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.SignalR;
@@ -24,8 +23,8 @@ namespace UavPms.NotificationService.API.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/notifications/realtime")]
-[AllowAnonymous]
-[InternalServiceOrAdminAuth]
+[ApiExplorerSettings(IgnoreApi = true)]
+[InternalServiceKeyAuth]
 public class RealtimeMissionBroadcastController : ControllerBase
 {
     private readonly IHubContext<NotificationHub> _hubContext;
@@ -178,49 +177,33 @@ public class RealtimeMissionBroadcastController : ControllerBase
     }
 }
 
-/// <summary>
-/// Secures internal realtime broadcast endpoints: requires either an authenticated SystemAdmin JWT
-/// or a matching internal service key (X-Internal-Key / X-Service-Key against InternalServices:SharedKey or AIService:ServiceKey).
-/// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
-public sealed class InternalServiceOrAdminAuthAttribute : Attribute, IAuthorizationFilter
+public sealed class InternalServiceKeyAuthAttribute : Attribute, IAuthorizationFilter
 {
+    private const string SharedKeySetting = "InternalServices:SharedKey";
+    private const string InternalKeyHeader = "X-Internal-Key";
+
     public void OnAuthorization(AuthorizationFilterContext context)
     {
-        var user = context.HttpContext.User;
-        if (user.Identity?.IsAuthenticated == true && user.IsInRole(UserRoles.SystemAdmin))
+        var config = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
+        var configuredKey = config[SharedKeySetting];
+        var providedKeys = context.HttpContext.Request.Headers[InternalKeyHeader];
+        if (!string.IsNullOrWhiteSpace(configuredKey) && providedKeys.Count == 1 &&
+            !string.IsNullOrWhiteSpace(providedKeys[0]) && FixedTimeEquals(providedKeys[0]!, configuredKey))
         {
             return;
         }
 
-        var config = context.HttpContext.RequestServices.GetService<IConfiguration>();
-        var configuredKey = config?["InternalServices:SharedKey"];
-        if (string.IsNullOrWhiteSpace(configuredKey))
-        {
-            configuredKey = config?["AIService:ServiceKey"];
-        }
-
-        if (!string.IsNullOrWhiteSpace(configuredKey))
-        {
-            var providedKey = context.HttpContext.Request.Headers["X-Internal-Key"].FirstOrDefault()
-                              ?? context.HttpContext.Request.Headers["X-Service-Key"].FirstOrDefault();
-
-            if (!string.IsNullOrWhiteSpace(providedKey) && FixedTimeEquals(providedKey, configuredKey))
-            {
-                return;
-            }
-        }
-
         context.Result = new UnauthorizedObjectResult(new ApiResponse(
             false,
-            "Authentication required: provide a SystemAdmin JWT or valid internal service key.",
+            "Internal service authentication required.",
             ErrorCode: "UNAUTHORIZED"));
     }
 
     private static bool FixedTimeEquals(string a, string b)
     {
-        var bytesA = Encoding.UTF8.GetBytes(a);
-        var bytesB = Encoding.UTF8.GetBytes(b);
-        return bytesA.Length == bytesB.Length && CryptographicOperations.FixedTimeEquals(bytesA, bytesB);
+        var providedHash = SHA256.HashData(Encoding.UTF8.GetBytes(a));
+        var configuredHash = SHA256.HashData(Encoding.UTF8.GetBytes(b));
+        return CryptographicOperations.FixedTimeEquals(providedHash, configuredHash);
     }
 }

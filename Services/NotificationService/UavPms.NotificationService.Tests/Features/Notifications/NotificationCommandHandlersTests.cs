@@ -81,9 +81,9 @@ public class NotificationCommandHandlersTests
         // arrange
         var notificationId = Guid.NewGuid();
         var notification = new Notification { Id = notificationId };
-        var command = new MarkNotificationAsReadCommand(notificationId);
+        var command = new MarkNotificationAsReadCommand(notificationId, notification.UserId);
 
-        _notificationRepositoryMock.Setup(r => r.GetByIdAsync(notificationId, It.IsAny<bool>()))
+        _notificationRepositoryMock.Setup(r => r.GetByOwnerAsync(notificationId, command.UserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(notification);
 
         var handler = new MarkNotificationAsReadCommandHandler(
@@ -95,7 +95,7 @@ public class NotificationCommandHandlersTests
         await handler.Handle(command, CancellationToken.None);
 
         // assert
-        _notificationRepositoryMock.Verify(r => r.MarkAsReadAsync(notificationId), Times.Once);
+        notification.ReadAt.Should().NotBeNull();
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -104,9 +104,9 @@ public class NotificationCommandHandlersTests
     {
         // arrange
         var notificationId = Guid.NewGuid();
-        var command = new MarkNotificationAsReadCommand(notificationId);
+        var command = new MarkNotificationAsReadCommand(notificationId, Guid.NewGuid());
 
-        _notificationRepositoryMock.Setup(r => r.GetByIdAsync(notificationId, It.IsAny<bool>()))
+        _notificationRepositoryMock.Setup(r => r.GetByOwnerAsync(notificationId, command.UserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Notification?)null);
 
         var handler = new MarkNotificationAsReadCommandHandler(
@@ -119,7 +119,6 @@ public class NotificationCommandHandlersTests
 
         // assert
         await act.Should().ThrowAsync<NotFoundException>();
-        _notificationRepositoryMock.Verify(r => r.MarkAsReadAsync(It.IsAny<Guid>()), Times.Never);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -128,14 +127,12 @@ public class NotificationCommandHandlersTests
     public async Task Handle_MarkAsRead_ShouldThrowNotFound_WhenNotificationBelongsToAnotherUser()
     {
         var notificationId = Guid.NewGuid();
-        _notificationRepositoryMock.Setup(r => r.GetByIdAsync(notificationId, It.IsAny<bool>()))
-            .ReturnsAsync(new Notification { Id = notificationId, UserId = Guid.NewGuid() });
         var handler = new MarkNotificationAsReadCommandHandler(_notificationRepositoryMock.Object, _unitOfWorkMock.Object);
 
         Func<Task> act = async () => await handler.Handle(new MarkNotificationAsReadCommand(notificationId, Guid.NewGuid()), CancellationToken.None);
 
         await act.Should().ThrowAsync<NotFoundException>();
-        _notificationRepositoryMock.Verify(r => r.MarkAsReadAsync(It.IsAny<Guid>()), Times.Never);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     #endregion
@@ -148,9 +145,9 @@ public class NotificationCommandHandlersTests
         // arrange
         var notificationId = Guid.NewGuid();
         var notification = new Notification { Id = notificationId };
-        var command = new DeleteNotificationCommand(notificationId);
+        var command = new DeleteNotificationCommand(notificationId, notification.UserId);
 
-        _notificationRepositoryMock.Setup(r => r.GetByIdAsync(notificationId, It.IsAny<bool>()))
+        _notificationRepositoryMock.Setup(r => r.GetByOwnerAsync(notificationId, command.UserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(notification);
 
         var handler = new DeleteNotificationCommandHandler(
@@ -171,9 +168,9 @@ public class NotificationCommandHandlersTests
     {
         // arrange
         var notificationId = Guid.NewGuid();
-        var command = new DeleteNotificationCommand(notificationId);
+        var command = new DeleteNotificationCommand(notificationId, Guid.NewGuid());
 
-        _notificationRepositoryMock.Setup(r => r.GetByIdAsync(notificationId, It.IsAny<bool>()))
+        _notificationRepositoryMock.Setup(r => r.GetByOwnerAsync(notificationId, command.UserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Notification?)null);
 
         var handler = new DeleteNotificationCommandHandler(

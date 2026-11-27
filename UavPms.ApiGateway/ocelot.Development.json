@@ -87,26 +87,49 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/notifications/realtime/{everything}",
+      "DownstreamPathTemplate": "/api/v1/notifications",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
-      "UpstreamPathTemplate": "/api/v{version}/notifications/realtime/{everything}",
-      "UpstreamHttpMethod": [],
+      "UpstreamPathTemplate": "/api/v1/notifications",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v1/notifications/history",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
+      "UpstreamPathTemplate": "/api/v1/notifications/history",
+      "UpstreamHttpMethod": ["GET"],
       "Priority": 100
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/notifications/{everything}",
+      "DownstreamPathTemplate": "/api/v1/notifications/unread-count",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
-      "UpstreamPathTemplate": "/api/v{version}/notifications/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      "UpstreamPathTemplate": "/api/v1/notifications/unread-count",
+      "UpstreamHttpMethod": ["GET"],
+      "Priority": 100
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/notifications",
+      "DownstreamPathTemplate": "/api/v1/notifications/{id}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
-      "UpstreamPathTemplate": "/api/v{version}/notifications",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      "UpstreamPathTemplate": "/api/v1/notifications/{id}",
+      "UpstreamHttpMethod": ["GET", "DELETE"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v1/notifications/{id}/read",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
+      "UpstreamPathTemplate": "/api/v1/notifications/{id}/read",
+      "UpstreamHttpMethod": ["PUT"]
+    },
+    {
+      "DownstreamPathTemplate": "/hubs/notifications/negotiate",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5104 }],
+      "UpstreamPathTemplate": "/hubs/notifications/negotiate",
+      "UpstreamHttpMethod": ["POST"],
+      "Priority": 100
     },
     {
       "DownstreamPathTemplate": "/hubs/notifications/{everything}",

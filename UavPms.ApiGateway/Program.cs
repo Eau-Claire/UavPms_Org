@@ -255,6 +255,22 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// Ocelot coi {id} là chuỗi, nên chặn các đường nội bộ trước khi chọn route theo ID.
+app.Use(async (context, next) =>
+{
+    const string notifications = "/api/v1/notifications";
+    var path = context.Request.Path;
+    if (path.StartsWithSegments(notifications + "/realtime") ||
+        path.StartsWithSegments(notifications + "/enqueue-email") ||
+        path.StartsWithSegments(notifications + "/schedule"))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    await next();
+});
+
 await app.UseOcelot();
 
 app.Run();

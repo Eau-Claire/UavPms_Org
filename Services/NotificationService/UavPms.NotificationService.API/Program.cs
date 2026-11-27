@@ -275,3 +275,5 @@ static int? TryGetIntConnectionValue(DbConnectionStringBuilder builder, string k
 
     return null;
 }
+
+public partial class Program;

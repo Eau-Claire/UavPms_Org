@@ -12,6 +12,7 @@ public sealed class GatewayRouteSecurityTests
     private const string ProductionEnvironment = "Production";
     private const string DevelopmentEnvironment = "Development";
     private const string TestBearerToken = "gate5-route-check";
+    private const string Notifications = "/api/v1/notifications";
 
     private static readonly string[] ClosedPaths =
     [
@@ -77,6 +78,46 @@ public sealed class GatewayRouteSecurityTests
         Assert.Contains(routes, route =>
             route["UpstreamPathTemplate"] == "/hubs/notifications" &&
             route["DownstreamScheme"] == "ws");
+    }
+
+    [Theory]
+    [MemberData(nameof(GatewayEnvironments))]
+    [Trait("Gate5", "GW")]
+    [Trait("Gate5", "P0-4")]
+    public async Task Notification_relay_routes_are_closed_and_only_owner_routes_are_mapped(string environment)
+    {
+        await using var factory = CreateFactory(environment);
+        using var client = factory.CreateClient();
+        await AssertNotFoundAsync(client, HttpMethod.Post, Notifications, false);
+        await AssertNotFoundAsync(client, HttpMethod.Post, Notifications, true);
+
+        foreach (var suffix in new[] { "/enqueue-email", "/schedule", "/realtime", "/realtime/read", "/REALTIME/mission-event", "/realtime/assessment-event/" })
+        {
+            foreach (var method in PreviouslyMappedMethods)
+            {
+                await AssertNotFoundAsync(client, method, Notifications + suffix, false);
+                await AssertNotFoundAsync(client, method, Notifications + suffix, true);
+            }
+        }
+
+        var configuration = factory.Services.GetRequiredService<IConfiguration>();
+        var routes = configuration.GetSection("Routes").GetChildren().ToArray();
+        var notificationRoutes = routes.Where(route =>
+            route["UpstreamPathTemplate"]?.Contains("/notifications", StringComparison.Ordinal) == true
+            && route["UpstreamPathTemplate"]!.StartsWith("/api/", StringComparison.Ordinal)).ToArray();
+        var actual = notificationRoutes.SelectMany(route =>
+            route.GetSection("UpstreamHttpMethod").Get<string[]>()!.Select(method => $"{method} {route["UpstreamPathTemplate"]}"));
+        string[] expected =
+        [
+            $"GET {Notifications}", $"GET {Notifications}/history", $"GET {Notifications}/unread-count",
+            $"GET {Notifications}/{{id}}", $"PUT {Notifications}/{{id}}/read", $"DELETE {Notifications}/{{id}}"
+        ];
+        Assert.Equal(expected.Order(), actual.Order());
+        Assert.All(notificationRoutes, route => Assert.Equal(route["UpstreamPathTemplate"], route["DownstreamPathTemplate"]));
+        Assert.Contains(routes, route =>
+            route["UpstreamPathTemplate"] == "/hubs/notifications/negotiate" &&
+            route["DownstreamScheme"] == "http" &&
+            route.GetSection("UpstreamHttpMethod").Get<string[]>()!.SequenceEqual(["POST"]));
     }
 
     private static WebApplicationFactory<Program> CreateFactory(string environment)
