@@ -44,14 +44,14 @@ Repo BE: `D:/UavPms_BEE`, .NET 9. Áp dụng từ gốc repo.
 - Quyền user và phạm vi truy cập lấy từ JWT đã xác thực và dữ liệu phía server.
 - Kiểm tra ownership/scope tại nơi đọc hoặc ghi. Từ chối khi thiếu claim bắt buộc.
 
-## Small Batches và code dễ bảo vệ
+## Small Batches v2.0 và code dễ bảo vệ
 
-1. Xác nhận phạm vi, tiêu chí acceptance và thứ tự batch trước khi sửa.
-2. Giữ mỗi batch tối đa 350 dòng diff (thêm + xóa, gồm test và tài liệu).
-3. Tách stacked PR nếu vượt trần; định rõ ranh giới và điều kiện rollout.
-4. Chạy kiểm chứng của batch. Batch đổi service phải chạy test project tương ứng.
-5. Ghi kết quả thực tế, tick checklist khi có và bàn giao phần đã hoàn thành.
-6. Dừng sau mỗi batch. Chờ Control Tower / Human review rồi mới mở batch sau.
+1. Xác nhận phạm vi, tiêu chí Gate 5 (`acceptance.md`) và ranh giới duyệt trước khi sửa; đảm bảo working tree sạch WIP ngoài phạm vi.
+2. **Vertical Slice**: Gom 1 lỗi P0 hoặc 1 tính năng trọn vẹn thành 1 slice (~250–450 dòng diff; refactor cơ học/xóa dead code được linh hoạt theo domain) và chấm **1 lượt Independent Judge** cho mỗi slice.
+3. **Chạy test trúng đích khi lặp**: Trong lúc sửa chỉ chạy `dotnet test` đúng project liên quan; chỉ chạy `dotnet build UavPms.sln -c Release` đúng **1 lần chốt cuối** trước khi báo cáo. Không search web hay dựng fixture bash/Docker nặng cho batch C#.
+4. **Test tự chạy được trong `dotnet test`**: Test Gate 5 mặc định phải chạy qua pipeline ASP.NET Core thật (`WebApplicationFactory<Program>` / in-process HTTP + JWT thật) và pass trong `dotnet test UavPms.sln` (không phụ thuộc URL server chạy sẵn ngoài môi trường làm đỏ CI); các probe live multi-service tách riêng category.
+5. **Risk-Tiered Pragmatic Judge**: Tier 1 (Auth/RBAC/Ocelot/SignalR/Migration — soi chặt bảo mật thật & test integrity); Tier 2 (CRUD/refactor — 1 lượt thực dụng, max 3 non-blocking); Tier 3 (CI/YAML — `actionlint` + chặn secret/injection/false-green, cấm over-engineering SRE).
+6. Reset chat Coding/Judge ngay khi đổi domain (Workflow → Notification → Auth) để giữ context sạch. Dừng sau mỗi slice chờ review.
 
 - Luồng `if/return` đi thẳng, guard clause sớm, lồng `if` tối đa hai cấp.
 - Không nested ternary, magic string/number hoặc helper che khuất luồng.
