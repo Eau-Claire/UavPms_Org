@@ -1,3 +1,6 @@
+> [!WARNING] LEGACY / DEPRECATED — KHÔNG dùng làm nguồn đặc tả cho AI Agent.
+> Đặc tả API cũ trước đợt chuẩn hóa v2.0 (có thể chứa route/module đã gỡ bỏ). Nguồn sự thật hiện hành là `docs/MASTER_SYSTEM_SPEC.md` (v2.0) và `.specify/memory/constitution.md`.
+
 # 📋 TÀI LIỆU ĐẶC TẢ API (API SPECIFICATION) - UAV-PMS SYSTEM
 **Hệ thống Quản lý và Giám sát Lưới điện bằng Thiết bị bay không người lái (UAV PMS)**
 *Phiên bản ERD v2.2: Hợp nhất MF01 - MF04. Mô hình dữ liệu đồng bộ với `docs/diagrams/ERD_Full_v2.mmd` (xem thêm `docs/database_schema.md`).*

@@ -1,0 +1,11 @@
+# Backend Requirements Traceability Matrix (RTM — 10 Columns)
+
+> Sổ cái truy vết sống cho **UAV-PMS Backend (`D:\UavPms_BEE`)**. Cập nhật tại mọi Gate (Spec `FROZEN` → Gate 5 `RED` locked → `GREEN` → Judge Approved → Human Merged → Released).
+> Mọi tài liệu kiến trúc/nghiệp vụ đối chiếu về [`docs/MASTER_SYSTEM_SPEC.md`](../docs/MASTER_SYSTEM_SPEC.md) (v2.0) và [`.specify/memory/constitution.md`](../.specify/memory/constitution.md).
+
+| Req ID | Source & Date | Priority | Status | Agreed Test List (Gate 5) | Story / Spec | Pull Request / Batch | Author (Human / Agent) | Named Approver | Release |
+|---|---|---|---|---|---|---|---|---|---|
+| `BE-REQ-001` | Master Spec v1.0→v2.0 (2026-11-26) | P0 | `in-progress` *(H, C1, C2a, C2b, C3a, G1, N1 Judge-approved; đang làm P0-4 N2+N3 → P0-1, P0-2, CU)* | [acceptance.md](./BE-REQ-001-p0-security-and-ci-audit/acceptance.md) + `*Tests.csproj` | [BE-REQ-001 Spec](./BE-REQ-001-p0-security-and-ci-audit/spec.md) | Batches `H`, `C1`, `C2a`, `C2b`, `C3a`, `G1`, `N1` *(C3b deferred `defer-c3b-until-wave1`)* | Coding Agent + Human | Independent Judge + Human Owner | *Đợt 0 (chưa deploy VPS)* |
+| `BE-REQ-002` | Master Spec v2.0 (2026-11-27) | P0 | `planned` *(chờ lập Spec EARS & Gate 5)* | *TBD (DROP 4 bảng + `DroneTelemetry` RAM-only + `InspectionMedia` nullable + 1 `ApiResponse` DESC + OpenAPI v1.0)* | [Master Spec v2.0](../docs/MASTER_SYSTEM_SPEC.md) | *pending* | Control Tower / Coding Agent | Independent Judge + Human Owner | *Đợt 1* |
+| `BE-REQ-003` | Master Spec v2.0 (2026-11-27) | P0 | `planned` *(chờ lập Spec EARS & Gate 5)* | *TBD (Drone Detail BIST/FC + MF01 Headcount + MF02 3-Role Accept + Check-in GPS 50m SignalR + `/hubs/telemetry` RAM ≤10s + `SystemAdmin` Full + `SystemSettings`)* | [Master Spec v2.0](../docs/MASTER_SYSTEM_SPEC.md) | *pending* | Control Tower / Coding Agent | Independent Judge + Human Owner | *Đợt 2* |
+| `BE-REQ-004` | Master Spec v2.0 (2026-11-27) | P1 | `planned` *(chờ lập Spec EARS & Gate 5)* | *TBD (EXIF GPS + Video Frame Capture + All-Member View / Analyst Approve + Auto-Assign Maintenance + Notification Matrix & Dedupe + Hangfire Cron)* | [Master Spec v2.0](../docs/MASTER_SYSTEM_SPEC.md) | *pending* | Control Tower / Coding Agent | Independent Judge + Human Owner | *Đợt 3* |

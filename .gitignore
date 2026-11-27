@@ -18,7 +18,9 @@ api-test/scripts/seed_test_users.local.sql
 !/.agents/skills/
 !/.agents/skills/*/
 !/.agents/skills/*/SKILL.md
-.codex/
+/.codex/**
+!/.codex/config.toml
+/.claude/settings.local.json
 
 # Runtime storage/uploads
 uav_storage/

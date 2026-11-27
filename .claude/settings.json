@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(../UavPms_Holdout/**)",
+      "Read(d:/UavPms_Holdout/**)",
+      "Read(D:/UavPms_Holdout/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-sdd-and-tests.mjs\"",
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}

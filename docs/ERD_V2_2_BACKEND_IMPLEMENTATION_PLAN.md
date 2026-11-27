@@ -1,3 +1,6 @@
+> [!WARNING] LEGACY / DEPRECATED — KHÔNG dùng làm nguồn đặc tả cho AI Agent.
+> Kế hoạch triển khai lịch sử 2026-10. Nguồn sự thật hiện hành là [`docs/MASTER_SYSTEM_SPEC.md`](docs/MASTER_SYSTEM_SPEC.md) (v2.0) và [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
+
 # Kế hoạch triển khai backend sau ERD v2.2
 
 Trạng thái ngày 2026-10-28 (cập nhật 2026-10-30: xong giai đoạn 1–2, giai đoạn 3 trừ 3.7, 3.8): ERD v2.2 đã được áp dụng vào code (commit `a0bd1e8`, `b2bfc9d`, `74b3cb8` trên `main`). Migration `20261027181344_AlignSchemaWithErdV2_2` đã chạy trên CSDL production bằng workflow *Migrate Database (ERD v2.2)*. Bản backup trước migration nằm ở `$DEPLOY_PATH/backups/uavpms_before_erd_v2_2_20261027195127.dump`.
