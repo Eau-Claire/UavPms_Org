@@ -19,14 +19,13 @@ public class MarkNotificationAsReadCommandHandler : IRequestHandler<MarkNotifica
     
     public async Task Handle(MarkNotificationAsReadCommand request, CancellationToken cancellationToken)
     {
-        var n = await _notificationRepository.GetByIdAsync(request.Id);
-        // Another user's notification is reported as not found, so ids cannot be probed.
-        if (n == null || (request.UserId.HasValue && n.UserId != request.UserId.Value))
+        var n = await _notificationRepository.GetByOwnerAsync(request.Id, request.UserId, cancellationToken);
+        if (n == null)
         {
-            throw new NotFoundException("Notification", request.Id);    
+            throw new NotFoundException("Notification was not found.");
         }
         
-        await _notificationRepository.MarkAsReadAsync(n.Id);
+        n.MarkAsRead();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

@@ -5,7 +5,6 @@ using MediatR;
 using UavPms.NotificationService.Application.Features.Notifications.Queries.GetNotifications;
 using UavPms.NotificationService.Application.Features.Notifications.Queries.GetNotificationById;
 using UavPms.NotificationService.Application.Features.Notifications.Queries.GetUnreadCount;
-using UavPms.NotificationService.Application.Features.Notifications.Commands.CreateNotification;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.DeleteNotification;
 using UavPms.NotificationService.Application.Features.Notifications.Commands.MarkNotificationAsRead;
 using UavPms.Shared.Contracts.Constants;
@@ -29,40 +28,18 @@ public class NotificationController : ControllerBase
 
     [HttpGet]
     [HttpGet("history")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetHistory(
         [FromQuery] string? userId = null,
         [FromQuery] int limit = 50,
         CancellationToken cancellationToken = default)
     {
-        var currentUserIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub")
-            ?? User.FindFirstValue("uid");
-
-        Guid targetGuid;
-        if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var userGuid))
+        var error = ValidateOwner(userId, out var ownerId);
+        if (error != null)
         {
-            targetGuid = userGuid;
-            // Kiểm tra người dùng chỉ được xem thông báo của chính mình (trừ Manager và Admin)
-            if (Guid.TryParse(currentUserIdStr, out var currentUserId) && currentUserId != userGuid)
-            {
-                var isManagerOrAdmin = User.IsInRole(UserRoles.Manager) || User.IsInRole(UserRoles.SystemAdmin);
-                if (!isManagerOrAdmin)
-                {
-                    return StatusCode(StatusCodes.Status403Forbidden, new ApiResponse(false, "Forbidden: You can only access your own notifications."));
-                }
-            }
-        }
-        else if (!string.IsNullOrEmpty(currentUserIdStr) && Guid.TryParse(currentUserIdStr, out var currentUserId))
-        {
-            targetGuid = currentUserId;
-        }
-        else
-        {
-            return BadRequest(new ApiResponse(false, "Invalid UserId format."));
+            return error;
         }
 
-        var query = new GetNotificationsQuery(targetGuid);
+        var query = new GetNotificationsQuery(ownerId);
         var result = await _mediator.Send(query, cancellationToken);
         var items = limit > 0 ? result.Take(limit).ToList() : result;
 
@@ -74,173 +51,92 @@ public class NotificationController : ControllerBase
     }
 
     [HttpGet("unread-count")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetUnreadCount(
         [FromQuery] string? userId = null,
         CancellationToken cancellationToken = default)
     {
-        var currentUserIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub")
-            ?? User.FindFirstValue("uid");
-
-        Guid targetGuid;
-        if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var userGuid))
+        var error = ValidateOwner(userId, out var ownerId);
+        if (error != null)
         {
-            targetGuid = userGuid;
-            if (Guid.TryParse(currentUserIdStr, out var currentUserId) && currentUserId != userGuid)
-            {
-                var isManagerOrAdmin = User.IsInRole(UserRoles.Manager) || User.IsInRole(UserRoles.SystemAdmin);
-                if (!isManagerOrAdmin)
-                {
-                    return StatusCode(StatusCodes.Status403Forbidden,
-                        new ApiResponse(false, "Forbidden: You can only access your own notifications.", ErrorCode: "FORBIDDEN"));
-                }
-            }
-        }
-        else if (!string.IsNullOrEmpty(currentUserIdStr) && Guid.TryParse(currentUserIdStr, out var currentUserId))
-        {
-            targetGuid = currentUserId;
-        }
-        else
-        {
-            return BadRequest(new ApiResponse(false, "Invalid UserId format.", ErrorCode: "VALIDATION_ERROR"));
+            return error;
         }
 
-        var count = await _mediator.Send(new GetUnreadCountQuery(targetGuid), cancellationToken);
+        var count = await _mediator.Send(new GetUnreadCountQuery(ownerId), cancellationToken);
         return Ok(new ApiResponse(true, "Unread notification count retrieved successfully.", new { unreadCount = count }));
     }
 
 
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
-        var query = new GetNotificationByIdQuery(id);
+        if (!TryGetOwnerId(out var ownerId))
+        {
+            return Unauthorized();
+        }
+
+        var query = new GetNotificationByIdQuery(id, ownerId);
         var result = await _mediator.Send(query, cancellationToken);
         return Ok(new ApiResponse(true, "Notification retrieved successfully", result));
     }
 
     [HttpPut("{id:guid}/read")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> MarkAsRead(Guid id, CancellationToken cancellationToken = default)
     {
-        var command = new MarkNotificationAsReadCommand(
-            id,
-            Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var currentUserId) ? currentUserId : null);
+        if (!TryGetOwnerId(out var ownerId))
+        {
+            return Unauthorized();
+        }
+
+        var command = new MarkNotificationAsReadCommand(id, ownerId);
         await _mediator.Send(command, cancellationToken);
         return Ok(new ApiResponse(true, "Notification marked as read successfully."));
     }
 
-    [HttpPost]
-    public async Task<IActionResult> CreateNotification([FromBody] CreateNotificationRequest request, CancellationToken cancellationToken = default)
-    {
-        var command = new CreateNotificationCommand(
-            request.UserId, 
-            request.Type, 
-            request.ReferenceType, 
-            request.ReferenceId, 
-            request.Title, 
-            request.Body
-        );
-        
-        var result = await _mediator.Send(command, cancellationToken);
-        return CreatedAtAction(
-            nameof(GetHistory),
-            new { userId = result.UserId.ToString() },
-            new ApiResponse(true, "Notification created successfully.", result));
-    }
-
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> DeleteNotification(Guid id, CancellationToken cancellationToken = default)
     {
-        var command = new DeleteNotificationCommand(id);
+        if (!TryGetOwnerId(out var ownerId))
+        {
+            return Unauthorized();
+        }
+
+        var command = new DeleteNotificationCommand(id, ownerId);
         await _mediator.Send(command, cancellationToken);
         return Ok(new ApiResponse(true, "Notification deleted successfully."));
     }
 
-    [HttpPost("enqueue-email")]
-    public IActionResult EnqueueEmail([FromBody] EnqueueEmailRequest request)
+    private bool TryGetOwnerId(out Guid ownerId)
     {
-        if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Subject) || string.IsNullOrEmpty(request.Body))
-        {
-            return BadRequest(new ApiResponse(false, "Email, Subject, and Body are required."));
-        }
-
-        var jobId = Hangfire.BackgroundJob.Enqueue<UavPms.NotificationService.Domain.Interfaces.Services.IEmailService>(
-            emailService => emailService.SendEmailAsync(request.Email, request.Subject, request.Body));
-
-        return Ok(new ApiResponse(true, "Email job successfully enqueued in Hangfire.", new { JobId = jobId }));
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub")
+            ?? User.FindFirstValue("uid");
+        return Guid.TryParse(claim, out ownerId) && ownerId != Guid.Empty;
     }
 
-    [HttpPost("schedule")]
-    public IActionResult ScheduleNotification([FromBody] ScheduleNotificationRequest request)
+    private IActionResult? ValidateOwner(string? userId, out Guid ownerId)
     {
-        if (string.IsNullOrEmpty(request.Title) || string.IsNullOrEmpty(request.Body))
+        if (!TryGetOwnerId(out ownerId))
         {
-            return BadRequest(new ApiResponse(false, "Title and Body are required."));
+            return Unauthorized();
         }
 
-        DateTimeOffset runAt;
-
-        if (request.ScheduleTime.HasValue)
+        // Model binding chuyển query rỗng thành null, nhưng client đã truyền thì vẫn phải kiểm tra.
+        if (userId == null && !Request.Query.ContainsKey(nameof(userId)))
         {
-            // If the user provided a specific date/time, convert it to a DateTimeOffset
-            // If the DateTime Kind is Unspecified, treat it as local time or UTC based on preference.
-            // Let's treat it as Local time (since the user is testing from Vietnam +07:00 or UTC).
-            var timeValue = request.ScheduleTime.Value;
-            if (timeValue.Kind == DateTimeKind.Unspecified)
-            {
-                // Convert unspecified/local to UTC or preserve offset
-                runAt = new DateTimeOffset(timeValue, TimeSpan.FromHours(7)); // Vietnam offset
-            }
-            else
-            {
-                runAt = new DateTimeOffset(timeValue);
-            }
-
-            if (runAt < DateTimeOffset.UtcNow)
-            {
-                return BadRequest(new ApiResponse(false, $"ScheduleTime ({runAt:yyyy-MM-dd HH:mm:ss zzz}) cannot be in the past. Current UTC time is {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm:ss}."));
-            }
+            return null;
         }
-        else if (request.DelaySeconds.HasValue && request.DelaySeconds.Value > 0)
-        {
-            runAt = DateTimeOffset.UtcNow.AddSeconds(request.DelaySeconds.Value);
-        }
-        else
-        {
-            return BadRequest(new ApiResponse(false, "Either a valid DelaySeconds (greater than 0) or ScheduleTime (in the future) must be provided."));
-        }
-        
-        var jobId = Hangfire.BackgroundJob.Schedule<UavPms.NotificationService.API.Jobs.ScheduledNotificationJob>(
-            job => job.SendNotificationAsync(request.UserId.HasValue ? request.UserId.Value.ToString() : null, request.Title, request.Body, request.Type ?? "ScheduledNotification"),
-            runAt);
 
-        return Ok(new ApiResponse(true, $"Notification scheduled to run at {runAt:yyyy-MM-dd HH:mm:ss zzz}.", new
+        if (!Guid.TryParse(userId, out var requestedId) || Request.Query[nameof(userId)].Count > 1)
         {
-            JobId = jobId,
-            Target = request.UserId.HasValue ? $"User: {request.UserId}" : "ALL Users"
-        }));
+            return BadRequest(new ApiResponse(false, "Invalid UserId format.", ErrorCode: "VALIDATION_ERROR"));
+        }
+
+        if (requestedId != ownerId)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new ApiResponse(false, "You can only access your own notifications.", ErrorCode: "FORBIDDEN"));
+        }
+
+        return null;
     }
 }
-
-public record CreateNotificationRequest(
-    Guid UserId,
-    string Type,
-    string? ReferenceType,
-    Guid? ReferenceId,
-    string Title,
-    string Body
-);
-
-public record EnqueueEmailRequest(string Email, string Subject, string Body);
-
-public record ScheduleNotificationRequest(
-    Guid? UserId, 
-    string Title, 
-    string Body, 
-    string? Type, 
-    int? DelaySeconds,
-    DateTime? ScheduleTime
-);

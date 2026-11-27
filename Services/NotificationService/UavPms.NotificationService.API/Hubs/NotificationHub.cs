@@ -10,13 +10,13 @@ using Microsoft.Extensions.Logging;
 using UavPms.NotificationService.API.Services;
 using UavPms.NotificationService.Infrastructure.Persistence;
 using UavPms.Shared.Contracts.Constants;
-using UavPms.Shared.Contracts.Events;
 
 namespace UavPms.NotificationService.API.Hubs;
 
 [Authorize]
 public class NotificationHub : Hub
 {
+    private const string ActiveAssignmentStatus = "Active";
     private readonly ILogger<NotificationHub> _logger;
     private readonly INotificationConnectionRegistry _connectionRegistry;
     private readonly IServiceScopeFactory? _scopeFactory;
@@ -64,15 +64,7 @@ public class NotificationHub : Hub
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var userId = GetCurrentUserId();
-        if (userId != null)
-        {
-            _connectionRegistry.RemoveFromGroup(UserGroupName(userId.Value), Context.ConnectionId);
-        }
-
-        foreach (var role in Context.User?.FindAll(ClaimTypes.Role).Select(claim => claim.Value).Distinct() ?? Enumerable.Empty<string>())
-        {
-            _connectionRegistry.RemoveFromGroup(RoleGroupName(role), Context.ConnectionId);
-        }
+        _connectionRegistry.RemoveConnection(Context.ConnectionId);
 
         if (exception == null)
         {
@@ -101,7 +93,7 @@ public class NotificationHub : Hub
     {
         if (string.IsNullOrWhiteSpace(missionId) || !Guid.TryParse(missionId, out var missionGuid))
         {
-            return;
+            throw new HubException("Mission group is invalid.");
         }
 
         var userId = GetCurrentUserId();
@@ -110,30 +102,15 @@ public class NotificationHub : Hub
             _logger.LogWarning(
                 "Unauthenticated connection attempted to join mission group. ConnectionId={ConnectionId}",
                 Context.ConnectionId);
-            return;
+            throw new HubException("User identity is invalid.");
         }
 
-        var roles = Context.User?.FindAll(ClaimTypes.Role).Select(c => c.Value).ToHashSet(StringComparer.OrdinalIgnoreCase)
-            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        var isGlobal = roles.Contains(UserRoles.SystemAdmin);
-        if (!isGlobal && _scopeFactory != null)
+        if (!HasRole(UserRoles.SystemAdmin) && !await CanJoinMissionAsync(missionGuid, userId.Value))
         {
-            using var scope = _scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var hasAccess = await db.Missions.AnyAsync(m => m.Id == missionGuid && !m.IsDeleted && m.ManagerId == userId.Value)
-                || await db.MissionAssignments.AnyAsync(a => a.MissionId == missionGuid && a.UserId == userId.Value && a.Status == "Active" && !a.IsDeleted);
-
-            if (!hasAccess)
-            {
-                _logger.LogWarning(
-                    "Forbidden attempt to join mission group. UserId={UserId}, MissionId={MissionId}, ConnectionId={ConnectionId}",
-                    userId, missionId, Context.ConnectionId);
-                return;
-            }
+            throw new HubException("Mission access is denied.");
         }
 
-        var groupName = MissionGroupName(missionId);
+        var groupName = MissionGroupName(missionGuid.ToString("D"));
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
         _connectionRegistry.AddToGroup(groupName, Context.ConnectionId);
         _logger.LogInformation(
@@ -141,11 +118,28 @@ public class NotificationHub : Hub
             missionId, Context.ConnectionId);
     }
 
+    private async Task<bool> CanJoinMissionAsync(Guid missionId, Guid userId)
+    {
+        var isManager = HasRole(UserRoles.Manager);
+        var isInspector = HasRole(UserRoles.Inspector);
+        if ((!isManager && !isInspector) || _scopeFactory == null)
+        {
+            return false;
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.Missions.AnyAsync(mission => mission.Id == missionId && !mission.IsDeleted
+            && ((isManager && mission.ManagerId == userId)
+                || (isInspector && mission.Assignments.Any(assignment => assignment.UserId == userId
+                    && assignment.Status == ActiveAssignmentStatus && !assignment.IsDeleted))));
+    }
+
     public async Task LeaveMissionGroup(string missionId)
     {
-        if (!string.IsNullOrWhiteSpace(missionId))
+        if (Guid.TryParse(missionId, out var missionGuid))
         {
-            var groupName = MissionGroupName(missionId);
+            var groupName = MissionGroupName(missionGuid.ToString("D"));
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
             _connectionRegistry.RemoveFromGroup(groupName, Context.ConnectionId);
             _logger.LogInformation(
@@ -154,29 +148,13 @@ public class NotificationHub : Hub
         }
     }
 
-    public async Task SendMissionEvent(MissionLifecycleEventDto evt)
-    {
-        if (evt == null || string.IsNullOrWhiteSpace(evt.MissionId)) return;
-        var missionGroup = MissionGroupName(evt.MissionId);
-        await Clients.Group(missionGroup).SendAsync("MissionLifecycleEvent", evt);
-        if (!string.IsNullOrWhiteSpace(evt.Type))
-        {
-            await Clients.Group(missionGroup).SendAsync(evt.Type, evt);
-        }
-    }
-
-    public async Task BroadcastMissionLifecycle(MissionLifecycleEventDto evt)
-    {
-        await SendMissionEvent(evt);
-    }
-
     public static string AssessmentGroupName(string assessmentId) => $"assessment_{assessmentId}";
     public const string AssessmentsListGroupName = "assessments";
 
     public async Task JoinAssessmentGroup(string assessmentId)
     {
-        if (string.IsNullOrWhiteSpace(assessmentId)) return;
-        var groupName = AssessmentGroupName(assessmentId);
+        var assessmentGuid = RequireAssessmentAccess(assessmentId);
+        var groupName = AssessmentGroupName(assessmentGuid.ToString("D"));
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
         _connectionRegistry.AddToGroup(groupName, Context.ConnectionId);
         _logger.LogInformation(
@@ -186,9 +164,9 @@ public class NotificationHub : Hub
 
     public async Task LeaveAssessmentGroup(string assessmentId)
     {
-        if (!string.IsNullOrWhiteSpace(assessmentId))
+        if (Guid.TryParse(assessmentId, out var assessmentGuid))
         {
-            var groupName = AssessmentGroupName(assessmentId);
+            var groupName = AssessmentGroupName(assessmentGuid.ToString("D"));
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
             _connectionRegistry.RemoveFromGroup(groupName, Context.ConnectionId);
             _logger.LogInformation(
@@ -199,6 +177,7 @@ public class NotificationHub : Hub
 
     public async Task JoinAssessmentsListGroup()
     {
+        RequireAssessmentAccess();
         await Groups.AddToGroupAsync(Context.ConnectionId, AssessmentsListGroupName);
         _connectionRegistry.AddToGroup(AssessmentsListGroupName, Context.ConnectionId);
         _logger.LogInformation(
@@ -215,33 +194,34 @@ public class NotificationHub : Hub
             Context.ConnectionId);
     }
 
-    public async Task SendAssessmentEvent(AssessmentRealtimeEventDto evt)
+    private Guid RequireAssessmentAccess(string assessmentId)
     {
-        if (evt == null || string.IsNullOrWhiteSpace(evt.AssessmentId)) return;
-        var assessmentGroup = AssessmentGroupName(evt.AssessmentId);
-        var listGroup = AssessmentsListGroupName;
-        var managerGroup = RoleGroupName(UserRoles.Manager);
-
-        await Clients.Group(assessmentGroup).SendAsync("AssessmentRealtimeEvent", evt);
-        await Clients.Group(listGroup).SendAsync("AssessmentRealtimeEvent", evt);
-        await Clients.Group(managerGroup).SendAsync("AssessmentRealtimeEvent", evt);
-
-        if (!string.IsNullOrWhiteSpace(evt.Type))
+        RequireAssessmentAccess();
+        if (!Guid.TryParse(assessmentId, out var assessmentGuid))
         {
-            await Clients.Group(assessmentGroup).SendAsync(evt.Type, evt);
-            await Clients.Group(listGroup).SendAsync(evt.Type, evt);
-            await Clients.Group(managerGroup).SendAsync(evt.Type, evt);
+            throw new HubException("Assessment group is invalid.");
+        }
+
+        return assessmentGuid;
+    }
+
+    private void RequireAssessmentAccess()
+    {
+        if (GetCurrentUserId() == null)
+        {
+            throw new HubException("User identity is invalid.");
+        }
+
+        if (!HasRole(UserRoles.SystemAdmin) && !HasRole(UserRoles.Manager) && !HasRole(UserRoles.Inspector))
+        {
+            throw new HubException("Assessment access is denied.");
         }
     }
 
-    public async Task BroadcastAssessmentEvent(AssessmentRealtimeEventDto evt)
+    private bool HasRole(string role)
     {
-        await SendAssessmentEvent(evt);
-    }
-
-    public async Task BroadcastEvent(MissionLifecycleEventDto evt)
-    {
-        await SendMissionEvent(evt);
+        return Context.User?.FindAll(ClaimTypes.Role)
+            .Any(claim => string.Equals(claim.Value, role, StringComparison.OrdinalIgnoreCase)) == true;
     }
 
     private Guid? GetCurrentUserId()

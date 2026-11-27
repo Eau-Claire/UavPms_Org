@@ -14,7 +14,10 @@ api-test/data/roles.json
 api-test/scripts/seed_test_users.local.sql
 
 # Local agent metadata
-.agents/
+/.agents/**
+!/.agents/skills/
+!/.agents/skills/*/
+!/.agents/skills/*/SKILL.md
 .codex/
 
 # Runtime storage/uploads

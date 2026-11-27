@@ -1,0 +1,346 @@
+name: EF Core Migration Rehearsal
+on:
+  workflow_dispatch:
+    inputs:
+      git_sha: { description: Full commit SHA from main or develop, required: true, type: string }
+      from_migration: { description: Baseline migration ID or 0, required: true, type: string }
+      to_migration: { description: Target migration ID, required: true, type: string }
+permissions: { contents: read, actions: read }
+concurrency: { group: production-operations-database-update, cancel-in-progress: false }
+jobs:
+  build-and-rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults: { run: { shell: bash } }
+    env:
+      INFRA_PROJECT: Services/OperationsService/UavPms.OperationsService.Infrastructure
+      STARTUP_PROJECT: Services/OperationsService/UavPms.OperationsService.API
+    steps:
+      - name: Verify approved SHA and authoritative Backend CI run
+        id: approved
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+          migration_id = r"[0-9]{14}_[A-Za-z][A-Za-z0-9_]{0,134}"
+
+          def validate_inputs(inputs):
+              sha = inputs["git_sha"].lower()
+              baseline, target = inputs["from_migration"], inputs["to_migration"]
+              if not re.fullmatch(r"[0-9a-f]{40}", sha):
+                  raise ValueError("git_sha must be 40 hexadecimal characters.")
+              if not re.fullmatch(migration_id, target) or (
+                  baseline != "0" and not re.fullmatch(migration_id, baseline)
+              ):
+                  raise ValueError("Invalid migration ID format.")
+              if baseline != "0" and baseline > target:
+                  raise ValueError("Baseline must not be newer than the target.")
+              return sha, baseline, target
+
+          def api(path):
+              base = os.environ["GITHUB_API_URL"] + "/repos/" + os.environ["GITHUB_REPOSITORY"]
+              headers = {"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                         "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+              with urlopen(Request(base + path, headers=headers), timeout=20) as response:
+                  return json.load(response)
+
+          def on_approved_branch(sha):
+              for branch in ("main", "develop"):
+                  try:
+                      comparison = api(f"/compare/{sha}...{branch}?per_page=1")
+                  except HTTPError as error:
+                      if error.code != 404:
+                          raise
+                      continue
+                  if comparison["status"] in ("ahead", "identical") and comparison["merge_base_commit"]["sha"] == sha:
+                      return True
+              return False
+
+          def pages(path, key, separator):
+              page = 1
+              while True:
+                  items = api(f"{path}{separator}per_page=100&page={page}")[key]
+                  yield from items
+                  if len(items) < 100:
+                      return
+                  page += 1
+
+          def has_successful_check(sha):
+              runs = [run for run in pages(f"/actions/workflows/ci.yml/runs?head_sha={sha}", "workflow_runs", "&")
+                      if run["head_sha"] == sha and run["head_branch"] in ("main", "develop")
+                      and run["head_repository"]["full_name"] == os.environ["GITHUB_REPOSITORY"]
+                      and run["path"].split("@", 1)[0] == ".github/workflows/ci.yml"]
+              if not runs:
+                  return False
+              latest = max(run["run_number"] for run in runs)
+              candidates = [run for run in runs if run["run_number"] == latest]
+              if len(candidates) != 1:
+                  return False
+              run = candidates[0]
+              if (run["status"], run["conclusion"]) != ("completed", "success"):
+                  return False
+              url = f"/actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs"
+              jobs = [job for job in pages(url, "jobs", "?") if job["name"] == "Build and Test"]
+              return len(jobs) == 1 and (jobs[0]["status"], jobs[0]["conclusion"]) == ("completed", "success")
+          inputs = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())["inputs"]
+          try:
+              sha, baseline, target = validate_inputs(inputs)
+          except ValueError as error:
+              raise SystemExit(f"::error::{error}") from None
+          try:
+              if not on_approved_branch(sha):
+                  raise SystemExit("::error::SHA is not in the history of main or develop.")
+              if not has_successful_check(sha):
+                  raise SystemExit("::error::Exact SHA has no successful Build and Test check.")
+          except (OSError, KeyError, ValueError):
+              raise SystemExit("::error::Could not verify SHA and check via GitHub API.") from None
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"sha={sha}\nbaseline={baseline}\ntarget={target}\n")
+          PY
+      - name: Checkout approved SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.approved.outputs.sha }}
+          persist-credentials: false
+      - name: Setup .NET 8 and 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+      - name: Generate bounded EF SQL and manifest
+        env:
+          APPROVED_SHA: ${{ steps.approved.outputs.sha }}
+          FROM_MIGRATION: ${{ steps.approved.outputs.baseline }}
+          TO_MIGRATION: ${{ steps.approved.outputs.target }}
+          ConnectionStrings__DefaultConnection: 'Host=127.0.0.1;Port=1;Database=ef_design;Username=ef_design;Timeout=1'
+          RunMigrations: 'false'
+          MigrationOnly: 'false'
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          umask 077
+          build_dir="$RUNNER_TEMP/ef-raw"
+          mkdir -- "$build_dir"
+          [[ "$(git rev-parse HEAD)" == "$APPROVED_SHA" ]] || fail "Checkout SHA mismatch."
+          jq -e '.tools["dotnet-ef"] | .version == "9.0.16" and .rollForward == false' .config/dotnet-tools.json >/dev/null 2>&1 ||
+            fail "Approved SHA must pin dotnet-ef 9.0.16."
+          ef_env=(env -u GITHUB_OUTPUT -u GITHUB_ENV -u GITHUB_PATH -u GITHUB_STEP_SUMMARY)
+          "${ef_env[@]}" dotnet tool restore >/dev/null 2>&1 || fail "EF tool restore failed."
+          "${ef_env[@]}" dotnet build "$STARTUP_PROJECT" --configuration Release >/dev/null 2>&1 || fail "EF startup build failed."
+          ef_args=(--project "$INFRA_PROJECT" --startup-project "$STARTUP_PROJECT" --configuration Release --no-build)
+          "${ef_env[@]}" dotnet ef migrations list --no-connect --json "${ef_args[@]}" \
+            >"$build_dir/inventory.json" 2>/dev/null || fail "Could not obtain the EF migration inventory."
+          python3 - "$build_dir" <<'PY'
+          import json, os, re, sys
+          from pathlib import Path
+
+          def expected_histories(ids, baseline, target):
+              pattern = r"[0-9]{14}_[A-Za-z][A-Za-z0-9_]{0,134}"
+              if ids != sorted(set(ids)) or not all(re.fullmatch(pattern, item) for item in ids):
+                  raise ValueError
+              start = 0 if baseline == "0" else ids.index(baseline) + 1
+              end = ids.index(target) + 1
+              if start > end:
+                  raise ValueError
+              return ids[:start], ids[:end]
+          directory = Path(sys.argv[1])
+          try:
+              # Startup có thể ghi cảnh báo Serilog trước JSON mà EF CLI trả về.
+              lines = (directory / "inventory.json").read_text(encoding="utf-8-sig").splitlines()
+              inventory = json.loads("\n".join(lines[lines.index("["):]))
+              ids = [migration["id"] for migration in inventory]
+              baseline, target = expected_histories(ids, os.environ["FROM_MIGRATION"], os.environ["TO_MIGRATION"])
+          except (OSError, KeyError, TypeError, ValueError):
+              raise SystemExit("::error::Invalid EF inventory or migration range for this release.") from None
+          for name, ids in (("baseline", baseline), ("target", target)):
+              (directory / f"{name}.expected").write_text("".join(f"{item}\n" for item in ids))
+          PY
+          generate_sql() {
+            "${ef_env[@]}" dotnet ef migrations script "$1" "$2" --idempotent "${ef_args[@]}" \
+              --output "$build_dir/$3.sql" >/dev/null 2>&1 || fail "Could not generate $3 SQL."
+          }
+          [[ "$FROM_MIGRATION" == 0 ]] || generate_sql 0 "$FROM_MIGRATION" baseline
+          generate_sql 0 "$TO_MIGRATION" reference
+          generate_sql "$FROM_MIGRATION" "$TO_MIGRATION" migration
+          sql="$build_dir/migration.sql"
+          [[ -f "$sql" && ! -L "$sql" ]] || fail "Invalid target SQL."
+          checksum="$(sha256sum -- "$sql")"
+          jq -n --arg git_sha "$APPROVED_SHA" --arg from_migration "$FROM_MIGRATION" \
+            --arg to_migration "$TO_MIGRATION" --arg sql_sha256 "${checksum%% *}" \
+            '{git_sha: $git_sha, from_migration: $from_migration, to_migration: $to_migration, sql_sha256: $sql_sha256}' \
+            >"$build_dir/manifest.json"
+      - name: Rehearse and verify idempotence on isolated PostGIS
+        id: rehearsal
+        run: |
+          set +x
+          fail() { echo "::error::$1"; exit 1; }
+          umask 077
+          build_dir="$RUNNER_TEMP/ef-raw"
+          network="uav-ef-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          container="$network-db"
+          db_host=127.0.0.1
+          db_port=5432
+          db_name=postgres
+          db_user=ef_rehearsal
+          timeout 30s docker network create --internal "$network" >/dev/null 2>&1 || fail "Isolated network creation failed."
+          env_file="$(mktemp "$RUNNER_TEMP/ef-db.XXXXXX")"
+          trap 'rm -f -- "$env_file"' EXIT
+          export PGPASSWORD
+          PGPASSWORD="$(openssl rand -hex 32)"
+          masked="${PGPASSWORD//%/%25}"
+          masked="${masked//$'\r'/%0D}"
+          masked="${masked//$'\n'/%0A}"
+          printf '::add-mask::%s\n' "$masked"
+          printf 'POSTGRES_DB=%s\nPOSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\n' \
+            "$db_name" "$db_user" "$PGPASSWORD" >"$env_file"
+          timeout 180s docker run -d --name "$container" --network "$network" --log-driver none \
+            --env-file "$env_file" postgis/postgis:16-3.5 >/dev/null 2>&1 || fail "Isolated PostGIS startup failed."
+          rm -f -- "$env_file"
+          trap - EXIT
+          # Không publish cổng. Chỉ client trong container mới gọi được loopback đích.
+          db_exec() {
+            timeout 360s docker exec -i -e PGPASSWORD -e "PGHOSTADDR=$db_host" -e PGSSLMODE=disable \
+              -e PGCONNECT_TIMEOUT=5 -e 'PGOPTIONS=-c statement_timeout=120000' "$container" \
+              env -u PGSERVICE -u PGSERVICEFILE "$@" 2>/dev/null
+          }
+          connection=(-h "$db_host" -p "$db_port" -U "$db_user" -w)
+          psql_checked() {
+            local identity_sql="SELECT 1 / ((host(inet_server_addr()) = '$db_host' AND inet_server_port() = $db_port AND current_database() = '$db_name') IS TRUE)::int;"
+            db_exec psql -X -qAt -v ON_ERROR_STOP=1 "${connection[@]}" -d "$db_name" -c "$identity_sql" "$@"
+          }
+          deadline=$((SECONDS + 90))
+          until timeout 6s docker exec "$container" pg_isready -h "$db_host" -p "$db_port" -U "$db_user" -d "$db_name" >/dev/null 2>&1; do
+            (( SECONDS < deadline )) || fail "PostGIS readiness timed out."
+            sleep 2
+          done
+          psql_checked -c 'SELECT PostGIS_Version();' </dev/null >/dev/null || fail "PostGIS identity or extension check failed."
+
+          verify_history() {
+            local expected="$1" present
+            present="$(psql_checked -c "SELECT to_regclass('public.\"__EFMigrationsHistory\"') IS NOT NULL;" </dev/null | tail -n +2)" ||
+              fail "Could not inspect migration history."
+            if [[ "$present" == t ]]; then
+              psql_checked -c 'SELECT "MigrationId" FROM public."__EFMigrationsHistory";' </dev/null |
+                tail -n +2 | LC_ALL=C sort >"$build_dir/actual" || fail "Could not read migration history."
+            else
+              [[ "$present" == f && ! -s "$expected" ]] || fail "Expected migration history is missing."
+              : >"$build_dir/actual"
+            fi
+            cmp -s -- "$expected" "$build_dir/actual" || fail "Migration history has missing or unexpected entries."
+          }
+
+          dump_hash() {
+            # Chỉ bỏ token ngẫu nhiên của pg_dump để so nội dung logic.
+            db_exec pg_dump "${connection[@]}" -d "$db_name" "$@" </dev/null |
+              sed -E '/^\\(un)?restrict [[:alnum:]]+$/d' | sha256sum
+          }
+          for database in ef_baseline ef_restored ef_reference; do
+            psql_checked -c "CREATE DATABASE $database TEMPLATE template0;" </dev/null >/dev/null || fail "Create database failed."
+          done
+          db_name=ef_baseline
+          verify_history /dev/null
+          if [[ -s "$build_dir/baseline.expected" ]]; then
+            psql_checked -f - <"$build_dir/baseline.sql" >/dev/null || fail "Baseline apply failed."
+          fi
+          verify_history "$build_dir/baseline.expected"
+          db_exec pg_dump "${connection[@]}" -d "$db_name" -Fc </dev/null >"$build_dir/baseline.dump" || fail "Baseline backup failed."
+          db_name=ef_restored
+          verify_history /dev/null
+          db_exec pg_restore "${connection[@]}" -d "$db_name" --exit-on-error <"$build_dir/baseline.dump" >/dev/null || fail "Baseline restore failed."
+          verify_history "$build_dir/baseline.expected"
+          sql="$build_dir/migration.sql"
+          digest="$(jq -er '.sql_sha256 | select(test("^[a-f0-9]{64}$"))' "$build_dir/manifest.json" 2>/dev/null)"
+          verify_checksum() { printf '%s  %s\n' "$digest" "$sql" | sha256sum --check --status || fail "SQL checksum mismatch."; }
+          verify_checksum
+          psql_checked -f - <"$sql" >/dev/null || fail "Target apply failed."
+          verify_history "$build_dir/target.expected"
+          actual_schema="$(dump_hash --schema-only)" || fail "Could not read rehearsed schema."
+          db_name=ef_reference
+          psql_checked -f - <"$build_dir/reference.sql" >/dev/null || fail "Reference apply failed."
+          verify_history "$build_dir/target.expected"
+          expected_schema="$(dump_hash --schema-only)" || fail "Could not read reference schema."
+          [[ "$actual_schema" == "$expected_schema" ]] || fail "Target schema differs from reference."
+          db_name=ef_restored
+          first_snapshot="$(dump_hash)" || fail "Could not snapshot rehearsed database."
+          verify_checksum
+          psql_checked -f - <"$sql" >/dev/null || fail "Target replay failed."
+          verify_history "$build_dir/target.expected"
+          second_snapshot="$(dump_hash)" || fail "Could not snapshot database after replay."
+          [[ "$first_snapshot" == "$second_snapshot" ]] || fail "Replay changed the rehearsed database."
+          verify_checksum
+          printf 'digest=%s\n' "$digest" >>"$GITHUB_OUTPUT"
+      - name: Verify and export rehearsed artifact
+        env:
+          APPROVED_SHA: ${{ steps.approved.outputs.sha }}
+          FROM_MIGRATION: ${{ steps.approved.outputs.baseline }}
+          TO_MIGRATION: ${{ steps.approved.outputs.target }}
+          REHEARSED_DIGEST: ${{ steps.rehearsal.outputs.digest }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, re, stat
+          from pathlib import Path
+
+          def read_file(path):
+              if path.is_symlink():
+                  raise ValueError
+              with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as stream:
+                  if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                      raise ValueError
+                  return stream.read()
+
+          def unique_fields(pairs):
+              fields = dict(pairs)
+              if len(fields) != len(pairs):
+                  raise ValueError("Duplicate manifest key.")
+              return fields
+
+          def export_artifact(root):
+              raw, output = root / "ef-raw", root / "ef-artifact"
+              if any(path.is_symlink() for path in (raw, *raw.parents)) or not raw.is_dir():
+                  raise ValueError
+              sql, metadata = (read_file(raw / name) for name in ("migration.sql", "manifest.json"))
+              expected = dict(git_sha=os.environ["APPROVED_SHA"], from_migration=os.environ["FROM_MIGRATION"],
+                              to_migration=os.environ["TO_MIGRATION"], sql_sha256=os.environ["REHEARSED_DIGEST"])
+              if json.loads(metadata, object_pairs_hook=unique_fields) != expected or hashlib.sha256(sql).hexdigest() != expected["sql_sha256"]:
+                  raise ValueError
+              metadata = (json.dumps(expected, indent=2, sort_keys=True) + "\n").encode("utf-8")
+              sensitive = (rb"[\w.%+-]+@[\w.-]+\.[a-z]{2,}|\$2[aby]\$\d{2}\$|eyJ[\w-]+\.[\w-]+\.[\w-]+"
+                           rb"|://[^\s/]+:[^\s/]+@|\b(?:password|pwd|secret|api[_ -]?key)(?:[\x22']?\s*[:=]|\s+')\s*[^;\s]|-----BEGIN [^-]*PRIVATE KEY-----")
+              if any(re.search(sensitive, payload, re.IGNORECASE) for payload in (sql, metadata)):
+                  raise ValueError
+              output.mkdir(mode=0o700)
+              (output / "migration.sql").write_bytes(sql)
+              (output / "manifest.json").write_bytes(metadata)
+
+          try:
+              export_artifact(Path(os.environ["RUNNER_TEMP"]))
+          except (OSError, ValueError, KeyError):
+              raise SystemExit("::error::Unsafe artifact path, content, manifest or checksum.") from None
+          PY
+      - name: Upload rehearsed SQL and manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: ef-migration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ef-artifact/migration.sql
+            ${{ runner.temp }}/ef-artifact/manifest.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Clean up isolated resources
+        if: always()
+        run: |
+          network="uav-ef-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if timeout 10s docker container inspect "$network-db" >/dev/null 2>&1 &&
+             ! timeout 20s docker container rm -fv "$network-db" >/dev/null 2>&1; then
+              echo "::warning::Could not remove the rehearsal container."
+          fi
+          if timeout 10s docker network inspect "$network" >/dev/null 2>&1 &&
+             ! timeout 20s docker network rm "$network" >/dev/null 2>&1; then
+            echo "::warning::Could not remove the rehearsal network."
+          fi

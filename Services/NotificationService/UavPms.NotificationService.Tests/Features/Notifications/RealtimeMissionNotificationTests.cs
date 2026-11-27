@@ -40,6 +40,8 @@ public class RealtimeMissionNotificationTests
 
         _hubContextMock.Setup(h => h.Clients).Returns(_clientsMock.Object);
         _clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(_clientProxyMock.Object);
+        _clientsMock.Setup(c => c.Clients(It.IsAny<IReadOnlyList<string>>())).Returns(_clientProxyMock.Object);
+        _connectionRegistryMock.Setup(r => r.GetConnections(It.IsAny<string>())).Returns(["conn-target"]);
 
         _service = new RealtimeNotificationService(
             _hubContextMock.Object,
@@ -48,6 +50,7 @@ public class RealtimeMissionNotificationTests
     }
 
     [Fact]
+    [Trait("Gate5", "P0-3")]
     public async Task SendMissionEventAsync_Confirmed_ShouldBroadcastAggregateAndSpecificEvents()
     {
         // Arrange
@@ -56,6 +59,7 @@ public class RealtimeMissionNotificationTests
         {
             MissionId = missionId,
             Type = "CONFIRMED",
+            TargetUserId = Guid.NewGuid().ToString(),
             Message = "Nhiệm vụ đã được xác nhận"
         };
 
@@ -64,15 +68,25 @@ public class RealtimeMissionNotificationTests
 
         // Assert
         var expectedGroup = $"mission_{missionId}";
-        _clientsMock.Verify(c => c.Group(expectedGroup), Times.AtLeastOnce);
+        _connectionRegistryMock.Verify(r => r.GetConnections(expectedGroup), Times.Once);
+        _clientsMock.Verify(c => c.Clients(It.Is<IReadOnlyList<string>>(ids => ids.SequenceEqual(new[] { "conn-target" }))), Times.Once);
         _clientProxyMock.Verify(p => p.SendCoreAsync(
             "MissionLifecycleEvent",
             It.Is<object[]>(args => args.Length > 0 && args[0] == evt),
             It.IsAny<CancellationToken>()), Times.Once);
         _clientProxyMock.Verify(p => p.SendCoreAsync(
-            "MissionConfirmed",
-            It.Is<object[]>(args => args.Length > 0 && args[0] == evt),
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<string>(), It.IsAny<object[]>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    [Trait("Gate5", "P0-3")]
+    public void NotificationHub_ShouldNotExposeClientCallableSendMethods()
+    {
+        var methods = typeof(NotificationHub).GetMethods(System.Reflection.BindingFlags.Public |
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly);
+
+        methods.Should().NotContain(method => method.Name.StartsWith("Broadcast", StringComparison.Ordinal)
+            || method.Name.StartsWith("Send", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -93,12 +107,11 @@ public class RealtimeMissionNotificationTests
         await _service.SendMissionEventAsync(evt);
 
         // Assert
-        _clientsMock.Verify(c => c.Group($"mission_{missionId}"), Times.AtLeastOnce);
-        _clientsMock.Verify(c => c.Group(NotificationHub.UserGroupName(targetUserId)), Times.Once);
+        _connectionRegistryMock.Verify(r => r.GetConnections(NotificationHub.UserGroupName(targetUserId)), Times.Once);
         _clientProxyMock.Verify(p => p.SendCoreAsync(
-            "MissionReminderSent",
+            "MissionLifecycleEvent",
             It.IsAny<object[]>(),
-            It.IsAny<CancellationToken>()), Times.Exactly(2));
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -119,12 +132,11 @@ public class RealtimeMissionNotificationTests
         await _service.SendMissionEventAsync(evt);
 
         // Assert
-        _clientsMock.Verify(c => c.Group($"mission_{missionId}"), Times.AtLeastOnce);
-        _clientsMock.Verify(c => c.Group(NotificationHub.UserGroupName(managerId)), Times.Once);
+        _connectionRegistryMock.Verify(r => r.GetConnections(NotificationHub.UserGroupName(managerId)), Times.Once);
         _clientProxyMock.Verify(p => p.SendCoreAsync(
-            "MissionConfirmationOverdue",
+            "MissionLifecycleEvent",
             It.IsAny<object[]>(),
-            It.IsAny<CancellationToken>()), Times.Exactly(2));
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -145,12 +157,11 @@ public class RealtimeMissionNotificationTests
         await _service.SendMissionEventAsync(evt);
 
         // Assert
-        _clientsMock.Verify(c => c.Group($"mission_{missionId}"), Times.AtLeastOnce);
-        _clientsMock.Verify(c => c.Group(NotificationHub.UserGroupName(inspectorId)), Times.Once);
+        _connectionRegistryMock.Verify(r => r.GetConnections(NotificationHub.UserGroupName(inspectorId)), Times.Once);
         _clientProxyMock.Verify(p => p.SendCoreAsync(
-            "MissionDispatched",
+            "MissionLifecycleEvent",
             It.IsAny<object[]>(),
-            It.IsAny<CancellationToken>()), Times.Exactly(2));
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -188,6 +199,7 @@ public class RealtimeMissionNotificationTests
     }
 
     [Fact]
+    [Trait("Gate5", "P0-3")]
     public async Task NotificationHub_JoinMissionGroup_WhenUnauthenticated_ShouldReject()
     {
         // Arrange
@@ -204,10 +216,120 @@ public class RealtimeMissionNotificationTests
         var missionId = Guid.NewGuid().ToString();
 
         // Act
-        await hub.JoinMissionGroup(missionId);
+        await Assert.ThrowsAsync<HubException>(() => hub.JoinMissionGroup(missionId));
+
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.Role, UserRoles.Analyst)
+        };
+        mockContext.Setup(c => c.User).Returns(new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth")));
+        await Assert.ThrowsAsync<HubException>(() => hub.JoinAssessmentGroup(Guid.NewGuid().ToString()));
 
         // Assert
         mockGroups.Verify(g => g.AddToGroupAsync(It.IsAny<string>(), It.IsAny<string>(), default), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(UserRoles.Analyst)]
+    [InlineData(UserRoles.Technician)]
+    [Trait("Gate5", "P0-3")]
+    public async Task JoinMissionGroup_WithoutMissionRole_ShouldRejectBeforeCheckingData(string role)
+    {
+        var registry = new NotificationConnectionRegistry();
+        var scopeFactory = new Mock<IServiceScopeFactory>(MockBehavior.Strict);
+        using var hub = CreateHub(role, registry, out var groups, scopeFactory.Object);
+        var missionId = Guid.NewGuid().ToString("D");
+
+        await Assert.ThrowsAsync<HubException>(() => hub.JoinMissionGroup(missionId));
+
+        scopeFactory.VerifyNoOtherCalls();
+        groups.VerifyNoOtherCalls();
+        Assert.Empty(registry.GetConnections(NotificationHub.MissionGroupName(missionId)));
+    }
+
+    [Theory]
+    [InlineData(UserRoles.Inspector, true)]
+    [InlineData(UserRoles.Analyst, false)]
+    [InlineData(UserRoles.Technician, false)]
+    [Trait("Gate5", "P0-3")]
+    public async Task JoinAssessmentGroups_ShouldEnforceRole(string role, bool allowed)
+    {
+        var registry = new NotificationConnectionRegistry();
+        using var hub = CreateHub(role, registry, out var groups);
+        var assessmentId = Guid.NewGuid().ToString("D");
+        var assessmentGroup = NotificationHub.AssessmentGroupName(assessmentId);
+        var listGroup = NotificationHub.AssessmentsListGroupName;
+
+        if (!allowed)
+        {
+            await Assert.ThrowsAsync<HubException>(() => hub.JoinAssessmentGroup(assessmentId));
+            await Assert.ThrowsAsync<HubException>(() => hub.JoinAssessmentsListGroup());
+            groups.VerifyNoOtherCalls();
+            Assert.Empty(registry.GetConnections(assessmentGroup));
+            Assert.Empty(registry.GetConnections(listGroup));
+            return;
+        }
+
+        await hub.JoinAssessmentGroup(assessmentId);
+        await hub.JoinAssessmentsListGroup();
+        Assert.Contains(hub.Context.ConnectionId, registry.GetConnections(assessmentGroup));
+        Assert.Contains(hub.Context.ConnectionId, registry.GetConnections(listGroup));
+    }
+
+    [Fact]
+    [Trait("Gate5", "P0-3")]
+    public async Task LeaveAndDisconnect_ShouldRemoveOnlyCurrentConnectionFromGroups()
+    {
+        var registry = new NotificationConnectionRegistry();
+        using var hub = CreateHub(UserRoles.SystemAdmin, registry, out var groups);
+        var missionId = Guid.NewGuid();
+        var assessmentId = Guid.NewGuid();
+        var missionGroup = NotificationHub.MissionGroupName(missionId.ToString("D"));
+        var assessmentGroup = NotificationHub.AssessmentGroupName(assessmentId.ToString("D"));
+        var listGroup = NotificationHub.AssessmentsListGroupName;
+        var connectionId = hub.Context.ConnectionId;
+        const string otherConnectionId = "other-connection";
+
+        await hub.JoinMissionGroup(missionId.ToString("D"));
+        await hub.JoinAssessmentGroup(assessmentId.ToString("D"));
+        await hub.JoinAssessmentsListGroup();
+        await hub.LeaveMissionGroup(missionId.ToString("B").ToUpperInvariant());
+        await hub.LeaveAssessmentGroup(assessmentId.ToString("B").ToUpperInvariant());
+        groups.Verify(g => g.RemoveFromGroupAsync(connectionId, missionGroup, default), Times.Once);
+        groups.Verify(g => g.RemoveFromGroupAsync(connectionId, assessmentGroup, default), Times.Once);
+        Assert.Empty(registry.GetConnections(missionGroup));
+        Assert.Empty(registry.GetConnections(assessmentGroup));
+
+        await hub.JoinMissionGroup(missionId.ToString("D"));
+        await hub.JoinAssessmentGroup(assessmentId.ToString("D"));
+        registry.AddToGroup(assessmentGroup, otherConnectionId);
+
+        await hub.OnDisconnectedAsync(null);
+
+        Assert.Empty(registry.GetConnections(missionGroup));
+        Assert.Empty(registry.GetConnections(listGroup));
+        Assert.Equal(new[] { otherConnectionId }, registry.GetConnections(assessmentGroup));
+    }
+
+    private static NotificationHub CreateHub(
+        string role, NotificationConnectionRegistry registry, out Mock<IGroupManager> groups,
+        IServiceScopeFactory? scopeFactory = null)
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString("D")),
+            new Claim(ClaimTypes.Role, role)
+        };
+        var context = new Mock<HubCallerContext>();
+        context.SetupGet(c => c.ConnectionId).Returns("test-connection");
+        context.SetupGet(c => c.User).Returns(new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth")));
+        groups = new Mock<IGroupManager>();
+        return new NotificationHub(new Mock<ILogger<NotificationHub>>().Object, registry, scopeFactory)
+        {
+            Context = context.Object,
+            Groups = groups.Object
+        };
     }
 
     [Fact]

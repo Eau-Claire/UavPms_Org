@@ -84,7 +84,7 @@ public class UnreadCountAndInternalAuthTests
     }
 
     [Fact]
-    public void InternalServiceOrAdminAuth_ShouldRejectUnauthenticatedWithoutKey_AndAllowMatchingKey()
+    public void InternalServiceKeyAuth_ShouldRejectMissingKey_AndAllowMatchingKey()
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -97,7 +97,7 @@ public class UnreadCountAndInternalAuthTests
             .AddSingleton<IConfiguration>(config)
             .BuildServiceProvider();
 
-        var attr = new InternalServiceOrAdminAuthAttribute();
+        var attr = new InternalServiceKeyAuthAttribute();
 
         // 1. No JWT, no key -> 401
         var unauthContext = new AuthorizationFilterContext(

@@ -25,14 +25,10 @@ public class NotificationRepository : GenericRepository<Notification>, INotifica
             .CountAsync(x => x.UserId == userId && x.ReadAt == null, cancellationToken);
     }
 
-    public async Task MarkAsReadAsync(Guid id)
+    public Task<Notification?> GetByOwnerAsync(Guid id, Guid userId, CancellationToken cancellationToken)
     {
-        var notification = await _context.Notifications.FindAsync(id);
-
-        if(notification == null)
-            return;
-
-        notification.MarkAsRead();
+        return _context.Notifications.FirstOrDefaultAsync(
+            notification => notification.Id == id && notification.UserId == userId, cancellationToken);
     }
 
     public async Task<List<Notification>> GetUnpushedNotificationsWithActiveUserAsync()

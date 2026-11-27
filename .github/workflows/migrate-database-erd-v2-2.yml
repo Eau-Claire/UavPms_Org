@@ -30,10 +30,6 @@ on:
         required: true
         type: string
 
-concurrency:
-  group: production-operations-database-update
-  cancel-in-progress: false
-
 env:
   DB_CONTAINER: uavpms-db
   DB_USER: uavpms
@@ -41,9 +37,21 @@ env:
   TARGET_MIGRATION: 20261027181344_AlignSchemaWithErdV2_2
 
 jobs:
+  retired-migration-guard:
+    name: Retired migration workflow
+    runs-on: ubuntu-latest
+    permissions: {}
+    concurrency: { group: production-operations-database-update, cancel-in-progress: false }
+    steps:
+      - name: Stop legacy workflow
+        run: |
+          echo "::error::This legacy workflow is retired. Use .github/workflows/ef-core-migrations.yml once it is available in C3."
+          exit 1
+
+  # Khóa cả job để các step luôn chạy cũng không thể đụng production.
   build-script:
     name: Build, test and generate migration SQL
-    if: ${{ inputs.confirmation == 'MIGRATE_ERD_V2_2' }}
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -85,6 +93,7 @@ jobs:
           retention-days: 30
 
   migrate:
+    if: ${{ false }}
     name: Backup, dry run${{ inputs.mode == 'apply' && ', apply' || '' }}
     needs: build-script
     runs-on: ubuntu-latest

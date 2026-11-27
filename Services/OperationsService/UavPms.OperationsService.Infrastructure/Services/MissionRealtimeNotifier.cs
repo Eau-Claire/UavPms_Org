@@ -105,13 +105,11 @@ public class MissionRealtimeNotifier : IMissionRealtimeNotifier
             var sharedKey = _configuration["InternalServices:SharedKey"];
             if (string.IsNullOrWhiteSpace(sharedKey))
             {
-                sharedKey = _configuration["AIService:ServiceKey"];
+                _logger.LogWarning("Direct realtime fallback skipped because the internal service key is missing.");
+                return;
             }
 
-            if (!string.IsNullOrWhiteSpace(sharedKey))
-            {
-                httpClient.DefaultRequestHeaders.TryAddWithoutValidation("X-Internal-Key", sharedKey);
-            }
+            httpClient.DefaultRequestHeaders.Add("X-Internal-Key", sharedKey);
 
             var json = JsonSerializer.Serialize(payload);
             using var content = new StringContent(json, Encoding.UTF8, "application/json");

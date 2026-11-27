@@ -87,26 +87,49 @@
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/notifications/realtime/{everything}",
+      "DownstreamPathTemplate": "/api/v1/notifications",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/notifications/realtime/{everything}",
-      "UpstreamHttpMethod": [],
+      "UpstreamPathTemplate": "/api/v1/notifications",
+      "UpstreamHttpMethod": ["GET"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v1/notifications/history",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v1/notifications/history",
+      "UpstreamHttpMethod": ["GET"],
       "Priority": 100
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/notifications/{everything}",
+      "DownstreamPathTemplate": "/api/v1/notifications/unread-count",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/notifications/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      "UpstreamPathTemplate": "/api/v1/notifications/unread-count",
+      "UpstreamHttpMethod": ["GET"],
+      "Priority": 100
     },
     {
-      "DownstreamPathTemplate": "/api/v{version}/notifications",
+      "DownstreamPathTemplate": "/api/v1/notifications/{id}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/api/v{version}/notifications",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      "UpstreamPathTemplate": "/api/v1/notifications/{id}",
+      "UpstreamHttpMethod": ["GET", "DELETE"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/v1/notifications/{id}/read",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/api/v1/notifications/{id}/read",
+      "UpstreamHttpMethod": ["PUT"]
+    },
+    {
+      "DownstreamPathTemplate": "/hubs/notifications/negotiate",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
+      "UpstreamPathTemplate": "/hubs/notifications/negotiate",
+      "UpstreamHttpMethod": ["POST"],
+      "Priority": 100
     },
     {
       "DownstreamPathTemplate": "/hubs/notifications/{everything}",
@@ -134,20 +157,6 @@
       "DownstreamScheme": "ws",
       "DownstreamHostAndPorts": [{ "Host": "operationsservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/hubs/telemetry",
-      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/hangfire/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/hangfire/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/hangfire",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "notificationservice", "Port": 8080 }],
-      "UpstreamPathTemplate": "/hangfire",
       "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
     },
     {
@@ -465,13 +474,6 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "aiinspectionservice", "Port": 8080 }],
       "UpstreamPathTemplate": "/api/v{version}/anomalies",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    },
-    {
-      "DownstreamPathTemplate": "/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "fastapi-ai", "Port": 8000 }],
-      "UpstreamPathTemplate": "/ai-service/{everything}",
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     }
   ],

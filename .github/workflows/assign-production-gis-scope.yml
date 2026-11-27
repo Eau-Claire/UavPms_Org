@@ -28,25 +28,40 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Mask scope recipient for Actions logs
+        shell: bash
+        run: |
+          set +x
+          # Đọc từ event file để email chưa mask không xuất hiện trong env header của step.
+          if ! user_email="$(jq -er '.inputs.user_email | strings' "$GITHUB_EVENT_PATH" 2>/dev/null)" ||
+            [[ ! "$user_email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+            echo "::error::GIS_SCOPE_RECIPIENT_INVALID"
+            exit 1
+          fi
+          masked_email="${user_email//%/%25}"
+          masked_email="${masked_email//$'\r'/%0D}"
+          masked_email="${masked_email//$'\n'/%0A}"
+          printf '::add-mask::%s\n' "$masked_email"
+          printf 'USER_EMAIL=%s\n' "$user_email" >> "$GITHUB_ENV"
+
       - name: Assign geographic scope over SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           CONFIRMATION: ${{ inputs.confirmation }}
-          USER_EMAIL: ${{ inputs.user_email }}
           REGION_CODES: ${{ inputs.region_codes }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
-          debug: true
           timeout: 60s
           command_timeout: 10m
           envs: DEPLOY_PATH,CONFIRMATION,USER_EMAIL,REGION_CODES
-          # Scope assignment remains idempotent; keep the SSH session alive so database diagnostics are visible.
-          script_stop: false
+          # Bash xử lý lỗi; giữ nguyên nội dung heredoc khi SSH truyền script.
           script: |
+            bash -s <<'GIS_SCOPE_SCRIPT'
+            set +x
             set -euo pipefail
             if [ "${CONFIRMATION:-}" != ASSIGN_PRODUCTION_GIS_SCOPE ]; then echo "ERROR: confirmation mismatch."; exit 1; fi
             if [ -z "${DEPLOY_PATH:-}" ]; then echo "ERROR: DEPLOY_PATH is not configured."; exit 1; fi
@@ -62,11 +77,22 @@ jobs:
             if [ -n "$(git status --porcelain --untracked-files=all)" ]; then echo "ERROR: deployment checkout is not clean."; exit 1; fi
             if [ "$(docker inspect uavpms-db --format '{{.State.Status}}')" != running ]; then echo "ERROR: uavpms-db is not running."; exit 1; fi
             DB_ARGS=(-X -v ON_ERROR_STOP=1 -U uavpms -d uavpms)
-            USER_ID="$(docker exec uavpms-db psql "${DB_ARGS[@]}" -tA -c "SELECT \"Id\" FROM public.\"Users\" WHERE lower(\"Email\") = lower('${USER_EMAIL}') AND NOT \"IsDeleted\";")"
+            # Truyền email qua stdin và chặn chẩn đoán SQL có thể lặp lại giá trị đầu vào.
+            if ! USER_ID="$(docker exec -i uavpms-db psql "${DB_ARGS[@]}" -tA 2>/dev/null <<SQL
+            \set scope_email '$USER_EMAIL'
+            SELECT "Id" FROM public."Users" WHERE lower("Email") = lower(:'scope_email') AND NOT "IsDeleted";
+            SQL
+            )"; then
+              echo "ERROR: GIS_SCOPE_USER_LOOKUP_FAILED"
+              exit 1
+            fi
             if [ -z "$USER_ID" ]; then echo "ERROR: user was not found."; exit 1; fi
-            if [ "$(printf '%s\n' "$USER_ID" | wc -l)" -ne 1 ]; then echo "ERROR: more than one active user has this email."; exit 1; fi
-            echo "Assigning scopes to user: $USER_EMAIL"
+            if [[ ! "$USER_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+              echo "ERROR: GIS_SCOPE_USER_MATCH_INVALID"
+              exit 1
+            fi
             IFS=',' read -r -a REGIONS <<< "${REGION_CODES:-}"
+            processed_regions=0
             for raw_code in "${REGIONS[@]}"; do
               CODE="$(printf '%s' "$raw_code" | xargs)"
               [ -z "$CODE" ] && continue
@@ -76,19 +102,22 @@ jobs:
               DECLARE v_region uuid; v_user uuid := '${USER_ID}'::uuid;
               BEGIN
                 SELECT \"Id\" INTO v_region FROM public.\"Regions\" WHERE \"Code\" = '${CODE}' AND NOT \"IsDeleted\";
-                IF v_region IS NULL THEN RAISE EXCEPTION 'Region code ${CODE} was not found'; END IF;
+                IF v_region IS NULL THEN RAISE EXCEPTION 'GIS_SCOPE_REGION_NOT_FOUND'; END IF;
                 IF EXISTS (SELECT 1 FROM public.\"UserGeographicScopes\" WHERE \"UserId\" = v_user AND \"RegionId\" = v_region AND NOT \"IsDeleted\") THEN
-                  RAISE NOTICE 'region scope already active: ${CODE}';
+                  NULL;
                 ELSIF EXISTS (SELECT 1 FROM public.\"UserGeographicScopes\" WHERE \"UserId\" = v_user AND \"RegionId\" = v_region) THEN
                   UPDATE public.\"UserGeographicScopes\" SET \"IsDeleted\" = false, \"DeletedAt\" = NULL, \"UpdatedAt\" = now()
                   WHERE \"Id\" = (SELECT \"Id\" FROM public.\"UserGeographicScopes\" WHERE \"UserId\" = v_user AND \"RegionId\" = v_region ORDER BY \"CreatedAt\" DESC LIMIT 1);
-                  RAISE NOTICE 'region scope reactivated: ${CODE}';
                 ELSE
                   INSERT INTO public.\"UserGeographicScopes\" (\"Id\",\"UserId\",\"RegionId\",\"CreatedAt\",\"IsDeleted\")
                   VALUES (gen_random_uuid(), v_user, v_region, now(), false);
-                  RAISE NOTICE 'region scope added: ${CODE}';
                 END IF;
               END \$\$;"
-              if docker exec uavpms-db psql "${DB_ARGS[@]}" -c "$SQL" 2>&1; then echo "region scope applied: $CODE"; else echo "ERROR: region scope SQL failed for $CODE"; exit 1; fi
+              if ! docker exec uavpms-db psql "${DB_ARGS[@]}" -c "$SQL" >/dev/null 2>&1; then
+                echo "ERROR: GIS_SCOPE_APPLY_FAILED"
+                exit 1
+              fi
+              processed_regions=$((processed_regions + 1))
             done
-            docker exec uavpms-db psql "${DB_ARGS[@]}" -c "SELECT s.\"Id\", r.\"Code\" AS region_code, r.\"Name\" AS region_name, s.\"IsDeleted\" FROM public.\"UserGeographicScopes\" s JOIN public.\"Regions\" r ON r.\"Id\" = s.\"RegionId\" WHERE s.\"UserId\" = '${USER_ID}'::uuid ORDER BY s.\"CreatedAt\";"
+            printf 'GIS_SCOPE_ASSIGNMENT_COMPLETED regionsProcessed=%s\n' "$processed_regions"
+            GIS_SCOPE_SCRIPT

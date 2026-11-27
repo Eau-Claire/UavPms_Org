@@ -16,10 +16,10 @@ public class GetNotificationByIdQueryHandler : IRequestHandler<GetNotificationBy
 
     public async Task<NotificationDto> Handle(GetNotificationByIdQuery request, CancellationToken cancellationToken)
     {
-        var n = await _notificationRepository.GetByIdAsync(request.Id);
+        var n = await _notificationRepository.GetByOwnerAsync(request.Id, request.UserId, cancellationToken);
         if (n == null)
         {
-            throw new NotFoundException("Notification", request.Id);
+            throw new NotFoundException("Notification was not found.");
         }
 
         return new NotificationDto

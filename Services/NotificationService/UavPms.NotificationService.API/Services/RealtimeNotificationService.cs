@@ -11,6 +11,8 @@ namespace UavPms.NotificationService.API.Services;
 
 public class RealtimeNotificationService : IRealtimeNotificationService
 {
+    private const string MissionLifecycleEventName = "MissionLifecycleEvent";
+    private const string AssessmentRealtimeEventName = "AssessmentRealtimeEvent";
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly INotificationConnectionRegistry _connectionRegistry;
     private readonly ILogger<RealtimeNotificationService> _logger;
@@ -123,79 +125,26 @@ public class RealtimeNotificationService : IRealtimeNotificationService
         UavPms.Shared.Contracts.Events.MissionLifecycleEventDto evt,
         CancellationToken cancellationToken = default)
     {
-        if (evt == null || string.IsNullOrWhiteSpace(evt.MissionId)) return;
+        if (evt == null || !Guid.TryParse(evt.MissionId, out var missionId))
+        {
+            return;
+        }
 
         try
         {
-            var missionGroup = NotificationHub.MissionGroupName(evt.MissionId);
-
-            // 1. Aggregate event to mission room
-            await _hubContext.Clients.Group(missionGroup).SendAsync("MissionLifecycleEvent", evt, cancellationToken);
-
-            // 2. Broadcast specific custom type if specified
-            if (!string.IsNullOrWhiteSpace(evt.Type))
+            var targetGroups = new HashSet<string>(StringComparer.Ordinal)
             {
-                await _hubContext.Clients.Group(missionGroup).SendAsync(evt.Type, evt, cancellationToken);
+                NotificationHub.MissionGroupName(missionId.ToString())
+            };
+            AddUserGroup(targetGroups, evt.TargetUserId);
+            AddUserGroup(targetGroups, evt.InspectorId);
+            AddUserGroup(targetGroups, evt.ManagerId);
+            foreach (var assignedUserId in evt.AssignedUserIds ?? [])
+            {
+                AddUserGroup(targetGroups, assignedUserId);
             }
 
-            // 3. Specific event broadcast
-            switch (evt.Type?.ToUpperInvariant())
-            {
-                case "CONFIRMED":
-                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionConfirmed", evt, cancellationToken);
-                    break;
-                case "SUSPENDED":
-                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionSuspended", evt, cancellationToken);
-                    break;
-                case "POSTPONED":
-                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionPostponed", evt, cancellationToken);
-                    break;
-                case "RESUMED":
-                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionResumed", evt, cancellationToken);
-                    break;
-                case "CANCELLED":
-                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionCancelled", evt, cancellationToken);
-                    break;
-                case "REMINDER":
-                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionReminderSent", evt, cancellationToken);
-                    if (!string.IsNullOrWhiteSpace(evt.TargetUserId) && Guid.TryParse(evt.TargetUserId, out var reminderTargetGuid))
-                    {
-                        await _hubContext.Clients.Group(NotificationHub.UserGroupName(reminderTargetGuid))
-                            .SendAsync("MissionReminderSent", evt, cancellationToken);
-                    }
-                    break;
-                case "COMMUNICATION":
-                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionCommunicationReceived", evt, cancellationToken);
-                    break;
-                case "DISPATCHED":
-                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionDispatched", evt, cancellationToken);
-                    var dispatchedUserGuids = new HashSet<Guid>();
-                    if (!string.IsNullOrWhiteSpace(evt.InspectorId) && Guid.TryParse(evt.InspectorId, out var inspectorGuid))
-                    {
-                        dispatchedUserGuids.Add(inspectorGuid);
-                    }
-                    if (evt.AssignedUserIds != null)
-                    {
-                        foreach (var uid in evt.AssignedUserIds)
-                        {
-                            if (Guid.TryParse(uid, out var g)) dispatchedUserGuids.Add(g);
-                        }
-                    }
-                    foreach (var targetGuid in dispatchedUserGuids)
-                    {
-                        var targetGroup = NotificationHub.UserGroupName(targetGuid);
-                        await _hubContext.Clients.Group(targetGroup).SendAsync("MissionDispatched", evt, cancellationToken);
-                    }
-                    break;
-                case "OVERDUE":
-                    await _hubContext.Clients.Group(missionGroup).SendAsync("MissionConfirmationOverdue", evt, cancellationToken);
-                    if (!string.IsNullOrWhiteSpace(evt.ManagerId) && Guid.TryParse(evt.ManagerId, out var managerGuid))
-                    {
-                        await _hubContext.Clients.Group(NotificationHub.UserGroupName(managerGuid))
-                            .SendAsync("MissionConfirmationOverdue", evt, cancellationToken);
-                    }
-                    break;
-            }
+            await SendOnceToGroupsAsync(targetGroups, MissionLifecycleEventName, evt, cancellationToken);
 
             _logger.LogInformation("Realtime mission event broadcasted. MissionId={MissionId}, Type={Type}", evt.MissionId, evt.Type);
         }
@@ -207,29 +156,52 @@ public class RealtimeNotificationService : IRealtimeNotificationService
 
     public async Task SendAssessmentEventAsync(AssessmentRealtimeEventDto evt, CancellationToken cancellationToken = default)
     {
-        if (evt == null || string.IsNullOrWhiteSpace(evt.AssessmentId)) return;
+        if (evt == null || !Guid.TryParse(evt.AssessmentId, out var assessmentId))
+        {
+            return;
+        }
+
         try
         {
-            var assessmentGroup = NotificationHub.AssessmentGroupName(evt.AssessmentId);
-            var listGroup = NotificationHub.AssessmentsListGroupName;
-            var managerGroup = NotificationHub.RoleGroupName(UserRoles.Manager);
-
-            await _hubContext.Clients.Group(assessmentGroup).SendAsync("AssessmentRealtimeEvent", evt, cancellationToken);
-            await _hubContext.Clients.Group(listGroup).SendAsync("AssessmentRealtimeEvent", evt, cancellationToken);
-            await _hubContext.Clients.Group(managerGroup).SendAsync("AssessmentRealtimeEvent", evt, cancellationToken);
-
-            if (!string.IsNullOrWhiteSpace(evt.Type))
+            var targetGroups = new[]
             {
-                await _hubContext.Clients.Group(assessmentGroup).SendAsync(evt.Type, evt, cancellationToken);
-                await _hubContext.Clients.Group(listGroup).SendAsync(evt.Type, evt, cancellationToken);
-                await _hubContext.Clients.Group(managerGroup).SendAsync(evt.Type, evt, cancellationToken);
-            }
+                NotificationHub.AssessmentGroupName(assessmentId.ToString()),
+                NotificationHub.AssessmentsListGroupName,
+                NotificationHub.RoleGroupName(UserRoles.Manager)
+            };
+            await SendOnceToGroupsAsync(targetGroups, AssessmentRealtimeEventName, evt, cancellationToken);
 
             _logger.LogInformation("Realtime assessment event broadcasted. AssessmentId={AssessmentId}, Type={Type}", evt.AssessmentId, evt.Type);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to broadcast realtime assessment event. AssessmentId={AssessmentId}, Type={Type}", evt.AssessmentId, evt.Type);
+        }
+    }
+
+    private async Task SendOnceToGroupsAsync(
+        IEnumerable<string> groupNames,
+        string eventName,
+        object payload,
+        CancellationToken cancellationToken)
+    {
+        var connectionIds = groupNames
+            .SelectMany(_connectionRegistry.GetConnections)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (connectionIds.Length == 0)
+        {
+            return;
+        }
+
+        await _hubContext.Clients.Clients(connectionIds).SendAsync(eventName, payload, cancellationToken);
+    }
+
+    private static void AddUserGroup(ISet<string> targetGroups, string? userIdText)
+    {
+        if (Guid.TryParse(userIdText, out var userId))
+        {
+            targetGroups.Add(NotificationHub.UserGroupName(userId));
         }
     }
 

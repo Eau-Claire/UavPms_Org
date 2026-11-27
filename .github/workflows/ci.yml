@@ -11,14 +11,20 @@ on:
       - main
       - develop
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Build and Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -26,20 +32,302 @@ jobs:
           dotnet-version: "9.0.x"
 
       - name: Restore dependencies
-        run: dotnet restore UavPms.sln
+        run: |
+          if ! dotnet restore UavPms.sln >/dev/null 2>&1; then
+            echo "::error::dotnet restore failed. Check restore locally."
+            exit 1
+          fi
 
       - name: Build solution
         run: |
-          dotnet build UavPms.sln \
-            --configuration Release \
-            --no-restore
+          if ! dotnet build UavPms.sln --configuration Release --no-restore >/dev/null 2>&1; then
+            echo "::error::dotnet build failed. Check the Release build locally."
+            exit 1
+          fi
 
-      - name: Run tests
+      - name: Start isolated Gate 5 containers
+        shell: bash
         run: |
-          dotnet test UavPms.sln \
-            --configuration Release \
-            --no-build \
-            --verbosity normal
+          set +x
+          prefix="uav-c1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          loopback=127.0.0.1
+          startup_timeout=120
+          readiness_timeout=120
+          probe_timeout=5
+          postgres_port=5432
+          redis_port=6379
+          rabbitmq_port=5672
+          smtp_port=1025
+          mailpit_api_port=8025
+          ci_user=uav_ci
+          postgres_database=uav_ci
+
+          start_container() {
+            local service="$1"
+            shift
+            # Tắt log container vì SQL/SMTP có thể ghi thông tin định danh khi lỗi.
+            if ! timeout "$startup_timeout" docker run -d --name "$prefix-$service" \
+              --network "$prefix" --log-driver none --health-interval 5s \
+              --health-timeout 5s --health-retries 18 "$@" >/dev/null 2>&1; then
+              printf '::error::Could not start CI container %s.\n' "$service"
+              return 1
+            fi
+          }
+
+          if ! timeout "$probe_timeout" docker network create "$prefix" >/dev/null 2>&1; then
+            echo "::error::Could not create isolated CI network."
+            exit 1
+          fi
+
+          # Bootstrap tự mask mật khẩu trước khi Docker hoặc GITHUB_ENV nhận giá trị.
+          umask 077
+          env_file=$(mktemp "$RUNNER_TEMP/uav-gate5-env.XXXXXX")
+          trap 'rm -f -- "$env_file"' EXIT
+          postgres_password=$(openssl rand -hex 32)
+          printf '::add-mask::%s\n' "$postgres_password"
+          printf 'POSTGRES_DB=%s\nPOSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\n' \
+            "$postgres_database" "$ci_user" "$postgres_password" > "$env_file"
+          start_container postgis --env-file "$env_file" -p "$loopback::$postgres_port" \
+            --health-cmd 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "SELECT PostGIS_Version()" >/dev/null 2>&1' \
+            postgis/postgis:16-3.5
+          rm -f -- "$env_file"
+
+          env_file=$(mktemp "$RUNNER_TEMP/uav-gate5-env.XXXXXX")
+          rabbitmq_password=$(openssl rand -hex 32)
+          printf '::add-mask::%s\n' "$rabbitmq_password"
+          printf 'RABBITMQ_DEFAULT_USER=%s\nRABBITMQ_DEFAULT_PASS=%s\n' \
+            "$ci_user" "$rabbitmq_password" > "$env_file"
+          start_container rabbitmq --env-file "$env_file" -p "$loopback::$rabbitmq_port" \
+            --health-cmd 'rabbitmq-diagnostics -q check_port_connectivity >/dev/null 2>&1' rabbitmq:4.3-alpine
+          rm -f -- "$env_file"
+
+          start_container redis -p "$loopback::$redis_port" \
+            --health-cmd 'redis-cli ping >/dev/null 2>&1' redis:7.4-alpine
+          start_container mailpit -p "$loopback::$smtp_port" -p "$loopback::$mailpit_api_port" \
+            --health-cmd '/mailpit readyz >/dev/null 2>&1' axllent/mailpit:v1.27.4
+
+          # Dùng một hạn chót chung để container lỗi không kéo dài cả job.
+          deadline=$((SECONDS + readiness_timeout))
+          for service in postgis redis rabbitmq mailpit; do
+            while true; do
+              state=$(timeout "$probe_timeout" docker inspect --format '{{.State.Health.Status}}' "$prefix-$service" 2>/dev/null) || state=unavailable
+              if [[ "$state" == healthy ]]; then
+                break
+              fi
+              if [[ "$state" == unhealthy || "$state" == unavailable ]] || (( SECONDS >= deadline )); then
+                printf '::error::CI container %s failed readiness checks.\n' "$service"
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+
+          published_port() {
+            local address
+            if ! address=$(timeout "$probe_timeout" docker port "$prefix-$1" "$2/tcp" 2>/dev/null) ||
+              [[ ! "$address" =~ ^127\.0\.0\.1:[0-9]+$ ]]; then
+              printf '::error::CI container %s has no loopback port mapping.\n' "$1" >&2
+              return 1
+            fi
+            printf '%s' "${address##*:}"
+          }
+
+          postgres_host_port=$(published_port postgis "$postgres_port")
+          redis_host_port=$(published_port redis "$redis_port")
+          rabbitmq_host_port=$(published_port rabbitmq "$rabbitmq_port")
+          smtp_host_port=$(published_port mailpit "$smtp_port")
+          mailpit_http_port=$(published_port mailpit "$mailpit_api_port")
+          {
+            printf 'GATE5_POSTGRES_HOST=%s\nGATE5_POSTGRES_PORT=%s\nGATE5_POSTGRES_DATABASE=%s\n' "$loopback" "$postgres_host_port" "$postgres_database"
+            printf 'GATE5_POSTGRES_USER=%s\nGATE5_POSTGRES_PASSWORD=%s\n' "$ci_user" "$postgres_password"
+            printf 'GATE5_REDIS_HOST=%s\nGATE5_REDIS_PORT=%s\n' "$loopback" "$redis_host_port"
+            printf 'GATE5_RABBITMQ_HOST=%s\nGATE5_RABBITMQ_PORT=%s\n' "$loopback" "$rabbitmq_host_port"
+            printf 'GATE5_RABBITMQ_USER=%s\nGATE5_RABBITMQ_PASSWORD=%s\n' "$ci_user" "$rabbitmq_password"
+            printf 'GATE5_SMTP_HOST=%s\nGATE5_SMTP_PORT=%s\nGATE5_SMTP_SECURITY=None\n' "$loopback" "$smtp_host_port"
+            printf 'GATE5_MAILPIT_API_URL=http://%s:%s\n' "$loopback" "$mailpit_http_port"
+          } >> "$GITHUB_ENV"
+
+      - name: Probe Gate 5 endpoints from runner
+        run: |
+          python3 - <<'PY'
+          import os
+          import socket
+          from contextlib import closing
+          from http import HTTPStatus
+          from http.client import HTTPConnection, HTTPException
+          from smtplib import SMTP
+          from urllib.parse import urlsplit
+
+          def endpoint(service):
+              return os.environ[f"GATE5_{service}_HOST"], int(os.environ[f"GATE5_{service}_PORT"])
+
+          timeout = 5
+          smtp_ready = 220
+          try:
+              for service in ("POSTGRES", "REDIS", "RABBITMQ"):
+                  with socket.create_connection(endpoint(service), timeout):
+                      pass
+              service = "Mailpit SMTP"
+              with closing(SMTP(timeout=timeout)) as smtp:
+                  code, _ = smtp.connect(*endpoint("SMTP"))
+                  if code != smtp_ready:
+                      raise ValueError
+              service = "Mailpit HTTP"
+              origin = urlsplit(os.environ["GATE5_MAILPIT_API_URL"])
+              with closing(HTTPConnection(origin.hostname, origin.port, timeout=timeout)) as http:
+                  http.request("GET", "/readyz")
+                  if http.getresponse().status != HTTPStatus.OK:
+                      raise ValueError
+          except (KeyError, OSError, ValueError, HTTPException):
+              raise SystemExit(f"::error::{service} loopback probe failed ({timeout}s timeout).") from None
+          PY
+
+      - name: Run solution tests
+        id: tests
+        shell: bash
+        run: |
+          umask 077
+          raw_dir="$RUNNER_TEMP/gate5-trx-raw"
+          mkdir -- "$raw_dir"
+          # Gỡ đường dẫn file điều khiển Actions trước khi nạp mã test.
+          if ! env -u GITHUB_OUTPUT -u GITHUB_ENV -u GITHUB_PATH -u GITHUB_STEP_SUMMARY \
+            dotnet test UavPms.sln --configuration Release --no-build --no-restore \
+              --logger trx --results-directory "$raw_dir" >/dev/null 2>&1; then
+            echo "::error::dotnet test failed. Run the solution tests locally for details."
+            exit 1
+          fi
+
+      - name: Validate and sanitize TRX
+        id: sanitize_trx
+        if: steps.tests.outcome == 'success'
+        run: |
+          python3 - <<'PY'
+          import os
+          import uuid
+          import xml.etree.ElementTree as xml
+          from pathlib import Path
+
+          solution = Path("UavPms.sln")
+          runner_temp = Path(os.environ["RUNNER_TEMP"])
+          trx_namespace = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"
+          passed_outcome = "Passed"
+          completed_outcome = "Completed"
+          passed_fields = ("total", "executed", "passed")
+          zero_fields = ("failed", "error", "timeout", "aborted", "inconclusive", "notExecuted")
+          required_projects = [
+              "UavPms.AIInspectionService.Tests",
+              "UavPms.IdentityService.Tests",
+              "UavPms.InspectionEvaluationService.Tests",
+              "UavPms.NotificationService.Tests",
+              "UavPms.OperationsService.IntegrationTests",
+              "UavPms.OperationsService.Tests",
+          ]
+          gateway_project = "UavPms.ApiGateway.Tests"
+          # Gateway được bắt buộc ngay khi project test của G1 vào solution.
+          if f'{gateway_project}.csproj"' in solution.read_text(encoding="utf-8-sig"):
+              required_projects.append(gateway_project)
+
+          class InvalidTrx(ValueError):
+              pass
+
+          def validate_results(root, summary, project):
+              results = root.findall(".//{*}UnitTestResult")
+              if not results:
+                  raise InvalidTrx(f"{project} has no test results.")
+              for result in results:
+                  if result.get("outcome") != passed_outcome:
+                      raise InvalidTrx(f"{project} has a missing or non-Passed test outcome.")
+
+              counters = summary.find("{*}Counters")
+              if counters is None:
+                  raise InvalidTrx(f"{project} has no TRX counters.")
+              # Counters phải khớp với từng kết quả đã đọc, kể cả các bộ đếm lỗi ngoài failed.
+              for field in passed_fields + zero_fields:
+                  expected = len(results) if field in passed_fields else 0
+                  if int(counters.attrib[field]) != expected:
+                      raise InvalidTrx(f"{project} has inconsistent TRX counters ({field}).")
+              if summary.get("outcome") != completed_outcome:
+                  raise InvalidTrx(f"{project} did not complete successfully.")
+              return len(results)
+
+          def read_trx(path, projects_by_assembly):
+              root = xml.parse(path).getroot()
+              summary = root.find("{*}ResultSummary")
+              if summary is None or root.tag != f"{{{trx_namespace}}}TestRun":
+                  raise ValueError
+              definitions = root.findall("{*}TestDefinitions/{*}UnitTest")
+              assemblies = {
+                  unit.attrib["storage"].replace("\\", "/").rsplit("/", 1)[-1].lower()
+                  for unit in definitions
+              }
+              if len(assemblies) != 1:
+                  raise ValueError
+              project = projects_by_assembly[assemblies.pop()]
+              return project, validate_results(root, summary, project)
+
+          def collect_trx(raw_dir):
+              if raw_dir.is_symlink():
+                  raise SystemExit("::error::Raw TRX path must be a real directory.")
+              projects_by_assembly = {f"{name.lower()}.dll": name for name in required_projects}
+              totals = dict.fromkeys(required_projects, 0)
+              for report in raw_dir.glob("*.trx"):
+                  if report.is_symlink() or not report.is_file():
+                      raise SystemExit("::error::TRX report must be a regular file.")
+                  try:
+                      project, passed = read_trx(report, projects_by_assembly)
+                  except InvalidTrx as error:
+                      raise SystemExit(f"::error::{error}") from None
+                  except (KeyError, OSError, ValueError, xml.ParseError):
+                      raise SystemExit("::error::Found an invalid or unrecognized TRX report.") from None
+                  totals[project] += passed
+              missing = [project for project, passed in totals.items() if not passed]
+              if missing:
+                  raise SystemExit(f"::error::Missing executed tests for {', '.join(missing)}.")
+              return totals
+
+          def write_sanitized_trx(totals, output_dir):
+              # Tạo TRX chỉ chứa số đếm và tên suite cho phép; TRX gốc có thể chứa payload.
+              output_dir.mkdir(mode=0o700)
+              for project, passed in totals.items():
+                  print(f"{project}: total={passed} passed={passed} failed=0 skipped=0")
+                  run = xml.Element("TestRun", xmlns=trx_namespace, name=project, id=str(uuid.uuid4()))
+                  summary = xml.SubElement(run, "ResultSummary", outcome=completed_outcome)
+                  counters = dict.fromkeys(passed_fields, str(passed)) | dict.fromkeys(zero_fields, "0")
+                  xml.SubElement(summary, "Counters", counters)
+                  xml.ElementTree(run).write(output_dir / f"{project}.trx", encoding="utf-8")
+
+          totals = collect_trx(runner_temp / "gate5-trx-raw")
+          write_sanitized_trx(totals, runner_temp / "gate5-trx-sanitized")
+          PY
+
+      - name: Upload sanitized TRX
+        if: ${{ success() && steps.sanitize_trx.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-ci-trx-${{ github.sha }}
+          path: ${{ runner.temp }}/gate5-trx-sanitized/*.trx
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Clean up Gate 5 containers
+        if: always()
+        shell: bash
+        run: |
+          prefix="uav-c1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          remove_resource() {
+            local kind="$1" resource="$2"
+            shift 2
+            if ! timeout 5s docker "$kind" inspect "$resource" >/dev/null 2>&1; then
+              return
+            fi
+            if ! timeout 20s docker "$kind" rm "$@" "$resource" >/dev/null 2>&1; then
+              printf '::warning::Could not remove CI %s during cleanup.\n' "$kind"
+            fi
+          }
+          for service in postgis redis rabbitmq mailpit; do
+            remove_resource container "$prefix-$service" -fv
+          done
+          remove_resource network "$prefix"
 
   docker-build:
     name: Validate Docker Build
@@ -49,6 +337,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Build Docker images
         env:
@@ -56,4 +346,8 @@ jobs:
           RABBITMQ_USER: ci-build-placeholder
           RABBITMQ_PASSWORD: ci-build-placeholder
           INTERNAL_SERVICES_SHARED_KEY: ci-build-placeholder
-        run: docker compose build
+        run: |
+          if ! docker compose build >/dev/null 2>&1; then
+            echo "::error::Docker image build failed. Check docker compose build locally."
+            exit 1
+          fi
