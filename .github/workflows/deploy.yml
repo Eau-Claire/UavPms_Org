@@ -228,7 +228,12 @@ jobs:
                   FROM regexp_matches(pg_get_constraintdef(c.oid),
                     $$('(?:[^']|'')*'|"(?:""|[^"])*"|[^[:space:]()'"]+)$$, 'g')
                     WITH ORDINALITY AS token(parts, position)
-                ) = $$CHECK"ValidationStatus"::text=ANYARRAY['Pending'::charactervarying,'InReview'::charactervarying,'Confirmed'::charactervarying,'Rejected'::charactervarying,'Resolved'::charactervarying]::text[]$$
+                -- Cùng 5 giá trị, Postgres in theo hai dạng: DDL tay cũ (ép kiểu cả mảng) và
+                -- migration EF AddAllEntityStatusCheckConstraints dùng IN (...) (ép kiểu từng phần tử, đang có trên production).
+                ) IN (
+                  $$CHECK"ValidationStatus"::text=ANYARRAY['Pending'::charactervarying,'InReview'::charactervarying,'Confirmed'::charactervarying,'Rejected'::charactervarying,'Resolved'::charactervarying]::text[]$$,
+                  $$CHECK"ValidationStatus"::text=ANYARRAY['Pending'::charactervarying::text,'InReview'::charactervarying::text,'Confirmed'::charactervarying::text,'Rejected'::charactervarying::text,'Resolved'::charactervarying::text]$$
+                )
             );
             SQL
             )" || [ "$schema_ok" != t ]; then
