@@ -127,7 +127,9 @@ public class DronesController : ControllerBase
         return Ok(new { message = $"Đã xóa Drone {id} thành công.", droneId = id });
     }
 
+    // Analyst không được xem lịch sử BIST/FC; vùng của Drone kiểm tra thêm trong service.
     [HttpGet("{id:guid}/technical-inspections")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorTechnician)]
     public async Task<IActionResult> GetTechnicalInspections(
         Guid id,
         [FromQuery] int page = 1,
@@ -139,7 +141,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpPost("{id:guid}/basic-technical-check")]
-    [Authorize(Roles = UserRoles.AdminManagerTechnician)]
+    [Authorize(Roles = UserRoles.AdminTechnician)]
     public async Task<ActionResult<DroneTechnicalInspectionSummaryDto>> SubmitBasicTechnicalCheck(
         Guid id,
         [FromBody] BasicTechnicalCheckRequest request,
@@ -150,6 +152,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpGet("eligible")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorTechnician)]
     public async Task<IActionResult> GetEligibleDrones(
         [FromQuery] Guid assessmentId,
         CancellationToken ct)
@@ -187,7 +190,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpPost("{droneId:guid}/flight-controller")]
-    [Authorize(Roles = UserRoles.AdminManagerTechnician)]
+    [Authorize(Roles = UserRoles.AdminTechnician)]
     public async Task<ActionResult<FlightControllerBindingDto>> PairFlightController(
         Guid droneId,
         [FromBody] PairFlightControllerRequest request,
@@ -198,7 +201,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpDelete("{droneId:guid}/flight-controller")]
-    [Authorize(Roles = UserRoles.AdminManagerTechnician)]
+    [Authorize(Roles = UserRoles.AdminTechnician)]
     public async Task<IActionResult> UnpairFlightController(Guid droneId, CancellationToken ct)
     {
         var result = await _flightControllerService.UnpairFlightControllerAsync(droneId, ct);
@@ -209,6 +212,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpGet("{droneId:guid}/flight-controller")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorTechnician)]
     public async Task<ActionResult<FlightControllerBindingDto>> GetActiveFlightController(Guid droneId, CancellationToken ct)
     {
         var binding = await _flightControllerService.GetActiveBindingForDroneAsync(droneId, ct);
@@ -219,6 +223,7 @@ public class DronesController : ControllerBase
     }
 
     [HttpGet("{droneId:guid}/flight-controller/history")]
+    [Authorize(Roles = UserRoles.AdminManagerInspectorTechnician)]
     public async Task<IActionResult> GetFlightControllerHistory(Guid droneId, CancellationToken ct)
     {
         var history = await _flightControllerService.GetBindingHistoryForDroneAsync(droneId, ct);

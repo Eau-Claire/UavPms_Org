@@ -224,7 +224,7 @@ public class PreMissionAssessmentServiceTests
         });
 
         // Add an available drone with valid technical inspection
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", AssignedRegionId = region.Id, OperationalStatus = DroneOperationalStatus.Available };
         drone.TechnicalInspections.Add(new DroneTechnicalInspection
         {
             DroneId = drone.Id,
@@ -278,7 +278,7 @@ public class PreMissionAssessmentServiceTests
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = inspector.Id, RegionId = region.Id });
         db.Users.Add(inspector);
 
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", AssignedRegionId = region.Id, OperationalStatus = DroneOperationalStatus.Available };
         drone.TechnicalInspections.Add(new DroneTechnicalInspection
         {
             DroneId = drone.Id,

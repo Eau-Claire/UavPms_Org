@@ -20,6 +20,7 @@ internal static class MissionResourceGuard
     public const int DefaultConfirmationDeadlineHours = 24;
     public const int DefaultStartToleranceMinutes = 120;
     public const int DefaultAssessmentValidityHours = 168; // 7 days
+    public const int MaxAssessmentValidityHours = 168; // FR-006: trần 7 ngày, cấu hình dài hơn vẫn bị cắt
     public const int DefaultSchedulePlannedDurationHours = 4;
     public const double DefaultCheckInGeofenceRadiusMeters = 200.0;
     public const int DefaultEmergencySlaDays = 1;
@@ -183,6 +184,14 @@ internal static class MissionResourceGuard
             .Select(s => s.Value)
             .FirstOrDefaultAsync(ct);
         return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0 ? value : defaultValue;
+    }
+
+    /// <summary>Hiệu lực MF01 theo cấu hình hệ thống nhưng không bao giờ vượt <see cref="MaxAssessmentValidityHours"/>.</summary>
+    public static async Task<int> GetAssessmentValidityHoursAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        var configuredHours = await GetPositiveIntSettingAsync(
+            db, SettingKeys.AssessmentValidityHours, DefaultAssessmentValidityHours, ct);
+        return Math.Min(configuredHours, MaxAssessmentValidityHours);
     }
 
     /// <summary>BR-09: positive double system setting (> 0) read without the settings service.</summary>

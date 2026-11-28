@@ -1,0 +1,15 @@
+# Tier 1 RED-Locked Acceptance / Gate 5 Test Paths (relative to repo root, forward slashes)
+# Protocol:
+# 1. Run with SDD_PHASE=RED to author failing tests mapped 1-to-1 to FR-xxx / HC-xx.
+# 2. Verify RED test fails as expected, then append its relative path below.
+# 3. Return to SDD_PHASE=CODE -> PreToolUse hook blocks any edits to listed files (exit 2).
+# 4. Clear slice paths only after Judge approval & merge.
+
+# BE-REQ-101 (Gate 5, RED verified 2026-11-27)
+Services/OperationsService/UavPms.OperationsService.IntegrationTests/Be101ApiFactory.cs
+
+# BE-REQ-101 Fix vòng 1 (Codex Auditor), RED verified 2026-11-27
+Services/OperationsService/UavPms.OperationsService.IntegrationTests/Be101AuditFixTests.cs
+
+# BE-REQ-101 Fix vòng 2 (Codex Auditor), RED verified 2026-11-27
+Services/OperationsService/UavPms.OperationsService.IntegrationTests/Be101AuditFixR2Tests.cs

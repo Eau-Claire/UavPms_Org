@@ -2,14 +2,13 @@
 
 Repo BE: `D:/UavPms_BEE`, .NET 9. Áp dụng từ gốc repo.
 
-## Nguồn sự thật và phạm vi
+## Nguồn sự thật, Hiến pháp & Rào chắn SDD
 
-- `D:/UavPms_FEE/docs/MASTER_SYSTEM_SPEC.md` xác định nghiệp vụ và kiến trúc.
-- `D:/UavPms_FEE/docs/contracts/HANDOFF.md` ghi hợp đồng và bàn giao BE/FE.
-- Khi nhận mã BE-REQ và batch, đọc spec, acceptance và checklist của đúng yêu cầu.
-- Chỉ mở file triển khai và test cần cho batch đã được giao.
-- Nạp `.agents/skills/readable-code-defense/SKILL.md` trước khi viết hoặc review code.
-- Gate 5 là danh sách test đã thống nhất. `confirmed` không có nghĩa test đã chạy.
+- `docs/MASTER_SYSTEM_SPEC.md` (v2.0) & `docs/contracts/HANDOFF.md` — nguồn sự thật đồng bộ FE/BE *(cấm dùng doc cũ đã gắn banner `DEPRECATED`)*.
+- `.specify/memory/constitution.md` — 7 bất biến kỹ thuật (`C-01..C-07`); `CLAUDE.md` & `.claude/hooks/` khóa ghi (`SDD_PHASE=SPEC|RED|CODE`, `.claude/locked-tests.txt`) + `.codex/config.toml`.
+- `specs/` — mẫu EARS/GEARS (`specs/_template/`) & ma trận `specs/RTM.md`. Khi nhận `BE-REQ`, chỉ đọc spec/acceptance, code và test của đúng batch được giao.
+- Nạp `.agents/skills/readable-code-defense/SKILL.md` trước khi viết/review code; Judge nạp `.agents/skills/pr-review-judge/SKILL.md`.
+- Gate 5 là danh sách test đã thống nhất. Với Tier 1: viết RED → khóa vào `.claude/locked-tests.txt` → mới code GREEN. `confirmed` ≠ test đã chạy.
 
 ## Bản đồ kiến trúc
 
@@ -46,11 +45,11 @@ Repo BE: `D:/UavPms_BEE`, .NET 9. Áp dụng từ gốc repo.
 
 ## Small Batches v2.0 và code dễ bảo vệ
 
-1. Xác nhận phạm vi, tiêu chí Gate 5 (`acceptance.md`) và ranh giới duyệt trước khi sửa; đảm bảo working tree sạch WIP ngoài phạm vi.
+1. **Mainflow / Demo First**: Luôn hỏi deadline gần nhất và kiểm chứng lỗi trên hệ thống thật trước khi ưu tiên CI/YAML hay refactor phụ. Xác nhận phạm vi, Gate 5 (`acceptance.md`) và đảm bảo working tree sạch WIP ngoài phạm vi.
 2. **Vertical Slice**: Gom 1 lỗi P0 hoặc 1 tính năng trọn vẹn thành 1 slice (~250–450 dòng diff; refactor cơ học/xóa dead code được linh hoạt theo domain) và chấm **1 lượt Independent Judge** cho mỗi slice.
 3. **Chạy test trúng đích khi lặp**: Trong lúc sửa chỉ chạy `dotnet test` đúng project liên quan; chỉ chạy `dotnet build UavPms.sln -c Release` đúng **1 lần chốt cuối** trước khi báo cáo. Không search web hay dựng fixture bash/Docker nặng cho batch C#.
 4. **Test tự chạy được trong `dotnet test`**: Test Gate 5 mặc định phải chạy qua pipeline ASP.NET Core thật (`WebApplicationFactory<Program>` / in-process HTTP + JWT thật) và pass trong `dotnet test UavPms.sln` (không phụ thuộc URL server chạy sẵn ngoài môi trường làm đỏ CI); các probe live multi-service tách riêng category.
-5. **Risk-Tiered Pragmatic Judge**: Tier 1 (Auth/RBAC/Ocelot/SignalR/Migration — soi chặt bảo mật thật & test integrity); Tier 2 (CRUD/refactor — 1 lượt thực dụng, max 3 non-blocking); Tier 3 (CI/YAML — `actionlint` + chặn secret/injection/false-green, cấm over-engineering SRE).
+5. **Risk-Tiered Pragmatic Judge (Anti-Banking Ceiling)**: Nạp `.agents/skills/pr-review-judge/SKILL.md`. Tier 1 (Auth/RBAC/Ocelot/SignalR — soi chặt bảo mật thật & test integrity); Tier 2 (CRUD/refactor — 1 lượt thực dụng, max 3 non-blocking); Tier 3 (CI/YAML — `actionlint` + chặn secret/injection/false-green, **cấm over-engineering SRE** như `pg_hba.conf` hay cluster DB thứ 2). Nhắm tối đa **1 vòng sửa** và tôn trọng quyết định accept-risk của Human Owner.
 6. Reset chat Coding/Judge ngay khi đổi domain (Workflow → Notification → Auth) để giữ context sạch. Dừng sau mỗi slice chờ review.
 
 - Luồng `if/return` đi thẳng, guard clause sớm, lồng `if` tối đa hai cấp.

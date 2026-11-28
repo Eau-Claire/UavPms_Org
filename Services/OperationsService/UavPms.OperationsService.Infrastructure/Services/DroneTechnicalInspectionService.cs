@@ -24,8 +24,8 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
     private readonly IMissionRealtimeNotifier? _notifier;
 
     public DroneTechnicalInspectionService(
-        ApplicationDbContext db, 
-        ICurrentUserServices current, 
+        ApplicationDbContext db,
+        ICurrentUserServices current,
         ISystemSettingService? systemSettingService = null,
         IMissionRealtimeNotifier? notifier = null)
     {
@@ -37,19 +37,22 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 
     public async Task<DroneTechnicalInspection> SubmitInspectionAsync(DroneInspectionSubmitRequest request, CancellationToken ct)
     {
-        await RequireTechnicianOrManager(ct);
+        await RequireTechnicianOrAdmin(ct);
 
         // UC-MF01-05 E4: an inspection needs real readings. There is no default "all passed" checklist any more:
         // it produced a Passed/Healthy inspection, valid for 7 days, from no data at all.
         if (request.Metrics == null || request.Metrics.Count == 0)
             throw new BusinessRuleException("METRICS_REQUIRED", "Technical inspection requires at least one diagnostic or telemetry metric.");
 
+        var sourceType = ResolveSourceType(request);
+        var conclusion = ResolveConclusion(request.Conclusion);
+
         var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == request.DroneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", request.DroneId);
 
-        await EnsureCallerHasDroneAccessAsync(drone.Id, ct);
+        await EnsureCallerHasDroneAccessAsync(drone, ct);
 
-        // BR-05: Hardware UID verification and assessment drone match
+        // BR-05: Hardware UID verification
         if (!string.IsNullOrWhiteSpace(request.FlightControllerUid))
         {
             var cleanUid = request.FlightControllerUid.Trim().ToUpperInvariant();
@@ -71,41 +74,25 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             activeBinding.LastSeenAt = DateTime.UtcNow;
         }
 
-        if (request.PreMissionAssessmentId.HasValue && request.PreMissionAssessmentId.Value != Guid.Empty)
-        {
-            var assessment = await _db.PreMissionAssessments
-                .Include(x => x.DroneCandidates)
-                .SingleOrDefaultAsync(x => x.Id == request.PreMissionAssessmentId.Value && !x.IsDeleted, ct)
-                ?? throw new NotFoundException("PreMissionAssessment", request.PreMissionAssessmentId.Value);
-
-            await EnsureCallerMayUseAssessmentAsync(assessment, ct);
-
-            // BR-05 / BR-17: an inspection can only be attached to an assessment that is still open.
-            if (assessment.Status == PreMissionAssessmentStatus.Completed)
-                throw new BusinessRuleException("ASSESSMENT_ALREADY_COMPLETED", "Bản đánh giá đã được dùng để tạo nhiệm vụ bay.");
-            if (assessment.Status == PreMissionAssessmentStatus.Cancelled)
-                throw new BusinessRuleException("ASSESSMENT_CANCELLED", "Bản đánh giá đã bị hủy.");
-            if (assessment.Status == PreMissionAssessmentStatus.Expired)
-                throw new BusinessRuleException("ASSESSMENT_EXPIRED", "Bản đánh giá đã hết hạn.");
-            if (AssessmentExpiryPolicy.CheckAndApplyExpiry(assessment))
-            {
-                AddAudit("PreMissionAssessments", assessment.Id, "ASSESSMENT_EXPIRED", "{}");
-                await _db.SaveChangesAsync(ct);
-                throw new BusinessRuleException("ASSESSMENT_EXPIRED", "Bản đánh giá đã hết hạn.");
-            }
-
-            var isCandidate = assessment.DroneCandidates.Any(x => x.DroneId == drone.Id);
-            if (!isCandidate)
-            {
-                throw new BusinessRuleException("ASSESSMENT_DRONE_MISMATCH", $"Drone {drone.UavCode} không thuộc danh sách UAV được chỉ định trong thẩm định tiền bay {assessment.Id}.");
-            }
-        }
-
         var droneSettings = _systemSettingService != null
             ? await _systemSettingService.GetDroneThresholdSettingsAsync(ct)
             : new DroneThresholdSettingsDto();
 
         var evalResult = DroneTechnicalHealthEvaluationPolicy.Evaluate(request.Metrics, drone.BatteryLevel, droneSettings);
+
+        // Technician kết luận Failed thì luôn là Failed/Critical dù số đo đẹp; kết luận Passed không được "cứu"
+        // một phiếu mà số đo có lỗi nghiêm trọng, nên trạng thái tính từ số đo vẫn được giữ.
+        var concludedFailed = conclusion == InspectionConclusions.Failed;
+        var status = concludedFailed ? DroneTechnicalInspectionStatus.Failed : evalResult.Status;
+        var health = concludedFailed ? TechnicalHealth.Critical : evalResult.Health;
+
+        // BRL-04: thiếu hạng mục bắt buộc thì chưa đạt chuẩn (Incomplete, không Healthy) để báo đỏ và cho nhập bổ sung.
+        var missingMetricCodes = request.MissingMetricCodes ?? Array.Empty<string>();
+        if (missingMetricCodes.Count > 0 && status == DroneTechnicalInspectionStatus.Passed)
+        {
+            status = DroneTechnicalInspectionStatus.Incomplete;
+            health = health == TechnicalHealth.Healthy ? TechnicalHealth.Unknown : health;
+        }
 
         var inspection = new DroneTechnicalInspection
         {
@@ -115,11 +102,12 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             CompletedAt = DateTime.UtcNow,
             ValidUntil = DateTime.UtcNow.AddDays(droneSettings.InspectionValidityDays),
             PolicyVersion = request.PolicyVersion ?? "v2.0",
-            Notes = request.Notes ?? "Kiểm định kỹ thuật tự động trước khi bay (BIST/Telemetry)",
-            SourceType = "bist",
+            // Không tự điền ghi chú giả: để trống khi Technician không nhập.
+            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
+            SourceType = sourceType,
             SourceVersion = "v2.0",
-            Status = evalResult.Status,
-            Health = evalResult.Health
+            Status = status,
+            Health = health
         };
 
         var metrics = evalResult.Metrics.Select(m => ToMetricEntity(inspection, m)).ToList();
@@ -131,6 +119,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             totalMetrics = metrics.Count,
             criticalFailures = evalResult.AnyCriticalFailed,
             warnings = evalResult.AnyWarning,
+            missingMetrics = missingMetricCodes,
             evaluatedAt = DateTime.UtcNow
         });
 
@@ -163,7 +152,7 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 
         if (_notifier != null)
         {
-            var isPass = evalResult.Status == DroneTechnicalInspectionStatus.Passed;
+            var isPass = inspection.Status == DroneTechnicalInspectionStatus.Passed;
             var activeAssessments = await _db.PreMissionAssessmentDrones
                 .Include(pad => pad.Assessment)
                 .Where(pad => pad.DroneId == drone.Id &&
@@ -223,7 +212,10 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
 
     public async Task<DroneTechnicalInspection?> GetLatestInspectionAsync(Guid droneId, CancellationToken ct)
     {
-        await EnsureCallerHasDroneAccessAsync(droneId, ct);
+        var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == droneId && !x.IsDeleted, ct)
+            ?? throw new NotFoundException("Drone", droneId);
+
+        await EnsureCallerHasDroneAccessAsync(drone, ct);
 
         return await _db.DroneTechnicalInspections
             .Include(x => x.Metrics)
@@ -231,6 +223,36 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
             .Where(x => x.DroneId == droneId)
             .OrderByDescending(x => x.CompletedAt)
             .FirstOrDefaultAsync(ct);
+    }
+
+    /// <summary>Không gửi sourceType thì suy ra: có UID Flight Controller là "fc", ngược lại là nhập tay.</summary>
+    private static string ResolveSourceType(DroneInspectionSubmitRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.SourceType))
+            return string.IsNullOrWhiteSpace(request.FlightControllerUid)
+                ? InspectionSourceTypes.Manual
+                : InspectionSourceTypes.FlightController;
+
+        var sourceType = request.SourceType.Trim().ToLowerInvariant();
+        if (!InspectionSourceTypes.IsValid(sourceType))
+            throw new BusinessRuleException("INVALID_SOURCE_TYPE", "sourceType chỉ nhận manual, fc hoặc bist.");
+
+        return sourceType;
+    }
+
+    /// <summary>Kết luận là tùy chọn; có thì chỉ nhận Passed hoặc Failed (không phân biệt hoa thường).</summary>
+    private static string? ResolveConclusion(string? conclusion)
+    {
+        if (string.IsNullOrWhiteSpace(conclusion))
+            return null;
+
+        var value = conclusion.Trim();
+        if (value.Equals(InspectionConclusions.Passed, StringComparison.OrdinalIgnoreCase))
+            return InspectionConclusions.Passed;
+        if (value.Equals(InspectionConclusions.Failed, StringComparison.OrdinalIgnoreCase))
+            return InspectionConclusions.Failed;
+
+        throw new BusinessRuleException("INVALID_CONCLUSION", "conclusion chỉ nhận Passed hoặc Failed.");
     }
 
     /// <summary>
@@ -268,44 +290,11 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         };
     }
 
-    /// <summary>
-    /// Attaching an inspection to an assessment: SystemAdmin, a Manager with the assessment's region in scope, or a
-    /// technician (technicians read every assessment – commit 0933670).
-    /// </summary>
-    private async Task EnsureCallerMayUseAssessmentAsync(PreMissionAssessment assessment, CancellationToken ct)
-    {
-        if (_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
-            _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
-            _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase))
-            return;
-
-        if (_current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) &&
-            await _db.UserGeographicScopes.AnyAsync(s => s.UserId == _current.UserId && s.RegionId == assessment.RegionId, ct))
-            return;
-
-        throw new ForbiddenException("ASSESSMENT_ACCESS_DENIED");
-    }
-
-    private void AddAudit(string table, Guid recordId, string action, string newValues) =>
-        _db.AuditLogs.Add(new AuditLog
-        {
-            UserId = _current.UserId,
-            TableName = table,
-            RecordId = recordId,
-            ActionType = action,
-            OldValues = "{}",
-            NewValues = newValues,
-            IpAddress = _current.IpAddress ?? "",
-            UserAgent = _current.UserAgent ?? ""
-        });
-
-    private async Task EnsureCallerHasDroneAccessAsync(Guid droneId, CancellationToken ct)
+    /// <summary>Đọc BIST/FC: Manager, Technician, Inspector trong vùng của Drone; SystemAdmin toàn hệ thống; Analyst bị từ chối.</summary>
+    private async Task EnsureCallerHasDroneAccessAsync(Uav drone, CancellationToken ct)
     {
         if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
             throw new ForbiddenException("AUTHENTICATION_REQUIRED");
-
-        if (!await _db.Uavs.AnyAsync(x => x.Id == droneId && !x.IsDeleted, ct))
-            throw new NotFoundException("Drone", droneId);
 
         if (_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase))
             return;
@@ -322,47 +311,20 @@ public sealed class DroneTechnicalInspectionService : IDroneTechnicalInspectionS
         if (user == null || (user.Status != "Active" && user.Status != "Enabled"))
             throw new ForbiddenException("ACTIVE_USER_REQUIRED");
 
-        var userScopes = await _db.UserGeographicScopes
-            .Where(s => s.UserId == _current.UserId)
-            .Select(s => (Guid?)s.RegionId)
-            .ToListAsync(ct);
-
-        // UserGeographicScope.RegionId is non-nullable, so there is no "global scope" row to look for.
-        if (userScopes.Count > 0)
-        {
-            var droneMissionRegions = await _db.Missions
-                .Where(m => m.UavId == droneId)
-                .Select(m => (Guid?)m.RegionId)
-                .Distinct()
-                .ToListAsync(ct);
-
-            var droneAssessmentRegions = await _db.PreMissionAssessmentDrones
-                .Where(d => d.DroneId == droneId && d.Assessment != null)
-                .Select(d => (Guid?)d.Assessment!.RegionId)
-                .Distinct()
-                .ToListAsync(ct);
-
-            var associatedRegions = droneMissionRegions.Concat(droneAssessmentRegions).Distinct().ToList();
-
-            if (associatedRegions.Count > 0 && !associatedRegions.Any(r => userScopes.Contains(r)))
-            {
-                throw new ForbiddenException("DRONE_ACCESS_DENIED");
-            }
-        }
+        await DroneRegionScope.EnsureAsync(_db, _current, drone, ct);
     }
 
-    private async Task RequireTechnicianOrManager(CancellationToken ct)
+    /// <summary>Ghi BIST/FC/nhập tay: chỉ Technician và SystemAdmin (HC-02); Manager/Inspector chỉ được đọc.</summary>
+    private async Task RequireTechnicianOrAdmin(CancellationToken ct)
     {
         if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
             throw new ForbiddenException("AUTHENTICATION_REQUIRED");
 
         var isAllowed = _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
-                        _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) ||
-                        _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
-                        _current.Roles.Contains("Technician", StringComparer.OrdinalIgnoreCase);
+                        _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase);
 
         if (!isAllowed)
-            throw new ForbiddenException("TECHNICIAN_OR_MANAGER_ROLE_REQUIRED");
+            throw new ForbiddenException("TECHNICIAN_ROLE_REQUIRED");
 
         var user = await _db.Users.SingleOrDefaultAsync(x => x.Id == _current.UserId, ct);
         if (user == null || (user.Status != "Active" && user.Status != "Enabled"))

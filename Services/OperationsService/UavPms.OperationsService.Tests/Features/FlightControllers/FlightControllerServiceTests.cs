@@ -20,6 +20,9 @@ namespace UavPms.OperationsService.Tests.Features.FlightControllers;
 
 public class FlightControllerServiceTests
 {
+    // Vùng dùng chung: Drone và Technician cùng vùng thì mới qua kiểm tra scope BE-REQ-101.
+    private static readonly Guid TestRegionId = Guid.NewGuid();
+
     private static Mock<ICurrentUserServices> CreateUserMock(Guid userId, string role)
     {
         var mock = new Mock<ICurrentUserServices>();
@@ -43,6 +46,7 @@ public class FlightControllerServiceTests
         var technicianId = Guid.NewGuid();
         var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = technicianId, RegionId = TestRegionId });
 
         var service = new FlightControllerService(db, user.Object);
 
@@ -61,9 +65,11 @@ public class FlightControllerServiceTests
         var technicianId = Guid.NewGuid();
         var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = technicianId, RegionId = TestRegionId });
 
         var drone = new Uav
         {
+            AssignedRegionId = TestRegionId,
             Id = Guid.NewGuid(),
             UavCode = "UAV-001",
             Model = "SpeedyBee F405 Hexacopter",
@@ -111,9 +117,11 @@ public class FlightControllerServiceTests
         var technicianId = Guid.NewGuid();
         var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = technicianId, RegionId = TestRegionId });
 
         var drone = new Uav
         {
+            AssignedRegionId = TestRegionId,
             Id = Guid.NewGuid(),
             UavCode = "UAV-002",
             Model = "DJI Matrice 300",
@@ -151,9 +159,11 @@ public class FlightControllerServiceTests
         var technicianId = Guid.NewGuid();
         var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = technicianId, RegionId = TestRegionId });
 
         var drone = new Uav
         {
+            AssignedRegionId = TestRegionId,
             Id = Guid.NewGuid(),
             UavCode = "UAV-003",
             Model = "Tarot 680 Pro"
@@ -192,15 +202,17 @@ public class FlightControllerServiceTests
     }
 
     [Fact]
-    public async Task PairFlightControllerAsync_SameUidOnAnotherDrone_DeactivatesOtherDroneBinding()
+    public async Task PairFlightControllerAsync_SameUidOnAnotherDrone_ThrowsFcAlreadyPaired_AndKeepsOtherDroneBinding()
     {
-        // BR-01
+        // BRL-02: không tự gỡ/chiếm FC đang gắn ở Drone khác; phải ngắt kết nối ở Drone cũ trước.
+
         var technicianId = Guid.NewGuid();
         var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = technicianId, RegionId = TestRegionId });
 
-        var droneA = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-A" };
-        var droneB = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-B" };
+        var droneA = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "UAV-A" };
+        var droneB = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "UAV-B" };
         db.Uavs.AddRange(droneA, droneB);
 
         var bindingA = new DroneFlightController
@@ -215,20 +227,16 @@ public class FlightControllerServiceTests
 
         var service = new FlightControllerService(db, user.Object);
 
-        // Move FC from DroneA to DroneB
         var pairToB = new PairFlightControllerRequest(
             FlightControllerUid: "SHARED-FC-UID",
             BoardIdentifier: "F405"
         );
 
-        var bindingB = await service.PairFlightControllerAsync(droneB.Id, pairToB, CancellationToken.None);
+        var pairAct = () => service.PairFlightControllerAsync(droneB.Id, pairToB, CancellationToken.None);
 
-        var bindingAInDb = await db.DroneFlightControllers.SingleAsync(b => b.Id == bindingA.Id);
-        bindingAInDb.UnpairedAt.Should().NotBeNull();
-
-        var bindingBInDb = await db.DroneFlightControllers.SingleAsync(b => b.Id == bindingB.Id);
-        bindingBInDb.UnpairedAt.Should().BeNull();
-        bindingBInDb.DroneId.Should().Be(droneB.Id);
+        await pairAct.Should().ThrowAsync<BusinessRuleException>().WithMessage("FC_ALREADY_PAIRED*");
+        (await db.DroneFlightControllers.SingleAsync(b => b.Id == bindingA.Id)).UnpairedAt.Should().BeNull();
+        (await db.DroneFlightControllers.CountAsync(b => b.DroneId == droneB.Id)).Should().Be(0);
     }
 
     [Fact]
@@ -237,8 +245,9 @@ public class FlightControllerServiceTests
         var technicianId = Guid.NewGuid();
         var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = technicianId, RegionId = TestRegionId });
 
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-004" };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "UAV-004" };
         db.Uavs.Add(drone);
 
         var binding = new DroneFlightController
@@ -267,10 +276,11 @@ public class FlightControllerServiceTests
         var technicianId = Guid.NewGuid();
         var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = technicianId, RegionId = TestRegionId });
         db.Users.Add(new User { Id = technicianId, Status = "Active" });
 
-        var droneA = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-001", BatteryLevel = 90 };
-        var droneB = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-002", BatteryLevel = 90 };
+        var droneA = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "UAV-001", BatteryLevel = 90 };
+        var droneB = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "UAV-002", BatteryLevel = 90 };
         db.Uavs.AddRange(droneA, droneB);
 
         // FC-002 is paired with droneB
@@ -309,9 +319,10 @@ public class FlightControllerServiceTests
         var technicianId = Guid.NewGuid();
         var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = technicianId, RegionId = TestRegionId });
         db.Users.Add(new User { Id = technicianId, Status = "Active" });
 
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-001", BatteryLevel = 90 };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "UAV-001", BatteryLevel = 90 };
         db.Uavs.Add(drone);
         await db.SaveChangesAsync();
 
@@ -339,9 +350,10 @@ public class FlightControllerServiceTests
         var technicianId = Guid.NewGuid();
         var user = CreateUserMock(technicianId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = technicianId, RegionId = TestRegionId });
         db.Users.Add(new User { Id = technicianId, Status = "Active" });
 
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-001", BatteryLevel = 95 };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "UAV-001", BatteryLevel = 95 };
         db.Uavs.Add(drone);
 
         var binding = new DroneFlightController

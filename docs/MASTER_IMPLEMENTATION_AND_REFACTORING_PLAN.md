@@ -1,3 +1,6 @@
+> [!WARNING] LEGACY / DEPRECATED — KHÔNG dùng làm nguồn đặc tả cho AI Agent.
+> Kế hoạch v3.0 cũ (tháng 10). Nguồn sự thật hiện hành là [`docs/MASTER_SYSTEM_SPEC.md`](docs/MASTER_SYSTEM_SPEC.md) (v2.0) và [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
+
 # 🏗️ KẾ HOẠCH TỔNG THỂ IMPLEMENT & REFACTOR TOÀN BỘ HỆ THỐNG UAV-PMS
 **Căn cứ theo Sơ đồ Thực thể Liên kết Hợp nhất Toàn diện: `docs/ERD_SYSTEM_MF01_TO_MF04.md`**
 *Phiên bản: 3.0 (Tháng 10/2026) - Kiến trúc Microservices .NET 9 & Event-Driven Architecture*

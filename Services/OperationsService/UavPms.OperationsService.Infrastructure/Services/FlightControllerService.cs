@@ -79,7 +79,7 @@ public sealed class FlightControllerService : IFlightControllerService
 
     public async Task<FlightControllerBindingDto> PairFlightControllerAsync(Guid droneId, PairFlightControllerRequest request, CancellationToken ct = default)
     {
-        await RequireTechnicianOrManager(ct);
+        await RequireTechnicianOrAdmin(ct);
 
         if (string.IsNullOrWhiteSpace(request.FlightControllerUid))
         {
@@ -90,6 +90,15 @@ public sealed class FlightControllerService : IFlightControllerService
 
         var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == droneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", droneId);
+
+        await DroneRegionScope.EnsureAsync(_db, _current, drone, ct);
+
+        // BRL-02: UID đang gắn ở Drone khác thì không tự gỡ hay chiếm (kể cả SystemAdmin, kể cả cùng vùng);
+        // phải DELETE ở Drone cũ trước. Thông báo không nêu mã Drone cũ để không lộ Drone ngoài vùng của người gọi.
+        var uidActiveOnAnotherDrone = await _db.DroneFlightControllers
+            .AnyAsync(x => x.FlightControllerUid == cleanUid && x.UnpairedAt == null && !x.IsDeleted && x.DroneId != droneId, ct);
+        if (uidActiveOnAnotherDrone)
+            throw new BusinessRuleException("FC_ALREADY_PAIRED", "Flight Controller đang gắn với Drone khác; cần ngắt kết nối (DELETE) ở Drone cũ trước.");
 
         var now = DateTime.UtcNow;
 
@@ -103,23 +112,14 @@ public sealed class FlightControllerService : IFlightControllerService
             b.UnpairedAt = now;
         }
 
-        // BR-01: Deactivate any currently active binding of this FlightControllerUid on ANY other drone
-        var existingUidBindings = await _db.DroneFlightControllers
-            .Where(x => x.FlightControllerUid == cleanUid && x.UnpairedAt == null && !x.IsDeleted)
-            .ToListAsync(ct);
-
-        foreach (var b in existingUidBindings)
-        {
-            b.UnpairedAt = now;
-        }
-
         // Create new active binding
         var newBinding = new DroneFlightController
         {
             DroneId = drone.Id,
             FlightControllerUid = cleanUid,
             BoardIdentifier = request.BoardIdentifier?.Trim(),
-            FirmwareName = string.IsNullOrWhiteSpace(request.FirmwareName) ? "Betaflight" : request.FirmwareName.Trim(),
+            // Không truyền firmware thì để trống, tuyệt đối không tự điền tên firmware.
+            FirmwareName = string.IsNullOrWhiteSpace(request.FirmwareName) ? null : request.FirmwareName.Trim(),
             FirmwareVersion = request.FirmwareVersion?.Trim(),
             PairedAt = now,
             LastSeenAt = now
@@ -153,7 +153,8 @@ public sealed class FlightControllerService : IFlightControllerService
 
     public async Task<bool> UnpairFlightControllerAsync(Guid droneId, CancellationToken ct = default)
     {
-        await RequireTechnicianOrManager(ct);
+        await RequireTechnicianOrAdmin(ct);
+        await EnsureDroneInScopeAsync(droneId, ct);
 
         var activeBinding = await _db.DroneFlightControllers
             .FirstOrDefaultAsync(x => x.DroneId == droneId && x.UnpairedAt == null && !x.IsDeleted, ct);
@@ -189,6 +190,8 @@ public sealed class FlightControllerService : IFlightControllerService
 
     public async Task<FlightControllerBindingDto?> GetActiveBindingForDroneAsync(Guid droneId, CancellationToken ct = default)
     {
+        await EnsureDroneInScopeAsync(droneId, ct);
+
         var binding = await _db.DroneFlightControllers
             .FirstOrDefaultAsync(x => x.DroneId == droneId && x.UnpairedAt == null && !x.IsDeleted, ct);
 
@@ -197,6 +200,8 @@ public sealed class FlightControllerService : IFlightControllerService
 
     public async Task<IReadOnlyList<FlightControllerBindingDto>> GetBindingHistoryForDroneAsync(Guid droneId, CancellationToken ct = default)
     {
+        await EnsureDroneInScopeAsync(droneId, ct);
+
         var list = await _db.DroneFlightControllers
             .Where(x => x.DroneId == droneId && !x.IsDeleted)
             .OrderByDescending(x => x.PairedAt)
@@ -221,16 +226,24 @@ public sealed class FlightControllerService : IFlightControllerService
         );
     }
 
-    private async Task RequireTechnicianOrManager(CancellationToken ct)
+    /// <summary>Đọc binding FC chỉ khi Drone thuộc vùng của người gọi (SystemAdmin bỏ qua); không có Drone thì 404.</summary>
+    private async Task EnsureDroneInScopeAsync(Guid droneId, CancellationToken ct)
+    {
+        var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == droneId && !x.IsDeleted, ct)
+            ?? throw new NotFoundException("Drone", droneId);
+
+        await DroneRegionScope.EnsureAsync(_db, _current, drone, ct);
+    }
+
+    /// <summary>Ghép/ngắt FC thuộc nhóm ghi BIST/FC nên chỉ Technician và SystemAdmin (Manager chỉ đọc).</summary>
+    private async Task RequireTechnicianOrAdmin(CancellationToken ct)
     {
         if (!_current.IsAuthenticated)
             throw new ForbiddenException("Vui lòng đăng nhập để thực hiện thao tác này.");
 
         var hasRole = _current.Roles.Any(r =>
             r.Equals(UserRoles.SystemAdmin, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals(UserRoles.Manager, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals("Technician", StringComparison.OrdinalIgnoreCase));
+            r.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase));
 
         if (!hasRole)
         {
@@ -241,12 +254,10 @@ public sealed class FlightControllerService : IFlightControllerService
             hasRole = user?.UserRoles.Any(r =>
                 r.Role != null && (
                     r.Role.RoleName.Equals(UserRoles.SystemAdmin, StringComparison.OrdinalIgnoreCase) ||
-                    r.Role.RoleName.Equals(UserRoles.Manager, StringComparison.OrdinalIgnoreCase) ||
-                    r.Role.RoleName.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
-                    r.Role.RoleName.Equals("Technician", StringComparison.OrdinalIgnoreCase))) ?? false;
+                    r.Role.RoleName.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase))) ?? false;
         }
 
         if (!hasRole)
-            throw new ForbiddenException("Chỉ Kỹ thuật viên (Technician) hoặc Quản lý (Manager) mới có quyền ghép nối Flight Controller.");
+            throw new ForbiddenException("Chỉ Kỹ thuật viên (Technician) hoặc SystemAdmin mới có quyền ghép nối Flight Controller.");
     }
 }

@@ -1,3 +1,6 @@
+> [!WARNING] LEGACY / DEPRECATED — KHÔNG dùng làm nguồn đặc tả cho AI Agent.
+> Tài liệu schema v2.2 cũ (42 bảng) chưa phản ánh đợt DROP 4 bảng & `DroneTelemetry` RAM-only của v2.0. Hãy dùng [`docs/MASTER_SYSTEM_SPEC.md`](docs/MASTER_SYSTEM_SPEC.md) (Mục 3, v2.0) và [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
+
 # Tài liệu Thiết kế Cơ sở Dữ liệu (Database Schema Documentation)
 **Hệ thống Quản lý và Giám sát Lưới điện bằng Thiết bị bay không người lái (UAV PMS)**
 *Phiên bản ERD v2.2 (42 bảng). Đồng bộ với `docs/diagrams/ERD_Full_v2.mmd` và `ERD_Full_v2_CHANGES.md` cùng thư mục. Hợp đồng tên vật lý: `docs/database/ERD_v2_2_TARGET_SCHEMA.md`.*

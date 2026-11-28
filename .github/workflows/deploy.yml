@@ -76,15 +76,26 @@ jobs:
             # Render đúng file Compose của SHA đích với thư mục và môi trường của deploy.
             export RUN_MIGRATIONS=false MIGRATION_ONLY=false
             compose=(docker compose --project-directory "$PWD")
-            release_compose="$(mktemp "$PWD/.compose-preflight.XXXXXX")"
-            trap 'rm -f -- "$release_compose"' EXIT
-            if ! git show "$DEPLOY_COMMIT:docker-compose.yml" > "$release_compose" 2>/dev/null ||
-              ! release_runtime="$("${compose[@]}" -f "$release_compose" config --format json operationsservice 2>/dev/null)"; then
-              echo "ERROR: Could not resolve Compose for the release. Deployment stopped."
-              exit 1
+            if [ -f "$PWD/.env" ]; then
+              compose+=(--env-file "$PWD/.env")
             fi
+            release_compose="$(mktemp "$PWD/.compose-preflight.XXXXXX")"
+            compose_error="$(mktemp)"
+            trap 'rm -f -- "$release_compose" "$compose_error"' EXIT
+            git show "$DEPLOY_COMMIT:docker-compose.yml" > "$release_compose" 2>/dev/null || {
+              printf 'ERROR: COMPOSE_RELEASE_FILE_FAILED exit=%s\n' "$?" >&2
+              exit 1
+            }
+            render_compose() {
+              local status missing_env
+              "${compose[@]}" -f "$1" config --format json operationsservice 2>"$compose_error" && return 0
+              status=$?
+              missing_env="$(sed -nE 's/^.*required variable (REDIS_PASSWORD|RABBITMQ_USER|RABBITMQ_PASSWORD) is missing a value.*$/\1/p' "$compose_error")"
+              printf 'ERROR: COMPOSE_CONFIG_FAILED exit=%s missing_env=%s\n' "$status" "${missing_env:-unknown}" >&2
+              return "$status"
+            }
+            release_runtime="$(render_compose "$release_compose")"
             rm -f -- "$release_compose"
-            trap - EXIT
 
             db_read() {
               RELEASE_COMPOSE="$release_runtime" timeout 30s python3 -c '
@@ -233,7 +244,7 @@ jobs:
             git reset --hard "$DEPLOY_COMMIT"
 
             # Dừng trước khi start nếu môi trường Compose đổi sau lần xác minh DB.
-            if ! deployed_runtime="$("${compose[@]}" -f docker-compose.yml config --format json operationsservice 2>/dev/null)" ||
+            if ! deployed_runtime="$(render_compose docker-compose.yml)" ||
               [ "$deployed_runtime" != "$release_runtime" ]; then
               echo "ERROR: Effective Compose configuration changed after preflight. Deployment stopped."
               exit 1

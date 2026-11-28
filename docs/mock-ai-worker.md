@@ -1,3 +1,6 @@
+> [!WARNING] LEGACY / DEPRECATED — KHÔNG dùng làm nguồn đặc tả cho AI Agent.
+> Tài liệu Mock AI Worker cũ bị cấm theo quy tắc Zero Mock / Real Infra. Nguồn sự thật là [`docs/MASTER_SYSTEM_SPEC.md`](docs/MASTER_SYSTEM_SPEC.md) (v2.0) và [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
+
 # Mock AI worker
 
 Temporary demo mode for the mission AI analysis flow. It is built into the WebApi process as an optional hosted service.

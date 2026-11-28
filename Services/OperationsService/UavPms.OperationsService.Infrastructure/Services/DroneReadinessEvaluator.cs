@@ -43,11 +43,15 @@ public static class DroneReadinessEvaluator
         double corridorKm,
         int towerCount,
         CancellationToken ct,
-        IReadOnlyCollection<Guid>? onlyDroneIds = null)
+        IReadOnlyCollection<Guid>? onlyDroneIds = null,
+        Guid? onlyRegionId = null)
     {
         var dronesQuery = db.Uavs.Where(x => !x.IsDeleted);
         if (onlyDroneIds != null)
             dronesQuery = dronesQuery.Where(x => onlyDroneIds.Contains(x.Id));
+        // Drone vùng nào chỉ dùng cho hồ sơ vùng đó; Drone chưa gắn vùng (null) không bao giờ khớp.
+        if (onlyRegionId.HasValue)
+            dronesQuery = dronesQuery.Where(x => x.AssignedRegionId == onlyRegionId.Value);
         var drones = await dronesQuery.OrderBy(x => x.UavCode).ToListAsync(ct);
         var droneIds = drones.Select(d => d.Id).ToList();
 

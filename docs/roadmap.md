@@ -1,3 +1,6 @@
+> [!WARNING] LEGACY / DEPRECATED — KHÔNG dùng làm nguồn đặc tả cho AI Agent.
+> Lộ trình cũ trước v2.0. Hãy dùng [`docs/MASTER_SYSTEM_SPEC.md`](docs/MASTER_SYSTEM_SPEC.md) (Mục 7, v2.0) và [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
+
 # 🗺️ TỔNG THỂ ROADMAP BACKEND: UAV-PMS SYSTEM (.NET 9)
 
 > [!NOTE]

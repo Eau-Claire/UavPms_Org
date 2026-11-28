@@ -1,0 +1,11 @@
+# .codex/config.toml — UAV-PMS Backend
+# Giữ `# model = ...` dạng comment để Codex dùng model mặc định đang cấu hình của bạn.
+# model = "gpt-5.3-codex"
+
+sandbox_mode = "workspace-write"
+project_doc_fallback_filenames = ["AGENTS.md"]
+project_doc_max_bytes = 65536
+
+[sandbox_workspace_write]
+writable_roots = []
+network_access = false

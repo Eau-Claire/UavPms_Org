@@ -8,7 +8,7 @@ public class DroneFlightController : BaseEntity
     public Guid DroneId { get; set; }
     public string FlightControllerUid { get; set; } = string.Empty;
     public string? BoardIdentifier { get; set; }
-    public string? FirmwareName { get; set; } = "Betaflight";
+    public string? FirmwareName { get; set; }
     public string? FirmwareVersion { get; set; }
     public DateTime PairedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UnpairedAt { get; set; }

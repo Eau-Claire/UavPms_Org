@@ -39,6 +39,9 @@ public class DroneTechnicalInspectionSummaryDto
     public string? TechnicianName { get; set; }
     public string? Notes { get; set; }
     public int MetricCount { get; set; }
+    // Ready khi Healthy, còn lại MaintenanceRequired; MissingMetrics là hạng mục bắt buộc chưa được gửi (BRL-04).
+    public string Readiness { get; set; } = string.Empty;
+    public IReadOnlyList<string> MissingMetrics { get; set; } = Array.Empty<string>();
 }
 
 public class CreateUavRequest
@@ -76,43 +79,44 @@ public class UpdateUavRequest
 
 public class BasicTechnicalCheckRequest
 {
+    // BE-REQ-101: mọi hạng mục là tùy chọn (null = không gửi); hệ thống không tự điền kết luận hay số đo.
     // Checklist items: Frame / Body
-    public bool FrameBodyPassed { get; set; } = true;
+    public bool? FrameBodyPassed { get; set; }
     public string? FrameBodyNotes { get; set; }
 
     // Propellers
-    public bool PropellersPassed { get; set; } = true;
+    public bool? PropellersPassed { get; set; }
     public string? PropellersNotes { get; set; }
 
     // Motors
-    public bool MotorsPassed { get; set; } = true;
+    public bool? MotorsPassed { get; set; }
     public string? MotorsNotes { get; set; }
 
     // Camera / Payload
-    public bool CameraPayloadPassed { get; set; } = true;
+    public bool? CameraPayloadPassed { get; set; }
     public string? CameraPayloadNotes { get; set; }
 
     // Battery (Voltage, Battery %, Cell Count)
-    public bool BatteryPassed { get; set; } = true;
+    public bool? BatteryPassed { get; set; }
     public decimal? BatteryVoltage { get; set; }
     public decimal? BatteryPercent { get; set; }
     public int? BatteryCellCount { get; set; }
     public string? BatteryNotes { get; set; }
 
     // GPS (Fix status, satellite count)
-    public bool GpsPassed { get; set; } = true;
+    public bool? GpsPassed { get; set; }
     public string? GpsFixStatus { get; set; }
     public int? GpsSatelliteCount { get; set; }
     public string? GpsNotes { get; set; }
 
     // Communication (Connected, signal info)
-    public bool CommunicationPassed { get; set; } = true;
+    public bool? CommunicationPassed { get; set; }
     public bool? CommunicationConnected { get; set; }
     public string? CommunicationSignalInfo { get; set; }
     public string? CommunicationNotes { get; set; }
 
     // Flight Controller (FC UID / board / firmware + connection status)
-    public bool FlightControllerPassed { get; set; } = true;
+    public bool? FlightControllerPassed { get; set; }
     public string? FlightControllerUid { get; set; }
     public string? FlightControllerBoard { get; set; }
     public string? FlightControllerFirmware { get; set; }
@@ -121,7 +125,6 @@ public class BasicTechnicalCheckRequest
 
     public string? Notes { get; set; }
     public string? PolicyVersion { get; set; } = "v2.0";
-    public Guid? PreMissionAssessmentId { get; set; }
 }
 
 public class GisDroneEstimationRequest
