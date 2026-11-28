@@ -44,11 +44,11 @@ public sealed class UavManagementService : IUavManagementService
         bool? availableOnly = null,
         CancellationToken ct = default)
     {
-        var query = _db.Uavs
+        // Chỉ Drone người gọi được xem (spec §4: theo vùng hoặc nhiệm vụ được giao; SystemAdmin mọi Drone).
+        IQueryable<Uav> query = DroneScope.Visible(_db, _current)
             .Include(x => x.AssignedRegion)
             .Include(x => x.FlightControllers.Where(fc => !fc.IsDeleted))
-            .Include(x => x.TechnicalInspections.Where(t => !t.IsDeleted).OrderByDescending(t => t.CompletedAt).Take(1))
-            .Where(x => !x.IsDeleted);
+            .Include(x => x.TechnicalInspections.Where(t => !t.IsDeleted).OrderByDescending(t => t.CompletedAt).Take(1));
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -101,12 +101,17 @@ public sealed class UavManagementService : IUavManagementService
             .SingleOrDefaultAsync(x => x.Id == droneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", droneId);
 
+        if (!await DroneScope.Visible(_db, _current).AnyAsync(x => x.Id == droneId, ct))
+            throw new ForbiddenException("DRONE_ACCESS_DENIED");
+
         return MapToDetailsDto(drone);
     }
 
     public async Task<UavDetailsDto> CreateDroneAsync(CreateUavRequest request, CancellationToken ct = default)
     {
-        EnsureManagerOrAdmin();
+        EnsureDroneManagementRole();
+        // Manager/Technician chỉ tạo Drone trong vùng của mình (SystemAdmin mọi vùng).
+        await DroneRegionScope.EnsureRegionAsync(_db, _current, request.AssignedRegionId, ct);
 
         if (string.IsNullOrWhiteSpace(request.Code))
             throw new BusinessRuleException("DRONE_CODE_REQUIRED", "Mã Drone (UAV Code) không được để trống.");
@@ -154,7 +159,7 @@ public sealed class UavManagementService : IUavManagementService
 
     public async Task<UavDetailsDto> UpdateDroneAsync(Guid droneId, UpdateUavRequest request, CancellationToken ct = default)
     {
-        EnsureManagerOrAdmin();
+        EnsureDroneManagementRole();
 
         var drone = await _db.Uavs
             .Include(x => x.AssignedRegion)
@@ -162,6 +167,11 @@ public sealed class UavManagementService : IUavManagementService
             .Include(x => x.TechnicalInspections.Where(t => !t.IsDeleted).OrderByDescending(t => t.CompletedAt).Take(1))
             .SingleOrDefaultAsync(x => x.Id == droneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", droneId);
+
+        // Chỉ sửa Drone trong vùng của mình; chuyển vùng thì vùng mới cũng phải thuộc phạm vi người gọi.
+        await DroneRegionScope.EnsureAsync(_db, _current, drone, ct);
+        if (request.AssignedRegionId.HasValue)
+            await DroneRegionScope.EnsureRegionAsync(_db, _current, request.AssignedRegionId, ct);
 
         if (!string.IsNullOrWhiteSpace(request.Name))
             drone.Name = request.Name.Trim();
@@ -210,12 +220,15 @@ public sealed class UavManagementService : IUavManagementService
 
     public async Task<bool> DeleteDroneAsync(Guid droneId, CancellationToken ct = default)
     {
-        EnsureManagerOrAdmin();
+        EnsureDroneManagementRole();
 
         var drone = await _db.Uavs
             .Include(x => x.FlightControllers)
             .SingleOrDefaultAsync(x => x.Id == droneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", droneId);
+
+        // Chỉ xóa Drone trong vùng của mình (SystemAdmin mọi vùng).
+        await DroneRegionScope.EnsureAsync(_db, _current, drone, ct);
 
         drone.IsDeleted = true;
         drone.DeletedAt = DateTime.UtcNow;
@@ -579,16 +592,15 @@ public sealed class UavManagementService : IUavManagementService
         };
     }
 
-    private void EnsureManagerOrAdmin()
+    /// <summary>Tạo/sửa/xóa Drone: SystemAdmin, Manager và Technician; phạm vi vùng kiểm tra riêng ở từng thao tác.</summary>
+    private void EnsureDroneManagementRole()
     {
         if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
             throw new ForbiddenException("AUTHENTICATION_REQUIRED");
 
-        var isAuthorized = _current.Roles.Any(r =>
-            r.Equals(UserRoles.SystemAdmin, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals(UserRoles.Manager, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals(UserRoles.Technician, StringComparison.OrdinalIgnoreCase) ||
-            r.Equals("Technician", StringComparison.OrdinalIgnoreCase));
+        var isAuthorized = RegionScope.IsSystemAdmin(_current)
+            || RegionScope.HasRole(_current, UserRoles.Manager)
+            || RegionScope.HasRole(_current, UserRoles.Technician);
 
         if (!isAuthorized)
             throw new ForbiddenException("INSUFFICIENT_PERMISSIONS");

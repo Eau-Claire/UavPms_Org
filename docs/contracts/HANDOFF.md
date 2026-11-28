@@ -4,14 +4,15 @@
 > **Hợp đồng REST chính**: `docs/contracts/openapi.json` (do Backend xuất sau mỗi đợt đổi REST).
 
 ## Trạng thái đồng bộ hiện tại
-- **Master Spec**: `docs/MASTER_SYSTEM_SPEC.md` (**v2.0** — khóa `2026-11-27`, Zero-Context Ready).
-- **Kế hoạch BA & Prompt Mẫu**: `docs/TEAM_MVP_ACTION_PLAN.md` (**v2.0**).
+- **Master Spec**: `docs/MASTER_SYSTEM_SPEC.md` (**v2.1** — §4 phân quyền theo vùng `2026-11-28`; v2.0 khóa `2026-11-27`).
+- **Kế hoạch BA & Prompt Mẫu**: `docs/TEAM_MVP_ACTION_PLAN.md` (**v2.0**) *(chưa có trong repo BE)*.
 - **OpenAPI Contract**: `docs/contracts/openapi.json` *(xuất bản chính thức v1.0 ở PR Lớn 4)*.
 - **Đợt hiện hành**: **PR Lớn 1 (Mainflow-First)**: BE chạy `BE-REQ-101` (Drone Detail BIST/FC + nhập tay cho Technician/SystemAdmin + bỏ BIST khỏi MF01 + MF01 chỉ chọn số lượng nhân sự); FE chạy song song `FE-REQ-004` `PR-1b2` (nốt 2 màn PMTiles Pre-Mission) → nối tiếp `FE-REQ-101`.
 - **Harness v2.0**: Đã dựng `.specify/memory/constitution.md`, `CLAUDE.md`, `.claude/hooks/` (`exit 2`), `.codex/config.toml`, EARS `_template/`, và `d:\UavPms_Holdout\`.
 
 ## Nhật ký bàn giao (Mới nhất ở trên)
 
+- **[BE-REQ-005 RBAC theo vùng][2026-11-28]** *(branch `feat/rbac-region-scope`, chưa merge)*: Spec §4 lên **v2.1**. Không đổi URL/schema, chỉ đổi role và lọc dữ liệu theo vùng / nhiệm vụ được giao (drones, telemetry, dashboard `monitor/*`, `alerts/*`, defect, ticket, pre-mission, reports, audit, settings); check-in chỉ Inspector; Manager không upload; standalone vào nhiệm vụ `STD-` riêng. 7 mã `403` mới. **FE làm theo**: [`FE_HANDOFF_RBAC_REGION_SCOPE.md`](FE_HANDOFF_RBAC_REGION_SCOPE.md).
 - **[BE-REQ-101 Contract Lock][2026-11-28]**: Khóa & **Codex R3 APPROVE** REST PR 1 (`OperationsService`):
   - `POST /api/v1/uavs/{droneId}/inspections` (`SystemAdmin` + `Technician` trong vùng): nhận `sourceType: manual|fc|bist`, `conclusion: Passed|Failed`, `notes`, `metrics[]`, bỏ `preMissionAssessmentId`; trả `readiness: Ready|MaintenanceRequired` (`Healthy`/`Passed` = `Ready`, còn lại = `MaintenanceRequired`). `GET /api/v1/uavs/{droneId}/inspections/latest`, `GET /api/v1/drones/{id}/technical-inspections` (`DESC`, `Analyst` `403`), `GET /api/v1/drones/eligible` (lọc `UserGeographicScopes`, ngoại lệ `SystemAdmin`). `BRL-02`: ghép FC cấm tự gỡ ở Drone khác (`409 FC_ALREADY_PAIRED`), không bịa firmware `"Betaflight"`. `BRL-04`: `basic-technical-check` giữ số đo thật (`connected` boolean, không bịa `0%`), thiếu mục bắt buộc trả `status: Incomplete`, `readiness: MaintenanceRequired`, `missingMetrics[]` để FE báo đỏ & vẫn cho nhập tay bổ sung; chỉ `400 METRICS_REQUIRED` khi rỗng hoàn toàn.
   - `POST /api/v1/pre-mission-assessments` & `/{id}/re-evaluate`: nhận `inspectorCount`, `analystCount`, `technicianCount` (`>=1`, lưu `Findings` jsonb, lỗi `400 INVALID_ROLE_HEADCOUNT`), `droneIds[]` (chỉ Drone `Ready` cùng vùng `BRL-01` cả `SystemAdmin` — `409 DRONE_REGION_MISMATCH`/`DRONE_NOT_READY`), `idempotencyKey` đối chiếu cả `droneIds[]` & 3 headcount (`409 IDEMPOTENCY_KEY_REUSED`); `BRL-03`: `/re-evaluate` không gửi `droneIds[]` tự loại Drone lệch vùng/hỏng rồi tính lại; trần hiệu lực `<= 7 ngày`.

@@ -10,6 +10,7 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Common.Security;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using UavPms.AIInspectionService.Domain.Contracts;
 using UavPms.AIInspectionService.Domain.Entities;
@@ -34,6 +35,7 @@ public sealed class UploadStandaloneAnalysisCommandHandler
     private readonly IFileStorageService _fileStorageService;
     private readonly IEventPublisher _eventPublisher;
     private readonly ICurrentUserServices _currentUser;
+    private readonly IMissionAccessPolicy _accessPolicy;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<UploadStandaloneAnalysisCommandHandler> _logger;
 
@@ -46,6 +48,7 @@ public sealed class UploadStandaloneAnalysisCommandHandler
         IFileStorageService fileStorageService,
         IEventPublisher eventPublisher,
         ICurrentUserServices currentUser,
+        IMissionAccessPolicy accessPolicy,
         IUnitOfWork unitOfWork,
         ILogger<UploadStandaloneAnalysisCommandHandler> logger,
         IGenericRepository<OutboxMessage>? outboxRepository = null)
@@ -57,6 +60,7 @@ public sealed class UploadStandaloneAnalysisCommandHandler
         _fileStorageService = fileStorageService;
         _eventPublisher = eventPublisher;
         _currentUser = currentUser;
+        _accessPolicy = accessPolicy;
         _unitOfWork = unitOfWork;
         _logger = logger;
         _outboxRepository = outboxRepository;
@@ -85,7 +89,19 @@ public sealed class UploadStandaloneAnalysisCommandHandler
         }
 
         var currentUserId = _currentUser.UserId;
+        var isStandalone = !request.MissionId.HasValue || request.MissionId.Value == Guid.Empty;
+        // Standalone: chỉ SystemAdmin và Analyst (spec §4); kiểm tra trước khi tìm/tạo nhiệm vụ thay thế.
+        if (isStandalone && !await _accessPolicy.CanUploadAsync(null))
+        {
+            throw new ForbiddenException("UPLOAD_NOT_ALLOWED");
+        }
+
         var mission = await ResolveMissionAsync(request.MissionId, currentUserId, request.Notes, cancellationToken);
+        // Vào nhiệm vụ: Inspector/Analyst được giao, Analyst của vùng, SystemAdmin; Manager không upload.
+        if (!isStandalone && !await _accessPolicy.CanUploadAsync(mission))
+        {
+            throw new ForbiddenException("UPLOAD_NOT_ALLOWED");
+        }
 
         var parsedAnalysisType = Enum.TryParse<AnalysisType>(request.AnalysisType, true, out var parsed)
             ? parsed
@@ -258,42 +274,30 @@ public sealed class UploadStandaloneAnalysisCommandHandler
             return specifiedMission;
         }
 
-        if (currentUserId != Guid.Empty)
-        {
-            var userMissions = await _missionRepository.FindAsync(m => m.ManagerId == currentUserId && !m.IsDeleted);
-            var latestUserMission = userMissions?
-                .OrderByDescending(m => m.CreatedAt)
-                .FirstOrDefault();
-            if (latestUserMission != null)
-            {
-                return latestUserMission;
-            }
-        }
-
-        var allMissions = await _missionRepository.GetAllAsync();
-        var latestMission = allMissions?
-            .Where(m => !m.IsDeleted)
-            .OrderByDescending(m => m.CreatedAt)
-            .FirstOrDefault();
-        if (latestMission != null)
-        {
-            return latestMission;
-        }
-
+        // Standalone: gom vào nhiệm vụ standalone (mã STD-) của chính người gọi; không bao giờ gắn vào nhiệm vụ của người khác
+        // hay nhiệm vụ kiểm tra thật (trước đây lấy nhiệm vụ mới nhất của cả hệ thống).
         if (currentUserId == Guid.Empty)
         {
             throw new BusinessRuleException("MISSION_REQUIRED", "A valid missionId is required to upload inspection media.");
+        }
+
+        var ownStandaloneMissions = await _missionRepository.FindAsync(m =>
+            m.ManagerId == currentUserId && m.MissionCode.StartsWith(Mission.StandaloneCodePrefix) && !m.IsDeleted);
+        var latestOwnStandalone = ownStandaloneMissions.OrderByDescending(m => m.CreatedAt).FirstOrDefault();
+        if (latestOwnStandalone != null)
+        {
+            return latestOwnStandalone;
         }
 
         var now = DateTime.UtcNow;
         var adHocMission = new Mission
         {
             Id = Guid.NewGuid(),
-            MissionCode = $"STD-{now:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
+            MissionCode = $"{Mission.StandaloneCodePrefix}{now:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
             Title = string.IsNullOrWhiteSpace(notes) ? "AI Analysis Upload" : notes.Trim(),
             ManagerId = currentUserId,
             Status = "InProgress",
-            MissionType = "AdHoc",
+            MissionType = Mission.AdHocType,
             StartedAt = now,
             CreatedAt = now,
             CreatedBy = currentUserId

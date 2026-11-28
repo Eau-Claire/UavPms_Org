@@ -11,7 +11,8 @@ namespace UavPms.OperationsService.API.Controllers;
 [ApiController]
 [Route("api/v{version:apiVersion}/system-settings")]
 [ApiVersion("1.0")]
-[Authorize]
+// SystemSettings chỉ dành cho SystemAdmin (spec §4), kể cả đọc và reload cache.
+[Authorize(Roles = UserRoles.SystemAdmin)]
 public class SystemSettingsController : ControllerBase
 {
     private readonly ISystemSettingService _settingService;
@@ -25,7 +26,6 @@ public class SystemSettingsController : ControllerBase
     /// Lấy danh sách tất cả cấu hình ngưỡng hệ thống (cho phép lọc theo category)
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> GetAllSettings([FromQuery] string? category, CancellationToken ct)
     {
         var settings = await _settingService.GetAllAsync(category, ct);
@@ -36,7 +36,6 @@ public class SystemSettingsController : ControllerBase
     /// Lấy chi tiết một cấu hình ngưỡng theo Key
     /// </summary>
     [HttpGet("{key}")]
-    [Authorize(Roles = UserRoles.AdminAndManager)]
     public async Task<IActionResult> GetSettingByKey(string key, CancellationToken ct)
     {
         var setting = await _settingService.GetByKeyAsync(key, ct);
@@ -52,7 +51,6 @@ public class SystemSettingsController : ControllerBase
     /// Cập nhật giá trị ngưỡng hệ thống (Chỉ dành cho SystemAdmin)
     /// </summary>
     [HttpPut("{key}")]
-    [Authorize(Roles = UserRoles.SystemAdmin)]
     public async Task<IActionResult> UpdateSetting(string key, [FromBody] UpdateSystemSettingRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request?.Value))
@@ -75,7 +73,6 @@ public class SystemSettingsController : ControllerBase
     /// Buộc làm mới bộ đệm (cache) cấu hình hệ thống
     /// </summary>
     [HttpPost("reload")]
-    [Authorize(Roles = UserRoles.AdminAndManager)]
     public IActionResult ReloadCache()
     {
         _settingService.InvalidateCache();

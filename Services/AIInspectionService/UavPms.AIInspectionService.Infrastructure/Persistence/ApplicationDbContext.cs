@@ -22,6 +22,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<DefectCategory> DefectCategories => Set<DefectCategory>();
     public DbSet<InspectionMedia> InspectionMedia => Set<InspectionMedia>();
     public DbSet<Tower> Towers => Set<Tower>();
+    public DbSet<Region> Regions => Set<Region>();
+    public DbSet<UserGeographicScope> UserGeographicScopes => Set<UserGeographicScope>();
     public DbSet<Mission> Missions => Set<Mission>();
     public DbSet<MissionAssignment> MissionAssignments => Set<MissionAssignment>();
     public DbSet<Uav> Uavs => Set<Uav>();

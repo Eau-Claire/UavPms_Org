@@ -11,6 +11,7 @@ public class MissionAssignment : BaseEntity
 {
     public const string ActiveStatus = "Active";
     public const string InspectorRole = "INSPECTOR";
+    public const string AnalystRole = "ANALYST";
 
     public Guid MissionId { get; set; }
     public Guid UserId { get; set; }

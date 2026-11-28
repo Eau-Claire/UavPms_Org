@@ -1,7 +1,7 @@
 # UAV-PMS — Tài liệu Đặc tả Hệ thống Tổng thể (Master BA & Architecture Spec v2.0)
 
 > **Vai trò tài liệu**: Nguồn sự thật duy nhất (*Single Source of Truth*) cho toàn bộ hệ thống **UAV Powerline Monitoring System (UAV-PMS)** bao phủ **Database (PostgreSQL/PostGIS) → Backend (.NET 9 Microservices + FastAPI AI) → Hợp đồng OpenAPI / SignalR → Frontend (Angular 21 + Local-only GIS)** — sẵn sàng cho bất kỳ AI Agent hoặc kỹ sư mới (Zero-Context) đọc một lần và làm đúng ngay.
-> Mọi quyết định trong bản **v2.0** này đã được Chủ hệ thống chốt xác nhận 100% (`2026-11-27`). Khi có mâu thuẫn với tài liệu cũ (`v1.0`, `api_spec.md` cũ, `CODING_STANDARDS.md`), **tài liệu này có quyền ưu tiên cao nhất** (song hành với `docs/AI_SECURITY_AND_GOVERNANCE.md`).
+> Mọi quyết định trong bản **v2.0** này đã được Chủ hệ thống chốt xác nhận 100% (`2026-11-27`). **v2.1 (`2026-11-28`)**: chốt lại ma trận phân quyền §4 theo vùng (chi tiết từng endpoint: [`docs/RBAC_PERMISSIONS.md`](RBAC_PERMISSIONS.md)). Khi có mâu thuẫn với tài liệu cũ (`v1.0`, `archive/api_spec.md` cũ, `CODING_STANDARDS.md`), **tài liệu này có quyền ưu tiên cao nhất** (song hành với `docs/AI_SECURITY_AND_GOVERNANCE.md`).
 
 ---
 
@@ -66,7 +66,7 @@ flowchart LR
    - Telemetry MF03 đẩy từ phần cứng thật qua BE phát SignalR `/hubs/telemetry` (trung chuyển RAM, **delay ≤ 10s**, **không script giả lập**, **không lưu DB**). Tự trả Drone khi `Completed`/`Cancelled`.
 4. **AI Media Upload (EXIF GPS / Video Live GPS) & Duyệt Khuyết tật**:
    - Cho phép upload ảnh **không cần chọn cột trước** (đọc **EXIF GPS** ảnh, AI xong tự gắn cột gần nhất và cho phép đổi thủ công); video có GPS live, AI phát hiện lỗi tự chụp màn hình (extract frame) gắn cột gần nhất.
-   - Mọi thành viên trong Mission đều **xem** được defect của Mission; chỉ `Analyst` của Mission (và `SystemAdmin`) được **duyệt (`Approve`/`Reject`)**.
+   - Mọi thành viên trong Mission đều **xem** được defect của Mission; chỉ `Analyst` được giao trong Mission hoặc `Analyst` của vùng nhiệm vụ (và `SystemAdmin`) được **duyệt (`Approve`/`Reject`)**.
    - **Sau khi duyệt**: **bỏ toàn bộ chữ `"AI Review"` / `"Chờ AI"`**, hiển thị kết quả chính thức; **xóa sạch các chỗ hiện `N/A`**; đồng nhất UI giữa tất cả các role.
 5. **Auto Maintenance Tickets, Notification Matrix, Hangfire Cron, Reports & List Ordering**:
    - `Approve` defect thuộc Mission → tự tạo `MaintenanceTicket` (`Emergency` | `Normal`) và **tự động gán thẳng cho `Technician` của Mission** (`Assigned`).
@@ -111,24 +111,29 @@ flowchart LR
   - Có quyền thực hiện **TẤT CẢ thao tác của mọi role** trong toàn hệ thống (bao gồm cả BIST/FC Drone, Pre-Mission, Mission Accept/Check-in/Bay, Upload/Duyệt AI `Approve`/`Reject`, Giao & Xử lý Bảo trì, `SystemSettings`, User/Multi-Role/Scope, Audit Logs).
 - **Multi-Role & Geographic Scope cho 4 role còn lại**:
   - Quyền hiệu lực = hợp (union) của các role user đang giữ.
-  - Mọi truy vấn dữ liệu (`Towers`, `UAVs`, `PreMissionAssessments`, `Missions`, `DetectedAnomalies`, `MaintenanceTickets`, `Reports`) phải lọc theo `UserGeographicScopes` của user (ngoại trừ `SystemAdmin`).
+  - Mọi truy vấn dữ liệu (`Towers`, `UAVs`, `PreMissionAssessments`, `Missions`, `DetectedAnomalies`, `MaintenanceTickets`, `Reports`, Dashboard `monitor/*`, cảnh báo khẩn, telemetry Drone) phải lọc theo `UserGeographicScopes` của user (ngoại trừ `SystemAdmin`). Vùng hiệu lực = vùng được gán + vùng con trực tiếp.
+  - **Nhiệm vụ được xem** = nhiệm vụ mình phụ trách (`ManagerId`), nhiệm vụ mình đang được giao (`MissionAssignments` Active), hoặc nhiệm vụ thuộc vùng của mình. Dữ liệu gắn nhiệm vụ (ảnh, defect, cảnh báo, số liệu dashboard) đi theo luật này.
+  - **Drone được xem** = Drone thuộc vùng của mình, hoặc Drone của nhiệm vụ mình đang được giao.
+  - User (kể cả `Manager`) **chưa được gán vùng thì không thấy dữ liệu theo vùng**; `SystemAdmin` phải gán vùng trước. `Manager` chỉ được gán/gỡ vùng nằm trong phạm vi của chính mình.
 - **Đồng nhất UI giữa các role**: Tất cả role khi mở cùng một màn hình (ví dụ Chi tiết Nhiệm vụ → Kết quả giám định, Chi tiết Cột điện, Phiếu bảo trì) phải dùng **cùng 1 nguồn dữ liệu chuẩn**, hiển thị thống nhất trạng thái thật, mã cột, tọa độ BBox (`0..100%`) và thông tin kiểm định — **tuyệt đối không để role này thấy "Chờ duyệt + có mã cột" còn role kia thấy "Đang thẩm định + Chưa gắn cột + BBox lệch"**. Chỉ khác nhau ở quyền hiện/ẩn nút thao tác.
 
 | Chức năng | SystemAdmin | Manager | Inspector | Analyst | Technician |
 |---|:---:|:---:|:---:|:---:|:---:|
 | Quản lý User, Gán Multi-Role, Khóa vùng địa lý, `SystemSettings`, Audit Logs | ✅ (Toàn hệ thống) | ❌ | ❌ | ❌ | ❌ |
-| Quản lý Region, Tower, UAV, Flight Controller | ✅ (Toàn quyền) | ✅ *(trong vùng)* | Xem *(trong vùng)* | Xem *(trong vùng)* | Xem *(trong vùng)* |
+| Quản lý Region, Tower, Flight Controller | ✅ (Toàn quyền) | ✅ *(trong vùng)* | Xem *(trong vùng)* | Xem *(trong vùng)* | Xem *(trong vùng)* |
+| Quản lý UAV / Drone (tạo, sửa, xóa) | ✅ (Toàn quyền) | ✅ *(trong vùng)* | Xem *(trong vùng / mission được giao)* | Xem *(trong vùng / mission được giao)* | **✅ *(trong vùng)*** |
 | **Kiểm tra BIST, Sức khỏe Drone, đọc FC / nhập thủ công BIST (tại Chi tiết Drone)** | **✅** | Xem kết quả *(không thao tác)* | Xem kết quả | ❌ | **✅ (Duy nhất ngoài Admin)** |
-| Tạo / Duyệt Pre-Mission Assessment (MF01 — chọn số lượng nhân sự, không BIST) | ✅ | ✅ *(trong vùng)* | Xem *(trong vùng)* | Xem *(trong vùng)* | Xem *(trong vùng)* |
+| Tạo / Duyệt / Xem Pre-Mission Assessment (MF01 — chọn số lượng nhân sự, không BIST) | ✅ | ✅ *(trong vùng)* | ❌ | ❌ | ❌ |
 | Tạo / Sửa / Hủy / Giao Mission (MF02 — chọn đích danh 3 role) | ✅ | ✅ *(trong vùng)* | Xem *(được giao)* | Xem *(được giao)* | Xem *(được giao)* |
 | **Bấm Xác nhận nhận Mission (`Accept`)** | ✅ | ❌ *(người giao)* | **✅ *(được gán)*** | **✅ *(được gán)*** | **✅ *(được gán)*** |
-| **Check-in hiện trường (GPS bán kính 50m tại Cột điện số 1)** | ✅ | ❌ | **✅ (Duy nhất ngoài Admin)** | ❌ | ❌ |
+| **Check-in hiện trường (GPS bán kính 50m tại Cột điện số 1)** — Mission `Ready` khi mọi `Inspector` đã `Accept` đều check-in; `Analyst`, `Technician` chỉ `Accept` | ✅ | ❌ | **✅ (Duy nhất ngoài Admin — Inspector được giao)** | ❌ | ❌ |
 | Xem Telemetry bay realtime (`/hubs/telemetry`, RAM/SignalR) | ✅ | ✅ *(trong vùng)* | ✅ *(mission được giao)* | Xem *(mission được giao)* | ❌ |
-| Upload Ảnh / Video cho AI (Mission — không bắt buộc chọn cột) | ✅ | ❌ | ✅ *(mission được giao)* | ✅ | ❌ |
+| Upload Ảnh / Video cho AI (Mission — không bắt buộc chọn cột) | ✅ | ❌ | ✅ *(mission được giao)* | ✅ *(mission được giao hoặc trong vùng)* | ❌ |
 | Upload Ảnh / Video Standalone Test (`MissionId = NULL`) | ✅ | ❌ | ❌ | ✅ | ❌ |
-| **Xem danh sách & chi tiết Defect trong Nhiệm vụ** | **✅** | **✅ *(trong vùng / mission)*** | **✅ *(mission được giao)*** | **✅ *(mission được giao)*** | **✅ *(mission được giao)*** |
-| **Duyệt Defect (`Approve` / `Reject`) & đổi cột thủ công** | **✅** | ❌ | ❌ | **✅ *(duy nhất: Analyst trong mission đó)*** | ❌ |
-| Xem Dashboard & Báo cáo (`Reports` PDF/Excel) | ✅ | ✅ *(trong vùng)* | ❌ | ✅ *(trong vùng)* | Xem danh sách |
+| **Xem danh sách & chi tiết Defect trong Nhiệm vụ** | **✅** | **✅ *(trong vùng / mission)*** | **✅ *(mission được giao)*** | **✅ *(mission được giao hoặc trong vùng)*** | **✅ *(mission được giao)*** |
+| **Duyệt Defect (`Approve` / `Reject`) & đổi cột thủ công** | **✅** | ❌ | ❌ | **✅ *(Analyst được giao hoặc Analyst của vùng nhiệm vụ)*** | ❌ |
+| Xem Dashboard (`monitor/*`) | ✅ | ✅ *(nhiệm vụ được xem)* | ✅ *(nhiệm vụ được xem)* | ✅ *(nhiệm vụ được xem)* | ✅ *(nhiệm vụ được xem)* |
+| Xem Báo cáo (`Reports` PDF/Excel) | ✅ | ✅ *(trong vùng)* | ❌ | ✅ *(trong vùng)* | Xem danh sách |
 | Giao / Đóng Phiếu bảo trì (`MaintenanceTickets`) | ✅ | ✅ *(trong vùng)* | ❌ | ❌ | ❌ |
 | Xử lý Phiếu bảo trì, cập nhật vật tư & ảnh minh chứng trước/sau | ✅ | Xem / Duyệt đóng | ❌ | ❌ | ✅ *(phiếu được giao)* |
 
@@ -220,7 +225,7 @@ flowchart LR
    - Nếu ảnh/video mất GPS hoặc gắn nhầm cột trên thực địa, `Analyst` của nhiệm vụ (hoặc `SystemAdmin`) được phép **chọn/đổi cột điện thủ công** trực tiếp trên thẻ/chi tiết khuyết tật (hoặc giữ nguyên trạng thái `"Chưa gắn cột"` nếu lỗi nằm trên dây giữa hai cột mà vẫn duyệt được bình thường).
 3. **Xem Kết quả thống nhất vs. Duyệt (`Approve` / `Reject`)**:
    - **1 nguồn dữ liệu đồng nhất**: Tất cả thành viên có mặt trong nhiệm vụ (`Manager` vùng, `Inspector`, `Analyst`, `Technician` được gán) và `SystemAdmin` đều **xem được đầy đủ danh sách & chi tiết defect trong tab "Kết quả giám định"** của Mission (không trả `403`, dùng chung chuẩn trạng thái, mã cột `towerCode` và tọa độ BBox **`0..100%`**).
-   - **Quyền duyệt**: Chỉ **`Analyst` được phân công trong chính nhiệm vụ đó** (và **`SystemAdmin`**) có quyền bấm **`Approve`** hoặc **`Reject`** kèm lý do (`PUT /api/v1/anomalies/{id}/validate`). Sau khi duyệt là **khóa cứng (immutable)**.
+   - **Quyền duyệt**: Chỉ **`Analyst` được phân công trong chính nhiệm vụ đó hoặc `Analyst` có vùng của nhiệm vụ** (và **`SystemAdmin`**) có quyền bấm **`Approve`** hoặc **`Reject`** kèm lý do (`PUT /api/v1/anomalies/{id}/validate`). Sau khi duyệt là **khóa cứng (immutable)**.
    - **Xóa nhãn `"AI Review"` sau khi duyệt & Diệt triệt để `"N/A"`**:
      - Chưa duyệt: hiển thị trạng thái **`Chờ duyệt`**.
      - Sau khi `Analyst`/`SystemAdmin` đã duyệt: **bỏ toàn bộ chữ `"AI Review"` / `"Chờ AI"` / `"Đang thẩm định AI"`** trên badge, tiêu đề, cột trạng thái; thay bằng kết quả giám định chính thức (**`Đã xác nhận`** / **`Đã loại bỏ`** / **`Đã khắc phục`**).
@@ -228,6 +233,7 @@ flowchart LR
 
 #### 4B. Luồng Standalone Test Độc lập (`MissionId = NULL`, `TowerId = NULL`)
 - Chỉ dành cho **`Analyst`** và **`SystemAdmin`** để tải ảnh/video test độc lập.
+- **Hiện trạng BE (v2.1)**: chưa lưu `MissionId = NULL`; file standalone được gom vào **nhiệm vụ tạm mã `STD-` của chính người upload** (mỗi người một nhiệm vụ, không bao giờ gắn vào nhiệm vụ thật hay nhiệm vụ người khác). Chuyển hẳn sang `MissionId = NULL` là việc còn lại (xem `docs/RBAC_PERMISSIONS.md` §6).
 - Tách biệt 100% khỏi danh sách vận hành (`WHERE MissionId IS NOT NULL`), không sinh `MaintenanceTicket`, không tính vào Dashboard/Reports, không dùng lại checksum chéo với ảnh Mission thật, có Hangfire dọn file S3 quá hạn theo `SystemSettings`.
 
 ---

@@ -79,6 +79,10 @@ public class UploadInspectionImageCommandHandler
         : this(missionRepository, towerRepository, mediaRepository, missionTargetRepository, unitOfWork,
             fileStorageService, eventPublisher, null!, currentUser, logger, null, null) { }
 
+    /// <summary>
+    /// Quyền upload ảnh/video vào nhiệm vụ (spec §4): SystemAdmin; Inspector hoặc Analyst được giao trong nhiệm vụ;
+    /// Analyst thuộc vùng của nhiệm vụ. Manager và Technician không upload.
+    /// </summary>
     private async Task<bool> CanUploadAsync(Mission mission, CancellationToken cancellationToken)
     {
         var userId = _currentUser.UserId;
@@ -90,46 +94,39 @@ public class UploadInspectionImageCommandHandler
             return true;
         }
 
-        if (HasRole(UserRoles.Manager))
-        {
-            if (mission.ManagerId == userId)
-            {
-                return true;
-            }
-
-            if (mission.RegionId.HasValue && _scopeRepository != null)
-            {
-                var scopes = await _scopeRepository.FindAsync(
-                    s => s.UserId == userId && s.RegionId == mission.RegionId.Value,
-                    track: false);
-                if (scopes.Count > 0)
-                {
-                    return true;
-                }
-            }
-        }
-
-        if (!HasRole(UserRoles.Inspector))
+        var isInspector = HasRole(UserRoles.Inspector);
+        var isAnalyst = HasRole(UserRoles.Analyst);
+        if (!isInspector && !isAnalyst)
         {
             return false;
         }
 
-        if (mission.PrimaryInspectorId() == userId)
+        if (isInspector && mission.PrimaryInspectorId() == userId)
         {
             return true;
         }
 
-        if (_assignmentRepository == null)
+        if (_assignmentRepository != null)
+        {
+            var assignments = await _assignmentRepository.FindAsync(
+                a => a.MissionId == mission.Id && a.UserId == userId && a.Status == MissionAssignmentStatus.Active,
+                track: false);
+            if (assignments.Any(a => (isInspector && a.HasRole(MissionAssignment.InspectorRole))
+                                     || (isAnalyst && a.HasRole(MissionAssignment.AnalystRole))))
+            {
+                return true;
+            }
+        }
+
+        if (!isAnalyst || !mission.RegionId.HasValue || _scopeRepository == null)
         {
             return false;
         }
 
-        var activeAssignments = await _assignmentRepository.FindAsync(
-            a => a.MissionId == mission.Id &&
-                 a.UserId == userId &&
-                 a.Status == MissionAssignmentStatus.Active,
+        var regionScopes = await _scopeRepository.FindAsync(
+            s => s.UserId == userId && s.RegionId == mission.RegionId.Value,
             track: false);
-        return activeAssignments.Count > 0;
+        return regionScopes.Count > 0;
     }
 
     public async Task<UploadInspectionImageResult> Handle(
@@ -164,11 +161,7 @@ public class UploadInspectionImageCommandHandler
             }
         }
 
-        // 2. Quyền upload (SRS bảng phân quyền SCR-13, BR-02, BR-40):
-        //    - SystemAdmin: mọi nhiệm vụ;
-        //    - Manager: nhiệm vụ mình phụ trách hoặc thuộc khu vực trong phạm vi quản lý;
-        //    - Inspector: thành viên đang được giao của nhiệm vụ.
-        //    Analyst và Technician chỉ xem nhiệm vụ, kể cả khi là thành viên.
+        // 2. Quyền upload: xem CanUploadAsync (spec §4).
         if (!await CanUploadAsync(mission, cancellationToken))
         {
             throw new ForbiddenException("You are not assigned to this mission.");

@@ -72,7 +72,8 @@ public class MaintenanceTicketController : ControllerBase
     /// Upload ảnh minh chứng sau sửa chữa và ghi chú kỹ thuật viên
     /// </summary>
     [HttpPost("{id:guid}/proof")]
-    [Authorize(Roles = UserRoles.AdminManagerTechnician)]
+    // Minh chứng và vật tư do Technician được giao ghi (spec §4); Manager chỉ xem/duyệt đóng.
+    [Authorize(Roles = UserRoles.AdminTechnician)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadProof(
         [FromRoute] Guid id,
@@ -89,7 +90,7 @@ public class MaintenanceTicketController : ControllerBase
     /// Khai báo nhật ký vật tư thiết bị đã thay thế
     /// </summary>
     [HttpPost("{id:guid}/materials")]
-    [Authorize(Roles = UserRoles.AdminManagerTechnician)]
+    [Authorize(Roles = UserRoles.AdminTechnician)]
     public async Task<IActionResult> LogMaterial([FromRoute] Guid id, [FromBody] LogMaterialRequest request, CancellationToken ct)
     {
         var result = await _ticketService.LogMaterialAsync(id, request, ct);
@@ -122,7 +123,8 @@ public class MaintenanceTicketController : ControllerBase
     /// Lấy danh sách toàn bộ phiếu bảo trì (có phân trang và bộ lọc)
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    // Inspector/Analyst không xem phiếu bảo trì (spec §4); service lọc theo vùng / phiếu được giao.
+    [Authorize(Roles = UserRoles.AdminManagerTechnician)]
     public async Task<IActionResult> GetTickets(
         [FromQuery] int pageIndex = 0,
         [FromQuery] int pageSize = 10,
@@ -138,7 +140,7 @@ public class MaintenanceTicketController : ControllerBase
     /// Lấy chi tiết phiếu bảo trì theo ID
     /// </summary>
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    [Authorize(Roles = UserRoles.AdminManagerTechnician)]
     public async Task<IActionResult> GetTicketById([FromRoute] Guid id, CancellationToken ct)
     {
         var result = await _ticketService.GetTicketByIdAsync(id, ct);

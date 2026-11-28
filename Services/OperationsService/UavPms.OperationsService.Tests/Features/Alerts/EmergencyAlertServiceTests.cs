@@ -20,17 +20,25 @@ namespace UavPms.OperationsService.Tests.Features.Alerts;
 
 public class EmergencyAlertServiceTests
 {
-    private static ApplicationDbContext CreateContext()
+    // Các test này kiểm tra cơ chế cảnh báo, không kiểm tra phạm vi vùng, nên chạy dưới quyền SystemAdmin.
+    private static readonly ICurrentUserServices Admin = CreateAdmin();
+
+    private static ICurrentUserServices CreateAdmin()
     {
         var userMock = new Mock<ICurrentUserServices>();
         userMock.SetupGet(u => u.UserId).Returns(Guid.NewGuid());
         userMock.SetupGet(u => u.IsAuthenticated).Returns(true);
+        userMock.SetupGet(u => u.Roles).Returns(new[] { UavPms.Shared.Contracts.Constants.UserRoles.SystemAdmin });
+        return userMock.Object;
+    }
 
+    private static ApplicationDbContext CreateContext()
+    {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
-        return new ApplicationDbContext(options, userMock.Object);
+        return new ApplicationDbContext(options, Admin);
     }
 
     [Fact]
@@ -39,7 +47,7 @@ public class EmergencyAlertServiceTests
         // Arrange
         await using var db = CreateContext();
         var mockPublisher = new Mock<IEventPublisher>();
-        var service = new EmergencyAlertService(db, mockPublisher.Object, NullLogger<EmergencyAlertService>.Instance);
+        var service = new EmergencyAlertService(db, mockPublisher.Object, NullLogger<EmergencyAlertService>.Instance, Admin);
 
         var activeAlert = new EmergencyAlert
         {
@@ -73,7 +81,7 @@ public class EmergencyAlertServiceTests
         // Arrange
         await using var db = CreateContext();
         var mockPublisher = new Mock<IEventPublisher>();
-        var service = new EmergencyAlertService(db, mockPublisher.Object, NullLogger<EmergencyAlertService>.Instance);
+        var service = new EmergencyAlertService(db, mockPublisher.Object, NullLogger<EmergencyAlertService>.Instance, Admin);
 
         for (int i = 0; i < 5; i++)
         {
@@ -111,7 +119,7 @@ public class EmergencyAlertServiceTests
         // Arrange
         await using var db = CreateContext();
         var mockPublisher = new Mock<IEventPublisher>();
-        var service = new EmergencyAlertService(db, mockPublisher.Object, NullLogger<EmergencyAlertService>.Instance);
+        var service = new EmergencyAlertService(db, mockPublisher.Object, NullLogger<EmergencyAlertService>.Instance, Admin);
 
         var alertId = Guid.NewGuid();
         var reviewerId = Guid.NewGuid();
@@ -149,7 +157,7 @@ public class EmergencyAlertServiceTests
         // Arrange
         await using var db = CreateContext();
         var mockPublisher = new Mock<IEventPublisher>();
-        var service = new EmergencyAlertService(db, mockPublisher.Object, NullLogger<EmergencyAlertService>.Instance);
+        var service = new EmergencyAlertService(db, mockPublisher.Object, NullLogger<EmergencyAlertService>.Instance, Admin);
 
         var alertId = Guid.NewGuid();
         var analystId = Guid.NewGuid();
@@ -200,7 +208,7 @@ public class EmergencyAlertServiceTests
         // Arrange
         await using var db = CreateContext();
         var mockPublisher = new Mock<IEventPublisher>();
-        var service = new EmergencyAlertService(db, mockPublisher.Object, NullLogger<EmergencyAlertService>.Instance);
+        var service = new EmergencyAlertService(db, mockPublisher.Object, NullLogger<EmergencyAlertService>.Instance, Admin);
 
         var analystId = Guid.NewGuid();
         var role = new Role { Id = 1, RoleName = "Analyst", Description = "Analyst Role" };
@@ -248,7 +256,7 @@ public class EmergencyAlertServiceTests
     public async Task EscalateAlertAsync_ToSelf_IsRejected()
     {
         await using var db = CreateContext();
-        var service = new EmergencyAlertService(db, Mock.Of<IEventPublisher>(), NullLogger<EmergencyAlertService>.Instance);
+        var service = new EmergencyAlertService(db, Mock.Of<IEventPublisher>(), NullLogger<EmergencyAlertService>.Instance, Admin);
         var alertId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         db.EmergencyAlerts.Add(new EmergencyAlert { Id = alertId, Status = "Open", Priority = "Critical", TriggeredAt = DateTime.UtcNow });
@@ -265,7 +273,7 @@ public class EmergencyAlertServiceTests
     public async Task TriggerAlertAsync_WhenAnomalyAlreadyHasActiveAlert_IsRejected()
     {
         await using var db = CreateContext();
-        var service = new EmergencyAlertService(db, Mock.Of<IEventPublisher>(), NullLogger<EmergencyAlertService>.Instance);
+        var service = new EmergencyAlertService(db, Mock.Of<IEventPublisher>(), NullLogger<EmergencyAlertService>.Instance, Admin);
         var anomalyId = Guid.NewGuid();
         db.EmergencyAlerts.Add(new EmergencyAlert { Id = Guid.NewGuid(), AnomalyId = anomalyId, Status = "Open", Priority = "Critical", TriggeredAt = DateTime.UtcNow });
         await db.SaveChangesAsync();

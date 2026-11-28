@@ -21,20 +21,46 @@ public class EmergencyAlertService : IEmergencyAlertService
     private readonly ApplicationDbContext _db;
     private readonly IEventPublisher _eventPublisher;
     private readonly ILogger<EmergencyAlertService> _logger;
+    private readonly ICurrentUserServices _currentUser;
 
     public EmergencyAlertService(
         ApplicationDbContext db,
         IEventPublisher eventPublisher,
-        ILogger<EmergencyAlertService> logger)
+        ILogger<EmergencyAlertService> logger,
+        ICurrentUserServices currentUser)
     {
         _db = db;
         _eventPublisher = eventPublisher;
         _logger = logger;
+        _currentUser = currentUser;
+    }
+
+    private async Task<bool> CanSeeMissionAsync(Guid missionId, CancellationToken ct) =>
+        RegionScope.IsSystemAdmin(_currentUser) || await MissionScope.VisibleIds(_db, _currentUser).ContainsAsync(missionId, ct);
+
+    private async Task<bool> CanSeeAnomalyAsync(Guid anomalyId, CancellationToken ct)
+    {
+        if (RegionScope.IsSystemAdmin(_currentUser))
+            return true;
+        var missionIds = MissionScope.VisibleIds(_db, _currentUser);
+        return await _db.DetectedAnomalies.AnyAsync(a => a.Id == anomalyId && missionIds.Contains(a.Media!.MissionId), ct);
+    }
+
+    /// <summary>Cảnh báo của các nhiệm vụ người gọi được xem (spec §4, lọc trong SQL).</summary>
+    private IQueryable<EmergencyAlert> VisibleAlerts
+    {
+        get
+        {
+            if (RegionScope.IsSystemAdmin(_currentUser))
+                return _db.EmergencyAlerts;
+            var missionIds = MissionScope.VisibleIds(_db, _currentUser);
+            return _db.EmergencyAlerts.Where(a => missionIds.Contains(a.Anomaly!.Media!.MissionId));
+        }
     }
 
     public async Task<List<ActiveEmergencyAlertDto>> GetActiveAlertsAsync(CancellationToken ct = default)
     {
-        var alerts = await _db.EmergencyAlerts
+        var alerts = await VisibleAlerts
             .AsNoTracking()
             .Include(a => a.Anomaly!)
                 .ThenInclude(an => an.Tower)
@@ -55,7 +81,7 @@ public class EmergencyAlertService : IEmergencyAlertService
         if (pageSize < 1) pageSize = 10;
         if (pageSize > 100) pageSize = 100;
 
-        var query = _db.EmergencyAlerts
+        var query = VisibleAlerts
             .AsNoTracking()
             .Include(a => a.Anomaly!)
                 .ThenInclude(an => an.Tower)
@@ -103,7 +129,7 @@ public class EmergencyAlertService : IEmergencyAlertService
 
     public async Task<EmergencyAlertDetailDto?> GetAlertByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var alert = await _db.EmergencyAlerts
+        var alert = await VisibleAlerts
             .AsNoTracking()
             .Include(a => a.Anomaly!)
                 .ThenInclude(an => an.Tower)
@@ -125,7 +151,7 @@ public class EmergencyAlertService : IEmergencyAlertService
 
     public async Task<bool> ReviewAlertAsync(Guid id, Guid reviewerId, ReviewEmergencyAlertRequest request, CancellationToken ct = default)
     {
-        var alert = await _db.EmergencyAlerts.FirstOrDefaultAsync(a => a.Id == id, ct);
+        var alert = await VisibleAlerts.FirstOrDefaultAsync(a => a.Id == id, ct);
         if (alert == null) return false;
 
         if (string.Equals(alert.Status, "Resolved", StringComparison.OrdinalIgnoreCase))
@@ -167,7 +193,7 @@ public class EmergencyAlertService : IEmergencyAlertService
         if (string.IsNullOrWhiteSpace(request.Reason))
             throw new BusinessRuleException("ESCALATION_REASON_REQUIRED", "Escalation reason is required.");
 
-        var alert = await _db.EmergencyAlerts
+        var alert = await VisibleAlerts
             .Include(a => a.Anomaly!)
                 .ThenInclude(an => an.Tower)
             .Include(a => a.Anomaly!)
@@ -250,24 +276,21 @@ public class EmergencyAlertService : IEmergencyAlertService
     public async Task<EmergencyAlertDetailDto> TriggerAlertAsync(TriggerEmergencyAlertRequest request, CancellationToken ct = default)
     {
         var missionId = request.MissionId ?? Guid.Empty;
-        if (missionId == Guid.Empty)
-        {
-            var latestMission = await _db.Missions.OrderByDescending(m => m.CreatedAt).FirstOrDefaultAsync(ct);
-            if (latestMission != null)
-            {
-                missionId = latestMission.Id;
-            }
-        }
 
         Guid anomalyId;
         if (request.AnomalyId.HasValue && request.AnomalyId.Value != Guid.Empty)
         {
             anomalyId = request.AnomalyId.Value;
+            if (!await CanSeeAnomalyAsync(anomalyId, ct))
+                throw new ForbiddenException("MISSION_ACCESS_DENIED");
         }
         else
         {
+            // Không tự gắn vào nhiệm vụ mới nhất của hệ thống: cảnh báo phải thuộc một nhiệm vụ người gọi được xem.
             if (missionId == Guid.Empty)
-                throw new InvalidOperationException("An emergency alert without an existing anomaly requires a mission to attach its media to.");
+                throw new BusinessRuleException("MISSION_REQUIRED", "An emergency alert without an existing anomaly requires a mission.");
+            if (!await CanSeeMissionAsync(missionId, ct))
+                throw new ForbiddenException("MISSION_ACCESS_DENIED");
 
             var defaultCategory = await _db.DefectCategories.FirstOrDefaultAsync(c => c.IsEmergencyClass, ct)
                 ?? await _db.DefectCategories.FirstOrDefaultAsync(ct);

@@ -120,7 +120,8 @@ public class DronesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = $"{UserRoles.Manager},{UserRoles.SystemAdmin}")]
+    // Technician quản lý Drone trong vùng như Manager; service kiểm tra vùng.
+    [Authorize(Roles = UserRoles.AdminManagerTechnician)]
     public async Task<IActionResult> DeleteDrone(Guid id, CancellationToken ct)
     {
         await _uavManagementService.DeleteDroneAsync(id, ct);

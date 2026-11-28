@@ -177,7 +177,7 @@ public class UploadInspectionImageCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_AssignedAnalyst_CannotUpload()
+    public async Task Handle_AnalystWithoutAnalystAssignmentOrRegion_CannotUpload()
     {
         var missionId = Guid.NewGuid();
         var analystId = Guid.NewGuid();
@@ -203,11 +203,12 @@ public class UploadInspectionImageCommandHandlerTests
 
     [Theory]
     [InlineData(UserRoles.SystemAdmin, false, true)]
-    [InlineData(UserRoles.Manager, true, true)]
+    // Spec §4: Manager không upload, kể cả khi phụ trách nhiệm vụ.
+    [InlineData(UserRoles.Manager, true, false)]
     [InlineData(UserRoles.Manager, false, false)]
     [InlineData(UserRoles.Analyst, true, false)]
     [InlineData(UserRoles.Technician, false, false)]
-    public async Task Handle_UnassignedUser_MayUploadOnlyAsAdminOrTheMissionManager(string role, bool isMissionManager, bool allowed)
+    public async Task Handle_UnassignedUser_MayUploadOnlyAsAdmin(string role, bool isMissionManager, bool allowed)
     {
         var missionId = Guid.NewGuid();
         var towerId = Guid.NewGuid();
@@ -244,6 +245,47 @@ public class UploadInspectionImageCommandHandlerTests
             await act.Should().NotThrowAsync();
         else
             await act.Should().ThrowAsync<ForbiddenException>().WithMessage("You are not assigned to this mission.");
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Handle_Analyst_MayUploadWhenAssignedAsAnalystOrInMissionRegion(bool assigned, bool inRegion)
+    {
+        // Spec §4: Analyst được giao trong nhiệm vụ, hoặc Analyst của vùng nhiệm vụ, được upload ảnh/video.
+        var missionId = Guid.NewGuid();
+        var regionId = Guid.NewGuid();
+        var analystId = Guid.NewGuid();
+        var mission = new Mission { Id = missionId, ManagerId = Guid.NewGuid(), RegionId = regionId, Status = MissionStatus.InProgress };
+        var assignments = new Mock<IGenericRepository<MissionAssignment>>();
+        assignments.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<MissionAssignment, bool>>>(), false))
+            .ReturnsAsync(assigned
+                ? new List<MissionAssignment> { new() { MissionId = missionId, UserId = analystId, AssignmentRole = MissionAssignment.AnalystRole } }
+                : new List<MissionAssignment>());
+        var scopes = new Mock<IGenericRepository<UserGeographicScope>>();
+        scopes.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<UserGeographicScope, bool>>>(), false))
+            .ReturnsAsync(inRegion
+                ? new List<UserGeographicScope> { new() { UserId = analystId, RegionId = regionId } }
+                : new List<UserGeographicScope>());
+        _missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false)).ReturnsAsync(mission);
+        _currentUserServicesMock.Setup(s => s.UserId).Returns(analystId);
+        _currentUserServicesMock.Setup(s => s.Roles).Returns(new[] { UserRoles.Analyst });
+        _missionTargetRepositoryMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<MissionTarget, bool>>>(), false))
+            .ReturnsAsync(new List<MissionTarget>());
+        _fileStorageServiceMock.Setup(s => s.SaveImageAsync(It.IsAny<Stream>(), "a.jpg", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("uav-media/a.jpg");
+        var handler = new UploadInspectionImageCommandHandler(
+            _missionRepositoryMock.Object, _assetRepositoryMock.Object, _mediaRepositoryMock.Object,
+            _missionTargetRepositoryMock.Object, _unitOfWorkMock.Object, _fileStorageServiceMock.Object,
+            _eventPublisherMock.Object, Mock.Of<IGenericRepository<OutboxMessage>>(), _currentUserServicesMock.Object,
+            _loggerMock.Object, assignments.Object, scopeRepository: scopes.Object);
+
+        Func<Task> act = async () => await handler.Handle(new UploadInspectionImageCommand
+        {
+            MissionId = missionId, CapturedAt = DateTime.UtcNow, FileStream = new MemoryStream(), FileName = "a.jpg", ContentType = "image/jpeg"
+        }, CancellationToken.None);
+
+        await act.Should().NotThrowAsync<ForbiddenException>();
     }
 
     [Theory]

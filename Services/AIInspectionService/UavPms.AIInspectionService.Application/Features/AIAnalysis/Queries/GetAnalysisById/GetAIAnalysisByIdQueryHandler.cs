@@ -5,8 +5,6 @@ using MediatR;
 using UavPms.AIInspectionService.Application.Common.Security;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
-using UavPms.AIInspectionService.Domain.Interfaces.Services;
-using UavPms.Shared.Contracts.Constants;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
 
 namespace UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetAnalysisById;
@@ -20,21 +18,18 @@ public class GetAIAnalysisByIdQueryHandler
     private readonly IGenericRepository<AIAnalysisRun> _repository;
     private readonly IGenericRepository<InspectionMedia> _mediaRepository;
     private readonly IGenericRepository<Mission> _missionRepository;
-    private readonly IGenericRepository<MissionAssignment> _assignmentRepository;
-    private readonly ICurrentUserServices _currentUser;
+    private readonly IMissionAccessPolicy _accessPolicy;
 
     public GetAIAnalysisByIdQueryHandler(
         IGenericRepository<AIAnalysisRun> repository,
         IGenericRepository<InspectionMedia> mediaRepository,
         IGenericRepository<Mission> missionRepository,
-        IGenericRepository<MissionAssignment> assignmentRepository,
-        ICurrentUserServices currentUser)
+        IMissionAccessPolicy accessPolicy)
     {
         _repository = repository;
         _mediaRepository = mediaRepository;
         _missionRepository = missionRepository;
-        _assignmentRepository = assignmentRepository;
-        _currentUser = currentUser;
+        _accessPolicy = accessPolicy;
     }
 
     public async Task<AIAnalysisDetailResult> Handle(
@@ -49,12 +44,9 @@ public class GetAIAnalysisByIdQueryHandler
 
         var mission = await _missionRepository.GetByIdAsync(media.MissionId, false, cancellationToken)
             ?? throw new KeyNotFoundException($"Mission with ID '{media.MissionId}' was not found.");
-        var roles = _currentUser.Roles ?? Array.Empty<string>();
-        if (roles.Contains(UserRoles.Inspector) &&
-            !await MissionAssignmentAccess.IsAssignedFieldOperatorAsync(_assignmentRepository, mission.Id, _currentUser.UserId))
-            throw new ForbiddenException("You may only view AI analyses for missions assigned to you.");
-        if (roles.Contains(UserRoles.Manager) && mission.ManagerId != _currentUser.UserId)
-            throw new ForbiddenException("You may only view AI analyses for missions you manage.");
+        // Kết quả phân tích thuộc nhiệm vụ: cùng quyền xem defect (spec §4).
+        if (!await _accessPolicy.CanViewAsync(mission))
+            throw new ForbiddenException("MISSION_DEFECT_ACCESS_DENIED");
 
         return new AIAnalysisDetailResult
         {

@@ -28,22 +28,7 @@ public sealed class GeographicAccessFilter
 
     private bool IsAnonymous => _currentUser is null || !_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty;
 
-    private bool IsManagerWithoutRestrictions(Guid userId)
-    {
-        if (_currentUser?.IsAuthenticated != true || _currentUser.Roles == null || !_currentUser.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))
-            return false;
-
-        var hasScopes = _context.UserGeographicScopes.Any(s => s.UserId == userId);
-        if (hasScopes) return false;
-
-        var hasFieldAssignment = _context.MissionAssignments.Any(a => a.UserId == userId
-                && a.Status == MissionAssignmentStatus.Active
-                && a.Mission!.Status != MissionStatus.Completed && a.Mission.Status != MissionStatus.Cancelled)
-            || _context.MaintenanceTickets.Any(t => t.TechnicianId == userId
-                && t.Status != TicketStatus.Closed && t.Status != TicketStatus.Cancelled);
-
-        return !hasFieldAssignment;
-    }
+    // Spec §4: mọi role trừ SystemAdmin chỉ thấy vùng được gán. Manager chưa được gán vùng không còn thấy toàn bộ bản đồ.
 
     /// <summary>Region ids directly granted to the user, plus their direct child regions.</summary>
     private IQueryable<Guid> ScopedRegionIds(Guid userId)
@@ -79,7 +64,6 @@ public sealed class GeographicAccessFilter
         if (IsSystemAdmin) return towers;
         if (IsAnonymous) return towers.Where(_ => false);
         var userId = _currentUser!.UserId;
-        if (IsManagerWithoutRestrictions(userId)) return towers;
 
         var regionIds = ScopedRegionIds(userId);
         var assignedTowerIds = AssignedTowerIds(userId);
@@ -91,7 +75,6 @@ public sealed class GeographicAccessFilter
         if (IsSystemAdmin) return regions;
         if (IsAnonymous) return regions.Where(_ => false);
         var userId = _currentUser!.UserId;
-        if (IsManagerWithoutRestrictions(userId)) return regions;
 
         var regionIds = ScopedRegionIds(userId);
         var assignedTowerIds = AssignedTowerIds(userId);

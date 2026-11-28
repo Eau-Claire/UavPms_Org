@@ -367,6 +367,16 @@ public class MqttDroneHandlersTests
         var actDrone = () => outsiderService.GetLatestByDroneCodeAsync("UAV-HCM-01");
         await actDrone.Should().ThrowAsync<ForbiddenException>();
 
+        // Manager không có vùng của Drone (và không được giao nhiệm vụ) -> cũng bị chặn, không còn thấy mọi vùng
+        var otherRegionManagerService = new DroneTelemetryService(
+            db,
+            MockUser(Guid.NewGuid(), UserRoles.Manager),
+            liveState,
+            Options.Create(new MqttOptions()),
+            NullLogger<DroneTelemetryService>.Instance);
+        var actManager = () => otherRegionManagerService.GetLatestByDroneCodeAsync("UAV-HCM-01");
+        await actManager.Should().ThrowAsync<ForbiddenException>().WithMessage("DRONE_TELEMETRY_ACCESS_DENIED");
+
         // Assigned inspector -> allowed
         var assignedService = new DroneTelemetryService(
             db,

@@ -114,8 +114,12 @@ public class MaintenanceAssignmentTests
             var manager = new MaintenanceTicketService(db, Current(managerId, UserRoles.Manager));
             (await manager.UpdateTicketStatusAsync(ticketId, "Closed")).Status.Should().Be("Closed");
 
-            var lateMaterial = () => manager.LogMaterialAsync(ticketId, new LogMaterialRequest { ComponentName = "Insulator", Unit = "pcs", QuantityUsed = 1 });
+            // Vật tư do Technician được giao ghi (spec §4); phiếu đã đóng thì bị khóa.
+            var technician = new MaintenanceTicketService(db, Current(technicianId, UserRoles.Technician));
+            var lateMaterial = () => technician.LogMaterialAsync(ticketId, new LogMaterialRequest { ComponentName = "Insulator", Unit = "pcs", QuantityUsed = 1 });
             await lateMaterial.Should().ThrowAsync<BusinessRuleException>().WithMessage("TICKET_CLOSED*");
+            var managerMaterial = () => manager.LogMaterialAsync(ticketId, new LogMaterialRequest { ComponentName = "Insulator", Unit = "pcs", QuantityUsed = 1 });
+            await managerMaterial.Should().ThrowAsync<ForbiddenException>();
 
             var list = await manager.GetTicketsAsync(0, 50, "Closed", null);
             var row = list.Items.Single(t => t.Id == ticketId);

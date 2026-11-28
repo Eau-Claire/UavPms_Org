@@ -14,6 +14,8 @@ using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using Xunit;
 
+using UavPms.AIInspectionService.Tests.Common;
+
 namespace UavPms.AIInspectionService.Tests.Features.AIAnalysis;
 
 public class MissionAiDetectionsTests
@@ -90,8 +92,7 @@ public class MissionAiDetectionsTests
             });
 
         var handler = new GetMissionAiDetectionsQueryHandler(
-            repositoryMock.Object, missionRepositoryMock.Object,
-            Mock.Of<IGenericRepository<MissionAssignment>>(), currentUserMock.Object);
+            repositoryMock.Object, missionRepositoryMock.Object, AccessPolicyStub.AllowAll());
 
         var result = await handler.Handle(new GetMissionAiDetectionsQuery(missionId), CancellationToken.None);
 
@@ -161,7 +162,8 @@ public class MissionAiDetectionsTests
         var handler = new ReviewMissionAiDetectionCommandHandler(
             anomalyRepoMock.Object,
             unitOfWorkMock.Object,
-            currentUserMock.Object);
+            currentUserMock.Object,
+            AccessPolicyStub.AllowAll());
 
         var result = await handler.Handle(new ReviewMissionAiDetectionCommand
         {
@@ -207,7 +209,8 @@ public class MissionAiDetectionsTests
         var handler = new ReviewMissionAiDetectionCommandHandler(
             anomalyRepoMock.Object,
             unitOfWorkMock.Object,
-            Mock.Of<ICurrentUserServices>());
+            Mock.Of<ICurrentUserServices>(),
+            AccessPolicyStub.AllowAll());
 
         var act = () => handler.Handle(new ReviewMissionAiDetectionCommand
         {
@@ -280,6 +283,7 @@ public class MissionAiDetectionsTests
             anomalyRepoMock.Object,
             Mock.Of<IUnitOfWork>(),
             currentUserMock.Object,
+            AccessPolicyStub.AllowAll(),
             null!,
             null!,
             alertRepoMock.Object,

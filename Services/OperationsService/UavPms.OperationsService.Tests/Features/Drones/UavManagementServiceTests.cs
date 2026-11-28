@@ -39,6 +39,15 @@ public class UavManagementServiceTests
         return new ApplicationDbContext(options, currentUser);
     }
 
+    /// <summary>Gán một vùng mới cho người dùng; thao tác Drone được giới hạn theo vùng (spec §4).</summary>
+    private static async Task<Guid> GrantRegionAsync(ApplicationDbContext db, Guid userId)
+    {
+        var regionId = Guid.NewGuid();
+        db.UserGeographicScopes.Add(new UserGeographicScope { Id = Guid.NewGuid(), UserId = userId, RegionId = regionId });
+        await db.SaveChangesAsync();
+        return regionId;
+    }
+
     [Fact]
     public async Task CreateDroneAsync_ValidRequest_CreatesUavSuccessfully()
     {
@@ -47,9 +56,11 @@ public class UavManagementServiceTests
         await using var db = CreateContext(userMock.Object);
         var inspectionMock = new Mock<IDroneTechnicalInspectionService>();
         var service = new UavManagementService(db, userMock.Object, inspectionMock.Object);
+        var regionId = await GrantRegionAsync(db, managerId);
 
         var request = new CreateUavRequest
         {
+            AssignedRegionId = regionId,
             Code = "UAV-101",
             Name = "Survey Hexacopter 01",
             Model = "DJI Matrice 350 RTK",
@@ -85,11 +96,13 @@ public class UavManagementServiceTests
         var inspectionMock = new Mock<IDroneTechnicalInspectionService>();
         var service = new UavManagementService(db, userMock.Object, inspectionMock.Object);
 
-        db.Uavs.Add(new Uav { Id = Guid.NewGuid(), UavCode = "UAV-001", Name = "Drone 1", Model = "M300" });
+        var regionId = await GrantRegionAsync(db, managerId);
+        db.Uavs.Add(new Uav { Id = Guid.NewGuid(), UavCode = "UAV-001", Name = "Drone 1", Model = "M300", AssignedRegionId = regionId });
         await db.SaveChangesAsync();
 
         var request = new CreateUavRequest
         {
+            AssignedRegionId = regionId,
             Code = "uav-001",
             Name = "Duplicate Drone",
             Model = "M300"
@@ -110,9 +123,11 @@ public class UavManagementServiceTests
         var service = new UavManagementService(db, userMock.Object, inspectionMock.Object);
 
         var droneId = Guid.NewGuid();
+        var regionId = await GrantRegionAsync(db, managerId);
         var drone = new Uav
         {
             Id = droneId,
+            AssignedRegionId = regionId,
             UavCode = "UAV-002",
             Name = "Original Name",
             Model = "M300",
@@ -152,7 +167,8 @@ public class UavManagementServiceTests
         var service = new UavManagementService(db, userMock.Object, inspectionMock.Object);
 
         var droneId = Guid.NewGuid();
-        var drone = new Uav { Id = droneId, UavCode = "UAV-003", Name = "Drone 3", Model = "M300" };
+        var regionId = await GrantRegionAsync(db, managerId);
+        var drone = new Uav { Id = droneId, UavCode = "UAV-003", Name = "Drone 3", Model = "M300", AssignedRegionId = regionId };
         var fc = new DroneFlightController
         {
             Id = Guid.NewGuid(),
@@ -183,16 +199,124 @@ public class UavManagementServiceTests
         var inspectionMock = new Mock<IDroneTechnicalInspectionService>();
         var service = new UavManagementService(db, userMock.Object, inspectionMock.Object);
 
+        var regionId = await GrantRegionAsync(db, userId);
         db.Uavs.AddRange(
-            new Uav { Id = Guid.NewGuid(), UavCode = "UAV-101", Name = "Hexa Alpha", Model = "M300", OperationalStatus = DroneOperationalStatus.Available, TechnicalHealth = TechnicalHealth.Healthy },
-            new Uav { Id = Guid.NewGuid(), UavCode = "UAV-102", Name = "Quad Beta", Model = "Air3", OperationalStatus = DroneOperationalStatus.Maintenance, TechnicalHealth = TechnicalHealth.Critical },
-            new Uav { Id = Guid.NewGuid(), UavCode = "UAV-103", Name = "Hexa Gamma", Model = "M350", OperationalStatus = DroneOperationalStatus.Available, TechnicalHealth = TechnicalHealth.Warning }
+            new Uav { Id = Guid.NewGuid(), UavCode = "UAV-101", Name = "Hexa Alpha", Model = "M300", OperationalStatus = DroneOperationalStatus.Available, TechnicalHealth = TechnicalHealth.Healthy, AssignedRegionId = regionId },
+            new Uav { Id = Guid.NewGuid(), UavCode = "UAV-102", Name = "Quad Beta", Model = "Air3", OperationalStatus = DroneOperationalStatus.Maintenance, TechnicalHealth = TechnicalHealth.Critical, AssignedRegionId = regionId },
+            new Uav { Id = Guid.NewGuid(), UavCode = "UAV-103", Name = "Hexa Gamma", Model = "M350", OperationalStatus = DroneOperationalStatus.Available, TechnicalHealth = TechnicalHealth.Warning, AssignedRegionId = regionId }
         );
         await db.SaveChangesAsync();
 
         var results = await service.GetDronesAsync(search: "Hexa", availableOnly: true, ct: CancellationToken.None);
         results.Should().HaveCount(2);
         results.Select(x => x.Code).Should().Contain(new[] { "UAV-101", "UAV-103" });
+    }
+
+    [Fact]
+    public async Task Technician_CanCreateUpdateAndDeleteDroneInOwnRegion()
+    {
+        var techId = Guid.NewGuid();
+        var userMock = CreateUserMock(techId, UserRoles.Technician);
+        await using var db = CreateContext(userMock.Object);
+        var service = new UavManagementService(db, userMock.Object, new Mock<IDroneTechnicalInspectionService>().Object);
+        var regionId = await GrantRegionAsync(db, techId);
+
+        var created = await service.CreateDroneAsync(
+            new CreateUavRequest { Code = "UAV-T01", Name = "Tech Drone", Model = "M300", AssignedRegionId = regionId });
+        var updated = await service.UpdateDroneAsync(created.Id, new UpdateUavRequest { Name = "Tech Drone 2" });
+        var deleted = await service.DeleteDroneAsync(created.Id);
+
+        updated.Name.Should().Be("Tech Drone 2");
+        deleted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Manager_CannotCreateDroneInRegionOutsideScope()
+    {
+        var managerId = Guid.NewGuid();
+        var userMock = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(userMock.Object);
+        var service = new UavManagementService(db, userMock.Object, new Mock<IDroneTechnicalInspectionService>().Object);
+        await GrantRegionAsync(db, managerId);
+
+        var act = () => service.CreateDroneAsync(
+            new CreateUavRequest { Code = "UAV-X01", Name = "Other", Model = "M300", AssignedRegionId = Guid.NewGuid() });
+
+        await act.Should().ThrowAsync<ForbiddenException>().WithMessage("DRONE_ACCESS_DENIED");
+        (await db.Uavs.AnyAsync()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Technician_CannotMoveDroneToRegionOutsideScope_OrTouchDroneOfOtherRegion()
+    {
+        var techId = Guid.NewGuid();
+        var userMock = CreateUserMock(techId, UserRoles.Technician);
+        await using var db = CreateContext(userMock.Object);
+        var service = new UavManagementService(db, userMock.Object, new Mock<IDroneTechnicalInspectionService>().Object);
+        var ownRegion = await GrantRegionAsync(db, techId);
+        var ownDrone = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-OWN", Name = "Own", Model = "M300", AssignedRegionId = ownRegion };
+        var otherDrone = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-OTH", Name = "Other", Model = "M300", AssignedRegionId = Guid.NewGuid() };
+        db.Uavs.AddRange(ownDrone, otherDrone);
+        await db.SaveChangesAsync();
+
+        var move = () => service.UpdateDroneAsync(ownDrone.Id, new UpdateUavRequest { AssignedRegionId = Guid.NewGuid() });
+        var editOther = () => service.UpdateDroneAsync(otherDrone.Id, new UpdateUavRequest { Name = "x" });
+        var deleteOther = () => service.DeleteDroneAsync(otherDrone.Id);
+
+        await move.Should().ThrowAsync<ForbiddenException>();
+        await editOther.Should().ThrowAsync<ForbiddenException>();
+        await deleteOther.Should().ThrowAsync<ForbiddenException>();
+        (await db.Uavs.FindAsync(ownDrone.Id))!.AssignedRegionId.Should().Be(ownRegion);
+        (await db.Uavs.FindAsync(otherDrone.Id))!.IsDeleted.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetDronesAsync_ListsOnlyCallerRegions_SystemAdminSeesAll()
+    {
+        var techId = Guid.NewGuid();
+        var techMock = CreateUserMock(techId, UserRoles.Technician);
+        await using var db = CreateContext(techMock.Object);
+        var regionId = await GrantRegionAsync(db, techId);
+        db.Uavs.AddRange(
+            new Uav { Id = Guid.NewGuid(), UavCode = "UAV-IN", Name = "In", Model = "M300", AssignedRegionId = regionId },
+            new Uav { Id = Guid.NewGuid(), UavCode = "UAV-OUT", Name = "Out", Model = "M300", AssignedRegionId = Guid.NewGuid() },
+            new Uav { Id = Guid.NewGuid(), UavCode = "UAV-NONE", Name = "No region", Model = "M300" });
+        await db.SaveChangesAsync();
+
+        var techList = await new UavManagementService(db, techMock.Object, new Mock<IDroneTechnicalInspectionService>().Object)
+            .GetDronesAsync(ct: CancellationToken.None);
+        var adminMock = CreateUserMock(Guid.NewGuid(), UserRoles.SystemAdmin);
+        var adminList = await new UavManagementService(db, adminMock.Object, new Mock<IDroneTechnicalInspectionService>().Object)
+            .GetDronesAsync(ct: CancellationToken.None);
+
+        techList.Select(x => x.Code).Should().BeEquivalentTo(new[] { "UAV-IN" });
+        adminList.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task GetDroneByIdAsync_OtherRegionForbidden_UnlessCallerIsOnMissionUsingDrone()
+    {
+        var inspectorId = Guid.NewGuid();
+        var userMock = CreateUserMock(inspectorId, UserRoles.Inspector);
+        await using var db = CreateContext(userMock.Object);
+        var service = new UavManagementService(db, userMock.Object, new Mock<IDroneTechnicalInspectionService>().Object);
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "UAV-M1", Name = "Mission drone", Model = "M300", AssignedRegionId = Guid.NewGuid() };
+        db.Uavs.Add(drone);
+        await db.SaveChangesAsync();
+
+        var beforeAssignment = () => service.GetDroneByIdAsync(drone.Id);
+        await beforeAssignment.Should().ThrowAsync<ForbiddenException>();
+
+        var mission = new Mission { Id = Guid.NewGuid(), UavId = drone.Id };
+        mission.Assignments.Add(new MissionAssignment
+        {
+            Id = Guid.NewGuid(), MissionId = mission.Id, UserId = inspectorId,
+            AssignmentRole = "INSPECTOR", Status = MissionAssignmentStatus.Active
+        });
+        db.Missions.Add(mission);
+        await db.SaveChangesAsync();
+
+        (await service.GetDroneByIdAsync(drone.Id)).Code.Should().Be("UAV-M1");
     }
 
     [Fact]

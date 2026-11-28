@@ -21,7 +21,8 @@ public class AuditController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = UserRoles.AdminAndManager)]
+    // Audit Logs chỉ dành cho SystemAdmin (spec §4).
+    [Authorize(Roles = UserRoles.SystemAdmin)]
     public async Task<IActionResult> GetAuditLogs(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,

@@ -22,7 +22,8 @@ namespace UavPms.OperationsService.API.Controllers;
 [ApiController]
 [Route("api/v{version:apiVersion}/reports")]
 [ApiVersion("1.0")]
-[Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+// Báo cáo (spec §4): Inspector không có quyền; Technician chỉ xem danh sách; tạo/sửa/xuất cho Admin, Manager, Analyst.
+[Authorize(Roles = UserRoles.AdminManagerAnalystTechnician)]
 public class ReportController : ControllerBase
 {
     private readonly ISender _mediator;
@@ -89,7 +90,7 @@ public class ReportController : ControllerBase
     /// Tạo mới báo cáo quản trị (trạng thái mặc định: draft).
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     public async Task<IActionResult> Create([FromBody] CreateReportRequest request)
     {
         var command = new CreateReportCommand(
@@ -109,7 +110,7 @@ public class ReportController : ControllerBase
     /// Cập nhật thông tin báo cáo (chỉ cho phép khi ở trạng thái draft).
     /// </summary>
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateReportRequest request)
     {
         var command = new UpdateReportCommand(
@@ -129,7 +130,7 @@ public class ReportController : ControllerBase
     /// Xóa mềm báo cáo (chỉ cho phép khi ở trạng thái draft).
     /// </summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var command = new DeleteReportCommand(id);
@@ -141,7 +142,7 @@ public class ReportController : ControllerBase
     /// Gửi báo cáo lên cấp quản lý duyệt (chuyển draft -> pending).
     /// </summary>
     [HttpPut("{id:guid}/submit")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     public async Task<IActionResult> Submit(Guid id)
     {
         var command = new SubmitReportCommand(id);
@@ -177,14 +178,14 @@ public class ReportController : ControllerBase
     /// Sinh trực tiếp tệp PDF/Excel từ dữ liệu hiện tại (báo cáo không lưu tệp). Giữ để tương thích, tương đương /download.
     /// </summary>
     [HttpPost("{id:guid}/generate")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     public Task<IActionResult> Generate(Guid id, [FromQuery] string format = "pdf") => Download(id, format);
 
     /// <summary>
     /// Tải báo cáo dạng PDF/Excel, sinh trực tiếp theo template từ dữ liệu hiện tại.
     /// </summary>
     [HttpGet("{id:guid}/download")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    [Authorize(Roles = UserRoles.AdminManagerAnalyst)]
     public async Task<IActionResult> Download(Guid id, [FromQuery] string format = "pdf")
     {
         var query = new DownloadReportQuery(id, format);

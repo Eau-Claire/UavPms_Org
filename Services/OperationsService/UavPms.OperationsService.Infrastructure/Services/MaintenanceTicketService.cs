@@ -79,6 +79,12 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             throw new NotFoundException("Anomaly not found");
         }
 
+        // Manager chỉ tạo phiếu cho defect trong vùng của mình (SystemAdmin mọi vùng).
+        if (!await RegionScope.IsGrantedAsync(_db, _currentUser, await AnomalyRegionIdAsync(anomaly.Id, ct), ct))
+        {
+            throw new ForbiddenException("TICKET_REGION_SCOPE_REQUIRED");
+        }
+
         // 7. Generate TicketCode
         var today = DateTime.UtcNow.Date;
         var countToday = await _db.MaintenanceTickets.CountAsync(t => t.CreatedAt >= today, ct);
@@ -149,6 +155,8 @@ public class MaintenanceTicketService : IMaintenanceTicketService
                 .ThenInclude(a => a!.Tower)
             .FirstOrDefaultAsync(t => t.Id == ticketId && !t.IsDeleted, ct)
             ?? throw new NotFoundException("Maintenance ticket not found");
+
+        await EnsureManagerTicketScopeAsync(ticket, ct);
 
         if (ticket.Status is not (TicketStatus.Open or TicketStatus.Assigned))
         {
@@ -277,7 +285,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         }
 
         // IDOR Guard
-        EnsureTechnicianOrAdminAccess(ticket);
+        await EnsureTicketAccessAsync(ticket, ct);
 
         // Terminal State Guard (Closed / Cancelled)
         if (ticket.Status is TicketStatus.Closed or TicketStatus.Cancelled)
@@ -402,7 +410,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             throw new NotFoundException("Maintenance ticket not found");
         }
 
-        EnsureTechnicianOrAdminAccess(ticket);
+        EnsureAssignedTechnicianOrAdmin(ticket);
         EnsureTicketEditable(ticket);
 
         if (file == null || file.Length == 0 || file.Length > 50 * 1024 * 1024)
@@ -475,7 +483,7 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             throw new NotFoundException("Maintenance ticket not found");
         }
 
-        EnsureTechnicianOrAdminAccess(ticket);
+        EnsureAssignedTechnicianOrAdmin(ticket);
         EnsureTicketEditable(ticket);
 
         if (string.IsNullOrWhiteSpace(request.ComponentName) || string.IsNullOrWhiteSpace(request.Unit))
@@ -531,6 +539,8 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         {
             throw new NotFoundException("Maintenance ticket not found");
         }
+
+        await EnsureManagerTicketScopeAsync(ticket, ct);
 
         if (ticket.Status != TicketStatus.PendingVerification)
         {
@@ -638,6 +648,20 @@ public class MaintenanceTicketService : IMaintenanceTicketService
             .AsSplitQuery()
             .Where(t => !t.IsDeleted);
 
+        // Spec §4: SystemAdmin thấy mọi phiếu; Technician thấy phiếu được giao; Manager thấy phiếu mình phụ trách
+        // hoặc phiếu trong vùng (vùng theo cột điện của defect, defect chưa gắn cột thì theo vùng nhiệm vụ).
+        if (!RegionScope.IsSystemAdmin(_currentUser))
+        {
+            var uid = _currentUser.UserId;
+            var isManager = RegionScope.HasRole(_currentUser, UserRoles.Manager);
+            var regionIds = RegionScope.RegionIds(_db, uid);
+            query = query.Where(t => t.TechnicianId == uid || (isManager && (
+                t.ManagerId == uid ||
+                (t.Anomaly!.TowerId != null && regionIds.Contains(t.Anomaly.Tower!.RegionId)) ||
+                (t.Anomaly!.TowerId == null && t.Anomaly.Media!.Mission!.RegionId != null
+                    && regionIds.Contains(t.Anomaly.Media.Mission.RegionId.Value)))));
+        }
+
         if (!string.IsNullOrWhiteSpace(status))
         {
             if (Enum.TryParse<TicketStatus>(status, true, out var s))
@@ -687,6 +711,8 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         {
             throw new NotFoundException("Maintenance ticket not found");
         }
+
+        await EnsureTicketAccessAsync(ticket, ct);
 
         var dto = MapToDto(ticket);
         if (ticket.Anomaly?.Tower != null)
@@ -739,17 +765,50 @@ public class MaintenanceTicketService : IMaintenanceTicketService
         }
     }
 
-    private void EnsureTechnicianOrAdminAccess(MaintenanceTicket ticket)
+    /// <summary>Minh chứng và vật tư: chỉ Technician được giao phiếu (và SystemAdmin) ghi (spec §4).</summary>
+    private void EnsureAssignedTechnicianOrAdmin(MaintenanceTicket ticket)
     {
-        if (IsManagerOrAdmin())
-        {
+        if (RegionScope.IsSystemAdmin(_currentUser) || ticket.TechnicianId == _currentUser.UserId)
             return;
-        }
+        throw new ForbiddenException("Technician is not assigned to this ticket");
+    }
 
-        if (ticket.TechnicianId != _currentUser.UserId)
-        {
-            throw new ForbiddenException("Technician is not assigned to this ticket");
-        }
+    /// <summary>Vùng của phiếu: theo cột điện của defect; defect chưa gắn cột thì theo vùng của nhiệm vụ.</summary>
+    private Task<Guid?> AnomalyRegionIdAsync(Guid anomalyId, CancellationToken ct) =>
+        _db.DetectedAnomalies
+            .Where(a => a.Id == anomalyId)
+            .Select(a => a.Tower != null ? (Guid?)a.Tower.RegionId : a.Media!.Mission!.RegionId)
+            .FirstOrDefaultAsync(ct);
+
+    /// <summary>Manager chỉ thao tác phiếu do mình phụ trách hoặc phiếu trong vùng của mình (spec §4).</summary>
+    private async Task<bool> IsManagerOfTicketAsync(MaintenanceTicket ticket, CancellationToken ct)
+    {
+        if (!RegionScope.HasRole(_currentUser, UserRoles.Manager))
+            return false;
+        if (ticket.ManagerId == _currentUser.UserId)
+            return true;
+        return await RegionScope.IsGrantedAsync(_db, _currentUser, await AnomalyRegionIdAsync(ticket.AnomalyId, ct), ct);
+    }
+
+    /// <summary>Giao / đóng phiếu: SystemAdmin hoặc Manager của vùng.</summary>
+    private async Task EnsureManagerTicketScopeAsync(MaintenanceTicket ticket, CancellationToken ct)
+    {
+        if (RegionScope.IsSystemAdmin(_currentUser) || await IsManagerOfTicketAsync(ticket, ct))
+            return;
+        throw new ForbiddenException("TICKET_REGION_SCOPE_REQUIRED");
+    }
+
+    /// <summary>
+    /// Xem / xử lý phiếu: SystemAdmin, Technician được giao phiếu, hoặc Manager của vùng.
+    /// Quyền theo trạng thái (trả lại, đóng, hủy) vẫn kiểm tra riêng trong UpdateTicketStatusAsync.
+    /// </summary>
+    private async Task EnsureTicketAccessAsync(MaintenanceTicket ticket, CancellationToken ct)
+    {
+        if (RegionScope.IsSystemAdmin(_currentUser) || ticket.TechnicianId == _currentUser.UserId)
+            return;
+        if (await IsManagerOfTicketAsync(ticket, ct))
+            return;
+        throw new ForbiddenException("Technician is not assigned to this ticket");
     }
 
     private static MaintenanceTicketDto MapToDto(MaintenanceTicket t)

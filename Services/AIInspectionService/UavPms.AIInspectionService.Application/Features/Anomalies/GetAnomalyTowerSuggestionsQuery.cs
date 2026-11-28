@@ -1,6 +1,7 @@
 using MediatR;
 using NetTopologySuite.Geometries;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Common.Security;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 
@@ -19,17 +20,26 @@ public class GetAnomalyTowerSuggestionsQueryHandler : IRequestHandler<GetAnomaly
 
     private readonly IAnomalyRepository _anomalyRepository;
     private readonly IGenericRepository<Tower> _towerRepository;
+    private readonly IMissionAccessPolicy _accessPolicy;
 
-    public GetAnomalyTowerSuggestionsQueryHandler(IAnomalyRepository anomalyRepository, IGenericRepository<Tower> towerRepository)
+    public GetAnomalyTowerSuggestionsQueryHandler(
+        IAnomalyRepository anomalyRepository,
+        IGenericRepository<Tower> towerRepository,
+        IMissionAccessPolicy accessPolicy)
     {
         _anomalyRepository = anomalyRepository;
         _towerRepository = towerRepository;
+        _accessPolicy = accessPolicy;
     }
 
     public async Task<TowerSuggestionsDto> Handle(GetAnomalyTowerSuggestionsQuery request, CancellationToken cancellationToken)
     {
         var anomaly = await _anomalyRepository.GetByIdWithDetailAsync(request.AnomalyId)
             ?? throw new NotFoundException(nameof(DetectedAnomaly), request.AnomalyId);
+        if (!await _accessPolicy.CanViewAsync(anomaly.Media?.Mission))
+        {
+            throw new ForbiddenException("MISSION_DEFECT_ACCESS_DENIED");
+        }
 
         string source;
         Point position;

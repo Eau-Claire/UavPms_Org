@@ -4,7 +4,8 @@ Repo BE: `D:/UavPms_BEE`, .NET 9. Áp dụng từ gốc repo.
 
 ## Nguồn sự thật, Hiến pháp & Rào chắn SDD
 
-- `docs/MASTER_SYSTEM_SPEC.md` (v2.0) & `docs/contracts/HANDOFF.md` — nguồn sự thật đồng bộ FE/BE *(cấm dùng doc cũ đã gắn banner `DEPRECATED`)*.
+- `docs/README.md` — bản đồ tài liệu (nguồn chuẩn, theo chủ đề, tài liệu đã ngưng dùng trong `docs/archive/`).
+- `docs/MASTER_SYSTEM_SPEC.md` (v2.1) & `docs/contracts/HANDOFF.md` — nguồn sự thật đồng bộ FE/BE *(cấm dùng doc cũ trong `docs/archive/`)*.
 - `.specify/memory/constitution.md` — 7 bất biến kỹ thuật (`C-01..C-07`); `CLAUDE.md` & `.claude/hooks/` khóa ghi (`SDD_PHASE=SPEC|RED|CODE`, `.claude/locked-tests.txt`) + `.codex/config.toml`.
 - `specs/` — mẫu EARS/GEARS (`specs/_template/`) & ma trận `specs/RTM.md`. Khi nhận `BE-REQ`, chỉ đọc spec/acceptance, code và test của đúng batch được giao.
 - Nạp `.agents/skills/readable-code-defense/SKILL.md` trước khi viết/review code; Judge nạp `.agents/skills/pr-review-judge/SKILL.md`.

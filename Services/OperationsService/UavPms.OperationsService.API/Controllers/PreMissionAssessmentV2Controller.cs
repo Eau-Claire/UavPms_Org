@@ -20,7 +20,8 @@ namespace UavPms.OperationsService.API.Controllers;
 [Authorize]
 public sealed class PreMissionAssessmentV2Controller : ControllerBase
 {
-    private const string AssessmentReaders = $"{UserRoles.AdminManagerInspector},{UserRoles.Technician}";
+    // Pre-Mission chỉ SystemAdmin và Manager của vùng xem (spec §4); service kiểm tra vùng.
+    private const string AssessmentReaders = UserRoles.AdminAndManager;
 
     private readonly PreMissionAssessmentService _service;
     private readonly ISender? _mediator;
@@ -150,7 +151,7 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
 
     /// <summary>Read-only: returns the stored result of the last evaluation. Use POST {id}/re-evaluate to refresh it.</summary>
     [HttpGet("{id:guid}/resource-readiness")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    [Authorize(Roles = AssessmentReaders)]
     public async Task<IActionResult> GetResourceReadiness(Guid id, CancellationToken ct)
     {
         if (_mediator != null)

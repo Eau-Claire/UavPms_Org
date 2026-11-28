@@ -46,7 +46,7 @@ public class MissionLifecycleTests
     {
         var inspector = Guid.NewGuid(); var drone = Guid.NewGuid();
         var mission = new Mission { Status = MissionStatus.Confirmed, UavId = drone };
-        mission.Assignments.Add(new MissionAssignment { UserId = inspector, ResponseStatus = MissionAssignmentResponse.Accepted });
+        mission.Assignments.Add(new MissionAssignment { UserId = inspector, AssignmentRole = MissionAssignment.InspectorRole, ResponseStatus = MissionAssignmentResponse.Accepted });
         mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), IsRequired = false, ResponseStatus = MissionAssignmentResponse.Pending });
         mission.MissionTargets.Add(new MissionTarget { TowerId = Guid.NewGuid() });
         mission.CheckIns.Add(new MissionCheckIn { UserId = inspector });
@@ -68,12 +68,39 @@ public class MissionLifecycleTests
     {
         var user = Guid.NewGuid(); var drone = Guid.NewGuid();
         var mission = new Mission { Status = MissionStatus.Confirmed, UavId = drone };
-        mission.Assignments.Add(new MissionAssignment { UserId = user, ResponseStatus = MissionAssignmentResponse.Accepted });
+        mission.Assignments.Add(new MissionAssignment { UserId = user, AssignmentRole = MissionAssignment.InspectorRole, ResponseStatus = MissionAssignmentResponse.Accepted });
         mission.MissionTargets.Add(new MissionTarget { TowerId = Guid.NewGuid() });
         mission.RecalculateReadiness().Should().BeFalse();
         mission.CheckIns.Add(new MissionCheckIn { UserId = user });
         mission.RecalculateReadiness().Should().BeTrue();
         mission.Status.Should().Be(MissionStatus.Ready);
+    }
+
+    [Fact]
+    public void OnlyTheInspectorChecksIn_AnalystAndTechnicianDoNot()
+    {
+        // Spec §4: chỉ Inspector (người bay) check-in tại cột số 1; Analyst/Technician làm việc tại văn phòng.
+        var inspector = Guid.NewGuid();
+        var mission = new Mission { Status = MissionStatus.Confirmed, UavId = Guid.NewGuid() };
+        foreach (var (userId, role) in new[] { (inspector, MissionAssignment.InspectorRole), (Guid.NewGuid(), MissionAssignment.AnalystRole), (Guid.NewGuid(), MissionAssignment.TechnicianRole) })
+            mission.Assignments.Add(new MissionAssignment { UserId = userId, AssignmentRole = role, ResponseStatus = MissionAssignmentResponse.Accepted });
+        mission.MissionTargets.Add(new MissionTarget { TowerId = Guid.NewGuid() });
+
+        mission.RecalculateReadiness().Should().BeFalse();
+        mission.CheckIns.Add(new MissionCheckIn { UserId = inspector });
+        mission.RecalculateReadiness().Should().BeTrue();
+        mission.Status.Should().Be(MissionStatus.Ready);
+    }
+
+    [Fact]
+    public void MissionWithoutInspector_IsNeverReady()
+    {
+        var mission = new Mission { Status = MissionStatus.Confirmed, UavId = Guid.NewGuid() };
+        mission.Assignments.Add(new MissionAssignment { UserId = Guid.NewGuid(), AssignmentRole = MissionAssignment.AnalystRole, ResponseStatus = MissionAssignmentResponse.Accepted });
+        mission.MissionTargets.Add(new MissionTarget { TowerId = Guid.NewGuid() });
+
+        mission.RecalculateReadiness().Should().BeFalse();
+        mission.Status.Should().Be(MissionStatus.Confirmed);
     }
 
     [Fact]

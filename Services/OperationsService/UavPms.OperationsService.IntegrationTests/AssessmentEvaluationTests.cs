@@ -450,7 +450,7 @@ public class AssessmentEvaluationTests
     }
 
     [Fact]
-    public async Task WriteActions_RequireCurrentRegionScope_ReadsStayOpenToFieldStaff()
+    public async Task WriteActions_RequireCurrentRegionScope_FieldStaffCannotRead()
     {
         if (!_pg.Available) return;
 
@@ -476,11 +476,13 @@ public class AssessmentEvaluationTests
             (await service.GetAsync(assessmentId, CancellationToken.None)).Id.Should().Be(assessmentId);
         }
 
+        // Spec §4: Pre-Mission chỉ SystemAdmin và Manager của vùng xem; Technician/Inspector không đọc.
         var technician = Current(site.TechnicianId, UserRoles.Technician);
         await using (var db = _pg.CreateContext(technician))
         {
             var service = new PreMissionAssessmentService(db, technician);
-            (await service.GetAsync(assessmentId, CancellationToken.None)).Id.Should().Be(assessmentId);
+            var read = () => service.GetAsync(assessmentId, CancellationToken.None);
+            await read.Should().ThrowAsync<ForbiddenException>().WithMessage("ASSESSMENT_PERMISSION_REQUIRED");
             var evaluate = () => service.EvaluateAsync(assessmentId, CancellationToken.None);
             await evaluate.Should().ThrowAsync<ForbiddenException>();
         }

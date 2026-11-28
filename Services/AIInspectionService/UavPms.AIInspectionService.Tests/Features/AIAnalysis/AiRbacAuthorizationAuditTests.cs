@@ -25,8 +25,9 @@ public class AiRbacAuthorizationAuditTests
         GetRoles(typeof(AIAnalysisController), nameof(AIAnalysisController.GetById))
             .Should().Contain(UserRoles.SystemAdmin).And.NotContain(UserRoles.Technician);
 
+        // Spec §4: mọi thành viên nhiệm vụ (kể cả Technician) xem defect; handler kiểm tra phân công.
         GetRoles(typeof(AIAnalysisController), nameof(AIAnalysisController.GetMissionAiDetections))
-            .Should().Contain(UserRoles.SystemAdmin).And.NotContain(UserRoles.Technician);
+            .Should().Contain(new[] { UserRoles.SystemAdmin, UserRoles.Technician });
 
         GetRoles(typeof(AIAnalysisController), nameof(AIAnalysisController.AnalyzeExistingMedia))
             .Should().BeEquivalentTo(new[] { UserRoles.SystemAdmin, UserRoles.Manager, UserRoles.Analyst });
@@ -34,7 +35,18 @@ public class AiRbacAuthorizationAuditTests
         GetRoles(typeof(AIAnalysisController), nameof(AIAnalysisController.UploadStandaloneAnalysis))
             .Should().NotContain(UserRoles.Technician);
 
+        // Spec §4: duyệt defect là Analyst và SystemAdmin.
         GetRoles(typeof(AIAnalysisController), nameof(AIAnalysisController.ReviewMissionAiDetection))
-            .Should().BeEquivalentTo(new[] { UserRoles.Analyst });
+            .Should().BeEquivalentTo(new[] { UserRoles.SystemAdmin, UserRoles.Analyst });
+    }
+
+    [Fact]
+    public void AnomaliesController_ReviewEndpoints_AllowAnalystAndSystemAdminOnly()
+    {
+        foreach (var action in new[] { nameof(AnomaliesController.ValidateAnomaly), nameof(AnomaliesController.AssignTower), nameof(AnomaliesController.GetPendingAnomalies) })
+        {
+            GetRoles(typeof(AnomaliesController), action)
+                .Should().BeEquivalentTo(new[] { UserRoles.SystemAdmin, UserRoles.Analyst }, action);
+        }
     }
 }

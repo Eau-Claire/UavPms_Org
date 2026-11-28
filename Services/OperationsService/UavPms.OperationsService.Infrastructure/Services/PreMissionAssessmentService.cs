@@ -420,7 +420,6 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         await RequireAssessmentReader(ct);
 
         var isGlobal = _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase);
-        var isInspector = IsFieldReader();
         // UserGeographicScope.RegionId is non-nullable: there is no "global scope" row; SystemAdmin sees everything.
         var userScopes = isGlobal
             ? new List<Guid>()
@@ -431,7 +430,6 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
         IQueryable<PreMissionAssessment> visible = _db.PreMissionAssessments
             .Where(x => isGlobal ||
-                        isInspector ||
                         x.ManagerId == _current.UserId ||
                         userScopes.Contains(x.RegionId));
 
@@ -1195,22 +1193,6 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         return assessment;
     }
 
-    private async Task RequireManagerOrInspector(CancellationToken ct)
-    {
-        if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
-            throw new ForbiddenException("AUTHENTICATION_REQUIRED");
-
-        var hasRole = _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) ||
-                      _current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
-                      _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase);
-
-        if (!hasRole)
-            throw new ForbiddenException("ASSESSMENT_PERMISSION_REQUIRED");
-
-        if (!await _db.Users.AnyAsync(x => x.Id == _current.UserId && (x.Status == "Active" || x.Status == "Enabled"), ct))
-            throw new ForbiddenException("ACTIVE_USER_REQUIRED");
-    }
-
     private async Task RequireManager(CancellationToken ct)
     {
         if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
@@ -1226,25 +1208,8 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             throw new ForbiddenException("ACTIVE_USER_REQUIRED");
     }
 
-    /// <summary>Inspectors and technicians read every assessment: they inspect drones and fly for any region.
-    /// Write actions are still limited by RequireManager / RequireManagerOrInspector.</summary>
-    private bool IsFieldReader() =>
-        _current.Roles.Contains(UserRoles.Inspector, StringComparer.OrdinalIgnoreCase) ||
-        _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
-        _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase);
-
-    private async Task RequireAssessmentReader(CancellationToken ct)
-    {
-        if (_current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase) ||
-            _current.Roles.Contains(UserRoles.Technician, StringComparer.OrdinalIgnoreCase))
-        {
-            if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
-                throw new ForbiddenException("AUTHENTICATION_REQUIRED");
-            return;
-        }
-
-        await RequireManagerOrInspector(ct);
-    }
+    /// <summary>Pre-Mission chỉ SystemAdmin và Manager đọc (spec §4); phạm vi vùng kiểm tra ở từng truy vấn.</summary>
+    private Task RequireAssessmentReader(CancellationToken ct) => RequireManager(ct);
 
     /// <summary>
     /// Write access (evaluate, cancel, mark completed, create mission, idempotent replay) – BR-02 / BR-14: a
@@ -1266,18 +1231,14 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             throw new ForbiddenException("REGION_MANAGEMENT_SCOPE_REQUIRED");
     }
 
-    /// <summary>
-    /// Read access (GET one): SystemAdmin, the creator, a Manager/Inspector with the region in scope, and every
-    /// Inspector or Technician (they inspect drones and fly for any region – commit 0933670).
-    /// </summary>
+    /// <summary>Read access (GET one, spec §4): SystemAdmin, the creator, or a Manager with the region in scope.</summary>
     private async Task EnsureAssessmentReadAccessAsync(PreMissionAssessment assessment, CancellationToken ct)
     {
         if (!_current.IsAuthenticated || _current.UserId == Guid.Empty)
             throw new ForbiddenException("AUTHENTICATION_REQUIRED");
 
         if (_current.Roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
-            assessment.ManagerId == _current.UserId ||
-            IsFieldReader())
+            assessment.ManagerId == _current.UserId)
             return;
 
         if (_current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase) &&

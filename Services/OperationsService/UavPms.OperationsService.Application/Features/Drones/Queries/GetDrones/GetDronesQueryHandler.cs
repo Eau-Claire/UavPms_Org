@@ -26,7 +26,8 @@ public class GetDronesQueryHandler : IRequestHandler<GetDronesQuery, IReadOnlyLi
 
     public async Task<IReadOnlyList<DroneDto>> Handle(GetDronesQuery request, CancellationToken cancellationToken)
     {
-        var uavs = await _uavRepository.GetAllAsync();
+        // Chỉ Drone người gọi được xem (spec §4: theo vùng hoặc nhiệm vụ được giao).
+        var uavs = await _uavRepository.GetVisibleAsync(cancellationToken);
         var drones = new List<DroneDto>();
 
         foreach (var uav in uavs)

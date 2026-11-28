@@ -4,8 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
-using UavPms.AIInspectionService.Domain.Interfaces.Services;
-using UavPms.Shared.Contracts.Constants;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
 using UavPms.AIInspectionService.Application.Common.Security;
 using UavPms.AIInspectionService.Domain.Entities;
@@ -16,20 +14,17 @@ public class GetMissionAiDetectionsQueryHandler
     : IRequestHandler<GetMissionAiDetectionsQuery, IReadOnlyList<MissionAiDetectionMediaDto>>
 {
     private readonly IInspectionMediaRepository _inspectionMediaRepository;
-    private readonly IGenericRepository<UavPms.AIInspectionService.Domain.Entities.Mission> _missionRepository;
-    private readonly IGenericRepository<MissionAssignment> _assignmentRepository;
-    private readonly ICurrentUserServices _currentUser;
+    private readonly IGenericRepository<Mission> _missionRepository;
+    private readonly IMissionAccessPolicy _accessPolicy;
 
     public GetMissionAiDetectionsQueryHandler(
         IInspectionMediaRepository inspectionMediaRepository,
-        IGenericRepository<UavPms.AIInspectionService.Domain.Entities.Mission> missionRepository,
-        IGenericRepository<MissionAssignment> assignmentRepository,
-        ICurrentUserServices currentUser)
+        IGenericRepository<Mission> missionRepository,
+        IMissionAccessPolicy accessPolicy)
     {
         _inspectionMediaRepository = inspectionMediaRepository;
         _missionRepository = missionRepository;
-        _assignmentRepository = assignmentRepository;
-        _currentUser = currentUser;
+        _accessPolicy = accessPolicy;
     }
 
     public async Task<IReadOnlyList<MissionAiDetectionMediaDto>> Handle(
@@ -38,12 +33,9 @@ public class GetMissionAiDetectionsQueryHandler
     {
         var mission = await _missionRepository.GetByIdAsync(request.MissionId, false, cancellationToken)
             ?? throw new KeyNotFoundException($"Mission with ID '{request.MissionId}' was not found.");
-        var roles = _currentUser.Roles ?? Array.Empty<string>();
-        if (roles.Contains(UserRoles.Inspector) &&
-            !await MissionAssignmentAccess.IsAssignedFieldOperatorAsync(_assignmentRepository, mission.Id, _currentUser.UserId))
-            throw new ForbiddenException("You may only view detections for missions assigned to you.");
-        if (roles.Contains(UserRoles.Manager) && mission.ManagerId != _currentUser.UserId)
-            throw new ForbiddenException("You may only view detections for missions you manage.");
+        // Defect của nhiệm vụ chỉ người tham gia (và Manager/Analyst của vùng) được xem (spec §4).
+        if (!await _accessPolicy.CanViewAsync(mission))
+            throw new ForbiddenException("MISSION_DEFECT_ACCESS_DENIED");
 
         var mediaList = await _inspectionMediaRepository.GetByMissionIdWithDetailsAsync(request.MissionId);
 

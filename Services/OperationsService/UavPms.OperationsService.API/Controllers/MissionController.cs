@@ -90,7 +90,8 @@ public class MissionController : ControllerBase
     public async Task<IActionResult> AssignDrone(Guid id, [FromBody] MissionDroneRequest request, CancellationToken ct) { await _lifecycle!.AssignDroneAsync(id, request.DroneId, ct); return Ok(new ApiResponse(true, "Mission drone assigned")); }
 
     [HttpPost("{id:guid}/check-in")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    // Chỉ Inspector được giao (SystemAdmin khi được giao làm Inspector) check-in; service kiểm tra phân công.
+    [Authorize(Roles = UserRoles.AdminInspector)]
     public async Task<IActionResult> CheckIn(Guid id, [FromBody] MissionCheckInRequest? request = null, CancellationToken ct = default)
     {
         if (request?.Latitude.HasValue == true && (request.Latitude < -90 || request.Latitude > 90))
@@ -148,7 +149,8 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("{id:guid}/telemetry")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    // Technician không xem telemetry bay (spec §4).
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     public async Task<IActionResult> GetMissionTelemetry(
         Guid id,
         [FromQuery] DateTime? from = null,
@@ -183,7 +185,8 @@ public class MissionController : ControllerBase
     }
 
     [HttpPost("{id:guid}/media")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    // Upload ảnh/video trong nhiệm vụ: Inspector, Analyst; Manager không upload (spec §4).
+    [Authorize(Roles = UserRoles.AdminInspectorAnalyst)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadMedia(
         Guid id,
@@ -319,7 +322,8 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("{id:guid}/detections")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    // Mọi thành viên nhiệm vụ và Manager trong vùng được xem; service kiểm tra chi tiết (RequireViewMissionDefects).
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetDetections(
         Guid id,
         [FromQuery] string? status = null,
@@ -334,7 +338,7 @@ public class MissionController : ControllerBase
 
     [HttpPost("{missionId:guid}/detections/{detectionId:guid}/review")]
     [HttpPut("{missionId:guid}/detections/{detectionId:guid}/review")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    [Authorize(Roles = UserRoles.AdminAnalyst)]
     public async Task<IActionResult> ReviewDetection(
         Guid missionId,
         Guid detectionId,
