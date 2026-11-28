@@ -16,6 +16,11 @@ public class InspectionSchedule : BaseEntity
 
 public class MissionAssignment : BaseEntity
 {
+    /// <summary>Giá trị AssignmentRole lưu trong DB (MF02 chọn đích danh 3 role).</summary>
+    public const string InspectorRole = "INSPECTOR";
+    public const string AnalystRole = "ANALYST";
+    public const string TechnicianRole = "TECHNICIAN";
+
     public Guid MissionId { get; set; }
     public Guid UserId { get; set; }
     public string AssignmentRole { get; set; } = string.Empty;
@@ -31,6 +36,8 @@ public class MissionAssignment : BaseEntity
     public virtual Mission? Mission { get; set; }
     public virtual User? User { get; set; }
     public virtual User? AssignedBy { get; set; }
+
+    public bool HasRole(string role) => string.Equals(AssignmentRole, role, StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class ResourceBooking : BaseEntity

@@ -140,7 +140,8 @@ public class MissionStateGuardTests
         (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.PendingAcceptance);
         await Expect("INVALID_MISSION_STATE", () => w.AsManager(s => s.StartAsync(mission.Id, default)));
         await w.As(analyst, UserRoles.Analyst, s => s.AcceptAssignmentAsync(mission.Id, default));
-        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Confirmed, "the new required member has not checked in yet");
+        // Spec §4: chỉ Inspector check-in; Analyst/Technician làm việc tại văn phòng nên chỉ cần Accept.
+        (await w.LoadMissionAsync(mission.Id)).Status.Should().Be(MissionStatus.Ready, "only the Inspector checks in; an office Analyst only accepts");
 
         // Suspended before the start, a reassignment is checked again on resume.
         await w.AsManager(s => s.SuspendMissionAsync(mission.Id, "Paperwork", default));

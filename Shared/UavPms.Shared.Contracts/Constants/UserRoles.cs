@@ -19,6 +19,8 @@ public static class UserRoles
     public const string AdminManagerInspectorAnalyst = "SystemAdmin,Manager,Inspector,Analyst";
     // Duyệt defect: Analyst của nhiệm vụ và SystemAdmin (spec §4).
     public const string AdminAnalyst = "SystemAdmin,Analyst";
+    // Check-in hiện trường: chỉ Inspector được giao (spec §4).
+    public const string AdminInspector = "SystemAdmin,Inspector";
     // Upload ảnh/video vào nhiệm vụ: Inspector, Analyst được giao và SystemAdmin; Manager không upload (spec §4).
     public const string AdminInspectorAnalyst = "SystemAdmin,Inspector,Analyst";
     // Xem báo cáo: Technician chỉ xem danh sách, Inspector không có quyền (spec §4).

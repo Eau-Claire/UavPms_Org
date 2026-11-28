@@ -90,7 +90,8 @@ public class MissionController : ControllerBase
     public async Task<IActionResult> AssignDrone(Guid id, [FromBody] MissionDroneRequest request, CancellationToken ct) { await _lifecycle!.AssignDroneAsync(id, request.DroneId, ct); return Ok(new ApiResponse(true, "Mission drone assigned")); }
 
     [HttpPost("{id:guid}/check-in")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    // Chỉ Inspector được giao (SystemAdmin khi được giao làm Inspector) check-in; service kiểm tra phân công.
+    [Authorize(Roles = UserRoles.AdminInspector)]
     public async Task<IActionResult> CheckIn(Guid id, [FromBody] MissionCheckInRequest? request = null, CancellationToken ct = default)
     {
         if (request?.Latitude.HasValue == true && (request.Latitude < -90 || request.Latitude > 90))
@@ -184,8 +185,8 @@ public class MissionController : ControllerBase
     }
 
     [HttpPost("{id:guid}/media")]
-    // Analyst được upload ảnh/video trong nhiệm vụ (spec §4).
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    // Upload ảnh/video trong nhiệm vụ: Inspector, Analyst; Manager không upload (spec §4).
+    [Authorize(Roles = UserRoles.AdminInspectorAnalyst)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadMedia(
         Guid id,

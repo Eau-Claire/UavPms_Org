@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Common.Security;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
@@ -24,6 +25,7 @@ public class ReviewMissionAiDetectionCommandHandler
     private readonly IAnomalyRepository _anomalyRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserServices _currentUser;
+    private readonly IMissionAccessPolicy _accessPolicy;
     private readonly IGenericRepository<OutboxMessage>? _outboxRepository;
     private readonly IEventPublisher? _eventPublisher;
     private readonly IGenericRepository<EmergencyAlert>? _alertRepository;
@@ -36,6 +38,7 @@ public class ReviewMissionAiDetectionCommandHandler
         IAnomalyRepository anomalyRepository,
         IUnitOfWork unitOfWork,
         ICurrentUserServices currentUser,
+        IMissionAccessPolicy accessPolicy,
         IGenericRepository<OutboxMessage> outboxRepository,
         IEventPublisher eventPublisher,
         IGenericRepository<EmergencyAlert>? alertRepository = null,
@@ -46,6 +49,7 @@ public class ReviewMissionAiDetectionCommandHandler
         _anomalyRepository = anomalyRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
+        _accessPolicy = accessPolicy;
         _outboxRepository = outboxRepository;
         _eventPublisher = eventPublisher;
         _alertRepository = alertRepository;
@@ -57,8 +61,9 @@ public class ReviewMissionAiDetectionCommandHandler
     public ReviewMissionAiDetectionCommandHandler(
         IAnomalyRepository anomalyRepository,
         IUnitOfWork unitOfWork,
-        ICurrentUserServices currentUser)
-        : this(anomalyRepository, unitOfWork, currentUser, null!, null!, null, null, null) { }
+        ICurrentUserServices currentUser,
+        IMissionAccessPolicy accessPolicy)
+        : this(anomalyRepository, unitOfWork, currentUser, accessPolicy, null!, null!, null, null, null) { }
 
     public async Task<MissionAiDetectionDto> Handle(
         ReviewMissionAiDetectionCommand request,
@@ -73,6 +78,12 @@ public class ReviewMissionAiDetectionCommandHandler
         if (request.MissionId != Guid.Empty && (anomaly.Media == null || anomaly.Media.MissionId != request.MissionId))
         {
             throw new KeyNotFoundException($"Detected anomaly with ID '{request.DetectionId}' was not found in mission '{request.MissionId}'.");
+        }
+
+        // Duyệt defect: SystemAdmin, Analyst được giao hoặc Analyst của vùng nhiệm vụ (spec §4).
+        if (!await _accessPolicy.CanReviewAsync(anomaly.Media?.Mission))
+        {
+            throw new ForbiddenException("DEFECT_REVIEW_DENIED");
         }
 
         if (anomaly.SupersededById.HasValue)

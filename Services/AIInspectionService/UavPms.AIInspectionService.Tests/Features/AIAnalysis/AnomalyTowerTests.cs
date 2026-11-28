@@ -13,6 +13,7 @@ using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.AIInspectionService.Infrastructure.Persistence;
 using UavPms.AIInspectionService.Infrastructure.Repositories;
 using Xunit;
+using UavPms.AIInspectionService.Tests.Common;
 
 namespace UavPms.AIInspectionService.Tests.Features.AIAnalysis;
 
@@ -61,7 +62,7 @@ public class AnomalyTowerTests
         anomaly.TowerId = mid.Id;
         await db.SaveChangesAsync();
 
-        var result = await new GetAnomalyTowerSuggestionsQueryHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db))
+        var result = await new GetAnomalyTowerSuggestionsQueryHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db), AccessPolicyStub.AllowAll())
             .Handle(new GetAnomalyTowerSuggestionsQuery(anomaly.Id, RadiusMeters: 300), CancellationToken.None);
 
         result.Source.Should().Be("Anomaly");
@@ -79,7 +80,7 @@ public class AnomalyTowerTests
         db.Towers.AddRange(NewTower("A", Lat + 0.0001, Lng), NewTower("B", Lat + 0.0002, Lng), NewTower("C", Lat + 0.0003, Lng));
         var (anomaly, _) = await SeedAnomalyAsync(db, null, P(Lat, Lng));
 
-        var result = await new GetAnomalyTowerSuggestionsQueryHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db))
+        var result = await new GetAnomalyTowerSuggestionsQueryHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db), AccessPolicyStub.AllowAll())
             .Handle(new GetAnomalyTowerSuggestionsQuery(anomaly.Id, Limit: 2), CancellationToken.None);
 
         result.Source.Should().Be("Media");
@@ -92,7 +93,7 @@ public class AnomalyTowerTests
         await using var db = CreateContext();
         var (anomaly, _) = await SeedAnomalyAsync(db, null, null);
 
-        var act = () => new GetAnomalyTowerSuggestionsQueryHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db))
+        var act = () => new GetAnomalyTowerSuggestionsQueryHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db), AccessPolicyStub.AllowAll())
             .Handle(new GetAnomalyTowerSuggestionsQuery(anomaly.Id), CancellationToken.None);
 
         (await act.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be("LOCATION_UNKNOWN");
@@ -106,7 +107,7 @@ public class AnomalyTowerTests
         db.Towers.Add(tower);
         var (anomaly, _) = await SeedAnomalyAsync(db, null, null);
 
-        var result = await new AssignAnomalyTowerCommandHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db), new UnitOfWork(db))
+        var result = await new AssignAnomalyTowerCommandHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db), new UnitOfWork(db), AccessPolicyStub.AllowAll())
             .Handle(new AssignAnomalyTowerCommand(anomaly.Id, tower.Id), CancellationToken.None);
 
         result.Should().Be(new AnomalyTowerAssignmentDto(anomaly.Id, tower.Id, "T-1", "Pending"));
@@ -129,7 +130,7 @@ public class AnomalyTowerTests
             await db.SaveChangesAsync();
         }
 
-        var act = () => new AssignAnomalyTowerCommandHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db), new UnitOfWork(db))
+        var act = () => new AssignAnomalyTowerCommandHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db), new UnitOfWork(db), AccessPolicyStub.AllowAll())
             .Handle(new AssignAnomalyTowerCommand(anomaly.Id, tower.Id), CancellationToken.None);
 
         (await act.Should().ThrowAsync<BusinessRuleException>()).Which.Code.Should().Be(expectedCode);
@@ -141,7 +142,7 @@ public class AnomalyTowerTests
         await using var db = CreateContext();
         var (anomaly, _) = await SeedAnomalyAsync(db, null, null);
 
-        var act = () => new AssignAnomalyTowerCommandHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db), new UnitOfWork(db))
+        var act = () => new AssignAnomalyTowerCommandHandler(new AnomalyRepository(db), new GenericRepository<Tower>(db), new UnitOfWork(db), AccessPolicyStub.AllowAll())
             .Handle(new AssignAnomalyTowerCommand(anomaly.Id, Guid.NewGuid()), CancellationToken.None);
 
         await act.Should().ThrowAsync<NotFoundException>();

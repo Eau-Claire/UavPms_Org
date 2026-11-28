@@ -10,6 +10,7 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Common.Security;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Queries.GetMissionAiDetections;
 using UavPms.AIInspectionService.Domain.Contracts;
 using UavPms.AIInspectionService.Domain.Entities;
@@ -34,6 +35,7 @@ public sealed class UploadStandaloneAnalysisCommandHandler
     private readonly IFileStorageService _fileStorageService;
     private readonly IEventPublisher _eventPublisher;
     private readonly ICurrentUserServices _currentUser;
+    private readonly IMissionAccessPolicy _accessPolicy;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<UploadStandaloneAnalysisCommandHandler> _logger;
 
@@ -46,6 +48,7 @@ public sealed class UploadStandaloneAnalysisCommandHandler
         IFileStorageService fileStorageService,
         IEventPublisher eventPublisher,
         ICurrentUserServices currentUser,
+        IMissionAccessPolicy accessPolicy,
         IUnitOfWork unitOfWork,
         ILogger<UploadStandaloneAnalysisCommandHandler> logger,
         IGenericRepository<OutboxMessage>? outboxRepository = null)
@@ -57,6 +60,7 @@ public sealed class UploadStandaloneAnalysisCommandHandler
         _fileStorageService = fileStorageService;
         _eventPublisher = eventPublisher;
         _currentUser = currentUser;
+        _accessPolicy = accessPolicy;
         _unitOfWork = unitOfWork;
         _logger = logger;
         _outboxRepository = outboxRepository;
@@ -85,7 +89,19 @@ public sealed class UploadStandaloneAnalysisCommandHandler
         }
 
         var currentUserId = _currentUser.UserId;
+        var isStandalone = !request.MissionId.HasValue || request.MissionId.Value == Guid.Empty;
+        // Standalone: chỉ SystemAdmin và Analyst (spec §4); kiểm tra trước khi tìm/tạo nhiệm vụ thay thế.
+        if (isStandalone && !await _accessPolicy.CanUploadAsync(null))
+        {
+            throw new ForbiddenException("UPLOAD_NOT_ALLOWED");
+        }
+
         var mission = await ResolveMissionAsync(request.MissionId, currentUserId, request.Notes, cancellationToken);
+        // Vào nhiệm vụ: Inspector/Analyst được giao, Analyst của vùng, SystemAdmin; Manager không upload.
+        if (!isStandalone && !await _accessPolicy.CanUploadAsync(mission))
+        {
+            throw new ForbiddenException("UPLOAD_NOT_ALLOWED");
+        }
 
         var parsedAnalysisType = Enum.TryParse<AnalysisType>(request.AnalysisType, true, out var parsed)
             ? parsed

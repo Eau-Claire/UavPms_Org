@@ -64,7 +64,7 @@ public class Mission : BaseEntity
     /// </summary>
     public MissionAssignment? PrimaryInspectorAssignment() => Assignments
         .Where(a => !a.IsDeleted && a.Status == MissionAssignmentStatus.Active
-            && string.Equals(a.AssignmentRole, "INSPECTOR", StringComparison.OrdinalIgnoreCase))
+            && a.HasRole(MissionAssignment.InspectorRole))
         .OrderBy(a => a.AssignedAt)
         .FirstOrDefault();
 
@@ -190,8 +190,9 @@ public class Mission : BaseEntity
     }
 
     /// <summary>
-    /// BR-37 readiness of a mission that has not started. Required members must accept and check in; an optional
-    /// member must check in only once they have accepted. A required member who has not accepted sends the mission
+    /// BR-37 readiness of a mission that has not started. Required members must accept; only the Inspector (the pilot in
+    /// the field) checks in at tower 1, so the mission is Ready once every accepted Inspector has checked in. Analyst and
+    /// Technician work from the office and never check in. A required member who has not accepted sends the mission
     /// back to Pending Acceptance (BR-32). Pending Acceptance itself only changes through <see cref="CheckAcceptance"/>;
     /// Suspended, Postponed and final missions are left unchanged.
     /// </summary>
@@ -225,9 +226,13 @@ public class Mission : BaseEntity
         }
 
         bool CheckedIn(Guid userId) => CheckIns.Any(c => !c.IsDeleted && c.UserId == userId && c.Status == MissionCheckInStatus.CheckedIn);
-        var mustCheckIn = active.Where(a => a.IsRequired || a.ResponseStatus == MissionAssignmentResponse.Accepted).ToList();
+        var inspectorsToCheckIn = active
+            .Where(a => a.HasRole(MissionAssignment.InspectorRole)
+                && (a.IsRequired || a.ResponseStatus == MissionAssignmentResponse.Accepted))
+            .ToList();
 
-        var ready = mustCheckIn.All(a => CheckedIn(a.UserId))
+        var ready = inspectorsToCheckIn.Count > 0
+            && inspectorsToCheckIn.All(a => CheckedIn(a.UserId))
             && MissionTargets.Count > 0;
 
         Status = ready ? MissionStatus.Ready : MissionStatus.Confirmed;

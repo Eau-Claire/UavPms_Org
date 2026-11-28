@@ -13,18 +13,23 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 
 | Endpoint | Trước | Sau | Ghi chú |
 |---|---|---|---|
-| `GET /missions/{missionId:guid}/ai-analysis/detections` | SystemAdmin, Manager, Inspector, Analyst | SystemAdmin, Manager, Inspector, Analyst, Technician | Thêm Technician (chỉ nhiệm vụ được giao) |
-| `PUT /missions/{missionId:guid}/ai-analysis/detections/{detectionId:guid}/review` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin |
-| `PUT /anomalies/{id:guid}/tower` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin |
-| `GET /anomalies/pending` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin |
-| `PUT /anomalies/{id:guid}/validate` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin |
+| `GET /ai-analysis/{id:guid}` | SystemAdmin, Manager, Inspector, Analyst | SystemAdmin, Manager, Inspector, Analyst | Chỉ người xem được defect của nhiệm vụ |
+| `GET /missions/{missionId:guid}/ai-analysis/detections` | SystemAdmin, Manager, Inspector, Analyst | SystemAdmin, Manager, Inspector, Analyst, Technician | Mọi role; chỉ người tham gia nhiệm vụ, Manager/Analyst của vùng |
+| `PUT /missions/{missionId:guid}/ai-analysis/detections/{detectionId:guid}/review` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin; Analyst phải được giao hoặc thuộc vùng nhiệm vụ |
+| `POST /ai-analysis/upload` | SystemAdmin, Manager, Inspector, Analyst | SystemAdmin, Inspector, Analyst | Bỏ Manager; vào nhiệm vụ: Inspector/Analyst được giao hoặc Analyst của vùng; standalone: chỉ SystemAdmin, Analyst |
+| `PUT /anomalies/{id:guid}/tower` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin; Analyst được giao hoặc của vùng |
+| `GET /anomalies/{id:guid}/tower-suggestions` | SystemAdmin, Manager, Analyst | SystemAdmin, Manager, Analyst | Chỉ người xem được defect |
+| `GET /anomalies/{id:guid}` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Inspector, Analyst, Technician | Chỉ người tham gia nhiệm vụ, Manager/Analyst của vùng |
+| `GET /anomalies` | SystemAdmin, Manager, Analyst | SystemAdmin, Manager, Analyst | Lọc trong SQL: nhiệm vụ mình phụ trách / được giao / thuộc vùng (Manager, Analyst) |
+| `GET /anomalies/pending` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin; lọc theo nhiệm vụ được giao / vùng |
+| `PUT /anomalies/{id:guid}/validate` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin; Analyst được giao hoặc của vùng |
 | `GET /audit-logs` | SystemAdmin, Manager | SystemAdmin | Bỏ Manager |
 | `GET /drones` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Inspector, Analyst, Technician | Mới: chỉ liệt kê Drone trong vùng (Admin: mọi vùng) |
 | `GET /drones/{id:guid}` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Inspector, Analyst, Technician | Mới: Drone trong vùng, hoặc Drone của nhiệm vụ mình đang được giao |
 | `POST /drones` | SystemAdmin, Manager, Technician | SystemAdmin, Manager, Technician | Mới: chỉ tạo Drone trong vùng của mình |
 | `PUT /drones/{id:guid}` | SystemAdmin, Manager, Technician | SystemAdmin, Manager, Technician | Mới: chỉ sửa Drone trong vùng; chuyển vùng thì vùng mới cũng phải thuộc phạm vi |
 | `DELETE /drones/{id:guid}` | SystemAdmin, Manager | SystemAdmin, Manager, Technician | Thêm Technician; mọi role trừ Admin chỉ xóa Drone trong vùng |
-| `POST /inspections/upload` | SystemAdmin, Manager, Inspector | SystemAdmin, Manager, Inspector, Analyst | Thêm Analyst |
+| `POST /inspections/upload` | SystemAdmin, Manager, Inspector | SystemAdmin, Inspector, Analyst | Thêm Analyst, bỏ Manager; Inspector/Analyst được giao hoặc Analyst của vùng |
 | `POST /maintenance/tickets` | SystemAdmin, Manager | SystemAdmin, Manager | Mới: Manager chỉ tạo phiếu cho defect trong vùng |
 | `PUT /maintenance/tickets/{id:guid}/assign` | SystemAdmin, Manager | SystemAdmin, Manager | Mới: Manager chỉ giao phiếu trong vùng / phiếu phụ trách |
 | `PUT /maintenance/tickets/{id:guid}/status` | SystemAdmin, Manager, Technician | SystemAdmin, Manager, Technician | Mới: Manager chỉ thao tác phiếu trong vùng / phiếu phụ trách |
@@ -33,10 +38,14 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | `PUT /maintenance/tickets/{id:guid}/close` | SystemAdmin, Manager | SystemAdmin, Manager | Mới: Manager chỉ đóng phiếu trong vùng / phiếu phụ trách |
 | `GET /maintenance/tickets` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Technician | Bỏ Inspector, Analyst; lọc: Manager theo vùng / phiếu phụ trách, Technician phiếu được giao |
 | `GET /maintenance/tickets/{id:guid}` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Technician | Bỏ Inspector, Analyst; cùng luật lọc như danh sách |
+| `POST /missions/{id:guid}/check-in` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Inspector | Chỉ Inspector được giao (và SystemAdmin khi được giao làm Inspector); mission Ready khi Inspector đã check-in |
 | `GET /missions/{id:guid}/telemetry` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Inspector, Analyst | Bỏ Technician |
-| `POST /missions/{id:guid}/media` | SystemAdmin, Manager, Inspector | SystemAdmin, Manager, Inspector, Analyst | Thêm Analyst |
-| `GET /missions/{id:guid}/detections` | Analyst | SystemAdmin, Manager, Inspector, Analyst, Technician | Mở cho mọi thành viên nhiệm vụ + Manager vùng (service kiểm tra) |
-| `POST /missions/{missionId:guid}/detections/{detectionId:guid}/review` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin |
+| `POST /missions/{id:guid}/media` | SystemAdmin, Manager, Inspector | SystemAdmin, Inspector, Analyst | Thêm Analyst, bỏ Manager; Inspector/Analyst được giao hoặc Analyst của vùng |
+| `GET /missions/{id:guid}/detections` | Analyst | SystemAdmin, Manager, Inspector, Analyst, Technician | Mọi role; chỉ người tham gia nhiệm vụ, Manager/Analyst của vùng |
+| `POST /missions/{missionId:guid}/detections/{detectionId:guid}/review` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin; Analyst được giao hoặc của vùng |
+| `GET /pre-mission-assessments` | SystemAdmin, Manager, Inspector, Technician | SystemAdmin, Manager, Inspector, Technician | Chỉ SystemAdmin và Manager của vùng (bỏ Inspector, Technician) |
+| `GET /pre-mission-assessments/{id:guid}` | SystemAdmin, Manager, Inspector, Technician | SystemAdmin, Manager, Inspector, Technician | Chỉ SystemAdmin, người tạo, Manager của vùng |
+| `GET /pre-mission-assessments/{id:guid}/resource-readiness` | SystemAdmin, Manager, Inspector | SystemAdmin, Manager, Inspector, Technician | Chỉ SystemAdmin và Manager của vùng (bỏ Inspector) |
 | `GET /regions` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Inspector, Analyst, Technician | Manager chưa được gán vùng không còn thấy mọi vùng |
 | `GET /reports` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Analyst, Technician | Bỏ Inspector |
 | `GET /reports/statistics` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Analyst, Technician | Bỏ Inspector |
@@ -55,19 +64,19 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 
 ## 3. Luật trong service (không thấy ở attribute)
 
-| Chức năng | Luật mới | Nơi kiểm tra |
+| Chức năng | Luật | Nơi kiểm tra |
 |---|---|---|
-| Drone: tạo / sửa / xóa | SystemAdmin mọi vùng; Manager, Technician chỉ Drone thuộc vùng của mình; sửa vùng thì vùng mới cũng phải thuộc phạm vi | `UavManagementService` + `DroneRegionScope` |
-| Drone: danh sách | Chỉ Drone của vùng người gọi; Drone chưa gắn vùng chỉ Admin thấy | `UavManagementService.GetDronesAsync` |
-| Drone: chi tiết | Drone trong vùng, hoặc Drone của nhiệm vụ người gọi đang được giao | `UavManagementService.GetDroneByIdAsync` |
-| Phiếu bảo trì: xem | Admin tất cả; Manager phiếu mình phụ trách hoặc trong vùng (vùng theo cột điện của defect, defect chưa gắn cột thì theo vùng nhiệm vụ); Technician phiếu được giao | `MaintenanceTicketService` |
-| Phiếu bảo trì: tạo / giao / đóng / đổi trạng thái | Manager chỉ trong vùng hoặc phiếu mình phụ trách | `MaintenanceTicketService` |
-| Phiếu bảo trì: minh chứng, vật tư | Chỉ Technician được giao và SystemAdmin | `MaintenanceTicketService` |
-| Gán vùng cho người dùng | SystemAdmin: tùy ý. Manager: chỉ vùng của chính mình, vùng khác của người dùng được giữ nguyên, không tự sửa vùng của mình | `SetUserGeographicScopesCommandHandler` |
-| Cột điện, khu vực (đọc) | Manager chưa có vùng không còn thấy toàn bộ | `GeographicAccessFilter` |
-| Xem defect trong nhiệm vụ (Operations) | SystemAdmin; Manager phụ trách hoặc Manager có vùng của nhiệm vụ; mọi thành viên đang được giao | `MissionLifecycleService.GetMissionDetectionsAsync` |
-| Duyệt defect trong nhiệm vụ (Operations) | Analyst được giao trong nhiệm vụ và SystemAdmin | `MissionLifecycleService.ReviewDetectionAsync` |
-| Xem defect trong nhiệm vụ (AI) | Technician chỉ nhiệm vụ được giao (Inspector, Manager giữ luật cũ) | `GetMissionAiDetectionsQueryHandler` |
+| Drone: tạo / sửa / xóa | SystemAdmin mọi vùng; Manager, Technician chỉ Drone thuộc vùng của mình; chuyển vùng thì vùng mới cũng phải thuộc phạm vi | `UavManagementService` + `DroneRegionScope` |
+| Drone: danh sách / chi tiết | Drone thuộc vùng người gọi; chi tiết thêm trường hợp Drone của nhiệm vụ mình đang được giao | `UavManagementService` |
+| Check-in hiện trường | Chỉ thành viên được giao với vai trò INSPECTOR; mission Ready khi mọi Inspector đã Accept đều check-in (Analyst, Technician chỉ Accept) | `MissionLifecycleService.CheckInAsync`, `Mission.RecalculateReadiness` |
+| Pre-Mission: xem | SystemAdmin, người tạo, Manager có vùng của hồ sơ | `PreMissionAssessmentService` |
+| Defect / kết quả AI: xem | SystemAdmin, Manager phụ trách nhiệm vụ, thành viên được giao, Manager/Analyst có vùng của nhiệm vụ | `IMissionAccessPolicy` (AI), `MissionLifecycleService` (Operations) |
+| Defect: duyệt, đổi cột | SystemAdmin; Analyst được giao hoặc Analyst có vùng của nhiệm vụ | `IMissionAccessPolicy` (AI), `MissionLifecycleService` (Operations) |
+| Danh sách defect | Lọc trong SQL theo `MissionVisibility` (nhiệm vụ phụ trách / được giao / thuộc vùng) | `AnomalyRepository` |
+| Upload ảnh/video | SystemAdmin; Inspector hoặc Analyst được giao; Analyst của vùng. Standalone: SystemAdmin, Analyst. Manager, Technician không upload | `IMissionAccessPolicy` (AI), `UploadInspectionImageCommandHandler` (Operations) |
+| Phiếu bảo trì | Admin tất cả; Manager phiếu phụ trách hoặc trong vùng; Technician phiếu được giao; minh chứng/vật tư chỉ Technician được giao | `MaintenanceTicketService` |
+| Gán vùng cho người dùng | SystemAdmin tùy ý; Manager chỉ vùng của chính mình, giữ nguyên vùng khác của người dùng | `SetUserGeographicScopesCommandHandler` |
+| Cột điện, khu vực | Manager chưa có vùng không còn thấy toàn bộ | `GeographicAccessFilter` |
 
 ## 4. Bảng đầy đủ sau thay đổi
 
@@ -77,13 +86,13 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 
 | Method | Endpoint | Admin | Manager | Inspector | Analyst | Technician | Đổi |
 |---|---|:-:|:-:|:-:|:-:|:-:|:-:|
-| POST | `/ai-analysis/upload` | ✓ | ✓ | ✓ | ✓ |  |  |
-| GET | `/ai-analysis/{id:guid}` | ✓ | ✓ | ✓ | ✓ |  |  |
-| GET | `/anomalies` | ✓ | ✓ |  | ✓ |  |  |
+| POST | `/ai-analysis/upload` | ✓ |  | ✓ | ✓ |  | ● |
+| GET | `/ai-analysis/{id:guid}` | ✓ | ✓ | ✓ | ✓ |  | ● |
+| GET | `/anomalies` | ✓ | ✓ |  | ✓ |  | ● |
 | GET | `/anomalies/pending` | ✓ |  |  | ✓ |  | ● |
-| GET | `/anomalies/{id:guid}` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| GET | `/anomalies/{id:guid}` | ✓ | ✓ | ✓ | ✓ | ✓ | ● |
 | PUT | `/anomalies/{id:guid}/tower` | ✓ |  |  | ✓ |  | ● |
-| GET | `/anomalies/{id:guid}/tower-suggestions` | ✓ | ✓ |  | ✓ |  |  |
+| GET | `/anomalies/{id:guid}/tower-suggestions` | ✓ | ✓ |  | ✓ |  | ● |
 | PUT | `/anomalies/{id:guid}/validate` | ✓ |  |  | ✓ |  | ● |
 | GET | `/missions/{missionId:guid}/ai-analysis/detections` | ✓ | ✓ | ✓ | ✓ | ✓ | ● |
 | PUT | `/missions/{missionId:guid}/ai-analysis/detections/{detectionId:guid}/review` | ✓ |  |  | ✓ |  | ● |
@@ -166,7 +175,7 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | POST | `/inspection-schedules/{id:guid}/trigger` | ✓ | ✓ |  |  |  |  |
 | GET | `/inspections/mission/{missionId:guid}` | ✓ | ✓ | ✓ | ✓ |  |  |
 | GET | `/inspections/report/{id:guid}` | ✓ | ✓ | ✓ | ✓ |  |  |
-| POST | `/inspections/upload` | ✓ | ✓ | ✓ | ✓ |  | ● |
+| POST | `/inspections/upload` | ✓ |  | ✓ | ✓ |  | ● |
 | GET | `/maintenance/tickets` | ✓ | ✓ |  |  | ✓ | ● |
 | POST | `/maintenance/tickets` | ✓ | ✓ |  |  |  | ● |
 | GET | `/maintenance/tickets/my` |  |  |  |  | ✓ |  |
@@ -192,7 +201,7 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | DELETE | `/missions/{id:guid}/assignments/{assignmentId:guid}` | ✓ | ✓ |  |  |  |  |
 | POST | `/missions/{id:guid}/assignments/{assignmentId:guid}/reassign` | ✓ | ✓ |  |  |  |  |
 | POST | `/missions/{id:guid}/cancel` | ✓ | ✓ |  |  |  |  |
-| POST | `/missions/{id:guid}/check-in` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| POST | `/missions/{id:guid}/check-in` | ✓ |  | ✓ |  |  | ● |
 | GET | `/missions/{id:guid}/communications` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | POST | `/missions/{id:guid}/communications` | ✓ | ✓ | ✓ |  |  |  |
 | POST | `/missions/{id:guid}/complete` | ✓ | ✓ | ✓ |  |  |  |
@@ -204,7 +213,7 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | GET | `/missions/{id:guid}/incidents` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | POST | `/missions/{id:guid}/incidents` | ✓ | ✓ | ✓ |  |  |  |
 | GET | `/missions/{id:guid}/maintenance-tasks` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
-| POST | `/missions/{id:guid}/media` | ✓ | ✓ | ✓ | ✓ |  | ● |
+| POST | `/missions/{id:guid}/media` | ✓ |  | ✓ | ✓ |  | ● |
 | POST | `/missions/{id:guid}/postpone` | ✓ | ✓ |  |  |  |  |
 | PATCH | `/missions/{id:guid}/priority` | ✓ | ✓ |  |  |  |  |
 | POST | `/missions/{id:guid}/remind` | ✓ | ✓ |  |  |  |  |
@@ -221,9 +230,9 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | GET | `/monitor/mission-status` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | GET | `/monitor/recent-defects` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | GET | `/monitor/summary` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
-| GET | `/pre-mission-assessments` | ✓ | ✓ | ✓ |  | ✓ |  |
+| GET | `/pre-mission-assessments` | ✓ | ✓ | ✓ |  | ✓ | ● |
 | POST | `/pre-mission-assessments` | ✓ | ✓ |  |  |  |  |
-| GET | `/pre-mission-assessments/{id:guid}` | ✓ | ✓ | ✓ |  | ✓ |  |
+| GET | `/pre-mission-assessments/{id:guid}` | ✓ | ✓ | ✓ |  | ✓ | ● |
 | POST | `/pre-mission-assessments/{id:guid}/cancel` | ✓ | ✓ |  |  |  |  |
 | POST | `/pre-mission-assessments/{id:guid}/confirm` | ✓ | ✓ |  |  |  |  |
 | POST | `/pre-mission-assessments/{id:guid}/consume` | ✓ | ✓ |  |  |  |  |
@@ -231,7 +240,7 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | POST | `/pre-mission-assessments/{id:guid}/evaluate` | ✓ | ✓ |  |  |  |  |
 | POST | `/pre-mission-assessments/{id:guid}/mark-completed` | ✓ | ✓ |  |  |  |  |
 | POST | `/pre-mission-assessments/{id:guid}/re-evaluate` | ✓ | ✓ |  |  |  |  |
-| GET | `/pre-mission-assessments/{id:guid}/resource-readiness` | ✓ | ✓ | ✓ |  |  |  |
+| GET | `/pre-mission-assessments/{id:guid}/resource-readiness` | ✓ | ✓ | ✓ |  | ✓ | ● |
 | GET | `/regions` | ✓ | ✓ | ✓ | ✓ | ✓ | ● |
 | POST | `/regions` | ✓ | ✓ |  |  |  |  |
 | DELETE | `/regions/{id:guid}` | ✓ | ✓ |  |  |  |  |
@@ -264,38 +273,54 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | GET | `/users/{userId:guid}/geographic-scopes` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | PUT | `/users/{userId:guid}/geographic-scopes` | ✓ | ✓ |  |  |  | ● |
 
-## 5. Chưa làm, cần nhóm quyết
+## 5. Sửa spec `MASTER_SYSTEM_SPEC.md` §4 (cần `SDD_PHASE=SPEC`)
 
-| # | Việc | Lý do chưa làm |
+Hook chặn sửa spec trong pha `CODE`. Thay các dòng sau trong bảng ma trận phân quyền:
+
+| Dòng hiện tại | Thay bằng |
+|---|---|
+| `Quản lý Region, Tower, UAV, Flight Controller` — Technician: Xem *(trong vùng)* | Tách 2 dòng: `Quản lý Region, Tower, Flight Controller` (giữ nguyên) và `Quản lý UAV / Drone (tạo, sửa, xóa)`: SystemAdmin ✅, Manager ✅ *(trong vùng)*, Inspector Xem *(trong vùng)*, Analyst Xem *(trong vùng)*, **Technician ✅ *(trong vùng)*** |
+| `Tạo / Duyệt Pre-Mission Assessment` — Inspector/Analyst/Technician: Xem *(trong vùng)* | Inspector ❌, Analyst ❌, Technician ❌ (chỉ SystemAdmin và Manager của vùng) |
+| `Check-in hiện trường` | Giữ: chỉ Inspector được giao. Thêm ghi chú: mission `Ready` khi Inspector đã check-in; Analyst, Technician chỉ `Accept` |
+| `Upload Ảnh / Video cho AI (Mission)` — Analyst: ✅ | Analyst: ✅ *(được giao hoặc trong vùng)* |
+| `Xem danh sách & chi tiết Defect trong Nhiệm vụ` — Analyst: ✅ *(mission được giao)* | Analyst: ✅ *(mission được giao hoặc trong vùng)* |
+| `Duyệt Defect` — Analyst: ✅ *(duy nhất: Analyst trong mission đó)* | Analyst: ✅ *(Analyst được giao hoặc Analyst của vùng nhiệm vụ)* |
+
+## 6. Còn lại, chưa làm
+
+| # | Việc | Ghi chú |
 |---|---|---|
-| 1 | Check-in chỉ Inspector (và SystemAdmin) như spec | Luồng hiện tại cả 3 role đều check-in (production: 4 check-in mỗi role) và mission chỉ `Ready` khi **mọi** thành viên đã Accept đều check-in (`Mission.RecalculateReadiness`). Đổi quyền phải đổi luôn điều kiện Ready và nút check-in trên FE. |
-| 2 | Bỏ quyền upload của Manager (`POST /ai-analysis/upload`, `/inspections/upload`, `/missions/{id}/media`) | Production có 17 file do Manager upload vào nhiệm vụ: luồng đang được dùng. |
-| 3 | Analyst / Technician xem `pre-mission-assessments/{id}/resource-readiness`, Analyst xem Pre-Mission | Luật đọc Pre-Mission trong `PreMissionAssessmentService` phức tạp (Inspector/Technician xem mọi vùng theo commit `0933670`), FE cũng chặn Analyst. |
-| 4 | Lọc vùng danh sách anomaly (`GET /anomalies`) | AIInspectionService chưa map `UserGeographicScopes`, `Regions`; cần thêm entity/mapping. |
-| 5 | Analyst duyệt defect phải thuộc nhiệm vụ (AIInspectionService) | `ReviewMissionAiDetectionCommandHandler` và `PUT /anomalies/{id}/validate` không kiểm tra phân công: Analyst nào cũng duyệt được defect của mọi nhiệm vụ (phát hiện khi rà). Bên OperationsService đã kiểm tra. |
-| 6 | Telemetry realtime `/hubs/telemetry` | Chưa rà SignalR hub; chỉ sửa endpoint REST. |
+| 1 | Dashboard `monitor/*` và cảnh báo khẩn `alerts/*` chưa lọc theo vùng | Mọi role thấy số liệu / cảnh báo của mọi vùng |
+| 2 | `GET /drones/{id}/status`, `/drones/{code}/telemetry/latest`, `/drones/available` chưa lọc theo vùng | Danh sách và chi tiết Drone đã lọc |
+| 3 | Upload không truyền `missionId` gắn file vào nhiệm vụ mới nhất của người gọi, nếu không có thì vào nhiệm vụ mới nhất của cả hệ thống (`UploadStandaloneAnalysisCommandHandler.ResolveMissionAsync`) | Ảnh test có thể lẫn vào nhiệm vụ người khác; nên luôn tạo nhiệm vụ AdHoc riêng |
+| 4 | `POST missions/{id}/ai-analysis/from-media/{mediaId}` (chạy lại AI) vẫn cho Manager | Không phải upload; giữ nguyên |
+| 5 | Upload bên OperationsService chỉ xét vùng được gán trực tiếp (chưa tính vùng con) | Bên AIInspectionService đã tính vùng con |
 
-## 6. FE cần làm theo (chưa sửa)
+## 7. FE cần làm theo (chưa sửa)
 
 | Màn | Việc |
 |---|---|
-| Sidebar, `route-access.ts` | Manager: bỏ mục "Nhật ký hệ thống" (`/system/audit-logs` giờ chỉ SystemAdmin) |
-| Sidebar, route `/reports` | Inspector: bỏ mục "Báo cáo", thêm guard cho route |
-| Quản lý UAV | Technician: hiện nút "Xóa UAV" (`canManageFleet` đang chỉ Admin/Manager) |
-| Chi tiết phiếu bảo trì | Manager: ẩn nút thêm minh chứng / vật tư (`canAddEvidence`), chỉ còn nghiệm thu, trả lại, đóng |
-| Kết quả giám định trong nhiệm vụ | Technician được xem tab defect; SystemAdmin được duyệt |
+| Sidebar, `route-access.ts` | Manager: bỏ "Nhật ký hệ thống" (`/system/audit-logs` chỉ SystemAdmin) |
+| Sidebar, route `/reports` | Inspector: bỏ "Báo cáo", thêm guard |
+| Sidebar, route `/pre-mission` | Inspector, Technician: bỏ "Đánh giá tiền bay" (chỉ Manager, Admin) |
+| Quản lý UAV | Technician: hiện nút "Xóa UAV" |
+| Chi tiết phiếu bảo trì | Manager: ẩn thêm minh chứng / vật tư |
+| Nhiệm vụ (màn hiện trường) | Chỉ Inspector thấy nút Check-in; Analyst, Technician chỉ Accept |
+| AI Studio upload | Manager: ẩn trang upload (`aiAnalysis` đang có Manager) |
+| Kết quả giám định | Technician xem tab defect; SystemAdmin và Analyst của vùng được duyệt |
 
-Test FE đang ghi luật cũ và sẽ phải sửa theo: `sidebar.spec.ts` (menu Inspector, link phụ Manager), `drone-management.spec.ts` (Technician không xóa). Trên `main` FE có sẵn 10 test fail không liên quan (facility-store, active-learning).
+Test FE đang ghi luật cũ và sẽ phải sửa: `sidebar.spec.ts`, `drone-management.spec.ts`. Trên `main` FE có sẵn 10 test fail không liên quan (facility-store, active-learning).
 
-## 7. Ảnh hưởng khi deploy
+## 8. Ảnh hưởng khi deploy
 
-- Manager chưa có vùng sẽ không thấy gì. Production hiện có 1 tài khoản như vậy: `khanhnqse19+manager@gmail.com`.
-- 4/7 Inspector chưa có vùng: danh sách Drone của họ sẽ trống; chi tiết Drone của nhiệm vụ được giao vẫn xem được.
-- Spec `MASTER_SYSTEM_SPEC.md` §4 dòng "Quản lý Region, Tower, UAV, Flight Controller" còn ghi Technician chỉ **Xem**: cần sửa (ở `SDD_PHASE=SPEC`) thành Technician quản lý UAV trong vùng.
+- Manager chưa có vùng không thấy gì: production có 1 tài khoản `khanhnqse19+manager@gmail.com`.
+- 4/7 Inspector chưa có vùng: danh sách Drone trống; dữ liệu nhiệm vụ được giao vẫn xem được.
+- Production đang có check-in của Analyst/Technician (luồng cũ); sau deploy họ bị `403 CHECK_IN_INSPECTOR_ONLY`, nhiệm vụ không còn chờ họ check-in.
+- Production có 17 file do Manager upload; sau deploy Manager không upload được.
 
-## 8. Kiểm chứng
+## 9. Kiểm chứng
 
 - `dotnet build UavPms.sln -c Release`: thành công.
-- Unit test: OperationsService 428/428, AIInspectionService 77/77, IdentityService pass.
-- Integration test OperationsService (PostgreSQL thật qua Testcontainers): 141/141.
-- Test mới: Drone theo vùng (5), phiếu bảo trì theo vùng (3), Manager gán vùng (1), xem/duyệt defect trong nhiệm vụ (2), Technician xem defect AI (2), RBAC attribute AnomaliesController (1).
+- OperationsService: unit 435/435, integration (PostgreSQL thật, Testcontainers, gồm các test khóa BE-REQ-101) 141/141.
+- AIInspectionService: 83/83 (gồm `MissionAccessPolicyTests` chạy policy thật trên InMemory DB).
+- IdentityService: pass.

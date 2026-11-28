@@ -8,6 +8,7 @@ using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Events;
+using UavPms.AIInspectionService.Tests.Common;
 
 namespace UavPms.AIInspectionService.Tests.Features.AIAnalysis;
 
@@ -63,6 +64,7 @@ public sealed class UploadStandaloneAnalysisTests
             fileStorage.Object,
             publisher.Object,
             currentUser.Object,
+            AccessPolicyStub.AllowAll(),
             unitOfWork.Object,
             Mock.Of<ILogger<UploadStandaloneAnalysisCommandHandler>>());
 

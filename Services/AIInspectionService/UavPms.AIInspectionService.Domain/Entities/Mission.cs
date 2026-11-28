@@ -12,6 +12,7 @@ public class Mission : BaseEntity
     public string MissionCode { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public Guid ManagerId { get; set; }
+    public Guid? RegionId { get; set; }
     public Guid? UavId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string MissionType { get; set; } = "AdHoc";

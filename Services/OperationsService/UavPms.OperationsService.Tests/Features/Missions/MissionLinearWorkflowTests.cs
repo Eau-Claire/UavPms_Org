@@ -118,30 +118,30 @@ public class MissionLinearWorkflowTests
         await asInspector.Should().ThrowAsync<ForbiddenException>().WithMessage("MISSION_DEFECT_ACCESS_DENIED");
     }
 
-    [Fact]
-    public async Task ReviewDetectionAsync_SystemAdminMayReview_UnassignedAnalystMayNot()
+    [Theory]
+    [InlineData(UserRoles.SystemAdmin, false, true)]
+    [InlineData(UserRoles.Analyst, true, true)]   // Analyst của vùng nhiệm vụ
+    [InlineData(UserRoles.Analyst, false, false)] // Analyst vùng khác, không được giao
+    [InlineData(UserRoles.Manager, true, false)]  // Manager xem nhưng không duyệt
+    public async Task ReviewDetectionAsync_OnlySystemAdminOrRegionOrAssignedAnalyst(string role, bool inRegion, bool allowed)
     {
-        // Spec §4: duyệt defect là Analyst của nhiệm vụ và SystemAdmin.
-        var adminId = Guid.NewGuid();
-        var analystId = Guid.NewGuid();
-        var admin = CreateUserMock(adminId, UserRoles.SystemAdmin);
-        await using var db = CreateContext(admin.Object);
-        db.Users.AddRange(
-            new User { Id = adminId, FullName = "Admin", Status = "Active" },
-            new User { Id = analystId, FullName = "Analyst", Status = "Active" });
+        // Spec §4: duyệt defect là SystemAdmin, Analyst được giao hoặc Analyst của vùng nhiệm vụ.
+        var userId = Guid.NewGuid();
+        var user = CreateUserMock(userId, role);
+        await using var db = CreateContext(user.Object);
+        db.Users.Add(new User { Id = userId, FullName = "Reviewer", Status = "Active" });
         var (missionId, regionId) = await SeedMissionWithTechnicianAsync(db, Guid.NewGuid());
-        db.UserGeographicScopes.Add(new UserGeographicScope { Id = Guid.NewGuid(), UserId = analystId, RegionId = regionId });
+        db.UserGeographicScopes.Add(new UserGeographicScope { Id = Guid.NewGuid(), UserId = userId, RegionId = inRegion ? regionId : Guid.NewGuid() });
         await db.SaveChangesAsync();
-        var request = new ReviewDetectionRequest("Approved");
 
         // Qua bước phân quyền thì gặp NotFound vì detection không tồn tại.
-        var asAdmin = () => new MissionLifecycleService(db, admin.Object)
-            .ReviewDetectionAsync(missionId, Guid.NewGuid(), request, CancellationToken.None);
-        var asAnalyst = () => new MissionLifecycleService(db, CreateUserMock(analystId, UserRoles.Analyst).Object)
-            .ReviewDetectionAsync(missionId, Guid.NewGuid(), request, CancellationToken.None);
+        var review = () => new MissionLifecycleService(db, user.Object)
+            .ReviewDetectionAsync(missionId, Guid.NewGuid(), new ReviewDetectionRequest("Approved"), CancellationToken.None);
 
-        await asAdmin.Should().ThrowAsync<NotFoundException>();
-        await asAnalyst.Should().ThrowAsync<ForbiddenException>();
+        if (allowed)
+            await review.Should().ThrowAsync<NotFoundException>();
+        else
+            await review.Should().ThrowAsync<ForbiddenException>();
     }
 
     [Fact]

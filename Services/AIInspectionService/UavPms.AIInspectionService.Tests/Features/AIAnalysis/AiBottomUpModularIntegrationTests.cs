@@ -24,6 +24,7 @@ using UavPms.AIInspectionService.Infrastructure.Services;
 using UavPms.Shared.Contracts.Constants;
 using UavPms.Shared.Contracts.Events;
 using Xunit;
+using UavPms.AIInspectionService.Tests.Common;
 
 namespace UavPms.AIInspectionService.Tests.Features.AIAnalysis;
 
@@ -373,8 +374,7 @@ public class AiBottomUpModularIntegrationTests
         var detectionsQueryHandler = new GetMissionAiDetectionsQueryHandler(
             new InspectionMediaRepository(db),
             new GenericRepository<Mission>(db),
-            new GenericRepository<MissionAssignment>(db),
-            userCtx);
+            AccessPolicyStub.AllowAll());
         var detectionsList = await detectionsQueryHandler.Handle(new GetMissionAiDetectionsQuery(missionId), CancellationToken.None);
         detectionsList.Should().ContainSingle();
         detectionsList[0].Detections.Select(d => d.Id).Should().Equal(run2Anomaly.Id);
@@ -383,12 +383,14 @@ public class AiBottomUpModularIntegrationTests
         var assignTowerHandler = new AssignAnomalyTowerCommandHandler(
             new AnomalyRepository(db),
             new GenericRepository<Tower>(db),
-            new UnitOfWork(db));
+            new UnitOfWork(db),
+            AccessPolicyStub.AllowAll());
 
         var reviewHandler = new ReviewMissionAiDetectionCommandHandler(
             new AnomalyRepository(db),
             new UnitOfWork(db),
             userCtx,
+            AccessPolicyStub.AllowAll(),
             new GenericRepository<OutboxMessage>(db),
             Mock.Of<IEventPublisher>(),
             new GenericRepository<EmergencyAlert>(db),

@@ -1,5 +1,6 @@
 using MediatR;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Common.Security;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
 
@@ -13,15 +14,18 @@ public class AssignAnomalyTowerCommandHandler : IRequestHandler<AssignAnomalyTow
     private readonly IAnomalyRepository _anomalyRepository;
     private readonly IGenericRepository<Tower> _towerRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IMissionAccessPolicy _accessPolicy;
 
     public AssignAnomalyTowerCommandHandler(
         IAnomalyRepository anomalyRepository,
         IGenericRepository<Tower> towerRepository,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IMissionAccessPolicy accessPolicy)
     {
         _anomalyRepository = anomalyRepository;
         _towerRepository = towerRepository;
         _unitOfWork = unitOfWork;
+        _accessPolicy = accessPolicy;
     }
 
     public async Task<AnomalyTowerAssignmentDto> Handle(AssignAnomalyTowerCommand request, CancellationToken cancellationToken)
@@ -33,6 +37,11 @@ public class AssignAnomalyTowerCommandHandler : IRequestHandler<AssignAnomalyTow
 
         var anomaly = await _anomalyRepository.GetByIdWithDetailAsync(request.AnomalyId)
             ?? throw new NotFoundException(nameof(DetectedAnomaly), request.AnomalyId);
+        // Đổi cột thủ công đi cùng quyền duyệt defect (spec §4).
+        if (!await _accessPolicy.CanReviewAsync(anomaly.Media?.Mission))
+        {
+            throw new ForbiddenException("DEFECT_REVIEW_DENIED");
+        }
         if (anomaly.SupersededById.HasValue)
         {
             throw new BusinessRuleException("ANOMALY_SUPERSEDED",

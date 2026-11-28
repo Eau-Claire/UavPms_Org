@@ -2,6 +2,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using UavPms.AIInspectionService.Application.Common.Behaviors;
+using UavPms.AIInspectionService.Application.Common.Security;
 
 namespace UavPms.AIInspectionService.Application;
 
@@ -16,6 +17,9 @@ public static class DependencyInjection
     {
         // Đăng ký toàn bộ các FluentValidation Validators trong Assembly
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
+
+        // Một nơi duy nhất cho quyền xem / duyệt / upload trên nhiệm vụ (spec §4).
+        services.AddScoped<IMissionAccessPolicy, MissionAccessPolicy>();
 
         // Đăng ký MediatR và cấu hình các pipeline behaviors chạy ngầm
         services.AddMediatR(cfg =>

@@ -112,7 +112,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     {
         var mission = await ManagedMission(missionId, ct, true); RequirePreExecution(mission);
         if (request.UserId == Guid.Empty) throw new BusinessRuleException("ASSIGNEE_REQUIRED", "UserId is required.");
-        var role = string.IsNullOrWhiteSpace(request.AssignmentRole) ? "INSPECTOR" : request.AssignmentRole.Trim();
+        var role = string.IsNullOrWhiteSpace(request.AssignmentRole) ? MissionAssignment.InspectorRole : request.AssignmentRole.Trim();
 
         // Adding someone who is already on the mission only updates the role; it never books them twice.
         var existing = mission.ActiveAssignments().FirstOrDefault(x => x.UserId == request.UserId);
@@ -267,6 +267,10 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         var assignment = mission.Assignments.SingleOrDefault(x => x.UserId == _current.UserId && x.Status == MissionAssignmentStatus.Active);
         if (assignment == null)
             throw new ForbiddenException("USER_NOT_ASSIGNED");
+
+        // Chỉ Inspector (người bay tại hiện trường) check-in tại cột số 1; Analyst/Technician làm việc tại văn phòng.
+        if (!assignment.HasRole(MissionAssignment.InspectorRole))
+            throw new ForbiddenException("CHECK_IN_INSPECTOR_ONLY");
 
         if (assignment.ResponseStatus != MissionAssignmentResponse.Accepted)
             throw new BusinessRuleException("ASSIGNMENT_NOT_ACCEPTED");
@@ -1392,14 +1396,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         await RequireActiveCaller(ct);
         var mission = await AccessibleMission(missionId, ct, true);
 
-        // BR: chỉ Analyst được phân công trong nhiệm vụ (và SystemAdmin, spec §4) mới được duyệt defect.
-        var isAssignedAnalyst = IsCurrentMember(mission) && mission.ActiveAssignments().Any(a =>
-            a.UserId == _current.UserId && a.AssignmentRole.Equals("ANALYST", StringComparison.OrdinalIgnoreCase));
-
-        if (!IsGlobal && !isAssignedAnalyst)
-        {
-            throw new ForbiddenException("CHỈ CHUYÊN VIÊN PHÂN TÍCH (ANALYST) ĐƯỢC PHÂN CÔNG TRONG NHIỆM VỤ MỚI CÓ QUYỀN DUYỆT KHUYẾT TẬT");
-        }
+        await RequireReviewMissionDefects(mission, ct);
 
         var anomaly = await _db.DetectedAnomalies
             .Include(a => a.Category)
@@ -2146,19 +2143,31 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
         a.ResponseStatus != MissionAssignmentResponse.Cancelled);
 
     /// <summary>
-    /// Xem defect của nhiệm vụ (spec §4): SystemAdmin, Manager phụ trách hoặc Manager có vùng của nhiệm vụ,
-    /// và mọi thành viên được phân công (Inspector, Analyst, Technician).
+    /// Xem defect của nhiệm vụ (spec §4): SystemAdmin, Manager phụ trách, mọi thành viên được phân công,
+    /// và Manager/Analyst có vùng của nhiệm vụ.
     /// </summary>
     private async Task RequireViewMissionDefects(Mission mission, CancellationToken ct)
     {
         if (IsGlobal || mission.ManagerId == _current.UserId || IsCurrentMember(mission))
             return;
 
-        var isRegionManager = _current.Roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase)
-            && mission.RegionId is Guid regionId
-            && await _db.UserGeographicScopes.AnyAsync(x => x.UserId == _current.UserId && x.RegionId == regionId, ct);
-        if (!isRegionManager)
+        var isRegionReader = RegionScope.HasRole(_current, UserRoles.Manager) || RegionScope.HasRole(_current, UserRoles.Analyst);
+        if (!isRegionReader || !await RegionScope.IsGrantedAsync(_db, _current, mission.RegionId, ct))
             throw new ForbiddenException("MISSION_DEFECT_ACCESS_DENIED");
+    }
+
+    /// <summary>Duyệt defect (spec §4): SystemAdmin, Analyst được phân công trong nhiệm vụ hoặc Analyst có vùng của nhiệm vụ.</summary>
+    private async Task RequireReviewMissionDefects(Mission mission, CancellationToken ct)
+    {
+        if (IsGlobal)
+            return;
+        if (!RegionScope.HasRole(_current, UserRoles.Analyst))
+            throw new ForbiddenException("DEFECT_REVIEW_DENIED");
+
+        var isAssignedAnalyst = IsCurrentMember(mission) && mission.ActiveAssignments()
+            .Any(a => a.UserId == _current.UserId && a.HasRole(MissionAssignment.AnalystRole));
+        if (!isAssignedAnalyst && !await RegionScope.IsGrantedAsync(_db, _current, mission.RegionId, ct))
+            throw new ForbiddenException("DEFECT_REVIEW_DENIED");
     }
     private static bool IsActive(string status) => status.Equals("Active", StringComparison.OrdinalIgnoreCase) || status.Equals("Enabled", StringComparison.OrdinalIgnoreCase);
     /// <summary>BR-32: personnel, UAV, targets and priority are frozen once the mission has started (also while suspended after the start).</summary>
@@ -2181,7 +2190,7 @@ public sealed class MissionLifecycleService : IMissionLifecycleService
     private static Guid RequireRegion(Mission m) => m.RegionId ?? throw new BusinessRuleException("MISSION_REGION_REQUIRED");
 
     private static bool IsInspectorRole(string? role) =>
-        string.Equals(role, "INSPECTOR", StringComparison.OrdinalIgnoreCase);
+        string.Equals(role, MissionAssignment.InspectorRole, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Bumps the mission version so concurrent changes to the same mission conflict (BR-07).</summary>
     private static void TouchMission(Mission m) { m.Version++; m.UpdatedAt = DateTime.UtcNow; }

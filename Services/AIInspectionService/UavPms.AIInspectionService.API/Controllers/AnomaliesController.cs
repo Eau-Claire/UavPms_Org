@@ -9,11 +9,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using UavPms.AIInspectionService.Application.Common.Exceptions;
+using UavPms.AIInspectionService.Application.Common.Security;
 using UavPms.AIInspectionService.Application.Features.AIAnalysis.Commands.ReviewMissionAiDetection;
 using UavPms.AIInspectionService.Application.Features.Anomalies;
 using UavPms.AIInspectionService.Domain.Entities;
 using UavPms.AIInspectionService.Domain.Interfaces.Repositories;
-using UavPms.AIInspectionService.Domain.Interfaces.Services;
 using UavPms.Shared.Contracts.Constants;
 
 namespace UavPms.AIInspectionService.API.Controllers;
@@ -25,20 +25,14 @@ namespace UavPms.AIInspectionService.API.Controllers;
 public class AnomaliesController : ControllerBase
 {
     private readonly IAnomalyRepository _anomalyRepository;
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly ICurrentUserServices _currentUserServices;
     private readonly ISender _mediator;
+    private readonly IMissionAccessPolicy _accessPolicy;
 
-    public AnomaliesController(
-        IAnomalyRepository anomalyRepository,
-        IUnitOfWork unitOfWork,
-        ICurrentUserServices currentUserServices,
-        ISender mediator)
+    public AnomaliesController(IAnomalyRepository anomalyRepository, ISender mediator, IMissionAccessPolicy accessPolicy)
     {
         _anomalyRepository = anomalyRepository;
-        _unitOfWork = unitOfWork;
-        _currentUserServices = currentUserServices;
         _mediator = mediator;
+        _accessPolicy = accessPolicy;
     }
 
     /// <summary>
@@ -84,6 +78,12 @@ public class AnomaliesController : ControllerBase
             return NotFound(new ApiResponse(false, $"Anomaly with ID {id} was not found.", ErrorCode: "NOT_FOUND"));
         }
 
+        // Defect gắn với nhiệm vụ: chỉ người tham gia nhiệm vụ (hoặc Manager/Analyst của vùng) được xem.
+        if (!await _accessPolicy.CanViewAsync(a.Media?.Mission))
+        {
+            throw new ForbiddenException("MISSION_DEFECT_ACCESS_DENIED");
+        }
+
         return Ok(new ApiResponse(true, "Anomaly retrieved successfully.", new
         {
             id = a.Id.ToString(),
@@ -125,14 +125,15 @@ public class AnomaliesController : ControllerBase
         if (pageSize < 1) pageSize = 12;
 
         IReadOnlyList<DetectedAnomaly> allAnomalies;
+        var visibility = await _accessPolicy.GetVisibilityAsync();
         var sStatus = status?.Trim().ToLowerInvariant();
         if (sStatus == "pending" || sStatus == "inreview")
         {
-            allAnomalies = await _anomalyRepository.GetPendingWithDetailsAsync();
+            allAnomalies = await _anomalyRepository.GetPendingWithDetailsAsync(visibility);
         }
         else
         {
-            allAnomalies = await _anomalyRepository.GetAllWithDetailsAsync();
+            allAnomalies = await _anomalyRepository.GetAllWithDetailsAsync(visibility);
             if (!string.IsNullOrWhiteSpace(sStatus) && sStatus != "all")
             {
                 allAnomalies = allAnomalies.Where(a =>
@@ -142,18 +143,6 @@ public class AnomaliesController : ControllerBase
                     (sStatus == "resolved" && (a.ValidationStatus == "Resolved" || a.ValidationStatus == "resolved"))
                 ).ToList();
             }
-        }
-
-        var currentUserId = _currentUserServices.UserId;
-        if (currentUserId != Guid.Empty && User.IsInRole(UserRoles.Analyst))
-        {
-            allAnomalies = allAnomalies.Where(a =>
-                a.Media?.Mission == null ||
-                a.Media.Mission.Assignments.Any(asg =>
-                    asg.UserId == currentUserId &&
-                    (asg.AssignmentRole == "ANALYST" || asg.AssignmentRole.Equals("Analyst", StringComparison.OrdinalIgnoreCase)) &&
-                    asg.Status == "Active")
-            ).ToList();
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -224,20 +213,8 @@ public class AnomaliesController : ControllerBase
         if (pageIndex < 1) pageIndex = 1;
         if (pageSize < 1) pageSize = 12;
 
-        var anomalies = await _anomalyRepository.GetPendingWithDetailsAsync();
-
-        // BR: Chỉ có Analyst nằm trong nhiệm vụ mà defect đó được phát hiện mới có quyền xem
-        var currentUserId = _currentUserServices.UserId;
-        if (currentUserId != Guid.Empty)
-        {
-            anomalies = anomalies.Where(a =>
-                a.Media?.Mission == null ||
-                a.Media.Mission.Assignments.Any(asg =>
-                    asg.UserId == currentUserId &&
-                    (asg.AssignmentRole == "ANALYST" || asg.AssignmentRole.Equals("Analyst", StringComparison.OrdinalIgnoreCase)) &&
-                    asg.Status == "Active")
-            ).ToList();
-        }
+        // Analyst thấy defect chờ duyệt của nhiệm vụ được giao hoặc thuộc vùng của mình (lọc trong SQL).
+        var anomalies = await _anomalyRepository.GetPendingWithDetailsAsync(await _accessPolicy.GetVisibilityAsync());
 
         if (!string.IsNullOrWhiteSpace(search))
         {

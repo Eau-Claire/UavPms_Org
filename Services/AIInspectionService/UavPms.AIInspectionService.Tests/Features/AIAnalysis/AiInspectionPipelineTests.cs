@@ -22,6 +22,7 @@ using UavPms.AIInspectionService.Infrastructure.Persistence;
 using UavPms.AIInspectionService.Infrastructure.Repositories;
 using UavPms.Shared.Contracts.Events;
 using Xunit;
+using UavPms.AIInspectionService.Tests.Common;
 
 namespace UavPms.AIInspectionService.Tests.Features.AIAnalysis;
 
@@ -140,8 +141,7 @@ public class AiInspectionPipelineTests
         var queryHandler = new GetMissionAiDetectionsQueryHandler(
             new InspectionMediaRepository(context),
             new GenericRepository<Mission>(context),
-            new GenericRepository<MissionAssignment>(context),
-            Mock.Of<ICurrentUserServices>());
+            AccessPolicyStub.AllowAll());
         var mediaResults = await queryHandler.Handle(
             new GetMissionAiDetectionsQuery(missionId),
             CancellationToken.None);
@@ -275,6 +275,7 @@ public class AiInspectionPipelineTests
             fileStorage.Object,
             Mock.Of<IEventPublisher>(),
             currentUser.Object,
+            AccessPolicyStub.AllowAll(),
             new UnitOfWork(context),
             Mock.Of<ILogger<UploadStandaloneAnalysisCommandHandler>>(),
             new GenericRepository<OutboxMessage>(context));
@@ -518,8 +519,7 @@ public class AiInspectionPipelineTests
         var queryHandler = new GetMissionAiDetectionsQueryHandler(
             new InspectionMediaRepository(context),
             new GenericRepository<Mission>(context),
-            new GenericRepository<MissionAssignment>(context),
-            Mock.Of<ICurrentUserServices>());
+            AccessPolicyStub.AllowAll());
         var mediaDetections = await queryHandler.Handle(new GetMissionAiDetectionsQuery(missionId), CancellationToken.None);
 
         mediaDetections.Should().ContainSingle();

@@ -49,6 +49,24 @@ public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
     }
 }
 
+public class RegionConfiguration : IEntityTypeConfiguration<Region>
+{
+    public void Configure(EntityTypeBuilder<Region> builder)
+    {
+        builder.ToTable("Regions");
+        builder.HasKey(e => e.Id);
+    }
+}
+
+public class UserGeographicScopeConfiguration : IEntityTypeConfiguration<UserGeographicScope>
+{
+    public void Configure(EntityTypeBuilder<UserGeographicScope> builder)
+    {
+        builder.ToTable("UserGeographicScopes");
+        builder.HasKey(e => e.Id);
+    }
+}
+
 public class TowerConfiguration : IEntityTypeConfiguration<Tower>
 {
     public void Configure(EntityTypeBuilder<Tower> builder)

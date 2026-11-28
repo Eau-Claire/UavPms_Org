@@ -109,7 +109,8 @@ public class AIAnalysisController : ControllerBase
     /// Tải lên ảnh/video trực tiếp lên MinIO và đưa vào hàng đợi phân tích AI (AI Studio Standalone Upload).
     /// </summary>
     [HttpPost("upload")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    // Manager không upload (spec §4); handler kiểm tra phân công / standalone qua IMissionAccessPolicy.
+    [Authorize(Roles = UserRoles.AdminInspectorAnalyst)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadStandaloneAnalysis(
         List<IFormFile>? files,
