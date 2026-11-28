@@ -44,11 +44,11 @@ public sealed class UavManagementService : IUavManagementService
         bool? availableOnly = null,
         CancellationToken ct = default)
     {
-        var query = _db.Uavs
+        // Chỉ Drone người gọi được xem (spec §4: theo vùng hoặc nhiệm vụ được giao; SystemAdmin mọi Drone).
+        IQueryable<Uav> query = DroneScope.Visible(_db, _current)
             .Include(x => x.AssignedRegion)
             .Include(x => x.FlightControllers.Where(fc => !fc.IsDeleted))
-            .Include(x => x.TechnicalInspections.Where(t => !t.IsDeleted).OrderByDescending(t => t.CompletedAt).Take(1))
-            .Where(x => !x.IsDeleted);
+            .Include(x => x.TechnicalInspections.Where(t => !t.IsDeleted).OrderByDescending(t => t.CompletedAt).Take(1));
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -82,13 +82,6 @@ public sealed class UavManagementService : IUavManagementService
             query = query.Where(x => x.OperationalStatus == DroneOperationalStatus.Available);
         }
 
-        // Danh sách Drone chỉ gồm các vùng của người gọi (spec §4); SystemAdmin thấy mọi vùng.
-        if (!RegionScope.IsSystemAdmin(_current))
-        {
-            var regionIds = RegionScope.RegionIds(_db, _current.UserId);
-            query = query.Where(x => x.AssignedRegionId != null && regionIds.Contains(x.AssignedRegionId.Value));
-        }
-
         var drones = await query
             .OrderBy(x => x.UavCode)
             .ToListAsync(ct);
@@ -108,12 +101,8 @@ public sealed class UavManagementService : IUavManagementService
             .SingleOrDefaultAsync(x => x.Id == droneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", droneId);
 
-        // Xem chi tiết khi Drone thuộc vùng của người gọi, hoặc người gọi đang được giao nhiệm vụ dùng Drone này
-        // (thành viên hiện trường có thể chưa được gán vùng).
-        var usedByMyMission = await _db.Missions.AnyAsync(m => m.UavId == droneId
-            && m.Assignments.Any(a => a.UserId == _current.UserId && a.Status == MissionAssignmentStatus.Active), ct);
-        if (!usedByMyMission)
-            await DroneRegionScope.EnsureAsync(_db, _current, drone, ct);
+        if (!await DroneScope.Visible(_db, _current).AnyAsync(x => x.Id == droneId, ct))
+            throw new ForbiddenException("DRONE_ACCESS_DENIED");
 
         return MapToDetailsDto(drone);
     }

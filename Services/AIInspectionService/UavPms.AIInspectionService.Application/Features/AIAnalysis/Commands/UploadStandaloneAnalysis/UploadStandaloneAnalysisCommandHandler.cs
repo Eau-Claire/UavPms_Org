@@ -274,42 +274,30 @@ public sealed class UploadStandaloneAnalysisCommandHandler
             return specifiedMission;
         }
 
-        if (currentUserId != Guid.Empty)
-        {
-            var userMissions = await _missionRepository.FindAsync(m => m.ManagerId == currentUserId && !m.IsDeleted);
-            var latestUserMission = userMissions?
-                .OrderByDescending(m => m.CreatedAt)
-                .FirstOrDefault();
-            if (latestUserMission != null)
-            {
-                return latestUserMission;
-            }
-        }
-
-        var allMissions = await _missionRepository.GetAllAsync();
-        var latestMission = allMissions?
-            .Where(m => !m.IsDeleted)
-            .OrderByDescending(m => m.CreatedAt)
-            .FirstOrDefault();
-        if (latestMission != null)
-        {
-            return latestMission;
-        }
-
+        // Standalone: gom vào nhiệm vụ standalone (mã STD-) của chính người gọi; không bao giờ gắn vào nhiệm vụ của người khác
+        // hay nhiệm vụ kiểm tra thật (trước đây lấy nhiệm vụ mới nhất của cả hệ thống).
         if (currentUserId == Guid.Empty)
         {
             throw new BusinessRuleException("MISSION_REQUIRED", "A valid missionId is required to upload inspection media.");
+        }
+
+        var ownStandaloneMissions = await _missionRepository.FindAsync(m =>
+            m.ManagerId == currentUserId && m.MissionCode.StartsWith(Mission.StandaloneCodePrefix) && !m.IsDeleted);
+        var latestOwnStandalone = ownStandaloneMissions.OrderByDescending(m => m.CreatedAt).FirstOrDefault();
+        if (latestOwnStandalone != null)
+        {
+            return latestOwnStandalone;
         }
 
         var now = DateTime.UtcNow;
         var adHocMission = new Mission
         {
             Id = Guid.NewGuid(),
-            MissionCode = $"STD-{now:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
+            MissionCode = $"{Mission.StandaloneCodePrefix}{now:yyyyMMdd}-{RandomNumberGenerator.GetInt32(1000, 10000)}",
             Title = string.IsNullOrWhiteSpace(notes) ? "AI Analysis Upload" : notes.Trim(),
             ManagerId = currentUserId,
             Status = "InProgress",
-            MissionType = "AdHoc",
+            MissionType = Mission.AdHocType,
             StartedAt = now,
             CreatedAt = now,
             CreatedBy = currentUserId

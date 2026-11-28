@@ -1,6 +1,9 @@
+using UavPms.OperationsService.Domain.Entities;
 using UavPms.OperationsService.Domain.Interfaces.Repositories;
+using UavPms.OperationsService.Domain.Interfaces.Services;
 using UavPms.OperationsService.Domain.Models.Monitor;
 using UavPms.OperationsService.Infrastructure.Persistence;
+using UavPms.OperationsService.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using UavPms.OperationsService.Domain.Enums;
 using static UavPms.OperationsService.Domain.Models.Monitor.DefectStatisticsModel;
@@ -25,10 +28,39 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
         ];
 
         private readonly ApplicationDbContext _context;
+        private readonly ICurrentUserServices _currentUser;
 
-        public MonitorRepository(ApplicationDbContext context)
+        public MonitorRepository(ApplicationDbContext context, ICurrentUserServices currentUser)
         {
             _context = context;
+            _currentUser = currentUser;
+        }
+
+        // Dashboard chỉ tính dữ liệu của các nhiệm vụ người gọi được xem (spec §4, lọc trong SQL).
+        private IQueryable<Mission> VisibleMissions => MissionScope.Visible(_context, _currentUser).AsNoTracking();
+
+        private IQueryable<InspectionMedia> VisibleMedia
+        {
+            get
+            {
+                var media = _context.InspectionMedia.AsNoTracking();
+                if (RegionScope.IsSystemAdmin(_currentUser))
+                    return media;
+                var missionIds = MissionScope.VisibleIds(_context, _currentUser);
+                return media.Where(m => missionIds.Contains(m.MissionId));
+            }
+        }
+
+        private IQueryable<DetectedAnomaly> VisibleAnomalies
+        {
+            get
+            {
+                var anomalies = _context.DetectedAnomalies.AsNoTracking();
+                if (RegionScope.IsSystemAdmin(_currentUser))
+                    return anomalies;
+                var missionIds = MissionScope.VisibleIds(_context, _currentUser);
+                return anomalies.Where(a => missionIds.Contains(a.Media!.MissionId));
+            }
         }
 
 
@@ -55,8 +87,7 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
 
         public async Task<DefectStatisticsModel> GetDefectStatisticsAsync(CancellationToken cancellationToken)
         {
-            var byType = await _context.DetectedAnomalies
-                .AsNoTracking()
+            var byType = await VisibleAnomalies
                 .Where(a => a.ValidationStatus == "Confirmed")
                 .GroupBy(a => a.Category!.CategoryName)
                 .Select(g => new { DefectType = g.Key, Count = g.Count() })
@@ -77,7 +108,7 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
 
         public async Task<(List<InspectionHistoryModel> Items, int TotalCount)> GetInspectionHistoryAsync(Guid? missionId, bool? IsDefect, DateTime? fromDate, DateTime? toDate, int page, int pageSize, CancellationToken cancellationToken)
         {
-            var query = _context.InspectionMedia.AsNoTracking().AsQueryable();
+            var query = VisibleMedia;
 
             if (missionId.HasValue)
             {
@@ -130,8 +161,7 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
 
         public async Task<MissionStatusOverviewModel> GetMissionStatusOverviewAsync(CancellationToken cancellationToken)
         {
-            var missionStats = await _context.Missions
-                .AsNoTracking()
+            var missionStats = await VisibleMissions
                 .GroupBy(m => m.Status)
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync(cancellationToken);
@@ -150,8 +180,7 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
 
         public async Task<(List<RecentDefectModel> Items, int TotalCount)> GetRecentDefectsAsync(int page, int pageSize, CancellationToken cancellationToken)
         {
-            var query = _context.DetectedAnomalies
-                .AsNoTracking()
+            var query = VisibleAnomalies
                 .Where(a => a.ValidationStatus == "Confirmed");
             
             var totalCount = await query.CountAsync(cancellationToken);
@@ -177,8 +206,7 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
         public async Task<MonitorSummaryModel> GetSummaryAsync(CancellationToken cancellationToken)
         {
             // 1. Get mission counts grouped by status in one query
-            var missionStats = await _context.Missions
-                .AsNoTracking()
+            var missionStats = await VisibleMissions
                 .GroupBy(m => m.Status)
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync(cancellationToken);
@@ -189,11 +217,10 @@ namespace UavPms.OperationsService.Infrastructure.Repositories
             var totalMissions = missionStats.Sum(s => s.Count);
 
             // 2. Get total inspection media count
-            var totalInspections = await _context.InspectionMedia.AsNoTracking().CountAsync(cancellationToken);
+            var totalInspections = await VisibleMedia.CountAsync(cancellationToken);
             
             // 3. Get defect counts (total and critical) in one query
-            var defectStats = await _context.DetectedAnomalies
-                .AsNoTracking()
+            var defectStats = await VisibleAnomalies
                 .Where(a => a.ValidationStatus == "Confirmed")
                 .GroupBy(a => a.Category!.IsEmergencyClass)
                 .Select(g => new { IsCritical = g.Key, Count = g.Count() })

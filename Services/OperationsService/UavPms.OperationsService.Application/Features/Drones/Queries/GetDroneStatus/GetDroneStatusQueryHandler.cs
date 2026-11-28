@@ -29,6 +29,8 @@ public class GetDroneStatusQueryHandler : IRequestHandler<GetDroneStatusQuery, D
         var uav = await _uavRepository.GetByIdAsync(request.Id, false);
         if (uav == null)
             throw new NotFoundException("Drone", request.Id);
+        if (!await _uavRepository.IsVisibleAsync(uav.Id, cancellationToken))
+            throw new ForbiddenException("DRONE_ACCESS_DENIED");
 
         var liveState = await _liveStateService.GetAsync(uav.UavCode, cancellationToken);
         var online = liveState != null

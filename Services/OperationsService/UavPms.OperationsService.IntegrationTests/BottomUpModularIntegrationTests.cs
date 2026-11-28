@@ -653,7 +653,7 @@ public class BottomUpModularIntegrationTests
         // 2. Manager reviews EmergencyAlert (Open -> Acknowledged) and assigns MaintenanceTicket to Technician (Open -> Assigned)
         await using (var db = scope.CreateContext(UserContext(managerId, UserRoles.Manager)))
         {
-            var alertService = new EmergencyAlertService(db, Mock.Of<IEventPublisher>(), NullLogger<EmergencyAlertService>.Instance);
+            var alertService = new EmergencyAlertService(db, Mock.Of<IEventPublisher>(), NullLogger<EmergencyAlertService>.Instance, UserContext(managerId, UserRoles.Manager));
             var reviewed = await alertService.ReviewAlertAsync(
                 alertId,
                 managerId,

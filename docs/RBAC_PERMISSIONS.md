@@ -67,13 +67,16 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | Chức năng | Luật | Nơi kiểm tra |
 |---|---|---|
 | Drone: tạo / sửa / xóa | SystemAdmin mọi vùng; Manager, Technician chỉ Drone thuộc vùng của mình; chuyển vùng thì vùng mới cũng phải thuộc phạm vi | `UavManagementService` + `DroneRegionScope` |
-| Drone: danh sách / chi tiết | Drone thuộc vùng người gọi; chi tiết thêm trường hợp Drone của nhiệm vụ mình đang được giao | `UavManagementService` |
+| Drone: danh sách, chi tiết, `available`, `status`, `telemetry/latest` | SystemAdmin mọi Drone; người khác Drone thuộc vùng mình (gồm vùng con) hoặc Drone của nhiệm vụ mình đang được giao | `DroneScope` (dùng ở `UavManagementService`, `UavRepository`, `DroneTelemetryService`) |
+| Dashboard `monitor/*` | Chỉ đếm nhiệm vụ / ảnh / defect / cảnh báo của nhiệm vụ người gọi được xem: phụ trách, được giao (Active) hoặc thuộc vùng; SystemAdmin tất cả | `MissionScope` (dùng ở `MonitorRepository`) |
+| Cảnh báo khẩn `alerts/*` | Danh sách, chi tiết, duyệt, leo thang chỉ cảnh báo của nhiệm vụ người gọi được xem; tạo cảnh báo bắt buộc `missionId` hoặc `anomalyId` người gọi được xem (`MISSION_REQUIRED`, `MISSION_ACCESS_DENIED`) | `EmergencyAlertService` |
 | Check-in hiện trường | Chỉ thành viên được giao với vai trò INSPECTOR; mission Ready khi mọi Inspector đã Accept đều check-in (Analyst, Technician chỉ Accept) | `MissionLifecycleService.CheckInAsync`, `Mission.RecalculateReadiness` |
 | Pre-Mission: xem | SystemAdmin, người tạo, Manager có vùng của hồ sơ | `PreMissionAssessmentService` |
 | Defect / kết quả AI: xem | SystemAdmin, Manager phụ trách nhiệm vụ, thành viên được giao, Manager/Analyst có vùng của nhiệm vụ | `IMissionAccessPolicy` (AI), `MissionLifecycleService` (Operations) |
 | Defect: duyệt, đổi cột | SystemAdmin; Analyst được giao hoặc Analyst có vùng của nhiệm vụ | `IMissionAccessPolicy` (AI), `MissionLifecycleService` (Operations) |
 | Danh sách defect | Lọc trong SQL theo `MissionVisibility` (nhiệm vụ phụ trách / được giao / thuộc vùng) | `AnomalyRepository` |
 | Upload ảnh/video | SystemAdmin; Inspector hoặc Analyst được giao; Analyst của vùng. Standalone: SystemAdmin, Analyst. Manager, Technician không upload | `IMissionAccessPolicy` (AI), `UploadInspectionImageCommandHandler` (Operations) |
+| Upload standalone (không `missionId`) | Chỉ gom vào nhiệm vụ `STD-` của chính người gọi, chưa có thì tạo mới; không bao giờ gắn vào nhiệm vụ thật hay nhiệm vụ người khác | `UploadStandaloneAnalysisCommandHandler.ResolveMissionAsync` |
 | Phiếu bảo trì | Admin tất cả; Manager phiếu phụ trách hoặc trong vùng; Technician phiếu được giao; minh chứng/vật tư chỉ Technician được giao | `MaintenanceTicketService` |
 | Gán vùng cho người dùng | SystemAdmin tùy ý; Manager chỉ vùng của chính mình, giữ nguyên vùng khác của người dùng | `SetUserGeographicScopesCommandHandler` |
 | Cột điện, khu vực | Manager chưa có vùng không còn thấy toàn bộ | `GeographicAccessFilter` |
@@ -290,11 +293,8 @@ Hook chặn sửa spec trong pha `CODE`. Thay các dòng sau trong bảng ma tr�
 
 | # | Việc | Ghi chú |
 |---|---|---|
-| 1 | Dashboard `monitor/*` và cảnh báo khẩn `alerts/*` chưa lọc theo vùng | Mọi role thấy số liệu / cảnh báo của mọi vùng |
-| 2 | `GET /drones/{id}/status`, `/drones/{code}/telemetry/latest`, `/drones/available` chưa lọc theo vùng | Danh sách và chi tiết Drone đã lọc |
-| 3 | Upload không truyền `missionId` gắn file vào nhiệm vụ mới nhất của người gọi, nếu không có thì vào nhiệm vụ mới nhất của cả hệ thống (`UploadStandaloneAnalysisCommandHandler.ResolveMissionAsync`) | Ảnh test có thể lẫn vào nhiệm vụ người khác; nên luôn tạo nhiệm vụ AdHoc riêng |
-| 4 | `POST missions/{id}/ai-analysis/from-media/{mediaId}` (chạy lại AI) vẫn cho Manager | Không phải upload; giữ nguyên |
-| 5 | Upload bên OperationsService chỉ xét vùng được gán trực tiếp (chưa tính vùng con) | Bên AIInspectionService đã tính vùng con |
+| 1 | `POST missions/{id}/ai-analysis/from-media/{mediaId}` (chạy lại AI) vẫn cho Manager | Không phải upload; giữ nguyên |
+| 2 | Upload bên OperationsService chỉ xét vùng được gán trực tiếp (chưa tính vùng con) | Bên AIInspectionService đã tính vùng con |
 
 ## 7. FE cần làm theo (chưa sửa)
 
@@ -317,10 +317,13 @@ Test FE đang ghi luật cũ và sẽ phải sửa: `sidebar.spec.ts`, `drone-ma
 - 4/7 Inspector chưa có vùng: danh sách Drone trống; dữ liệu nhiệm vụ được giao vẫn xem được.
 - Production đang có check-in của Analyst/Technician (luồng cũ); sau deploy họ bị `403 CHECK_IN_INSPECTOR_ONLY`, nhiệm vụ không còn chờ họ check-in.
 - Production có 17 file do Manager upload; sau deploy Manager không upload được.
+- Dashboard và cảnh báo khẩn của Manager/Inspector/Analyst/Technician chỉ còn số liệu nhiệm vụ trong vùng hoặc được giao; người chưa có vùng và chưa được giao thấy 0.
+- `POST /alerts/trigger` không còn tự lấy nhiệm vụ mới nhất; client phải gửi `missionId` hoặc `anomalyId`.
+- Upload standalone cũ đã nằm trong nhiệm vụ của người khác thì giữ nguyên; chỉ upload mới đi vào nhiệm vụ `STD-` riêng.
 
 ## 9. Kiểm chứng
 
 - `dotnet build UavPms.sln -c Release`: thành công.
-- OperationsService: unit 435/435, integration (PostgreSQL thật, Testcontainers, gồm các test khóa BE-REQ-101) 141/141.
-- AIInspectionService: 83/83 (gồm `MissionAccessPolicyTests` chạy policy thật trên InMemory DB).
-- IdentityService: pass.
+- OperationsService: unit 440/440 (gồm `RegionVisibilityTests`), integration (PostgreSQL thật, Testcontainers, gồm các test khóa BE-REQ-101 và `RegionVisibilityQueryTests`) 142/142.
+- AIInspectionService: 85/85 (gồm `MissionAccessPolicyTests`, `StandaloneMissionResolutionTests`).
+- IdentityService: 93/93.

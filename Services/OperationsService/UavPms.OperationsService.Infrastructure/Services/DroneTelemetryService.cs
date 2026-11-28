@@ -350,25 +350,10 @@ public sealed class DroneTelemetryService : IDroneTelemetryService
         if (!_currentUser.IsAuthenticated || _currentUser.UserId == Guid.Empty)
             throw new ForbiddenException("AUTHENTICATION_REQUIRED");
 
-        var roles = _currentUser.Roles ?? Array.Empty<string>();
-        if (roles.Contains(UserRoles.SystemAdmin, StringComparer.OrdinalIgnoreCase) ||
-            roles.Contains(UserRoles.Manager, StringComparer.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        // Field members may view the drone's latest telemetry if assigned to an active mission flying this drone
-        var hasAssignedMissionForDrone = await _db.Missions.AsNoTracking()
-            .Where(m => m.UavId == uavId && !m.IsDeleted)
-            .AnyAsync(m => m.Assignments.Any(a =>
-                a.UserId == _currentUser.UserId
-                && a.Status == MissionAssignmentStatus.Active
-                && !a.IsDeleted), ct);
-
-        if (!hasAssignedMissionForDrone)
-        {
+        // Cùng luật với danh sách Drone: Drone thuộc vùng người gọi hoặc của nhiệm vụ đang được giao (Admin mọi Drone)
+        var canSeeDrone = await DroneScope.Visible(_db, _currentUser).AnyAsync(u => u.Id == uavId, ct);
+        if (!canSeeDrone)
             throw new ForbiddenException("DRONE_TELEMETRY_ACCESS_DENIED");
-        }
     }
 
     private static DateTime NormalizeUtc(DateTime dt) =>
