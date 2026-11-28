@@ -14,6 +14,9 @@ namespace UavPms.OperationsService.Tests.Features.Drones;
 
 public class DroneTechnicalInspectionTests
 {
+    // Vùng dùng chung: Drone và Technician cùng vùng thì mới qua kiểm tra scope BE-REQ-101.
+    private static readonly Guid TestRegionId = Guid.NewGuid();
+
     private static Mock<ICurrentUserServices> CreateUserMock(Guid userId, string role)
     {
         var mock = new Mock<ICurrentUserServices>();
@@ -37,9 +40,10 @@ public class DroneTechnicalInspectionTests
         var techId = Guid.NewGuid();
         var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = techId, RegionId = TestRegionId });
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "DRONE-01", OperationalStatus = DroneOperationalStatus.Available };
         db.Uavs.Add(drone);
         await db.SaveChangesAsync();
 
@@ -71,9 +75,10 @@ public class DroneTechnicalInspectionTests
         var techId = Guid.NewGuid();
         var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = techId, RegionId = TestRegionId });
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-02", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "DRONE-02", OperationalStatus = DroneOperationalStatus.Available };
         db.Uavs.Add(drone);
         await db.SaveChangesAsync();
 
@@ -105,9 +110,10 @@ public class DroneTechnicalInspectionTests
         var techId = Guid.NewGuid();
         var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = techId, RegionId = TestRegionId });
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-03", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "DRONE-03", OperationalStatus = DroneOperationalStatus.Available };
         db.Uavs.Add(drone);
 
         var older = new DroneTechnicalInspection
@@ -142,9 +148,10 @@ public class DroneTechnicalInspectionTests
         var techId = Guid.NewGuid();
         var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = techId, RegionId = TestRegionId });
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-04", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "DRONE-04", OperationalStatus = DroneOperationalStatus.Available };
         db.Uavs.Add(drone);
         await db.SaveChangesAsync();
 
@@ -165,9 +172,10 @@ public class DroneTechnicalInspectionTests
         var techId = Guid.NewGuid();
         var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = techId, RegionId = TestRegionId });
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-05", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "DRONE-05", OperationalStatus = DroneOperationalStatus.Available };
         db.Uavs.Add(drone);
         await db.SaveChangesAsync();
 
@@ -192,9 +200,10 @@ public class DroneTechnicalInspectionTests
         var techId = Guid.NewGuid();
         var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = techId, RegionId = TestRegionId });
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-06", OperationalStatus = DroneOperationalStatus.Available, BatteryLevel = 15 };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "DRONE-06", OperationalStatus = DroneOperationalStatus.Available, BatteryLevel = 15 };
         db.Uavs.Add(drone);
         await db.SaveChangesAsync();
 
@@ -221,7 +230,7 @@ public class DroneTechnicalInspectionTests
         await using var db = CreateContext(user.Object);
 
         db.Users.Add(new User { Id = viewerId, Status = "Active" });
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-07", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "DRONE-07", OperationalStatus = DroneOperationalStatus.Available };
         db.Uavs.Add(drone);
         await db.SaveChangesAsync();
 
@@ -243,17 +252,9 @@ public class DroneTechnicalInspectionTests
         var droneRegion = Guid.NewGuid();
         db.UserGeographicScopes.Add(new UserGeographicScope { UserId = managerId, RegionId = userRegion });
 
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-SCOPE-01", OperationalStatus = DroneOperationalStatus.Available };
+        // Phạm vi lấy trực tiếp từ vùng gán cho Drone, không còn suy ra từ Mission.
+        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-SCOPE-01", AssignedRegionId = droneRegion, OperationalStatus = DroneOperationalStatus.Available };
         db.Uavs.Add(drone);
-
-        db.Missions.Add(new Mission
-        {
-            Id = Guid.NewGuid(),
-            MissionCode = "MS-SCOPE-01",
-            Title = "Mission in other region",
-            RegionId = droneRegion,
-            UavId = drone.Id
-        });
         await db.SaveChangesAsync();
 
         var service = new DroneTechnicalInspectionService(db, user.Object);
@@ -268,9 +269,10 @@ public class DroneTechnicalInspectionTests
         var techId = Guid.NewGuid();
         var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = techId, RegionId = TestRegionId });
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-VER-01", OperationalStatus = DroneOperationalStatus.Available, Version = 1 };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "DRONE-VER-01", OperationalStatus = DroneOperationalStatus.Available, Version = 1 };
         db.Uavs.Add(drone);
         await db.SaveChangesAsync();
 
@@ -296,9 +298,10 @@ public class DroneTechnicalInspectionTests
         var techId = Guid.NewGuid();
         var user = CreateUserMock(techId, UserRoles.Technician);
         await using var db = CreateContext(user.Object);
+        db.UserGeographicScopes.Add(new UserGeographicScope { UserId = techId, RegionId = TestRegionId });
 
         db.Users.Add(new User { Id = techId, Status = "Active" });
-        var drone = new Uav { Id = Guid.NewGuid(), UavCode = "DRONE-REALTIME-01", Model = "Matrice 300 RTK", OperationalStatus = DroneOperationalStatus.Available };
+        var drone = new Uav { AssignedRegionId = TestRegionId, Id = Guid.NewGuid(), UavCode = "DRONE-REALTIME-01", Model = "Matrice 300 RTK", OperationalStatus = DroneOperationalStatus.Available };
         db.Uavs.Add(drone);
 
         var assessment = new PreMissionAssessment

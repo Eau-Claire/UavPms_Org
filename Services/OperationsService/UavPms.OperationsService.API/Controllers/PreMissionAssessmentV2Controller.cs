@@ -43,10 +43,12 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
             request.BoundaryWkt,
             request.IdempotencyKey,
             ct,
-            request.RequiredInspectors ?? 1,
-            request.RequiredAnalysts ?? 1,
-            request.RequiredTechnicians ?? 1,
-            request.MaxDronesLimit ?? 1);
+            // Thiếu số lượng = 0 để service trả 400 INVALID_ROLE_HEADCOUNT thay vì ngầm mặc định 1.
+            request.InspectorCount ?? 0,
+            request.AnalystCount ?? 0,
+            request.TechnicianCount ?? 0,
+            request.MaxDronesLimit ?? 1,
+            request.DroneIds);
         return Ok(assessment.ToDto());
     }
 
@@ -91,9 +93,9 @@ public sealed class PreMissionAssessmentV2Controller : ControllerBase
 
     [HttpPost("{id:guid}/re-evaluate")]
     [Authorize(Roles = UserRoles.AdminAndManager)]
-    public async Task<IActionResult> ReEvaluate(Guid id, CancellationToken ct)
+    public async Task<IActionResult> ReEvaluate(Guid id, [FromBody] ReEvaluateAssessmentRequest? request, CancellationToken ct)
     {
-        var assessment = await _service.EvaluateAsync(id, ct);
+        var assessment = await _service.ReEvaluateAsync(id, request, ct);
         return Ok(assessment.ToDto());
     }
 

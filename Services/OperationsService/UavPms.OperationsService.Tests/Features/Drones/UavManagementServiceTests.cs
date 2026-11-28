@@ -354,7 +354,8 @@ public class UavManagementServiceTests
             It.Is<DroneInspectionSubmitRequest>(r =>
                 r.DroneId == droneId &&
                 r.FlightControllerUid == "BF-F405-A1B2C3D4" &&
-                r.Metrics!.Count == 8),
+                // 8 hạng mục checklist + BATTERY_VOLTAGE (BRL-04: điện áp client gửi được giữ như số đo riêng)
+                r.Metrics!.Count == 9),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 }

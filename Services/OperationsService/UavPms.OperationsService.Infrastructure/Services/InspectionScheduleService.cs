@@ -253,8 +253,7 @@ public sealed class InspectionScheduleService : IInspectionScheduleService
             throw new BusinessRuleException("MANAGER_REQUIRED", "A valid manager user is required to trigger an inspection schedule.");
         }
 
-        var validityHours = await MissionResourceGuard.GetPositiveIntSettingAsync(
-            _db, SettingKeys.AssessmentValidityHours, MissionResourceGuard.DefaultAssessmentValidityHours, ct);
+        var validityHours = await MissionResourceGuard.GetAssessmentValidityHoursAsync(_db, ct);
         var plannedDurationHours = await MissionResourceGuard.GetPositiveIntSettingAsync(
             _db, SettingKeys.ScheduleDefaultPlannedDurationHours, MissionResourceGuard.DefaultSchedulePlannedDurationHours, ct);
         var plannedStart = utcNow.Date.Add(schedule.PlannedTime.ToTimeSpan());

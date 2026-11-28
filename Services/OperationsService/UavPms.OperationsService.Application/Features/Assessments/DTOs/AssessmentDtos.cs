@@ -9,10 +9,19 @@ public record CreateAssessmentRequest(
     IReadOnlyCollection<Guid> TowerIds,
     string? BoundaryWkt = null,
     string? IdempotencyKey = null,
-    int? RequiredInspectors = null,
-    int? RequiredAnalysts = null,
-    int? RequiredTechnicians = null,
-    int? MaxDronesLimit = null
+    int? InspectorCount = null,
+    int? AnalystCount = null,
+    int? TechnicianCount = null,
+    int? MaxDronesLimit = null,
+    IReadOnlyCollection<Guid>? DroneIds = null
+);
+
+/// <summary>Body tùy chọn của re-evaluate: đổi số lượng nhân sự hoặc danh sách Drone đã chọn (chỉ Drone Ready).</summary>
+public record ReEvaluateAssessmentRequest(
+    int? InspectorCount = null,
+    int? AnalystCount = null,
+    int? TechnicianCount = null,
+    IReadOnlyCollection<Guid>? DroneIds = null
 );
 
 public record MissionPersonnelAssignmentRequest(
@@ -58,7 +67,10 @@ public record DroneInspectionSubmitRequest(
     List<DroneMetricSubmitDto>? Metrics = null,
     string? PolicyVersion = "v2.0",
     string? FlightControllerUid = null,
-    Guid? PreMissionAssessmentId = null
+    string? SourceType = null,
+    string? Conclusion = null,
+    /// <summary>BRL-04: hạng mục bắt buộc mà client chưa gửi; có phần tử thì phiếu không thể Passed/Healthy.</summary>
+    IReadOnlyList<string>? MissingMetricCodes = null
 );
 
 public record PostponeAssignmentRequest(
@@ -147,7 +159,10 @@ public record PreMissionAssessmentDto(
     AssessmentCheckResultDto Personnel,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
-    string? ManagerName = null
+    string? ManagerName = null,
+    int InspectorCount = 1,
+    int AnalystCount = 1,
+    int TechnicianCount = 1
 )
 {
     public Guid? CompletedMissionId => ConsumedByMissionId;
@@ -182,6 +197,8 @@ public record DroneTechnicalInspectionDto(
     DateTime StartedAt,
     DateTime? CompletedAt,
     DateTime? ValidUntil,
-    IReadOnlyList<DroneTechnicalMetricDto> Metrics
+    IReadOnlyList<DroneTechnicalMetricDto> Metrics,
+    string Readiness,
+    IReadOnlyList<string> MissingMetrics
 );
 

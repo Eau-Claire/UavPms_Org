@@ -26,6 +26,13 @@ public class DroneTechnicalInspectionRulesTests
         var tag = Tag();
         var technicianId = await InsertUserAsync(db, tag, UserRoles.Technician);
         var droneId = await AddDroneAsync(db, tag, "INSP");
+
+        // BE-REQ-101: Technician chỉ ghi được cho Drone thuộc vùng được cấp scope.
+        var region = new Region { Code = $"R-{tag}", Name = $"Region {tag}", Type = "Province" };
+        db.Regions.Add(region);
+        (await db.Uavs.SingleAsync(u => u.Id == droneId)).AssignedRegionId = region.Id;
+        await db.SaveChangesAsync();
+        await AddScopeAsync(db, technicianId, region.Id);
         return (technicianId, droneId, tag);
     }
 
@@ -118,6 +125,14 @@ public class DroneTechnicalInspectionRulesTests
             var service = new UavManagementService(db, current, new DroneTechnicalInspectionService(db, current));
             var summary = await service.SubmitBasicTechnicalCheckAsync(drone, new BasicTechnicalCheckRequest
             {
+                FrameBodyPassed = true,
+                PropellersPassed = true,
+                MotorsPassed = true,
+                CameraPayloadPassed = true,
+                BatteryPassed = true,
+                GpsPassed = true,
+                CommunicationPassed = true,
+                FlightControllerPassed = true,
                 BatteryPercent = 88,
                 BatteryVoltage = 24.6m,
                 GpsSatelliteCount = 17,
@@ -127,7 +142,10 @@ public class DroneTechnicalInspectionRulesTests
 
             summary.Status.Should().Be("Passed");
             summary.Health.Should().Be("Healthy");
-            summary.MetricCount.Should().Be(8);
+            // 8 hạng mục checklist + BATTERY_VOLTAGE (điện áp client gửi được giữ như số đo riêng, BRL-04).
+            summary.MetricCount.Should().Be(9);
+            summary.Readiness.Should().Be("Ready");
+            summary.MissingMetrics.Should().BeEmpty();
         }
 
         await using (var db = _pg.CreateContext())
@@ -137,10 +155,11 @@ public class DroneTechnicalInspectionRulesTests
             var battery = inspection.Metrics.Single(m => m.MetricCode == "BATTERY_HEALTH");
             battery.NumericValue.Should().Be(88);
             battery.ValueText.Should().BeNull();
-            battery.Metadata.Should().Contain("24.6");
+            battery.Metadata.Should().Contain("OK");
+            inspection.Metrics.Single(m => m.MetricCode == "BATTERY_VOLTAGE").NumericValue.Should().Be(24.6m);
 
             // The note is still returned to the client.
-            inspection.ToDto().Metrics.Single(m => m.MetricCode == "BATTERY_HEALTH").ValueText.Should().Contain("24.6");
+            inspection.ToDto().Metrics.Single(m => m.MetricCode == "BATTERY_HEALTH").ValueText.Should().Contain("OK");
 
             // The old mapping (numeric reading AND note in ValueText) is what the database rejects.
             db.DroneTechnicalMetrics.Add(new DroneTechnicalMetric
@@ -151,87 +170,5 @@ public class DroneTechnicalInspectionRulesTests
             (await oldMapping.Should().ThrowAsync<DbUpdateException>())
                 .Which.InnerException!.Message.Should().Contain("CK_DroneTechnicalMetrics_SingleValue");
         }
-    }
-
-    [Theory]
-    [InlineData(PreMissionAssessmentStatus.Cancelled, "ASSESSMENT_CANCELLED")]
-    [InlineData(PreMissionAssessmentStatus.Completed, "ASSESSMENT_ALREADY_COMPLETED")]
-    [InlineData(PreMissionAssessmentStatus.Expired, "ASSESSMENT_EXPIRED")]
-    [InlineData(PreMissionAssessmentStatus.Ready, "ASSESSMENT_EXPIRED")] // Ready but its validity has passed
-    public async Task Inspection_ForClosedAssessment_IsRejected(PreMissionAssessmentStatus status, string code)
-    {
-        if (!_pg.Available) return;
-
-        Mf01Seed.Site site;
-        Guid droneId, assessmentId;
-        await using (var db = _pg.CreateContext())
-        {
-            site = await SeedSiteAsync(db);
-            droneId = await AddDroneAsync(db, site.Tag, "CLOSED");
-            assessmentId = await AddAssessmentWithDroneAsync(db, site, droneId, status,
-                validUntil: status == PreMissionAssessmentStatus.Ready ? DateTime.UtcNow.AddMinutes(-1) : DateTime.UtcNow.AddHours(1));
-        }
-
-        var current = Current(site.TechnicianId, UserRoles.Technician);
-        await using var ctx = _pg.CreateContext(current);
-        var submit = () => new DroneTechnicalInspectionService(ctx, current).SubmitInspectionAsync(
-            new DroneInspectionSubmitRequest(droneId, "IT", new List<DroneMetricSubmitDto> { new("FRAME_BODY", "Airframe", null, BoolValue: true) }, PreMissionAssessmentId: assessmentId),
-            CancellationToken.None);
-
-        await submit.Should().ThrowAsync<BusinessRuleException>().WithMessage($"{code}*");
-    }
-
-    [Fact]
-    public async Task Inspection_ForAssessment_ManagerNeedsRegionScope()
-    {
-        if (!_pg.Available) return;
-
-        Mf01Seed.Site site;
-        Guid droneId, assessmentId, outsiderManagerId;
-        await using (var db = _pg.CreateContext())
-        {
-            site = await SeedSiteAsync(db);
-            droneId = await AddDroneAsync(db, site.Tag, "SCOPE");
-            assessmentId = await AddAssessmentWithDroneAsync(db, site, droneId, PreMissionAssessmentStatus.NotReady, DateTime.UtcNow.AddHours(1));
-            outsiderManagerId = await InsertUserAsync(db, site.Tag, UserRoles.Manager);
-        }
-
-        var request = new DroneInspectionSubmitRequest(droneId, "IT",
-            new List<DroneMetricSubmitDto> { new("FRAME_BODY", "Airframe", null, BoolValue: true) }, PreMissionAssessmentId: assessmentId);
-
-        var outsider = Current(outsiderManagerId, UserRoles.Manager);
-        await using (var db = _pg.CreateContext(outsider))
-        {
-            var submit = () => new DroneTechnicalInspectionService(db, outsider).SubmitInspectionAsync(request, CancellationToken.None);
-            await submit.Should().ThrowAsync<ForbiddenException>().WithMessage("ASSESSMENT_ACCESS_DENIED");
-        }
-
-        var manager = Current(site.ManagerId, UserRoles.Manager);
-        await using (var db = _pg.CreateContext(manager))
-        {
-            var inspection = await new DroneTechnicalInspectionService(db, manager).SubmitInspectionAsync(request, CancellationToken.None);
-            inspection.Status.Should().Be(DroneTechnicalInspectionStatus.Passed);
-        }
-    }
-
-    private static async Task<Guid> AddAssessmentWithDroneAsync(
-        Infrastructure.Persistence.ApplicationDbContext db, Mf01Seed.Site site, Guid droneId, PreMissionAssessmentStatus status, DateTime validUntil)
-    {
-        var start = DateTime.UtcNow.AddHours(2);
-        var assessment = new PreMissionAssessment
-        {
-            ManagerId = site.ManagerId,
-            RegionId = site.RegionId,
-            PlannedStart = start,
-            PlannedEnd = start.AddHours(2),
-            Status = status,
-            ValidUntil = validUntil,
-            EvaluationPolicyVersion = "v2.0",
-        };
-        assessment.Towers = site.TowerIds.Select((t, i) => new PreMissionAssessmentTower { AssessmentId = assessment.Id, TowerId = t, Sequence = i + 1 }).ToList();
-        assessment.DroneCandidates.Add(new PreMissionAssessmentDrone { AssessmentId = assessment.Id, DroneId = droneId, SnapshotAt = DateTime.UtcNow });
-        db.PreMissionAssessments.Add(assessment);
-        await db.SaveChangesAsync();
-        return assessment.Id;
     }
 }

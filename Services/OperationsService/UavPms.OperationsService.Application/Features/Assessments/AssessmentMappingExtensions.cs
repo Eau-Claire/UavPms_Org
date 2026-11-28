@@ -72,22 +72,14 @@ public static class AssessmentMappingExtensions
 
         var technicalCheck = new AssessmentCheckResultDto(
             (isReadyOrCompleted || ((entity.OverallTechnicalHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning) && entity.DroneCandidates.Any(d => d.IsEligible))) ? "PASS" : "FAIL",
-            (isReadyOrCompleted || ((entity.OverallTechnicalHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning) && entity.DroneCandidates.Any(d => d.IsEligible))) ? null : "Cần thực hiện kiểm định kỹ thuật tự động (BIST/Telemetry) trước khi bay.",
+            (isReadyOrCompleted || ((entity.OverallTechnicalHealth is TechnicalHealth.Healthy or TechnicalHealth.Warning) && entity.DroneCandidates.Any(d => d.IsEligible))) ? null : "Chưa có UAV nào ở trạng thái Ready; kiểm tra kỹ thuật được thực hiện tại Chi tiết Drone.",
             entity.UpdatedAt ?? entity.CreatedAt
         );
 
-        int reqInsp = 1, reqAna = 1, reqTech = 1;
-        if (!string.IsNullOrEmpty(entity.Findings))
-        {
-            try
-            {
-                using var doc = System.Text.Json.JsonDocument.Parse(entity.Findings);
-                if (doc.RootElement.TryGetProperty("requiredInspectors", out var p1) && p1.TryGetInt32(out var v1)) reqInsp = Math.Max(1, v1);
-                if (doc.RootElement.TryGetProperty("requiredAnalysts", out var p2) && p2.TryGetInt32(out var v2)) reqAna = Math.Max(1, v2);
-                if (doc.RootElement.TryGetProperty("requiredTechnicians", out var p3) && p3.TryGetInt32(out var v3)) reqTech = Math.Max(1, v3);
-            }
-            catch { }
-        }
+        var headcount = AssessmentFindings.ReadHeadcount(entity.Findings);
+        var reqInsp = headcount.Inspectors;
+        var reqAna = headcount.Analysts;
+        var reqTech = headcount.Technicians;
 
         var hasReqPersonnel = isReadyOrCompleted || (
             entity.PersonnelCandidates.Count(p => p.IsEligible && string.Equals(p.Role, "Inspector", StringComparison.OrdinalIgnoreCase)) >= reqInsp &&
@@ -128,7 +120,10 @@ public static class AssessmentMappingExtensions
             personnelCheck,
             entity.CreatedAt,
             entity.UpdatedAt,
-            entity.Manager?.FullName ?? entity.Manager?.Email
+            entity.Manager?.FullName ?? entity.Manager?.Email,
+            reqInsp,
+            reqAna,
+            reqTech
         );
     }
 
@@ -184,7 +179,9 @@ public static class AssessmentMappingExtensions
             entity.StartedAt,
             entity.CompletedAt,
             entity.ValidUntil,
-            metrics
+            metrics,
+            DroneReadiness.FromHealth(entity.Health),
+            DroneInspectionSnapshot.ReadMissingMetrics(entity.RawSnapshot)
         );
     }
 }

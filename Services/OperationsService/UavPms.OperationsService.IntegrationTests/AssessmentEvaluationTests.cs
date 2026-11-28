@@ -80,17 +80,17 @@ public class AssessmentEvaluationTests
         await using (var db = _pg.CreateContext())
         {
             site = await SeedSiteAsync(db);
-            validDrone = await AddDroneAsync(db, site.Tag, "OK", inspections: ValidPassed());
+            validDrone = await AddDroneAsync(db, site.Tag, "OK", regionId: site.RegionId, inspections: ValidPassed());
             // #2: an older Passed inspection is still valid, but a newer one Failed.
-            newerFailedDrone = await AddDroneAsync(db, site.Tag, "FAILED", inspections: new[]
+            newerFailedDrone = await AddDroneAsync(db, site.Tag, "FAILED", regionId: site.RegionId, inspections: new[]
             {
                 ValidPassed(daysAgo: 2),
                 (DroneTechnicalInspectionStatus.Failed, TechnicalHealth.Critical, DateTime.UtcNow.AddHours(-2), DateTime.UtcNow.AddDays(7))
             });
             // #10: inspected months ago, stored health still Healthy.
-            expiredDrone = await AddDroneAsync(db, site.Tag, "OLD", inspections:
+            expiredDrone = await AddDroneAsync(db, site.Tag, "OLD", regionId: site.RegionId, inspections:
                 (DroneTechnicalInspectionStatus.Passed, TechnicalHealth.Healthy, DateTime.UtcNow.AddDays(-90), DateTime.UtcNow.AddDays(-83)));
-            neverInspectedDrone = await AddDroneAsync(db, site.Tag, "NEW");
+            neverInspectedDrone = await AddDroneAsync(db, site.Tag, "NEW", regionId: site.RegionId);
         }
 
         var manager = Current(site.ManagerId, UserRoles.Manager);
@@ -137,11 +137,11 @@ public class AssessmentEvaluationTests
         {
             // 3 towers 0.135° of latitude apart: a corridor of ~30 km.
             site = await SeedSiteAsync(db, towerCount: 3, spacingDeg: 0.135);
-            oneFlight = await AddDroneAsync(db, site.Tag, "LONG", enduranceMinutes: 120, rangeKm: 40, inspections: ValidPassed());
-            split = await AddDroneAsync(db, site.Tag, "SPLIT", enduranceMinutes: 120, rangeKm: 12, inspections: ValidPassed());   // range: 3 flights
-            tooShort = await AddDroneAsync(db, site.Tag, "SHORT", enduranceMinutes: 120, rangeKm: 5, inspections: ValidPassed()); // range: 6 flights
-            noEndurance = await AddDroneAsync(db, site.Tag, "ZERO", enduranceMinutes: 0, rangeKm: 40, inspections: ValidPassed());
-            maintenance = await AddDroneAsync(db, site.Tag, "MAINT", status: DroneOperationalStatus.Maintenance, enduranceMinutes: 120, rangeKm: 40, inspections: ValidPassed());
+            oneFlight = await AddDroneAsync(db, site.Tag, "LONG", regionId: site.RegionId, enduranceMinutes: 120, rangeKm: 40, inspections: ValidPassed());
+            split = await AddDroneAsync(db, site.Tag, "SPLIT", regionId: site.RegionId, enduranceMinutes: 120, rangeKm: 12, inspections: ValidPassed());   // range: 3 flights
+            tooShort = await AddDroneAsync(db, site.Tag, "SHORT", regionId: site.RegionId, enduranceMinutes: 120, rangeKm: 5, inspections: ValidPassed()); // range: 6 flights
+            noEndurance = await AddDroneAsync(db, site.Tag, "ZERO", regionId: site.RegionId, enduranceMinutes: 0, rangeKm: 40, inspections: ValidPassed());
+            maintenance = await AddDroneAsync(db, site.Tag, "MAINT", regionId: site.RegionId, status: DroneOperationalStatus.Maintenance, enduranceMinutes: 120, rangeKm: 40, inspections: ValidPassed());
         }
 
         var manager = Current(site.ManagerId, UserRoles.Manager);
@@ -347,7 +347,7 @@ public class AssessmentEvaluationTests
         await using (var db = _pg.CreateContext())
         {
             site = await SeedSiteAsync(db);
-            droneId = await AddDroneAsync(db, site.Tag, "RR", inspections: ValidPassed());
+            droneId = await AddDroneAsync(db, site.Tag, "RR", regionId: site.RegionId, inspections: ValidPassed());
         }
 
         var manager = Current(site.ManagerId, UserRoles.Manager);

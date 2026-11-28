@@ -27,6 +27,9 @@ public static class ConflictErrorCodes
         "DUPLICATE_CHECK_IN",
         "DUPLICATE_RESOURCE",
         "DRONE_IN_USE",
+        "DRONE_NOT_READY",
+        "DRONE_REGION_MISMATCH",
+        "FC_ALREADY_PAIRED",
         "REQUIRED_ACCEPTANCE_PENDING"
     };
 

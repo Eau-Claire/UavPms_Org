@@ -86,6 +86,7 @@ internal static class Mf01Seed
         TechnicalHealth storedHealth = TechnicalHealth.Healthy,
         double enduranceMinutes = 40,
         double rangeKm = 10,
+        Guid? regionId = null,
         params (DroneTechnicalInspectionStatus Status, TechnicalHealth Health, DateTime CompletedAt, DateTime ValidUntil)[] inspections)
     {
         var drone = new Uav
@@ -95,6 +96,7 @@ internal static class Mf01Seed
             Name = $"Drone {suffix}",
             Model = "M300",
             SerialNumber = $"SN-{tag}-{suffix}",
+            AssignedRegionId = regionId,
             OperationalStatus = status,
             TechnicalHealth = storedHealth,
             FlightEnduranceMinutes = enduranceMinutes,

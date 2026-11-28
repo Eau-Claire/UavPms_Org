@@ -167,16 +167,16 @@ flowchart LR
 2. **Kiểm tra BIST, Sức khỏe Drone & Thông số FC (Tại màn Chi tiết Drone)**:
    - **Vị trí UI**: Nằm trực tiếp trong màn hình **Chi tiết Drone (`Drone Detail`)** — **chỉ `Technician` và `SystemAdmin` được quyền thao tác**.
    - **Thao tác hỗ trợ**:
-     - Kết nối trực tiếp qua cổng Serial/FC lấy thông số Flight Controller (Firmware, Sensor, Pin, GPS lock, Motor/ESC) và chạy BIST tự động.
-     - **Cho phép `Technician` và `SystemAdmin` nhập thủ công thông số BIST / kiểm tra sức khỏe Drone** kèm ghi chú kiểm định và lưu vào `DroneTechnicalInspections` / `DroneTechnicalMetrics`.
+     - Kết nối trực tiếp qua cổng Serial/FC lấy thông số Flight Controller (Firmware, Sensor, Pin, GPS lock, Motor/ESC) và chạy BIST tự động. **`[BRL-02 — Khóa FC & Không bịa Firmware]`**: *Cấm tự động gỡ FC đang gắn trên Drone khác (kể cả cùng vùng, kể cả `SystemAdmin`) — trả `409 FC_ALREADY_PAIRED`, bắt buộc ngắt kết nối (`DELETE`) ở Drone cũ trước; không tự điền `"Betaflight"` nếu thiếu firmware.*
+     - **Cho phép `Technician` và `SystemAdmin` nhập thủ công thông số BIST / kiểm tra sức khỏe Drone** kèm ghi chú kiểm định và lưu vào `DroneTechnicalInspections` / `DroneTechnicalMetrics`. **`[BRL-04 — Báo đỏ thiếu thông số & Bổ sung thủ công]`**: *Khi đọc FC hoặc kiểm tra chỉ gửi một phần số đo hoặc báo mất kết nối (`connected: boolean`), lưu đúng số đo thực tế đã gửi và tuyệt đối không bịa `0%`; nếu thiếu thông số bắt buộc thì báo đỏ chỉ mục còn thiếu (`MaintenanceRequired`) và vẫn mở biểu mẫu cho phép `Technician`/`SystemAdmin` nhập thêm thủ công bổ sung.*
    - **Kết quả**: Cập nhật trạng thái kỹ thuật của Drone sang **`Đạt chuẩn / Sẵn sàng`** hoặc **`Không đạt / Cần bảo trì`**.
 3. **Đánh giá Tiền nhiệm vụ (Pre-Mission Assessment — MF01)**:
    - **Loại bỏ hoàn toàn màn hình & bước kiểm tra kỹ thuật Drone khỏi Pre-Mission** (không bắt `Manager` kiểm tra BIST/FC trong MF01).
    - **Các bước của `Manager` (hoặc `SystemAdmin`) trong MF01**:
      1. Chọn Khu vực (`Region`) và Danh sách Cột điện cần bay (`PreMissionAssessmentTowers`).
-     2. Chọn các **Drone đang ở trạng thái `Đạt chuẩn / Sẵn sàng`** (kế thừa kết quả kiểm tra từ màn Chi tiết Drone).
+     2. Chọn các **Drone đang ở trạng thái `Đạt chuẩn / Sẵn sàng`** (kế thừa kết quả kiểm tra từ màn Chi tiết Drone). **`[BRL-01 — Ràng buộc vùng tài sản]`**: *Drone thuộc vùng nào chỉ được sử dụng cho hồ sơ Pre-Mission / Mission của đúng vùng đó (`Uav.AssignedRegionId == RegionId`) — áp dụng bắt buộc cho TẤT CẢ các role kể cả `SystemAdmin` (vi phạm trả `409 DRONE_REGION_MISMATCH`).* **`[BRL-03 — Tự động lọc Drone khi Re-evaluate]`**: *Khi gọi `/re-evaluate` không truyền `droneIds[]` mới, tự động loại bỏ các Drone đã chuyển vùng hoặc không còn `Ready` ra khỏi hồ sơ rồi tính lại kết quả sẵn sàng (còn khi truyền `droneIds[]` mới vẫn chặn `409` nếu lệch vùng/chưa Ready).*
      3. Kiểm tra điều kiện Thời tiết / Không vực an toàn.
-     4. **Chỉ chọn SỐ LƯỢNG nhân sự cần thiết theo từng role** (`InspectorCount`, `AnalystCount`, `TechnicianCount` lưu tại `PreMissionAssessmentPersonnel`) — **chưa chọn đích danh tên người** ở MF01.
+     4. **Chỉ chọn SỐ LƯỢNG nhân sự cần thiết theo từng role** (`inspectorCount`, `analystCount`, `technicianCount` lưu tại `PreMissionAssessments.Findings` `jsonb` — không tạo migration thừa) — **chưa chọn đích danh tên người** ở MF01.
    - **Ràng buộc cứng**: Phải có bản `PreMissionAssessment` đạt chuẩn và còn hiệu lực (tối đa **≤ 7 ngày**) thì mới được tạo và bắt đầu Mission.
 
 ---

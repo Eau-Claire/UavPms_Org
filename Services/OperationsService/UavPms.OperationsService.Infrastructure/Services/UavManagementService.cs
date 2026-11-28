@@ -237,9 +237,11 @@ public sealed class UavManagementService : IUavManagementService
         int pageSize = 10,
         CancellationToken ct = default)
     {
-        var droneExists = await _db.Uavs.AnyAsync(x => x.Id == droneId && !x.IsDeleted, ct);
-        if (!droneExists)
-            throw new NotFoundException("Drone", droneId);
+        var drone = await _db.Uavs.SingleOrDefaultAsync(x => x.Id == droneId && !x.IsDeleted, ct)
+            ?? throw new NotFoundException("Drone", droneId);
+
+        // Lịch sử kiểm tra chỉ đọc được khi Drone thuộc vùng của người gọi (SystemAdmin được bỏ qua).
+        await DroneRegionScope.EnsureAsync(_db, _current, drone, ct);
 
         var inspections = await _db.DroneTechnicalInspections
             .Include(x => x.Technician)
@@ -262,119 +264,123 @@ public sealed class UavManagementService : IUavManagementService
             .SingleOrDefaultAsync(x => x.Id == droneId && !x.IsDeleted, ct)
             ?? throw new NotFoundException("Drone", droneId);
 
-        var metrics = new List<DroneMetricSubmitDto>
+        // Zero Fake Data: chỉ tạo hạng mục khi client gửi kết luận hoặc số đo thật; không điền giá trị mặc định.
+        var checklist = new[]
         {
-            new DroneMetricSubmitDto(
-                "FRAME_BODY",
-                "Airframe",
-                null,
-                null,
-                request.FrameBodyNotes ?? (request.FrameBodyPassed ? "Kết cấu khung vỏ đạt tiêu chuẩn" : "Phát hiện vết nứt/hư hỏng khung vỏ"),
-                null,
-                request.FrameBodyPassed,
-                true,
-                true,
-                request.FrameBodyPassed ? "Low" : "Critical"
-            ),
-            new DroneMetricSubmitDto(
-                "PROP_INTEGRITY",
-                "Propulsion",
-                null,
-                null,
-                request.PropellersNotes ?? (request.PropellersPassed ? "Cánh quạt nguyên vẹn, cân bằng động tốt" : "Cánh quạt bị mẻ/cong vênh"),
-                null,
-                request.PropellersPassed,
-                true,
-                true,
-                request.PropellersPassed ? "Low" : "Critical"
-            ),
-            new DroneMetricSubmitDto(
-                "MOTORS",
-                "Propulsion",
-                null,
-                null,
-                request.MotorsNotes ?? (request.MotorsPassed ? "Động cơ quay êm, nhiệt độ bình thường" : "Động cơ kẹt/phát tiếng ồn bất thường"),
-                null,
-                request.MotorsPassed,
-                true,
-                true,
-                request.MotorsPassed ? "Low" : "Critical"
-            ),
-            new DroneMetricSubmitDto(
-                "CAMERA_PAYLOAD",
-                "Payload",
-                null,
-                null,
-                request.CameraPayloadNotes ?? (request.CameraPayloadPassed ? "Gimbal & cảm biến camera hoạt động tốt" : "Lỗi tín hiệu Gimbal/Camera"),
-                null,
-                request.CameraPayloadPassed,
-                false,
-                false,
-                request.CameraPayloadPassed ? "Low" : "Medium"
-            ),
-            new DroneMetricSubmitDto(
-                "BATTERY_HEALTH",
-                "Power",
-                request.BatteryPercent ?? (decimal)drone.BatteryLevel,
-                null,
-                $"Điện áp: {request.BatteryVoltage ?? 24.8m}V | Cell: {request.BatteryCellCount ?? 6} | Ghi chú: {request.BatteryNotes ?? "Bình thường"}",
-                "%",
-                request.BatteryPassed,
-                true,
-                true,
-                request.BatteryPassed ? "Low" : "Critical"
-            ),
-            new DroneMetricSubmitDto(
-                "GPS_RTK_FIX",
-                "Avionics",
-                request.GpsSatelliteCount,
-                null,
-                $"Trạng thái GPS Fix: {request.GpsFixStatus ?? "3D_FIX_RTK"} | Vệ tinh: {request.GpsSatelliteCount?.ToString() ?? "N/A"}",
-                "Sats",
-                request.GpsPassed,
-                true,
-                true,
-                request.GpsPassed ? "Low" : "Critical"
-            ),
-            new DroneMetricSubmitDto(
-                "RF_LINK_TELEMETRY",
-                "Communication",
-                request.CommunicationConnected == false ? 0m : (decimal?)null,
-                null,
-                $"Tín hiệu: {request.CommunicationSignalInfo ?? "RSSI -62dBm"} | Kết nối: {(request.CommunicationConnected != false ? "Connected" : "Disconnected")}",
-                "%",
-                request.CommunicationPassed,
-                true,
-                true,
-                request.CommunicationPassed ? "Low" : "Critical"
-            ),
-            new DroneMetricSubmitDto(
-                "FLIGHT_CONTROLLER",
-                "Avionics",
-                null,
-                null,
-                $"FC UID: {request.FlightControllerUid ?? "BF-FC"} | Bo mạch: {request.FlightControllerBoard ?? "STM32F405"} | Firmware: {request.FlightControllerFirmware ?? "Betaflight 4.5.1"}",
-                null,
-                request.FlightControllerPassed,
-                true,
-                true,
-                request.FlightControllerPassed ? "Low" : "Critical"
-            )
+            (Code: "FRAME_BODY", Required: true,
+                Metric: BuildChecklistMetric("FRAME_BODY", "Airframe", request.FrameBodyPassed, null, null, null,
+                    request.FrameBodyNotes, critical: true)),
+            (Code: "PROP_INTEGRITY", Required: true,
+                Metric: BuildChecklistMetric("PROP_INTEGRITY", "Propulsion", request.PropellersPassed, null, null, null,
+                    request.PropellersNotes, critical: true)),
+            (Code: "MOTORS", Required: true,
+                Metric: BuildChecklistMetric("MOTORS", "Propulsion", request.MotorsPassed, null, null, null,
+                    request.MotorsNotes, critical: true)),
+            (Code: "CAMERA_PAYLOAD", Required: false,
+                Metric: BuildChecklistMetric("CAMERA_PAYLOAD", "Payload", request.CameraPayloadPassed, null, null, null,
+                    request.CameraPayloadNotes, critical: false)),
+            (Code: "BATTERY_HEALTH", Required: true,
+                Metric: BuildChecklistMetric("BATTERY_HEALTH", "Power", request.BatteryPassed, request.BatteryPercent, null, "%",
+                    Detail("Ghi chú", request.BatteryNotes), critical: true)),
+            (Code: "GPS_RTK_FIX", Required: true,
+                Metric: BuildChecklistMetric("GPS_RTK_FIX", "Avionics", request.GpsPassed, request.GpsSatelliteCount, null, "Sats",
+                    JoinDetails(
+                        Detail("Trạng thái GPS Fix", request.GpsFixStatus),
+                        Detail("Ghi chú", request.GpsNotes)),
+                    critical: true)),
+            // BRL-04: trạng thái kết nối lưu dạng boolean, không quy đổi thành số đo (không bịa 0%).
+            (Code: "RF_LINK_TELEMETRY", Required: true,
+                Metric: BuildChecklistMetric("RF_LINK_TELEMETRY", "Communication", request.CommunicationPassed, null,
+                    request.CommunicationConnected, null,
+                    JoinDetails(
+                        Detail("Tín hiệu", request.CommunicationSignalInfo),
+                        Detail("Ghi chú", request.CommunicationNotes)),
+                    critical: true)),
+            (Code: "FLIGHT_CONTROLLER", Required: true,
+                Metric: BuildChecklistMetric("FLIGHT_CONTROLLER", "Avionics", request.FlightControllerPassed, null,
+                    request.FlightControllerConnected, null,
+                    JoinDetails(
+                        Detail("FC UID", request.FlightControllerUid),
+                        Detail("Bo mạch", request.FlightControllerBoard),
+                        Detail("Firmware", request.FlightControllerFirmware),
+                        Detail("Ghi chú", request.FlightControllerNotes)),
+                    critical: true))
         };
+
+        var metrics = checklist.Select(item => item.Metric).OfType<DroneMetricSubmitDto>().ToList();
+        // Điện áp và số cell là số đo thật: luôn được giữ lại, kể cả khi chỉ gửi riêng hai giá trị này.
+        AddNumericReading(metrics, "BATTERY_VOLTAGE", "Power", request.BatteryVoltage, "V");
+        AddNumericReading(metrics, "BATTERY_CELL_COUNT", "Power", request.BatteryCellCount, "cells");
+
+        if (metrics.Count == 0)
+            throw new BusinessRuleException("METRICS_REQUIRED", "Cần gửi ít nhất một số đo hoặc kết luận của hạng mục kiểm tra; hệ thống không tự điền dữ liệu.");
+
+        // Hạng mục bắt buộc chưa gửi: phiếu vẫn được lưu nhưng chưa đạt (MaintenanceRequired) để UI báo đỏ và cho nhập bổ sung.
+        var missingMetricCodes = checklist
+            .Where(item => item.Required && item.Metric == null)
+            .Select(item => item.Code)
+            .ToList();
 
         var submitReq = new DroneInspectionSubmitRequest(
             drone.Id,
-            request.Notes ?? "Kiểm tra kỹ thuật định kỳ cơ bản (Basic Technical Checklist)",
+            request.Notes,
             metrics,
             request.PolicyVersion ?? "v2.0",
             request.FlightControllerUid,
-            request.PreMissionAssessmentId
+            MissingMetricCodes: missingMetricCodes
         );
 
         var inspection = await _inspectionService.SubmitInspectionAsync(submitReq, ct);
 
         return MapInspectionToSummaryDto(inspection);
     }
+
+    /// <summary>Hạng mục chỉ được tạo khi client gửi kết luận (passed), số đo hoặc trạng thái kết nối; ngược lại trả null.</summary>
+    private static DroneMetricSubmitDto? BuildChecklistMetric(
+        string metricCode,
+        string subsystem,
+        bool? passed,
+        decimal? numericValue,
+        bool? boolValue,
+        string? unit,
+        string? valueText,
+        bool critical)
+    {
+        if (!passed.HasValue && !numericValue.HasValue && !boolValue.HasValue)
+            return null;
+
+        var failedSeverity = critical ? "Critical" : "Medium";
+        var severity = passed == false ? failedSeverity : "Low";
+        return new DroneMetricSubmitDto(
+            metricCode, subsystem, numericValue, boolValue, valueText,
+            numericValue.HasValue ? unit : null,
+            passed, critical, critical, severity);
+    }
+
+    private static void AddNumericReading(List<DroneMetricSubmitDto> metrics, string metricCode, string subsystem, decimal? value, string unit)
+    {
+        if (!value.HasValue)
+            return;
+
+        metrics.Add(new DroneMetricSubmitDto(metricCode, subsystem, value, null, null, unit, null, false, false, "Low"));
+    }
+    /// <summary>"Nhãn: giá trị" cho dữ liệu client đã gửi; null khi không gửi để không bịa giá trị mặc định.</summary>
+    private static string? Detail(string label, object? value)
+    {
+        if (value is null)
+            return null;
+        if (value is string text && string.IsNullOrWhiteSpace(text))
+            return null;
+
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{label}: {value}");
+    }
+
+    private static string? JoinDetails(params string?[] details)
+    {
+        var provided = details.Where(d => !string.IsNullOrWhiteSpace(d)).ToList();
+        return provided.Count == 0 ? null : string.Join(" | ", provided);
+    }
+
 
     /// <summary>
     /// GIS scope estimate (BR-21). Suitability is judged from the scope and the UAV's endurance/range only
@@ -416,7 +422,8 @@ public sealed class UavManagementService : IUavManagementService
         if (assessment != null)
         {
             evaluated = await DroneReadinessEvaluator.EvaluateAsync(
-                _db, assessment.PlannedStart, assessment.PlannedEnd, corridorKm, assetCount, ct);
+                _db, assessment.PlannedStart, assessment.PlannedEnd, corridorKm, assetCount, ct,
+                onlyRegionId: assessment.RegionId);
         }
         else
         {
@@ -464,9 +471,13 @@ public sealed class UavManagementService : IUavManagementService
             .SingleOrDefaultAsync(a => a.Id == assessmentId && !a.IsDeleted, ct)
             ?? throw new NotFoundException("PreMissionAssessment", assessmentId);
 
+        // Danh sách Drone chỉ được xem khi vùng của hồ sơ nằm trong scope của người gọi (SystemAdmin bỏ qua).
+        await DroneRegionScope.EnsureRegionAsync(_db, _current, assessment.RegionId, ct);
+
         var (corridorKm, towerCount) = await DroneReadinessEvaluator.EstimateScopeAsync(_db, assessment.Towers, ct);
         var evaluated = await DroneReadinessEvaluator.EvaluateAsync(
-            _db, assessment.PlannedStart, assessment.PlannedEnd, corridorKm, towerCount, ct);
+            _db, assessment.PlannedStart, assessment.PlannedEnd, corridorKm, towerCount, ct,
+            onlyRegionId: assessment.RegionId);
 
         return evaluated
             .Where(x => x.Result.IsEligible)
@@ -562,7 +573,9 @@ public sealed class UavManagementService : IUavManagementService
             ValidUntil = inspection.ValidUntil,
             TechnicianName = inspection.Technician?.FullName ?? inspection.Technician?.Email,
             Notes = inspection.Notes,
-            MetricCount = inspection.Metrics?.Count ?? 0
+            MetricCount = inspection.Metrics?.Count ?? 0,
+            Readiness = DroneReadiness.FromHealth(inspection.Health),
+            MissingMetrics = DroneInspectionSnapshot.ReadMissingMetrics(inspection.RawSnapshot)
         };
     }
 

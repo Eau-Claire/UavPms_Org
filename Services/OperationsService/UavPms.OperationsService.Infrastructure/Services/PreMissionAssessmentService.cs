@@ -1,6 +1,7 @@
 using UavPms.OperationsService.Infrastructure.Repositories;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using UavPms.OperationsService.Application.Common.Exceptions;
@@ -54,9 +55,13 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         int requiredInspectors = 1,
         int requiredAnalysts = 1,
         int requiredTechnicians = 1,
-        int maxDronesLimit = 1)
+        int maxDronesLimit = 1,
+        IReadOnlyCollection<Guid>? droneIds = null)
     {
         await RequireManager(ct);
+
+        // MF01 chỉ nhận số lượng theo role; thiếu hoặc < 1 là lỗi 400 trước khi chạm DB.
+        EnsureValidHeadcount(requiredInspectors, requiredAnalysts, requiredTechnicians);
 
         // BR-14: a missing tower list is an empty scope (400), not a NullReferenceException (500).
         if (towerIds == null || towerIds.Count == 0 || towerIds.Any(id => id == Guid.Empty) ||
@@ -72,7 +77,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         {
             var existing = await FindByIdempotencyKeyAsync(idempotencyKey, ct);
             if (existing != null)
-                return await ReplayIdempotentCreateAsync(existing, regionId, plannedStart, plannedEnd, towerIds, boundaryWkt, ct);
+                return await ReplayIdempotentCreateAsync(existing, regionId, plannedStart, plannedEnd, towerIds, boundaryWkt, new AssessmentHeadcount(requiredInspectors, requiredAnalysts, requiredTechnicians), droneIds, ct);
         }
 
         if (plannedEnd <= plannedStart || plannedEnd <= DateTime.UtcNow)
@@ -104,11 +109,16 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         if (!siteResult.IsValid)
             throw new BusinessRuleException(siteResult.ErrorMessage ?? "SITE_FEASIBILITY_FAILED");
 
+        // Drone chọn phải Ready; kiểm tra trước khi tạo hồ sơ để lỗi 409 không để lại bản ghi dở.
+        var selectedDroneIds = await EnsureSelectedDronesReadyAsync(droneIds, regionId, ct);
+
         var findingsDict = JsonSerializer.Deserialize<Dictionary<string, object>>(siteResult.FindingsJson) ?? new Dictionary<string, object>();
-        findingsDict["requiredInspectors"] = Math.Max(1, requiredInspectors);
-        findingsDict["requiredAnalysts"] = Math.Max(1, requiredAnalysts);
-        findingsDict["requiredTechnicians"] = Math.Max(1, requiredTechnicians);
+        findingsDict[AssessmentFindings.InspectorCount] = requiredInspectors;
+        findingsDict[AssessmentFindings.AnalystCount] = requiredAnalysts;
+        findingsDict[AssessmentFindings.TechnicianCount] = requiredTechnicians;
         findingsDict["maxDronesLimit"] = Math.Max(1, maxDronesLimit);
+        if (selectedDroneIds.Count > 0)
+            findingsDict[AssessmentFindings.DroneIds] = selectedDroneIds;
 
         var assessment = new PreMissionAssessment
         {
@@ -148,7 +158,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
             if (existing == null)
                 throw new BusinessRuleException("IDEMPOTENCY_CONFLICT", "An assessment with the same idempotency key is currently being processed.");
 
-            return await ReplayIdempotentCreateAsync(existing, regionId, plannedStart, plannedEnd, towerIds, boundaryWkt, ct);
+            return await ReplayIdempotentCreateAsync(existing, regionId, plannedStart, plannedEnd, towerIds, boundaryWkt, new AssessmentHeadcount(requiredInspectors, requiredAnalysts, requiredTechnicians), droneIds, ct);
         }
 
         try
@@ -197,6 +207,8 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         DateTime plannedEnd,
         IReadOnlyCollection<Guid> towerIds,
         string? boundaryWkt,
+        AssessmentHeadcount requestedHeadcount,
+        IReadOnlyCollection<Guid>? requestedDroneIds,
         CancellationToken ct)
     {
         if (existing.ManagerId != _current.UserId)
@@ -210,9 +222,12 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
                           SameInstant(existing.PlannedEnd, plannedEnd) &&
                           existing.Towers.Select(t => t.TowerId).ToHashSet().SetEquals(towerIds) &&
                           existing.Towers.Count == towerIds.Count &&
-                          sameBoundary;
+                          sameBoundary &&
+                          // Đổi Drone hoặc số lượng nhân sự là một yêu cầu khác, không được trả lại kết quả cũ.
+                          AssessmentFindings.ReadHeadcount(existing.Findings) == requestedHeadcount &&
+                          (ReadSelectedDroneIds(existing.Findings) ?? new HashSet<Guid>()).SetEquals(requestedDroneIds ?? Array.Empty<Guid>());
         if (!samePayload)
-            throw new BusinessRuleException("IDEMPOTENCY_KEY_REUSED", "Khóa idempotency đã được dùng với vùng, khung giờ hoặc danh sách cột khác.");
+            throw new BusinessRuleException("IDEMPOTENCY_KEY_REUSED", "Khóa idempotency đã được dùng với vùng, khung giờ, danh sách cột, Drone hoặc số lượng nhân sự khác.");
 
         await EnsureManagerHasAssessmentAccessAsync(existing, ct);
 
@@ -244,6 +259,112 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
          pg.ConstraintName != null &&
          (pg.ConstraintName.StartsWith("IX_PreMissionAssessmentPersonnel_", StringComparison.Ordinal) ||
           pg.ConstraintName.StartsWith("IX_PreMissionAssessmentDrones_", StringComparison.Ordinal)));
+
+    /// <summary>Số lượng nhân sự và Drone đã chọn nằm trong PreMissionAssessments.Findings (jsonb), không thêm cột DB.</summary>
+    /// <summary>Giá trị không truyền (null) được bỏ qua; giá trị có truyền phải >= 1 (FR-005/FR-007).</summary>
+    private static void EnsureValidHeadcount(int? inspectors, int? analysts, int? technicians)
+    {
+        if (inspectors < 1 || analysts < 1 || technicians < 1)
+            throw new BusinessRuleException("INVALID_ROLE_HEADCOUNT", "inspectorCount, analystCount và technicianCount phải >= 1.");
+    }
+
+    /// <summary>
+    /// Drone chọn vào MF01 phải cùng vùng với hồ sơ (mọi role, kể cả SystemAdmin) và đang Ready (TechnicalHealth = Healthy).
+    /// Trả tập Id đã kiểm tra; rỗng nghĩa là chưa chọn (tự nạp Drone cùng vùng). Drone không tồn tại là 404,
+    /// khác vùng hoặc chưa gắn vùng là 409 DRONE_REGION_MISMATCH, không Ready là 409 DRONE_NOT_READY.
+    /// </summary>
+    private async Task<HashSet<Guid>> EnsureSelectedDronesReadyAsync(IReadOnlyCollection<Guid>? droneIds, Guid assessmentRegionId, CancellationToken ct)
+    {
+        if (droneIds == null || droneIds.Count == 0)
+            return new HashSet<Guid>();
+
+        var requestedIds = droneIds.Distinct().ToList();
+        var drones = await _db.Uavs
+            .Where(x => requestedIds.Contains(x.Id) && !x.IsDeleted)
+            .Select(x => new { x.Id, x.TechnicalHealth, x.AssignedRegionId })
+            .ToListAsync(ct);
+
+        var unknownIds = requestedIds.Where(id => drones.All(d => d.Id != id)).ToList();
+        if (unknownIds.Count > 0)
+            throw new NotFoundException("Drone", unknownIds[0]);
+
+        if (drones.Any(d => d.AssignedRegionId != assessmentRegionId))
+            throw new BusinessRuleException("DRONE_REGION_MISMATCH", "Drone chỉ được dùng cho hồ sơ MF01 của đúng vùng được gán cho Drone.");
+
+        if (drones.Any(d => DroneReadiness.FromHealth(d.TechnicalHealth) != DroneReadiness.Ready))
+            throw new BusinessRuleException("DRONE_NOT_READY", "Chỉ được chọn Drone ở trạng thái Ready (đã đạt kiểm tra kỹ thuật tại Chi tiết Drone).");
+
+        return requestedIds.ToHashSet();
+    }
+
+    /// <summary>null = hồ sơ chưa chọn Drone (tự nạp theo vùng); tập rỗng = đã chọn nhưng đều bị loại.</summary>
+    private static HashSet<Guid>? ReadSelectedDroneIds(string? findings)
+    {
+        if (string.IsNullOrWhiteSpace(findings))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(findings);
+            if (!doc.RootElement.TryGetProperty(AssessmentFindings.DroneIds, out var array) || array.ValueKind != JsonValueKind.Array)
+                return null;
+
+            var ids = new HashSet<Guid>();
+            foreach (var item in array.EnumerateArray())
+            {
+                if (item.TryGetGuid(out var id))
+                    ids.Add(id);
+            }
+
+            return ids;
+        }
+        catch (JsonException)
+        {
+            // Findings hỏng thì coi như chưa chọn Drone; các phần khác của đánh giá vẫn chạy.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// BRL-03: mỗi lần đánh giá lại chỉ giữ Drone đã chọn mà vẫn cùng vùng hồ sơ và còn Ready (Healthy);
+    /// Drone đã chuyển vùng, bị xóa hoặc hỏng bị loại khỏi danh sách đã lưu.
+    /// </summary>
+    private async Task<HashSet<Guid>> KeepUsableDronesAsync(HashSet<Guid> selectedDroneIds, Guid assessmentRegionId, CancellationToken ct)
+    {
+        if (selectedDroneIds.Count == 0)
+            return selectedDroneIds;
+
+        var usableIds = await _db.Uavs
+            .Where(x => selectedDroneIds.Contains(x.Id) && !x.IsDeleted &&
+                        x.AssignedRegionId == assessmentRegionId &&
+                        x.TechnicalHealth == TechnicalHealth.Healthy)
+            .Select(x => x.Id)
+            .ToListAsync(ct);
+
+        return usableIds.ToHashSet();
+    }
+    /// <summary>Áp số lượng/Drone mới vào Findings của hồ sơ (lưu cùng lượt đánh giá lại), sau khi kiểm tra như lúc tạo.</summary>
+    private async Task ApplyRequirementChangesAsync(PreMissionAssessment assessment, ReEvaluateAssessmentRequest changes, CancellationToken ct)
+    {
+        EnsureValidHeadcount(changes.InspectorCount, changes.AnalystCount, changes.TechnicianCount);
+        var newDroneIds = await EnsureSelectedDronesReadyAsync(changes.DroneIds, assessment.RegionId, ct);
+
+        var findings = JsonNode.Parse(string.IsNullOrWhiteSpace(assessment.Findings) ? "{}" : assessment.Findings) as JsonObject
+            ?? new JsonObject();
+
+        // Luôn ghi đủ 3 khóa chuẩn (giá trị mới hoặc giá trị đang lưu) và bỏ khóa cũ để bản ghi cũ được chuyển sang khóa chuẩn.
+        var current = AssessmentFindings.ReadHeadcount(assessment.Findings);
+        findings[AssessmentFindings.InspectorCount] = changes.InspectorCount ?? current.Inspectors;
+        findings[AssessmentFindings.AnalystCount] = changes.AnalystCount ?? current.Analysts;
+        findings[AssessmentFindings.TechnicianCount] = changes.TechnicianCount ?? current.Technicians;
+        foreach (var legacyKey in AssessmentFindings.LegacyHeadcountKeys)
+            findings.Remove(legacyKey);
+
+        if (newDroneIds.Count > 0)
+            findings[AssessmentFindings.DroneIds] = new JsonArray(newDroneIds.Select(id => (JsonNode?)JsonValue.Create(id.ToString())).ToArray());
+
+        assessment.Findings = findings.ToJsonString();
+    }
 
     /// <summary>PostgreSQL keeps microseconds; .NET keeps 100 ns ticks.</summary>
     private static bool SameInstant(DateTime a, DateTime b) =>
@@ -402,7 +523,14 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         };
     }
 
-    public async Task<PreMissionAssessment> EvaluateAsync(Guid id, CancellationToken ct)
+    public Task<PreMissionAssessment> EvaluateAsync(Guid id, CancellationToken ct) =>
+        EvaluateCoreAsync(id, null, ct);
+
+    /// <summary>Đánh giá lại; body tùy chọn đổi số lượng nhân sự hoặc danh sách Drone Ready đã chọn.</summary>
+    public Task<PreMissionAssessment> ReEvaluateAsync(Guid id, ReEvaluateAssessmentRequest? changes, CancellationToken ct) =>
+        EvaluateCoreAsync(id, changes, ct);
+
+    private async Task<PreMissionAssessment> EvaluateCoreAsync(Guid id, ReEvaluateAssessmentRequest? changes, CancellationToken ct)
     {
         await RequireManager(ct);
 
@@ -428,6 +556,10 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         if (assessment.Status == PreMissionAssessmentStatus.Expired || await ApplyExpiryAsync(assessment, ct))
             throw new BusinessRuleException("ASSESSMENT_EXPIRED", "Khung giờ bay hoặc thời hạn của bản đánh giá đã hết hạn, không thể đánh giá lại.");
 
+        // Thay đổi nhân sự/Drone chỉ áp khi hồ sơ còn mở (đã qua các guard Completed/Cancelled/Expired ở trên).
+        if (changes != null)
+            await ApplyRequirementChangesAsync(assessment, changes, ct);
+
         // Step 1: Site Feasibility
         var towerIds = assessment.Towers.OrderBy(x => x.Sequence).Select(x => x.TowerId).ToList();
         var towers = await _db.Towers
@@ -441,24 +573,31 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         var siteResult = SiteFeasibilityPolicy.Evaluate(region, towers, assessment.ProposedBoundary, towerIds);
         assessment.SiteFeasibilityStatus = siteResult.Status;
 
-        int reqInspectors = 1, reqAnalysts = 1, reqTechnicians = 1, maxDrones = 1;
+        // Đọc khóa chuẩn, có fallback khóa cũ cho bản ghi tạo trước BE-REQ-101; ghi lại luôn bằng khóa chuẩn.
+        var headcount = AssessmentFindings.ReadHeadcount(assessment.Findings);
+        var reqInspectors = headcount.Inspectors;
+        var reqAnalysts = headcount.Analysts;
+        var reqTechnicians = headcount.Technicians;
+        var maxDrones = 1;
         if (!string.IsNullOrEmpty(assessment.Findings))
         {
             try
             {
                 using var doc = JsonDocument.Parse(assessment.Findings);
-                if (doc.RootElement.TryGetProperty("requiredInspectors", out var pInsp) && pInsp.TryGetInt32(out var vInsp)) reqInspectors = Math.Max(1, vInsp);
-                if (doc.RootElement.TryGetProperty("requiredAnalysts", out var pAna) && pAna.TryGetInt32(out var vAna)) reqAnalysts = Math.Max(1, vAna);
-                if (doc.RootElement.TryGetProperty("requiredTechnicians", out var pTech) && pTech.TryGetInt32(out var vTech)) reqTechnicians = Math.Max(1, vTech);
                 if (doc.RootElement.TryGetProperty("maxDronesLimit", out var pMaxDrones) && pMaxDrones.TryGetInt32(out var vMax)) maxDrones = Math.Max(1, vMax);
             }
             catch { }
         }
+        var storedDroneIds = ReadSelectedDroneIds(assessment.Findings);
+        var selectedDroneIds = storedDroneIds == null ? null : await KeepUsableDronesAsync(storedDroneIds, assessment.RegionId, ct);
         var mergedFindings = JsonSerializer.Deserialize<Dictionary<string, object>>(siteResult.FindingsJson) ?? new Dictionary<string, object>();
-        mergedFindings["requiredInspectors"] = reqInspectors;
-        mergedFindings["requiredAnalysts"] = reqAnalysts;
-        mergedFindings["requiredTechnicians"] = reqTechnicians;
+        mergedFindings[AssessmentFindings.InspectorCount] = reqInspectors;
+        mergedFindings[AssessmentFindings.AnalystCount] = reqAnalysts;
+        mergedFindings[AssessmentFindings.TechnicianCount] = reqTechnicians;
         mergedFindings["maxDronesLimit"] = maxDrones;
+        // Giữ danh sách Drone đã chọn qua mỗi lần đánh giá lại, nếu không re-evaluate sẽ quay về quét toàn bộ Drone.
+        if (selectedDroneIds != null)
+            mergedFindings[AssessmentFindings.DroneIds] = selectedDroneIds;
         assessment.Findings = JsonSerializer.Serialize(mergedFindings);
 
         // Step 2: Clear old candidates (Gap #4)
@@ -525,11 +664,17 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
         // Step 4: UAV candidates (BR-20 – BR-22). Same evaluator as GET /drones/eligible: newest completed inspection
         // of any result, valid at the planned start; scope suitability from the real tower corridor.
         var (corridorKm, towerCount) = await DroneReadinessEvaluator.EstimateScopeAsync(_db, assessment.Towers, ct);
+        // Chỉ nạp Drone cùng vùng với hồ sơ (mọi role); Drone vùng khác hoặc chưa gắn vùng không vào danh sách.
         var droneResults = await DroneReadinessEvaluator.EvaluateAsync(
-            _db, assessment.PlannedStart, assessment.PlannedEnd, corridorKm, towerCount, ct);
+            _db, assessment.PlannedStart, assessment.PlannedEnd, corridorKm, towerCount, ct,
+            onlyRegionId: assessment.RegionId);
 
         foreach (var (drone, result) in droneResults)
         {
+            // Đã chọn Drone cụ thể thì chỉ đánh giá các Drone đó (kể cả khi bị loại hết); chưa chọn thì nạp Drone cùng vùng.
+            if (selectedDroneIds != null && !selectedDroneIds.Contains(drone.Id))
+                continue;
+
             var droneCandidate = new PreMissionAssessmentDrone
             {
                 Assessment = assessment,
@@ -563,8 +708,7 @@ public sealed class PreMissionAssessmentService : IPreMissionAssessmentService
 
         var isReady = isSiteFeasible && hasEligiblePersonnel && hasEligibleDrone;
         assessment.Status = isReady ? PreMissionAssessmentStatus.Ready : PreMissionAssessmentStatus.NotReady;
-        var validityHours = await MissionResourceGuard.GetPositiveIntSettingAsync(
-            _db, SettingKeys.AssessmentValidityHours, MissionResourceGuard.DefaultAssessmentValidityHours, ct);
+        var validityHours = await MissionResourceGuard.GetAssessmentValidityHoursAsync(_db, ct);
         assessment.ValidUntil = DateTime.UtcNow.AddHours(validityHours);
         assessment.Version++;
         assessment.EvaluationPolicyVersion = "v2.0";

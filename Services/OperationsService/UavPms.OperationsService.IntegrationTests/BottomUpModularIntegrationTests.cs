@@ -205,8 +205,7 @@ public class BottomUpModularIntegrationTests
                 {
                     new("BATTERY_HEALTH", "Power", 92m, Passed: true, Critical: true, Severity: "High"),
                     new("RF_LINK_QUALITY", "Comms", 88m, Passed: true, Critical: true, Severity: "High")
-                },
-                PreMissionAssessmentId: assessmentId), CancellationToken.None);
+                }), CancellationToken.None);
 
             inspection.Status.Should().Be(DroneTechnicalInspectionStatus.Passed);
             inspection.Health.Should().Be(TechnicalHealth.Healthy);
