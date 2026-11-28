@@ -201,7 +201,7 @@ python -m edge.main
 
 ## 8. Liên kết với Roadmap chính
 
-Tích hợp này liên quan đến các Epic trong `roadmap.md`:
+Tích hợp này liên quan đến các Epic trong `archive/roadmap.md` (lộ trình cũ, đã ngưng dùng):
 - **EPIC 6 (Phase 6.1)**: AI Pipeline & Tích hợp Python - Task #42, #43, #44
 - **EPIC 8 (Phase 8.1)**: SignalR & Emergency Alerts - Task #52, #53
 - **EPIC 10 (Phase 10.1)**: Notification Service - Task #61, #62

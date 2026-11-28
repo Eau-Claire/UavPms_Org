@@ -1,6 +1,6 @@
 # Ma trận phân quyền BE (RBAC + phạm vi vùng)
 
-Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh tự động từ `[Authorize(Roles = …)]` trong code (trước = `main` `fb7c28f`, sau = branch này). Nguồn yêu cầu: `docs/MASTER_SYSTEM_SPEC.md` §4.
+Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh tự động từ `[Authorize(Roles = …)]` trong code (trước = `main` `fb7c28f`, sau = branch này). Nguồn yêu cầu: `docs/MASTER_SYSTEM_SPEC.md` §4 (v2.1). Bàn giao FE: [`contracts/FE_HANDOFF_RBAC_REGION_SCOPE.md`](contracts/FE_HANDOFF_RBAC_REGION_SCOPE.md). Truy vết: `specs/RTM.md` dòng `BE-REQ-005`.
 
 ## 1. Nguyên tắc
 
@@ -16,7 +16,7 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | `GET /ai-analysis/{id:guid}` | SystemAdmin, Manager, Inspector, Analyst | SystemAdmin, Manager, Inspector, Analyst | Chỉ người xem được defect của nhiệm vụ |
 | `GET /missions/{missionId:guid}/ai-analysis/detections` | SystemAdmin, Manager, Inspector, Analyst | SystemAdmin, Manager, Inspector, Analyst, Technician | Mọi role; chỉ người tham gia nhiệm vụ, Manager/Analyst của vùng |
 | `PUT /missions/{missionId:guid}/ai-analysis/detections/{detectionId:guid}/review` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin; Analyst phải được giao hoặc thuộc vùng nhiệm vụ |
-| `POST /ai-analysis/upload` | SystemAdmin, Manager, Inspector, Analyst | SystemAdmin, Inspector, Analyst | Bỏ Manager; vào nhiệm vụ: Inspector/Analyst được giao hoặc Analyst của vùng; standalone: chỉ SystemAdmin, Analyst |
+| `POST /ai-analysis/upload` | SystemAdmin, Manager, Inspector, Analyst | SystemAdmin, Inspector, Analyst | Bỏ Manager; vào nhiệm vụ: Inspector/Analyst được giao hoặc Analyst của vùng; standalone: chỉ SystemAdmin, Analyst, file vào nhiệm vụ `STD-` riêng của người upload |
 | `PUT /anomalies/{id:guid}/tower` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin; Analyst được giao hoặc của vùng |
 | `GET /anomalies/{id:guid}/tower-suggestions` | SystemAdmin, Manager, Analyst | SystemAdmin, Manager, Analyst | Chỉ người xem được defect |
 | `GET /anomalies/{id:guid}` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Inspector, Analyst, Technician | Chỉ người tham gia nhiệm vụ, Manager/Analyst của vùng |
@@ -24,7 +24,12 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | `GET /anomalies/pending` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin; lọc theo nhiệm vụ được giao / vùng |
 | `PUT /anomalies/{id:guid}/validate` | Analyst | SystemAdmin, Analyst | Thêm SystemAdmin; Analyst được giao hoặc của vùng |
 | `GET /audit-logs` | SystemAdmin, Manager | SystemAdmin | Bỏ Manager |
+| `GET /alerts`, `/alerts/active`, `/alerts/{id:guid}`, `PUT /alerts/{id:guid}/review`, `POST /alerts/{id:guid}/escalate` | (không đổi role) | (không đổi role) | Mới: chỉ cảnh báo của nhiệm vụ người gọi được xem |
+| `POST /alerts/trigger` | (không đổi role) | (không đổi role) | Mới: bắt buộc `missionId`/`anomalyId` được xem; bỏ fallback nhiệm vụ mới nhất (`400 MISSION_REQUIRED`, `403 MISSION_ACCESS_DENIED`) |
+| `GET /monitor/*` | (không đổi role) | (không đổi role) | Mới: chỉ đếm nhiệm vụ / ảnh / defect / cảnh báo của nhiệm vụ được xem |
 | `GET /drones` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Inspector, Analyst, Technician | Mới: chỉ liệt kê Drone trong vùng (Admin: mọi vùng) |
+| `GET /drones/available`, `GET /drones/{id:guid}/status` | (không đổi role) | (không đổi role) | Mới: Drone trong vùng hoặc của nhiệm vụ được giao (`403 DRONE_ACCESS_DENIED`) |
+| `GET /drones/{droneCode}/telemetry/latest` | (không đổi role) | (không đổi role) | Mới: cùng luật Drone; Manager không còn xem mọi vùng (`403 DRONE_TELEMETRY_ACCESS_DENIED`) |
 | `GET /drones/{id:guid}` | SystemAdmin, Manager, Inspector, Analyst, Technician | SystemAdmin, Manager, Inspector, Analyst, Technician | Mới: Drone trong vùng, hoặc Drone của nhiệm vụ mình đang được giao |
 | `POST /drones` | SystemAdmin, Manager, Technician | SystemAdmin, Manager, Technician | Mới: chỉ tạo Drone trong vùng của mình |
 | `PUT /drones/{id:guid}` | SystemAdmin, Manager, Technician | SystemAdmin, Manager, Technician | Mới: chỉ sửa Drone trong vùng; chuyển vùng thì vùng mới cũng phải thuộc phạm vi |
@@ -276,40 +281,35 @@ Cập nhật 28/11/2026, branch `feat/rbac-region-scope`. Bảng endpoint sinh t
 | GET | `/users/{userId:guid}/geographic-scopes` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | PUT | `/users/{userId:guid}/geographic-scopes` | ✓ | ✓ |  |  |  | ● |
 
-## 5. Sửa spec `MASTER_SYSTEM_SPEC.md` §4 (cần `SDD_PHASE=SPEC`)
+## 5. Spec
 
-Hook chặn sửa spec trong pha `CODE`. Thay các dòng sau trong bảng ma trận phân quyền:
+Đã áp dụng vào `docs/MASTER_SYSTEM_SPEC.md` (v2.1, 28/11/2026): §4 thêm định nghĩa "nhiệm vụ được xem" / "Drone được xem", tách dòng Quản lý UAV (Technician CRUD trong vùng), Pre-Mission chỉ Admin + Manager vùng, check-in chỉ Inspector, Analyst của vùng được upload / xem / duyệt, tách dòng Dashboard; §2 và §4A.3 sửa câu quyền duyệt cho khớp; §4B ghi hiện trạng standalone `STD-`.
 
-| Dòng hiện tại | Thay bằng |
-|---|---|
-| `Quản lý Region, Tower, UAV, Flight Controller` — Technician: Xem *(trong vùng)* | Tách 2 dòng: `Quản lý Region, Tower, Flight Controller` (giữ nguyên) và `Quản lý UAV / Drone (tạo, sửa, xóa)`: SystemAdmin ✅, Manager ✅ *(trong vùng)*, Inspector Xem *(trong vùng)*, Analyst Xem *(trong vùng)*, **Technician ✅ *(trong vùng)*** |
-| `Tạo / Duyệt Pre-Mission Assessment` — Inspector/Analyst/Technician: Xem *(trong vùng)* | Inspector ❌, Analyst ❌, Technician ❌ (chỉ SystemAdmin và Manager của vùng) |
-| `Check-in hiện trường` | Giữ: chỉ Inspector được giao. Thêm ghi chú: mission `Ready` khi Inspector đã check-in; Analyst, Technician chỉ `Accept` |
-| `Upload Ảnh / Video cho AI (Mission)` — Analyst: ✅ | Analyst: ✅ *(được giao hoặc trong vùng)* |
-| `Xem danh sách & chi tiết Defect trong Nhiệm vụ` — Analyst: ✅ *(mission được giao)* | Analyst: ✅ *(mission được giao hoặc trong vùng)* |
-| `Duyệt Defect` — Analyst: ✅ *(duy nhất: Analyst trong mission đó)* | Analyst: ✅ *(Analyst được giao hoặc Analyst của vùng nhiệm vụ)* |
+## 6. Còn lại (checklist)
 
-## 6. Còn lại, chưa làm
+**Lỗi / lệch spec trong BE**
 
-| # | Việc | Ghi chú |
-|---|---|---|
-| 1 | `POST missions/{id}/ai-analysis/from-media/{mediaId}` (chạy lại AI) vẫn cho Manager | Không phải upload; giữ nguyên |
-| 2 | Upload bên OperationsService chỉ xét vùng được gán trực tiếp (chưa tính vùng con) | Bên AIInspectionService đã tính vùng con |
+- [ ] **P1** `TelemetryHub.JoinDrone`: Manager join được nhóm telemetry của **mọi** Drone (chưa lọc vùng như REST `telemetry/latest`). Sửa: kiểm tra `DroneScope`.
+- [ ] **P2** `TelemetryHub.JoinMission`: Manager của vùng (không phải người tạo) không join được, trong khi REST cho xem. Sửa: dùng `MissionScope`.
+- [ ] **P2** Check-in: spec cho `SystemAdmin` check-in, code đòi assignment (`USER_NOT_ASSIGNED`). Có từ trước, chưa sửa.
+- [ ] **P2** Upload bên OperationsService chỉ xét vùng được gán trực tiếp, chưa tính vùng con (AIInspectionService đã tính).
+- [ ] **P3** `POST missions/{id}/ai-analysis/from-media/{mediaId}` (chạy lại AI) vẫn cho Manager. Không phải upload; chờ quyết định.
+- [ ] **Lệch spec có từ trước**: spec §2 gỡ `/alerts*` và bảng `EmergencyAlerts`, code vẫn còn (nay đã lọc vùng); spec cấm ghi `DroneTelemetry`, `DroneTelemetryService` vẫn ghi; spec §4B `MissionId = NULL`, code dùng nhiệm vụ `STD-`.
+- [ ] Spec và `HANDOFF.md` trỏ tới file không tồn tại: `docs/AI_SECURITY_AND_GOVERNANCE.md`, `CODING_STANDARDS.md`, `docs/TEAM_MVP_ACTION_PLAN.md`.
 
-## 7. FE cần làm theo (chưa sửa)
+**Quy trình trước khi merge**
 
-| Màn | Việc |
-|---|---|
-| Sidebar, `route-access.ts` | Manager: bỏ "Nhật ký hệ thống" (`/system/audit-logs` chỉ SystemAdmin) |
-| Sidebar, route `/reports` | Inspector: bỏ "Báo cáo", thêm guard |
-| Sidebar, route `/pre-mission` | Inspector, Technician: bỏ "Đánh giá tiền bay" (chỉ Manager, Admin) |
-| Quản lý UAV | Technician: hiện nút "Xóa UAV" |
-| Chi tiết phiếu bảo trì | Manager: ẩn thêm minh chứng / vật tư |
-| Nhiệm vụ (màn hiện trường) | Chỉ Inspector thấy nút Check-in; Analyst, Technician chỉ Accept |
-| AI Studio upload | Manager: ẩn trang upload (`aiAnalysis` đang có Manager) |
-| Kết quả giám định | Technician xem tab defect; SystemAdmin và Analyst của vùng được duyệt |
+- [ ] Chạy 1 lượt Independent Judge (Tier 1, `.agents/skills/pr-review-judge`) cho 3 commit.
+- [ ] Push + mở PR vào `main` (chờ Human Owner duyệt).
+- [ ] Xuất lại `openapi.json` qua Gateway thật nếu FE cần (schema không đổi, chỉ đổi role).
+- [ ] Trước deploy: gán vùng cho mọi Manager / Inspector chưa có vùng (xem §8).
+- [ ] FE làm theo `contracts/FE_HANDOFF_RBAC_REGION_SCOPE.md`.
 
-Test FE đang ghi luật cũ và sẽ phải sửa: `sidebar.spec.ts`, `drone-management.spec.ts`. Trên `main` FE có sẵn 10 test fail không liên quan (facility-store, active-learning).
+**Đã xong** (không còn trong danh sách): dashboard `monitor/*`, cảnh báo `alerts/*`, Drone `available`/`status`/`telemetry/latest` lọc vùng; upload standalone không còn gắn vào nhiệm vụ mới nhất của hệ thống; spec §4 cập nhật v2.1.
+
+## 7. FE cần làm theo
+
+Chuyển sang [`contracts/FE_HANDOFF_RBAC_REGION_SCOPE.md`](contracts/FE_HANDOFF_RBAC_REGION_SCOPE.md) (dán thẳng cho agent FE).
 
 ## 8. Ảnh hưởng khi deploy
 
