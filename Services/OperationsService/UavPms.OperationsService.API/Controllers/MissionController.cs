@@ -148,7 +148,8 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("{id:guid}/telemetry")]
-    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
+    // Technician không xem telemetry bay (spec §4).
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     public async Task<IActionResult> GetMissionTelemetry(
         Guid id,
         [FromQuery] DateTime? from = null,
@@ -183,7 +184,8 @@ public class MissionController : ControllerBase
     }
 
     [HttpPost("{id:guid}/media")]
-    [Authorize(Roles = UserRoles.AdminManagerInspector)]
+    // Analyst được upload ảnh/video trong nhiệm vụ (spec §4).
+    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadMedia(
         Guid id,
@@ -319,7 +321,8 @@ public class MissionController : ControllerBase
     }
 
     [HttpGet("{id:guid}/detections")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    // Mọi thành viên nhiệm vụ và Manager trong vùng được xem; service kiểm tra chi tiết (RequireViewMissionDefects).
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetDetections(
         Guid id,
         [FromQuery] string? status = null,
@@ -334,7 +337,7 @@ public class MissionController : ControllerBase
 
     [HttpPost("{missionId:guid}/detections/{detectionId:guid}/review")]
     [HttpPut("{missionId:guid}/detections/{detectionId:guid}/review")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    [Authorize(Roles = UserRoles.AdminAnalyst)]
     public async Task<IActionResult> ReviewDetection(
         Guid missionId,
         Guid detectionId,

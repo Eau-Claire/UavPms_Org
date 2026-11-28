@@ -130,6 +130,41 @@ public class MissionAiDetectionsTests
         detection.IsEmergencyClass.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetMissionAiDetections_Technician_SeesOnlyAssignedMissions(bool assigned)
+    {
+        // Spec §4: Technician xem defect của nhiệm vụ mình được giao.
+        var missionId = Guid.NewGuid();
+        var technicianId = Guid.NewGuid();
+        var missionRepositoryMock = new Mock<IGenericRepository<Mission>>();
+        missionRepositoryMock.Setup(r => r.GetByIdAsync(missionId, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Mission { Id = missionId });
+        var mediaRepositoryMock = new Mock<IInspectionMediaRepository>();
+        mediaRepositoryMock.Setup(r => r.GetByMissionIdWithDetailsAsync(missionId)).ReturnsAsync(new List<InspectionMedia>());
+        var assignments = new List<MissionAssignment>();
+        if (assigned)
+            assignments.Add(new MissionAssignment { MissionId = missionId, UserId = technicianId, AssignmentRole = "TECHNICIAN" });
+        var assignmentRepositoryMock = new Mock<IGenericRepository<MissionAssignment>>();
+        assignmentRepositoryMock
+            .Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<MissionAssignment, bool>>>(), It.IsAny<bool>()))
+            .ReturnsAsync((System.Linq.Expressions.Expression<Func<MissionAssignment, bool>> predicate, bool _) =>
+                assignments.FindAll(a => predicate.Compile()(a)));
+        var currentUserMock = new Mock<ICurrentUserServices>();
+        currentUserMock.SetupGet(u => u.UserId).Returns(technicianId);
+        currentUserMock.SetupGet(u => u.Roles).Returns(new[] { UavPms.Shared.Contracts.Constants.UserRoles.Technician });
+
+        var handler = new GetMissionAiDetectionsQueryHandler(
+            mediaRepositoryMock.Object, missionRepositoryMock.Object, assignmentRepositoryMock.Object, currentUserMock.Object);
+        var act = () => handler.Handle(new GetMissionAiDetectionsQuery(missionId), CancellationToken.None);
+
+        if (assigned)
+            (await act()).Should().BeEmpty();
+        else
+            await act.Should().ThrowAsync<ForbiddenException>();
+    }
+
     [Fact]
     public async Task ReviewMissionAiDetection_ShouldPersistDecisionNotesAndAnalyst()
     {

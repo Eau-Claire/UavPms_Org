@@ -43,7 +43,8 @@ public class AIAnalysisController : ControllerBase
     /// List mission media that have AI detections, including bounding boxes for FE overlays.
     /// </summary>
     [HttpGet("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/detections")]
-    [Authorize(Roles = UserRoles.AdminManagerInspectorAnalyst)]
+    // Mọi thành viên nhiệm vụ xem defect (spec §4); handler kiểm tra phân công.
+    [Authorize(Roles = UserRoles.AllAuthenticatedRoles)]
     public async Task<IActionResult> GetMissionAiDetections(Guid missionId, CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(new GetMissionAiDetectionsQuery(missionId), cancellationToken);
@@ -55,7 +56,8 @@ public class AIAnalysisController : ControllerBase
     /// Accept or reject one AI detection and optionally save analyst notes for that bounding box.
     /// </summary>
     [HttpPut("/api/v{version:apiVersion}/missions/{missionId:guid}/ai-analysis/detections/{detectionId:guid}/review")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    // Duyệt defect: Analyst và SystemAdmin (spec §4).
+    [Authorize(Roles = UserRoles.AdminAnalyst)]
     public async Task<IActionResult> ReviewMissionAiDetection(
         Guid missionId,
         Guid detectionId,

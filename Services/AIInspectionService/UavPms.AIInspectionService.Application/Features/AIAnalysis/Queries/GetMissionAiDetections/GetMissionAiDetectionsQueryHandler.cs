@@ -44,6 +44,10 @@ public class GetMissionAiDetectionsQueryHandler
             throw new ForbiddenException("You may only view detections for missions assigned to you.");
         if (roles.Contains(UserRoles.Manager) && mission.ManagerId != _currentUser.UserId)
             throw new ForbiddenException("You may only view detections for missions you manage.");
+        // Technician xem defect của nhiệm vụ mình được giao (spec §4).
+        if (!roles.Contains(UserRoles.SystemAdmin) && roles.Contains(UserRoles.Technician) &&
+            !await MissionAssignmentAccess.IsAssignedMemberAsync(_assignmentRepository, mission.Id, _currentUser.UserId))
+            throw new ForbiddenException("You may only view detections for missions assigned to you.");
 
         var mediaList = await _inspectionMediaRepository.GetByMissionIdWithDetailsAsync(request.MissionId);
 

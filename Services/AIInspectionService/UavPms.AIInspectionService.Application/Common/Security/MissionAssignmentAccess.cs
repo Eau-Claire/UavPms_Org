@@ -21,6 +21,19 @@ public static class MissionAssignmentAccess
         return rows.Count > 0;
     }
 
+    /// <summary>Người dùng đang được phân công (vai trò bất kỳ) trong nhiệm vụ.</summary>
+    public static async Task<bool> IsAssignedMemberAsync(
+        IGenericRepository<MissionAssignment> assignments,
+        Guid missionId,
+        Guid userId)
+    {
+        var rows = await assignments.FindAsync(a =>
+            a.MissionId == missionId &&
+            a.UserId == userId &&
+            a.Status == MissionAssignment.ActiveStatus);
+        return rows.Count > 0;
+    }
+
     public static async Task<IReadOnlyList<Guid>> GetFieldOperatorIdsAsync(
         IGenericRepository<MissionAssignment> assignments,
         Guid missionId)

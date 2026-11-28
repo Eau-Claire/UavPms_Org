@@ -45,7 +45,8 @@ public class AnomaliesController : ControllerBase
     /// Gán cột điện cho bất thường (bắt buộc trước khi xác nhận)
     /// </summary>
     [HttpPut("{id:guid}/tower")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    // Đổi cột thủ công đi cùng quyền duyệt defect: Analyst và SystemAdmin (spec §4).
+    [Authorize(Roles = UserRoles.AdminAnalyst)]
     public async Task<IActionResult> AssignTower(
         [FromRoute] Guid id,
         [FromBody] AssignAnomalyTowerRequest request,
@@ -213,7 +214,7 @@ public class AnomaliesController : ControllerBase
     /// Lấy danh sách các anomaly/phát hiện đang chờ thẩm định (Pending validation)
     /// </summary>
     [HttpGet("pending")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    [Authorize(Roles = UserRoles.AdminAnalyst)]
     public async Task<IActionResult> GetPendingAnomalies(
         [FromQuery] int pageIndex = 1,
         [FromQuery] int pageSize = 12,
@@ -295,7 +296,8 @@ public class AnomaliesController : ControllerBase
     /// Thẩm định anomaly (Xác nhận Confirmed hoặc Bác bỏ Rejected) — chuẩn hóa cùng một luồng với ReviewMissionAiDetection
     /// </summary>
     [HttpPut("{id:guid}/validate")]
-    [Authorize(Roles = UserRoles.Analyst)]
+    // Duyệt defect: Analyst và SystemAdmin (spec §4).
+    [Authorize(Roles = UserRoles.AdminAnalyst)]
     public async Task<IActionResult> ValidateAnomaly(
         [FromRoute] Guid id,
         [FromBody] AnomalyValidateRequestDto request,

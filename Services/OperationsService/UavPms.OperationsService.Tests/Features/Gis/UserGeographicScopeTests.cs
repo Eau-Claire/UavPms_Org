@@ -125,6 +125,35 @@ public class UserGeographicScopeTests
     }
 
     [Fact]
+    public async Task SetScopes_Manager_ManagesOnlyOwnRegions_AndKeepsUserOtherRegions()
+    {
+        var managerId = Guid.NewGuid();
+        var manager = CreateUserMock(managerId, UserRoles.Manager);
+        await using var db = CreateContext(manager.Object);
+        var staff = new User { Id = Guid.NewGuid(), Email = "staff@x.vn" };
+        var (own, own2, other) = (NewRegion("OWN"), NewRegion("OWN2"), NewRegion("OTHER"));
+        db.Users.AddRange(new User { Id = managerId, Email = "m@x.vn" }, staff);
+        db.Regions.AddRange(own, own2, other);
+        db.UserGeographicScopes.AddRange(
+            new UserGeographicScope { Id = Guid.NewGuid(), UserId = managerId, RegionId = own.Id },
+            new UserGeographicScope { Id = Guid.NewGuid(), UserId = managerId, RegionId = own2.Id },
+            new UserGeographicScope { Id = Guid.NewGuid(), UserId = staff.Id, RegionId = own2.Id },
+            new UserGeographicScope { Id = Guid.NewGuid(), UserId = staff.Id, RegionId = other.Id });
+        await db.SaveChangesAsync();
+
+        // Gán OWN, gỡ OWN2 (cả hai thuộc Manager); OTHER do người khác quản lý nên phải được giữ.
+        await CreateSetHandler(db, manager.Object)
+            .Handle(new SetUserGeographicScopesCommand(staff.Id, new[] { own.Id }), CancellationToken.None);
+
+        (await db.UserGeographicScopes.Where(s => s.UserId == staff.Id).Select(s => s.RegionId).ToListAsync())
+            .Should().BeEquivalentTo(new[] { own.Id, other.Id });
+
+        var outside = () => CreateSetHandler(db, manager.Object)
+            .Handle(new SetUserGeographicScopesCommand(staff.Id, new[] { own.Id, other.Id }), CancellationToken.None);
+        (await outside.Should().ThrowAsync<ForbiddenException>()).Which.Message.Should().Contain("REGION_OUTSIDE_MANAGER_SCOPE");
+    }
+
+    [Fact]
     public async Task GetScopes_NonManagerReadingAnotherUser_IsForbidden_ButOwnScopeIsAllowed()
     {
         var inspectorId = Guid.NewGuid();

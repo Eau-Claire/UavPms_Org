@@ -79,6 +79,71 @@ public class MissionLinearWorkflowTests
         result.Should().BeEmpty();
     }
 
+    /// <summary>Mission thuộc một vùng, có Technician được giao; trả về id mission và id vùng.</summary>
+    private static async Task<(Guid MissionId, Guid RegionId)> SeedMissionWithTechnicianAsync(ApplicationDbContext db, Guid technicianId)
+    {
+        var regionId = Guid.NewGuid();
+        var mission = new Mission { Id = Guid.NewGuid(), MissionCode = "MS-RBAC", Title = "RBAC", RegionId = regionId, Status = MissionStatus.Confirmed };
+        db.Missions.Add(mission);
+        db.MissionAssignments.Add(new MissionAssignment
+        {
+            Id = Guid.NewGuid(), MissionId = mission.Id, UserId = technicianId,
+            AssignmentRole = "TECHNICIAN", ResponseStatus = MissionAssignmentResponse.Accepted
+        });
+        await db.SaveChangesAsync();
+        return (mission.Id, regionId);
+    }
+
+    [Fact]
+    public async Task GetMissionDetectionsAsync_AssignedTechnicianCanView_UnassignedInspectorInRegionCannot()
+    {
+        // Spec §4: mọi thành viên được giao xem defect của nhiệm vụ; người cùng vùng nhưng không được giao thì không.
+        var technicianId = Guid.NewGuid();
+        var inspectorId = Guid.NewGuid();
+        var technician = CreateUserMock(technicianId, UserRoles.Technician);
+        await using var db = CreateContext(technician.Object);
+        db.Users.AddRange(
+            new User { Id = technicianId, FullName = "Tech", Status = "Active" },
+            new User { Id = inspectorId, FullName = "Inspector", Status = "Active" });
+        var (missionId, regionId) = await SeedMissionWithTechnicianAsync(db, technicianId);
+        db.UserGeographicScopes.Add(new UserGeographicScope { Id = Guid.NewGuid(), UserId = inspectorId, RegionId = regionId });
+        await db.SaveChangesAsync();
+
+        var asTechnician = await new MissionLifecycleService(db, technician.Object)
+            .GetMissionDetectionsAsync(missionId, null, null, null, CancellationToken.None);
+        var asInspector = () => new MissionLifecycleService(db, CreateUserMock(inspectorId, UserRoles.Inspector).Object)
+            .GetMissionDetectionsAsync(missionId, null, null, null, CancellationToken.None);
+
+        asTechnician.Should().BeEmpty();
+        await asInspector.Should().ThrowAsync<ForbiddenException>().WithMessage("MISSION_DEFECT_ACCESS_DENIED");
+    }
+
+    [Fact]
+    public async Task ReviewDetectionAsync_SystemAdminMayReview_UnassignedAnalystMayNot()
+    {
+        // Spec §4: duyệt defect là Analyst của nhiệm vụ và SystemAdmin.
+        var adminId = Guid.NewGuid();
+        var analystId = Guid.NewGuid();
+        var admin = CreateUserMock(adminId, UserRoles.SystemAdmin);
+        await using var db = CreateContext(admin.Object);
+        db.Users.AddRange(
+            new User { Id = adminId, FullName = "Admin", Status = "Active" },
+            new User { Id = analystId, FullName = "Analyst", Status = "Active" });
+        var (missionId, regionId) = await SeedMissionWithTechnicianAsync(db, Guid.NewGuid());
+        db.UserGeographicScopes.Add(new UserGeographicScope { Id = Guid.NewGuid(), UserId = analystId, RegionId = regionId });
+        await db.SaveChangesAsync();
+        var request = new ReviewDetectionRequest("Approved");
+
+        // Qua bước phân quyền thì gặp NotFound vì detection không tồn tại.
+        var asAdmin = () => new MissionLifecycleService(db, admin.Object)
+            .ReviewDetectionAsync(missionId, Guid.NewGuid(), request, CancellationToken.None);
+        var asAnalyst = () => new MissionLifecycleService(db, CreateUserMock(analystId, UserRoles.Analyst).Object)
+            .ReviewDetectionAsync(missionId, Guid.NewGuid(), request, CancellationToken.None);
+
+        await asAdmin.Should().ThrowAsync<NotFoundException>();
+        await asAnalyst.Should().ThrowAsync<ForbiddenException>();
+    }
+
     [Fact]
     public async Task GetMissionDetectionsAsync_WithAnomalies_ShouldMapAndFilterCorrectly()
     {
